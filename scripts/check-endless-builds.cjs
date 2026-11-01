@@ -25,13 +25,13 @@ const {chromium}=require('playwright');
   assert.equal(await blessing.locator('[data-gemstone]').count(),10);
   const paused=await page.evaluate(()=>window.__run.gameTick);await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>window.__run.gameTick),paused);
   await page.screenshot({path:path.join(out,'celestial-blessings.png')});
-  await page.keyboard.press('3');await blessing.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>window.__run.build.blessings.length),1);
+  await page.keyboard.press('0');await blessing.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>window.__run.build.blessings.length),1);assert.equal(await page.evaluate(()=>window.__run.build.blessings[0]),'aegis_sentinel');
   await page.getByLabel('Active celestial blessings').waitFor();
   // Render the real runtime zones and marks with a quiet, paused-free scene.
   await page.evaluate(()=>{const s=window.__run;s.build.zones=[{x:s.playerX+100,y:s.playerY,radius:2,ticks:300,damage:5,kind:'fire'},{x:s.playerX-100,y:s.playerY,radius:2,ticks:300,damage:5,kind:'gravity'}];});
   await page.screenshot({path:path.join(out,'endless-build-zones.png')});
   await page.goto((process.env.RUBYSTAR_TEST_URL||'http://localhost:3000')+'/challenge/jupiter?god=1',{waitUntil:'domcontentloaded',timeout:60000});
-  await page.getByRole('button',{name:'UNDERSTOOD',exact:true}).click();await attach();
+  await attach();await page.getByRole('button',{name:'UNDERSTOOD',exact:true}).click();await page.getByRole('button',{name:'UNDERSTOOD',exact:true}).waitFor({state:'hidden'});
   await page.evaluate(()=>Object.assign(window.__run,{godMode:true,meteoriteTimer:1e7}));
   await page.getByRole('button',{name:'Phase 2',exact:true}).click();await page.getByRole('button',{name:'Pursuit',exact:true}).click();
   await page.waitForFunction(()=>window.__run.jupiter.fragments.length===3);
