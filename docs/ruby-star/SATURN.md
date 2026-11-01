@@ -1,0 +1,11 @@
+# Saturn
+
+[Overview](README.md)
+
+Saturn is a map-only preview at `/challenge/saturn`, available from the celestial star map. The existing Frost Warden spawns immediately in ALPHA, near the player, using his standard abilities. No custom Saturn boss mechanics or special C skill are implemented. Automatic enemy spawns, boss spawns, meteors and ambient events are disabled in this preview. Existing movement, hallways, teleporting, Ruby and Saturn Guard (F) remain available. His health bar appears normally; his glowing ice tiles retain their usual slow effect.
+
+The frozen ring station blends the Saturn player suit's mint/jade with Frost Warden's ice blue and white. Dark blue-teal frozen floor tiles have subtle pale borders, broad frost sweeps, sparse cracks and fine wind wisps, without metal rails or repeated tile emblems. A single worn frozen orbit around each chamber’s central pad provides a quiet room landmark. They support connected translucent ice formations. Adjacent cover tiles merge without internal seams; only exposed edges have a fine frosted boundary. There are no raised bevels, thick caps or shaded side/lower faces. Dense blue ice faces have restrained translucency, flat translucent faces, milky frost ribbons and long asymmetric hairline fractures that cross tile joins. Sparse trapped bubbles and short splinters add depth; the backdrop is only faintly visible through the ice. The backdrop is a frozen ring field: a monumental fractured ice ring with broad shaded slab faces, large flat snow-capped ice floes in two parallax layers, a broken tilted orbit of smaller ice slabs, faint polar light curtains and slanting blizzard snow. There are no cloud bands, continuous parallel rings or banded planet. Drifting snow and decorative frost have no gameplay effect. Chamber accents are ice turquoise `#89e7e4`, periwinkle `#b6d5f3`, glacial mint `#a2dfc9` and icy pearl `#d9f3f0`, shared by borders, pads, minimap and teleport picker. The star map Saturn icon shares this icy turquoise, blue shadow and pearl ring palette. Collision and the shared four-chamber layout are unchanged.
+
+Art lives in `saturn-art.ts`; the brief map sheet is `SaturnGuide.tsx`. Run `node scripts/preview-saturn.cjs docs/visual-reference` to render the actual battlefield and the existing Warden palette comparison.
+
+![Frozen ring station](visual-reference/saturn.png)

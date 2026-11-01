@@ -1,0 +1,339 @@
+import { TILE_SIZE, CHAMBER_BOUNDS, T_WALL, chamberOfTile, ENEMY_CONFIGS, NEPTUNE_PUFF_TICKS, NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_RADIUS, NEPTUNE_LASER_WARNING } from './constants';
+import type { Enemy, GameState } from './engine';
+
+// Blocky neon-vector art for the Neptune challenge: fish, stingers, water clones, water balls,
+// tides and the player's sky laser.
+
+function block(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string) {
+  ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+
+const rockHash = (x: number, y: number, k: number) => { const n = Math.sin(x * 127.1 + y * 311.7 + k * 74.7) * 43758.5453; return n - Math.floor(n); };
+const isCover = (state: Readonly<GameState>, tx: number, ty: number) => {
+  if ((state.map[ty]?.[tx] ?? T_WALL) !== T_WALL) return false;
+  const ch = chamberOfTile(tx, ty); if (ch < 0) return false;
+  const [t, l, b, r] = CHAMBER_BOUNDS[ch]; return tx > l && tx < r && ty > t && ty < b;
+};
+
+// A cover block as reef rock, kept simple: two blue-teal slabs with wide crevices, a light top bevel and shaded lower
+// edge, a pale barnacle cluster on some blocks, and on fewer a small stepped branching coral (pink, orange or violet). The rim in the room colour shows only
+// where the block meets open floor; the swaying kelp is drawn over it separately.
+export function drawNeptuneRock(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, tx: number, ty: number, x: number, y: number, color: string) {
+  const s = TILE_SIZE, h = (k: number) => rockHash(tx, ty, k);
+  ctx.save(); ctx.shadowBlur = 0;
+  block(ctx, x, y, s, s, '#07202c'); // crevices
+  const split = 18 + Math.floor(h(1) * 14), across = h(2) > .5;
+  const slabs = across ? [[2, 2, s - 4, split - 4], [2, split + 2, s - 4, s - split - 4]] : [[2, 2, split - 4, s - 4], [split + 2, 2, s - split - 4, s - 4]]; // wider crevices
+  slabs.forEach(([sx, sy, w, ht], i) => {
+    block(ctx, x + sx, y + sy, w, ht, h(3 + i) > .5 ? '#1b4a5c' : '#163f50');
+    block(ctx, x + sx, y + sy, w, 3, '#2f6f82'); block(ctx, x + sx, y + sy + ht - 3, w, 3, '#0c2a38'); // bevel and shade
+  });
+  for (let k = 0; k < 1; k++) if (h(10 + k) > .5) { // one barnacle cluster on about half the blocks
+    const bx = x + 7 + Math.floor(h(13 + k) * (s - 18)), by = y + 7 + Math.floor(h(16 + k) * (s - 18));
+    block(ctx, bx, by, 4, 4, '#bfe3e8'); block(ctx, bx + 1, by + 1, 2, 2, '#3a6676');
+    block(ctx, bx + 5, by + 2, 3, 3, '#a8d4dc'); block(ctx, bx + 6, by + 3, 1, 1, '#3a6676');
+  }
+  if (h(20) > .72) { // a small branching coral growing from the lower edge
+    const c = ['#ff7aa8', '#ff9a5a', '#b88cff'][Math.floor(h(21) * 3)], cx = x + 10 + Math.floor(h(22) * (s - 22)), base = y + s - 4;
+    block(ctx, cx, base - 14, 4, 14, c); block(ctx, cx - 6, base - 10, 6, 3, c); block(ctx, cx - 6, base - 16, 3, 7, c);
+    block(ctx, cx + 4, base - 8, 6, 3, c); block(ctx, cx + 7, base - 14, 3, 7, c);
+    block(ctx, cx + 1, base - 16, 2, 2, '#ffe6f0'); block(ctx, cx - 6, base - 18, 2, 2, '#ffe6f0'); block(ctx, cx + 7, base - 16, 2, 2, '#ffe6f0');
+  }
+  const open = (dx: number, dy: number) => !isCover(state, tx + dx, ty + dy);
+  ctx.globalAlpha = .65;
+  if (open(0, -1)) block(ctx, x, y, s, 3, color); if (open(-1, 0)) block(ctx, x, y, 3, s, color);
+  if (open(1, 0)) block(ctx, x + s - 3, y, 3, s, color); if (open(0, 1)) block(ctx, x, y + s - 3, s, 3, color);
+  ctx.restore();
+}
+
+function facing(e: Readonly<Enemy>) {
+  const dx = e.targetTileX - e.tileX;
+  return dx < 0 ? -1 : 1;
+}
+
+// Small fish: body, tail and eye, swimming toward its next tile with a little bob.
+function drawFish(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
+  const red = e.type === 'fish_red';
+  const body = red ? '#ff5a6a' : '#59c8ff', dark = red ? '#a8243a' : '#1f6fa8', light = red ? '#ffc2c8' : '#d8f4ff';
+  ctx.save(); ctx.scale(facing(e), 1); ctx.translate(0, Math.round(Math.sin(tick * .2 + e.id) * 1.5));
+  ctx.shadowColor = body; ctx.shadowBlur = 6;
+  block(ctx, -9, -6, 16, 12, body); ctx.shadowBlur = 0;
+  block(ctx, -9, 2, 16, 4, dark); block(ctx, -7, -6, 10, 3, light);
+  const flap = Math.floor(tick / 6 + e.id) % 2 ? 2 : 0;
+  block(ctx, -15, -6 + flap, 6, 4, body); block(ctx, -15, 2 - flap, 6, 4, body);
+  block(ctx, 2, -3, 3, 3, '#0b1020');
+  if (red) { block(ctx, -3, -9, 2, 3, light); block(ctx, 1, -9, 2, 3, light); } // little warning spines
+  else block(ctx, -1, -1, 3, 3, '#ffffff'); // healing sparkle
+  ctx.restore();
+}
+
+// Stinger: a larger teal fish with a spiked back and a glowing poison barb.
+function drawStinger(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
+  ctx.save(); ctx.scale(facing(e), 1);
+  ctx.shadowColor = '#3fd6b0'; ctx.shadowBlur = 6;
+  block(ctx, -13, -9, 24, 18, '#2fa889'); ctx.shadowBlur = 0;
+  block(ctx, -13, 3, 24, 6, '#1a6b58'); block(ctx, -11, -9, 18, 4, '#a8f5e2');
+  for (const x of [-9, -3, 3]) block(ctx, x, -14, 3, 5, '#a8f5e2');
+  block(ctx, -20, -8, 7, 6, '#2fa889'); block(ctx, -20, 2, 7, 6, '#2fa889');
+  block(ctx, 5, -4, 4, 4, '#0b1020');
+  const pulse = .55 + .45 * Math.abs(Math.sin(tick * .15));
+  ctx.globalAlpha = pulse; block(ctx, 11, -2, 8, 4, '#c6ff8a'); ctx.globalAlpha = 1;
+  if (e.shootTicks > 0) { ctx.globalAlpha = e.shootTicks / 14; block(ctx, 14, -6, 10, 12, '#c6ff8a'); ctx.globalAlpha = 1; }
+  ctx.restore();
+}
+
+// Water clone: a smaller, see-through echo of the Sea Chanter's silhouette (square shell, stepped fan fins,
+// crest and fluke, pearl eyes) built from a few flat water-tone blocks, without her scales, gills or lashes.
+function drawClone(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
+  const shimmer = .55 + .12 * Math.sin(tick * .12 + e.id), edge = '#4f7fc4', water = '#6fc7ff', pale = '#d8f2ff';
+  ctx.save(); ctx.globalAlpha = shimmer; ctx.translate(0, Math.round(Math.sin(tick * .06 + e.id) * 2)); ctx.scale(.75, .75);
+  for (const side of [-1, 1]) {
+    block(ctx, side * 27 - 5, -22, 10, 34, edge); block(ctx, side * 36 - 4, -28, 8, 28, edge);
+    block(ctx, side * 27 - 3, -20, 6, 30, water);
+  }
+  block(ctx, -8, 20, 16, 12, edge); block(ctx, -20, 28, 16, 8, edge); block(ctx, 4, 28, 16, 8, edge);
+  block(ctx, -8, -34, 16, 12, edge); block(ctx, -2, -32, 4, 10, water);
+  ctx.shadowColor = water; ctx.shadowBlur = 6;
+  block(ctx, -25, -24, 50, 48, water); ctx.shadowBlur = 0;
+  block(ctx, -20, -19, 40, 38, '#1d5a8f');
+  block(ctx, -16, -8, 12, 6, pale); block(ctx, 4, -8, 12, 6, pale);
+  block(ctx, -3, 6, 6, 4, pale);
+  // One slow light band sweeps down the shell, so it reads as water rather than a solid body.
+  ctx.globalAlpha = shimmer * .6; block(ctx, -20, -19 + Math.floor((tick * .4 + e.id * 7) % 34), 40, 4, pale);
+  ctx.restore();
+  const pips = Math.ceil(e.hp / e.maxHp * 4);
+  for (let i = 0; i < 4; i++) block(ctx, -15 + i * 8, -36, 6, 3, i < pips ? '#d8f2ff' : '#1b2a3d');
+}
+
+// Water ball: a glowing orb whose ring empties as the fuse burns, with its blast area marked on the floor.
+function drawWaterBall(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
+  const left = Math.max(0, e.windupTicks / NEPTUNE_BOMB_FUSE), radius = NEPTUNE_BOMB_RADIUS * TILE_SIZE;
+  const urgent = left < .34, flash = urgent && Math.floor(tick / 4) % 2 === 0;
+  ctx.save();
+  ctx.globalAlpha = .1 + (1 - left) * .14; ctx.fillStyle = '#7fd0ff'; ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+  ctx.globalAlpha = .55 + (1 - left) * .4; ctx.strokeStyle = flash ? '#ffffff' : '#7fd0ff'; ctx.lineWidth = 3;
+  ctx.strokeRect(-radius + 1, -radius + 1, radius * 2 - 2, radius * 2 - 2);
+  ctx.globalAlpha = 1; ctx.shadowColor = '#7fd0ff'; ctx.shadowBlur = 12;
+  block(ctx, -12, -12, 24, 24, '#3fa8f0'); ctx.shadowBlur = 0;
+  block(ctx, -8, -8, 16, 16, '#7fd0ff'); block(ctx, -6, -6, 6, 6, '#ffffff');
+  ctx.strokeStyle = '#e1f6ff'; ctx.lineWidth = 3; ctx.beginPath();
+  ctx.moveTo(0, -17); // fuse ring: clockwise square perimeter that empties
+  const perimeter = [[17, -17], [17, 17], [-17, 17], [-17, -17], [0, -17]], total = left * 4;
+  for (let i = 0; i < 4 && i < total; i++) {
+    const [x1, y1] = i === 0 ? [0, -17] : perimeter[i - 1], [x2, y2] = perimeter[i], part = Math.min(1, total - i);
+    ctx.lineTo(x1 + (x2 - x1) * part, y1 + (y2 - y1) * part);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Jellyfish: a glowing pink bell that pulses, with blocky tentacles swaying below.
+function drawJellyfish(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
+  const pulse = Math.sin(tick * .12 + e.id), squash = Math.round(pulse * 2);
+  ctx.translate(0, Math.round(Math.sin(tick * .05 + e.id) * 3));
+  for (let k = 0; k < 4; k++) {
+    const x = -10 + k * 6, sway = Math.round(Math.sin(tick * .15 + k) * 2);
+    block(ctx, x + sway, 4, 3, 6, '#ff9ce6'); block(ctx, x - sway, 10, 3, 6, '#ffc4ef'); block(ctx, x + sway, 16, 3, 4, '#ff9ce6');
+  }
+  ctx.shadowColor = '#ff9ce6'; ctx.shadowBlur = 6;
+  block(ctx, -14 - squash, -12 + squash, 28 + squash * 2, 16 - squash, '#e25fc0'); ctx.shadowBlur = 0;
+  block(ctx, -10 - squash, -16 + squash, 20 + squash * 2, 4, '#e25fc0');
+  block(ctx, -14 - squash, 0, 28 + squash * 2, 4, '#a83a8c');
+  block(ctx, -8, -12 + squash, 6, 6, '#ffd6f4'); block(ctx, 4, -8 + squash, 4, 4, '#ffd6f4');
+}
+
+// Pufferfish: a round blocky fish that swells and bristles with spikes before it bursts.
+function drawPufferfish(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
+  const swell = e.windupTicks > 0 ? 1 - e.windupTicks / NEPTUNE_PUFF_TICKS : 0, burst = e.shootTicks > 0 ? e.shootTicks / 18 : 0;
+  const r = Math.round(10 + swell * 8), flash = swell > .6 && Math.floor(tick / 3) % 2 === 0;
+  ctx.save(); ctx.scale(facing(e), 1); ctx.translate(0, swell ? 0 : Math.round(Math.sin(tick * .2 + e.id) * 1.5));
+  block(ctx, -r - 6, -4, 6, 8, '#e0a83a'); // tail
+  ctx.shadowColor = '#ffc94a'; ctx.shadowBlur = 4 + swell * 4;
+  block(ctx, -r, -r + 2, r * 2, r * 2 - 4, flash ? '#fff0b8' : '#ffc94a'); block(ctx, -r + 2, -r, r * 2 - 4, r * 2, flash ? '#fff0b8' : '#ffc94a');
+  ctx.shadowBlur = 0;
+  block(ctx, -r + 2, r - 6, r * 2 - 4, 4, '#c98a2a'); block(ctx, -r + 4, -r + 2, r, 4, '#fff0b8');
+  block(ctx, r - 8, -5, 4, 4, '#1a1020'); block(ctx, r - 2, 0, 4, 3, '#8a4a2a');
+  if (swell > 0) for (let k = 0; k < 8; k++) { // spikes push out as it swells
+    const a = k * Math.PI / 4, d = r + 2 + swell * 4;
+    block(ctx, Math.cos(a) * d - 2, Math.sin(a) * d - 2, 4, 4, '#fff0b8');
+  }
+  ctx.restore();
+  if (burst > 0) { // spike burst ring
+    ctx.save(); ctx.globalAlpha = burst; ctx.strokeStyle = '#ffe680'; ctx.lineWidth = 4;
+    const half = Math.round((1 - burst) * 1.6 * TILE_SIZE + 12); ctx.strokeRect(-half, -half, half * 2, half * 2);
+    for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; block(ctx, Math.cos(a) * half - 3, Math.sin(a) * half - 3, 6, 6, '#fff0b8'); }
+    ctx.restore();
+  }
+}
+
+export function drawNeptuneUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number): boolean {
+  if (e.type !== 'fish_blue' && e.type !== 'fish_red' && e.type !== 'stinger' && e.type !== 'water_clone' && e.type !== 'water_bomb' && e.type !== 'jellyfish' && e.type !== 'pufferfish') return false;
+  ctx.save(); ctx.translate(Math.round(sx), Math.round(sy));
+  if (e.flashTicks > 0) ctx.filter = 'brightness(1.8)';
+  if (e.type === 'jellyfish') { ctx.scale(1.3, 1.3); drawJellyfish(ctx, e, tick); }
+  else if (e.type === 'pufferfish') {
+    ctx.save(); ctx.scale(1.3, 1.3); drawPufferfish(ctx, e, tick); ctx.restore();
+    const width = 30; block(ctx, -width / 2, -28, width, 4, '#0a101b'); block(ctx, -width / 2, -28, Math.floor(width * Math.max(0, e.hp / e.maxHp)), 4, ENEMY_CONFIGS.pufferfish.color);
+  }
+  else if (e.type === 'water_bomb') drawWaterBall(ctx, e, tick);
+  else if (e.type === 'water_clone') drawClone(ctx, e, tick);
+  else if (e.type === 'stinger') {
+    ctx.save(); ctx.scale(1.15, 1.15); drawStinger(ctx, e, tick); ctx.restore();
+    const width = 30; block(ctx, -width / 2, -22, width, 4, '#0a101b');
+    block(ctx, -width / 2, -22, Math.floor(width * Math.max(0, e.hp / e.maxHp)), 4, ENEMY_CONFIGS.stinger.color);
+  } else { ctx.scale(1.4, 1.4); drawFish(ctx, e, tick); }
+  ctx.restore();
+  return true;
+}
+
+// Floor layer: tides flowing through a room and the sky laser's countdown on its chosen room.
+export function drawNeptuneOverlay(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, tick: number) {
+  const neptune = state.neptune;
+  if (!neptune) return;
+  ctx.save();
+  for (const tide of neptune.tides) {
+    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[tide.chamber];
+    const x = c1 * TILE_SIZE - camX, y = r1 * TILE_SIZE - camY, w = (c2 - c1 + 1) * TILE_SIZE, h = (r2 - r1 + 1) * TILE_SIZE;
+    ctx.globalAlpha = .1; ctx.fillStyle = '#3f8fe8'; ctx.fillRect(x, y, w, h);
+    // Chevrons drift along the current.
+    ctx.globalAlpha = .45; ctx.fillStyle = '#9fd8ff';
+    const step = TILE_SIZE * 3, drift = (tick * 2) % step;
+    for (let gy = 0; gy < h; gy += step) for (let gx = 0; gx < w; gx += step) {
+      const px = x + gx + step / 2 + tide.dirX * (drift - step / 2), py = y + gy + step / 2 + tide.dirY * (drift - step / 2);
+      if (px < x || px > x + w || py < y || py > y + h) continue;
+      ctx.save(); ctx.translate(Math.round(px), Math.round(py)); ctx.rotate(Math.atan2(tide.dirY, tide.dirX));
+      ctx.fillRect(-6, -10, 6, 4); ctx.fillRect(0, -6, 6, 4); ctx.fillRect(0, 2, 6, 4); ctx.fillRect(-6, 6, 6, 4);
+      ctx.restore();
+    }
+    ctx.globalAlpha = .6; ctx.strokeStyle = '#7fc7ff'; ctx.lineWidth = 2; ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+  }
+  // Shark: a striped warning lane across the chamber, then the shark charges through and out of the wall.
+  const shark = neptune.shark;
+  if (shark) {
+    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[shark.chamber];
+    const lo = shark.vertical ? r1 : c1, hi = shark.vertical ? r2 : c2;
+    for (let k = lo; k <= hi; k++) {
+      const tx = shark.vertical ? shark.line : k, ty = shark.vertical ? k : shark.line;
+      if (state.map[ty]?.[tx] === 0) continue;
+      const x = tx * TILE_SIZE - camX, y = ty * TILE_SIZE - camY;
+      if (shark.warning > 0) {
+        ctx.globalAlpha = .22 + .2 * Math.abs(Math.sin(tick * .25 + k * .5)); ctx.fillStyle = '#ff4d5a'; ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+        ctx.globalAlpha = .7; ctx.fillStyle = '#ffd0d0';
+        const along = ((k - lo) * shark.dir + Math.floor(tick / 5)) % 3 === 0; // chevrons running toward the exit wall
+        if (along) { ctx.save(); ctx.translate(x + TILE_SIZE / 2, y + TILE_SIZE / 2); ctx.rotate(Math.atan2(shark.vertical ? shark.dir : 0, shark.vertical ? 0 : shark.dir));
+          ctx.fillRect(-8, -10, 6, 4); ctx.fillRect(-2, -6, 6, 4); ctx.fillRect(-2, 2, 6, 4); ctx.fillRect(-8, 6, 6, 4); ctx.restore(); }
+      } else { ctx.globalAlpha = .12; ctx.fillStyle = '#ff4d5a'; ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4); }
+    }
+    if (shark.warning <= 0) {
+      const px = ((shark.vertical ? shark.line : shark.pos) + .5) * TILE_SIZE - camX, py = ((shark.vertical ? shark.pos : shark.line) + .5) * TILE_SIZE - camY;
+      ctx.save(); ctx.translate(Math.round(px), Math.round(py)); ctx.rotate(Math.atan2(shark.vertical ? shark.dir : 0, shark.vertical ? 0 : shark.dir));
+      ctx.globalAlpha = .35; ctx.fillStyle = '#9fd8ff'; for (let k = 1; k <= 3; k++) ctx.fillRect(-30 - k * 14, -6 + (k % 2) * 4, 10, 4); // wake
+      ctx.globalAlpha = 1; ctx.shadowColor = '#7fa8c8'; ctx.shadowBlur = 4;
+      block(ctx, -34, -12, 56, 24, '#5f7e98'); ctx.shadowBlur = 0;
+      block(ctx, -34, 4, 56, 8, '#3d566c'); block(ctx, -28, -12, 44, 4, '#9fb8cc');
+      block(ctx, 22, -8, 10, 16, '#5f7e98'); block(ctx, 30, -4, 6, 8, '#5f7e98'); // snout
+      block(ctx, -46, -16, 12, 10, '#5f7e98'); block(ctx, -46, 6, 12, 10, '#5f7e98'); // tail
+      block(ctx, -8, -24, 14, 12, '#4a667e'); block(ctx, -4, -28, 8, 4, '#4a667e'); // dorsal fin
+      block(ctx, 18, -6, 4, 4, '#0b1020'); block(ctx, 22, 4, 10, 3, '#e8f4ff'); // eye, teeth
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // A clone revealed by a jellyfish: a pulsing light column above it.
+  const reveal = neptune.reveal, revealed = reveal && state.enemies.find(c => c.id === reveal.cloneId);
+  if (reveal && revealed) {
+    const x = revealed.x - camX, y = revealed.y - camY, fade = Math.min(1, reveal.ticks / 30), pulse = .5 + .5 * Math.sin(tick * .2);
+    ctx.globalAlpha = (.25 + .2 * pulse) * fade; ctx.fillStyle = '#ffd6f4'; ctx.fillRect(x - 10, y - 420, 20, 400);
+    ctx.globalAlpha = (.7 + .3 * pulse) * fade; ctx.strokeStyle = '#ff9ce6'; ctx.lineWidth = 4;
+    const half = 30 + pulse * 6; ctx.strokeRect(x - half, y - half, half * 2, half * 2);
+    ctx.globalAlpha = 1;
+  }
+  const laser = neptune.laser;
+  if (laser) {
+    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[laser.chamber], progress = 1 - laser.ticks / NEPTUNE_LASER_WARNING;
+    const x = c1 * TILE_SIZE - camX, y = r1 * TILE_SIZE - camY, w = (c2 - c1 + 1) * TILE_SIZE, h = (r2 - r1 + 1) * TILE_SIZE;
+    const pulse = Math.abs(Math.sin(tick * (.15 + progress * .25)));
+    ctx.globalAlpha = .05 + pulse * (.08 + progress * .12); ctx.fillStyle = '#c9f2ff'; ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = .6 + pulse * .35; ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = 4; ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+    // A narrowing targeting column marks the strike centre.
+    const cx = x + w / 2, cy = y + h / 2, beam = Math.round(w * (.5 - progress * .42));
+    ctx.globalAlpha = .18 + progress * .35; ctx.fillStyle = '#9fe4ff'; ctx.fillRect(cx - beam / 2, y, beam, h);
+    ctx.globalAlpha = .9; ctx.fillStyle = '#ffffff';
+    ctx.font = '700 22px var(--font-pixel), monospace'; ctx.textAlign = 'center';
+    ctx.fillText(`TRIDENT ${Math.ceil(laser.ticks / 60)}s`, cx, cy);
+  }
+  ctx.restore();
+}
+
+// Water ball burst: a flat stepped water ring sweeps out to the blast edge over a brief pale wash, a short
+// white splash column rises from the centre, and eight 12px droplets arc outward and fall. 28 ticks, no glow.
+export function drawWaterBurst(ctx: CanvasRenderingContext2D, x: number, y: number, maxRadius: number, ticks: number) {
+  const progress = 1 - ticks / 28, fade = 1 - progress, G = 12;
+  const snap = (v: number) => Math.round(v / 6) * 6;
+  const block = (px: number, py: number, w: number, h: number, c: string) => { ctx.fillStyle = c; ctx.fillRect(snap(px), snap(py), w, h); };
+  ctx.save(); ctx.shadowBlur = 0;
+  // Wash marking the hit area, strongest at the moment of the burst.
+  ctx.globalAlpha = fade * .22; ctx.fillStyle = '#59c8ff';
+  ctx.beginPath(); ctx.arc(x, y, maxRadius, 0, Math.PI * 2); ctx.fill();
+  // Two stepped rings of 12px blocks: a bright crest leading, a deeper blue trough behind it.
+  const ring = (r: number, c: string, alpha: number) => {
+    const rr = Math.max(G * 2, Math.round(r / G) * G);
+    ctx.globalAlpha = alpha;
+    for (let py = -rr; py <= rr; py += G) for (let px = -rr; px <= rr; px += G) {
+      const d = px * px + py * py;
+      if (d <= rr * rr && d >= (rr - G) * (rr - G)) block(x + px - G / 2, y + py - G / 2, G, G, c);
+    }
+  };
+  const ease = 1 - (1 - progress) * (1 - progress);
+  ring(maxRadius * ease, '#e8fbff', fade * .95);
+  if (progress > .15) ring(maxRadius * ease * .7, '#2f7fd0', fade * .7);
+  // Splash column: rises then sinks back.
+  const rise = Math.sin(Math.min(1, progress * 1.6) * Math.PI) * 42;
+  ctx.globalAlpha = fade;
+  block(x - 12, y - rise, 24, Math.max(6, rise), '#9fe4ff'); block(x - 6, y - rise - 6, 12, 12, '#ffffff');
+  // Droplets thrown outward on a short arc.
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4 + Math.PI / 8, d = maxRadius * (.25 + ease * .55), lift = Math.sin(progress * Math.PI) * 30;
+    block(x + Math.cos(a) * d - 6, y + Math.sin(a) * d * .8 - lift - 6, G, G, i % 2 ? '#9fe4ff' : '#e8fbff');
+  }
+  ctx.restore();
+}
+
+// Sky laser impact (drawn above actors): a white-cyan beam slams down over the whole room and narrows to a core,
+// square water shockwaves ripple out from the centre, and blocky droplets splash up and fall back.
+export function drawSkyLaserImpact(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
+  const impact = state.neptune?.laserImpact;
+  if (!impact) return;
+  const total = 70, age = total - impact.ticks, progress = age / total;
+  const [r1, c1, r2, c2] = CHAMBER_BOUNDS[impact.chamber];
+  const left = c1 * TILE_SIZE - camX, top = r1 * TILE_SIZE - camY, width = (c2 - c1 + 1) * TILE_SIZE, height = (r2 - r1 + 1) * TILE_SIZE;
+  const cx = left + width / 2, cy = top + height / 2;
+  ctx.save();
+  // Room-wide flash.
+  ctx.globalAlpha = Math.max(0, 1 - age / 12) * .55; ctx.fillStyle = '#e8fbff'; ctx.fillRect(left, top, width, height);
+  // The beam: full room width at impact, shrinking to a thin bright core, reaching from far above the room.
+  const beam = Math.max(10, width * Math.max(0, 1 - age / 26)), fade = Math.max(0, 1 - Math.max(0, age - 26) / 30);
+  const beamTop = top - 900;
+  ctx.globalAlpha = .35 * fade; ctx.fillStyle = '#59c8ff'; ctx.fillRect(Math.round(cx - beam / 2 - 18), beamTop, Math.round(beam + 36), cy - beamTop);
+  ctx.globalAlpha = .75 * fade; ctx.fillStyle = '#9fe4ff'; ctx.fillRect(Math.round(cx - beam / 2), beamTop, Math.round(beam), cy - beamTop);
+  ctx.globalAlpha = fade; ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(cx - beam / 6), beamTop, Math.round(beam / 3), cy - beamTop);
+  ctx.beginPath(); ctx.rect(left, top, width, height); ctx.clip();
+  // Square shockwaves rippling out across the water.
+  for (let i = 0; i < 4; i++) {
+    const t = (age - i * 7) / 45;
+    if (t <= 0 || t >= 1) continue;
+    const half = Math.round((20 + t * width * .6) / 8) * 8;
+    ctx.globalAlpha = (1 - t) * (i % 2 ? .45 : .85); ctx.strokeStyle = i % 2 ? '#59c8ff' : '#e8fbff'; ctx.lineWidth = i % 2 ? 4 : 7;
+    ctx.shadowColor = '#9fe4ff'; ctx.shadowBlur = i % 2 ? 0 : 10;
+    ctx.strokeRect(cx - half, cy - half, half * 2, half * 2); ctx.shadowBlur = 0;
+  }
+  // Splash: blocky droplets thrown outward and upward, falling back with gravity.
+  for (let i = 0; i < 48; i++) {
+    const angle = i * 2.39996, speed = 3 + (i % 6), lift = 5 + (i % 4) * 2;
+    const x = cx + Math.cos(angle) * speed * age, y = cy + Math.sin(angle) * speed * age * .55 - lift * age + .18 * age * age;
+    ctx.globalAlpha = (1 - progress) * (i % 3 ? .85 : .55);
+    ctx.fillStyle = i % 4 ? '#9fe4ff' : '#ffffff';
+    const size = 3 + (i % 3) * 2; ctx.fillRect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, size, size + 2);
+  }
+  ctx.restore();
+}

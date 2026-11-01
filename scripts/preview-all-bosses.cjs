@@ -1,0 +1,13 @@
+const fs=require('fs'),Module=require('module'),ts=require('typescript');require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,f);
+const {createCanvas}=require('@napi-rs/canvas');const c=require('../game/constants.ts'),engine=require('../game/engine.ts'),src=fs.readFileSync('game/RubyStarGame.tsx','utf8');
+const code='const {'+Object.keys(c).join(',')+"}=require('./constants.ts');const {"+Object.keys(engine).filter(k=>!(k in c)).join(',')+"}=require('./engine.ts');const {drawNeptuneUnit,drawNeptuneOverlay,drawSkyLaserImpact}=require('./neptune-art.ts');const {drawEncounterEnemy,drawEncounterTelegraphs,drawEncounterEffects}=require('./encounter-art.ts');"+src.slice(src.indexOf('const BG_COLOR'),src.indexOf('// Challenge HUD centre: the guardian'))+';exports.drawEnemy=drawEnemy;exports.drawThornGround=drawThornGround;';const m=new Module(require('path').resolve('game/preview.cjs'),module);m.filename=require('path').resolve('game/preview.cjs');m.paths=module.paths;m._compile(ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,m.filename);
+const types=[...c.BOSS_TYPES,'aegis_construct'];
+const canvas=createCanvas(1200,Math.ceil(types.length/4)*380),ctx=canvas.getContext('2d');ctx.fillStyle='#0b1019';ctx.fillRect(0,0,canvas.width,canvas.height);
+for(const [i,type] of types.entries()){
+ const col=i%4,row=Math.floor(i/4),left=col*300,top=row*380;ctx.fillStyle='#111923';ctx.fillRect(left+10,top+10,280,360);ctx.strokeStyle='#ffffff12';ctx.lineWidth=1;ctx.strokeRect(left+10.5,top+10.5,279,359);
+ const s=engine.createInitialState();engine.godSpawnBoss(s,type==='aegis_construct'?'aegis_sentinel':type);
+ const bodies=type==='astral_twins'?s.enemies:[s.enemies[type==='aegis_construct'?1:0]];
+ bodies.forEach((boss,index)=>{boss.visualSpawnTicks=0;boss.flashTicks=0;boss.shootTicks=0;boss.attackTimer=200;ctx.save();ctx.translate(left+(bodies.length===2?100+index*110:150),top+225);ctx.scale(bodies.length===2?1.5:2,bodies.length===2?1.5:2);m.exports.drawEnemy(ctx,boss,0,0,40);ctx.restore();});
+ ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.fillStyle=c.ENEMY_CONFIGS[type].color;ctx.font='18px monospace';ctx.textAlign='center';ctx.fillText(c.BOSS_NAMES[type]||'SEAL PYLON',left+150,top+43);
+}
+fs.writeFileSync(process.argv[2] || 'all-boss-designs.png',canvas.toBuffer('image/png'));

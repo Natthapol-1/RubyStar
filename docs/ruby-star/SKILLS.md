@@ -1,0 +1,86 @@
+# Skills and upgrades
+
+[Overview](README.md)
+
+## Constellations
+
+After every third actual boss defeat (3, 6, 9, 12, 15, ...), wait one second of unpaused play for defeat effects, then pause and offer three distinct random unowned Constellations. Each can be chosen only once per run; there are no ranks or repeat picks. Choices continue after Ascension. When fewer than three remain, offer the remaining choices; after all 29 are owned, stop offering Constellations. Restart clears owned upgrades and pending choices. The God-panel Constellations button opens a paused editor with all 29 upgrades as independent toggles; click an active card to remove its effect, then use Done or Escape to resume. This does not advance stages or consume milestone rewards.
+
+Click, tap, keys 1/2/3, or focused-button Enter/Space selects. Keyboard focus stays in the dialog. `gamePhase='constellation'` freezes simulation and rejects gameplay actions. Boss restoration, hazard cleanup and celestial rewards still resolve, including meteor/special defeats. Choosing clears held mouse/touch movement and attack input. The chosen star pattern briefly appears as a faint, non-interactive afterglow for 96 gameplay ticks (1.6s) while play continues; it pauses with gameplay and clears on restart. The HUD lists owned constellations, with descriptions available on hover.
+
+| Constellation / internal key | Effect |
+| --- | --- |
+| Ophiuchus / `healing` | Manual healing recharges 20% faster: 15-tick cooldown rather than 18 |
+| Lyra / `laser` | Normal/powered laser damage ×1.2 |
+| Pegasus / `speed` | Movement ×1.08, including carrying and speed burst; forced knockback unchanged |
+| Aquarius / `energy` | Ordinary kill and blue-shard energy ×1.2, including Runner bonus; Leech stored-energy refunds are not multiplied |
+| Perseus / `bomb` | Normal/powered bomb radius +1 tile, including visible range and self-damage reach |
+| Orion / `bullets` | Normal/powered bullet damage ×1.25 |
+| Draco / `wave` | Normal/powered wave damage ×1.25 |
+| Cassiopeia / `ruby` | Incoming Ruby damage ×0.85 before its shield, including meteors |
+| Phoenix / `power` | Powered duration +60 ticks, including Sirius Surge; firing during active power does not extend it |
+| Aquila / `laserRate` | Laser cooldown ×0.85 |
+| Cygnus / `waveReach` | Normal/powered wave radius +1 tile and push +1 tile; visible wave matches actual reach |
+| Scorpius / `bombDamage` | Normal/powered bomb damage ×1.2, including its self-damage calculation |
+| Taurus / `burstDuration` | Manual/powered/free speed-burst duration ×1.25 |
+| Vela / `burstRate` | Manual speed-burst cooldown ×0.8 |
+| Centaurus / `waveRate` | Wave cooldown ×0.85; hold-to-charge time unchanged |
+| Delphinus / `playerGuard` | Incoming player damage ×0.9 before shields, including meteors, poison and bomb self-damage; Ruby unchanged |
+| Libra / `manualHealing` | Manual healing adds +2 Ruby HP and +1 player HP per use |
+| Hercules / `killHealing` | Ordinary kill healing adds +2 player HP; meteor defeats give none |
+| Cepheus / `bombRate` | Bomb cooldown ×0.8 |
+| Crux / `laserRange` | Normal/powered laser range +2 tiles; bullets unchanged |
+
+| Lepus / `twinShot` | Two parallel auto-aimed bullets, each 60% damage: 20% net gain if both hit. Orion and Twin copies scale normally |
+| Sagitta / `ricochet` | Each laser ray reflects once from floor-adjacent cover, reversing with 30% damage and spending its remaining range. Moon mirrors keep their hostile reflection rule |
+| Eridanus / `waveEcho` | One second wave at the original cast position after 24 ticks, 25% original wave damage and the same radius; no push or recursive echoes |
+| Fornax / `bombPull` | Detonation waits 24 ticks and pulls normal aliens one floor tile toward the bomb every 6 ticks within radius +1. No boss pull, cover crossing or repeated detonation input |
+| Lacerta / `boostTrail` | While Speed Boost is active, leave a patch every 10 ticks. Patches last 90 ticks, radius .65 tiles, slowing enemies to 65%. They deal no damage |
+| Corona / `rubyWave` | Placed Ruby emits a wave at 60% radius and 25% damage when you cast. No push, extra power consumption or recursive echoes |
+| Lupus / `bulletMark` | Three bullet hits mark a target for 6 seconds. A direct Charge Wave consumes the mark for a 1.6-tile explosion dealing 30% wave damage. Explosions cannot mark or trigger other marks |
+| Puppis / `boostCharge` | Manual Speed Boost makes the next wave hold 35% faster (650 ms normal, 975 ms chilled); charge presses add two instead of one. Consumed on wave cast |
+| Pictor / `rubyLaser` | Casting within 3 tiles of placed Ruby fires a four-direction laser copy from Ruby for 25% damage. Same range and one-bounce rules; no recursive Ruby copies |
+
+Healing safety checks, HP/energy caps and bomb Ruby immunity remain. Upgrades affecting different aspects of the same ability combine. No upgrade changes celestial skill damage. Existing fields and placed bombs retain their rules; Perseus updates the shared bomb radius calculation for both gameplay and the indicator.
+
+New regular aliens and Splitter children gain +5% HP per third-boss milestone, reaching +30% at defeat 18; after that the late-run factor adds +2% per defeat, and +3% per defeat after defeat 20 (see Difficulty). The factor multiplies existing tier/global HP scaling and does not retroactively rescale existing enemies. Bosses retain their existing +15 HP per prior defeat, without an extra Constellation multiplier; Queen echoes are unchanged. See [Difficulty](GAMEPLAY.md#difficulty-progression).
+
+## Celestial blessings (Endless)
+
+At stages 20, 30, 40 and every ten thereafter, choose one gemstone from all remaining unowned blessings. There are ten, one for each boss; each is chosen once per run. They are separate from constellations and one-use F skills. If both milestones coincide, resolve the constellation first, then the blessing. Rewards queue when multiple encounters end together. Selection pauses gameplay and uses the existing square neon cards, boss-colored cut gemstones, keyboard 1–9/0 and focus trap. Owned blessings appear in the HUD with hover descriptions. Restart clears them; when all ten are owned, offers stop. Challenge and Tutorial modes do not award them.
+
+| Blessing / boss | Effect |
+| --- | --- |
+| Citrine · Sirius / Blind Prayer | Every third manual Laser or Charge Wave adds 6 shield HP to player and Ruby, capped at 12; larger existing shields are preserved |
+| Aquamarine · Saturn / Frost Warden | Direct Charge Wave hits slow enemies to 65% movement for 2 seconds |
+| Amber · Sun / Fiery King | Each meteor leaves three 2-tile burning patches in its chamber for 6 seconds. They damage enemies twice per second: 4 + .2 per stage DPS, capped at 12; player and Ruby are safe |
+| Emerald · Jupiter / Storm Reaper | Each direct laser hit arcs once to the nearest other enemy within 3 tiles for 30% of that hit's damage; arcs cannot chain themselves |
+| Amethyst · Moon / Shadow Queen | Every fourth connected bullet adds a 65%-damage echo hit on its target (16.25% average gain); no additional on-hit procs |
+| Obsidian · Singularity / Devourer | Bomb leaves a gravity patch for 3 seconds at radius +1, pulling normal aliens one floor tile every 20 ticks, dealing 4% bomb damage per second; no self damage |
+| Rubellite · Binary Star / Astral Twins | Alternating manual Laser and Charge Wave gives the new cast 20% extra damage; repeats get no bonus |
+| Sapphire · Neptune / Sea Chanter | Charge Wave restores 3 HP to both player and Ruby, at most once every 4 seconds |
+| Peridot · Gaia / Thorn Weaver | Every fifth bullet hit on a target slows it to 15% movement for 1.5 seconds; bosses retain 65% speed |
+| Turquoise · Venus / Aegis Sentinel | Every 15 seconds add 8 shield HP to player and Ruby, capped at 16, preserving larger shields |
+
+Echoes use snapshot cast damage and cannot trigger additional casts. Zone lists are capped at 80, trail lifetimes are short, and delayed effects pause in menus. Slows use the strongest current slow rather than multiplying identical debuffs. The numerical constellation options remain valid alternatives: mechanic gains are usually 20–30% at best, conditional on positioning or several hits; defensive blessings trade damage for bounded healing, shields or control.
+
+## Ascension and celestial skills
+
+The **tenth boss defeat** unlocks Ascension and grants that defeated boss's skill. Every subsequent encounter grants its mapped skill. Aegis Sentinel grants Venus Veil; Astral Twins grants Binary Star, awarded once after defeating the pair. Hold one single-use skill; the next reward replaces it. F activates it. After a cast, F is ignored for 1.5s (`SPECIAL_RECAST_LOCK`; not in challenges, whose skill has its own cooldown), so a skill granted by that cast's boss kill is not fired by a repeated press. Consume the old skill before resolving its kills, so a boss killed by that skill can immediately grant a replacement. A held skill changes the suit; carrying Ruby takes model priority without deleting the skill. Celestial colors and shapes follow the player planet/star theme; see [Visual style](VISUALS.md).
+
+| Boss reward | Skill | Effect |
+| --- | --- | --- |
+| King | Solar Flare | Entire arena: 10% boss max HP. Regular aliens take 25 × the alien skill scale (current tier HP multiplier × late-run alien HP factor up to Stage 18, `skillAlienScale`) so it has the same effect from the start to Stage 18 (it always just kills an unshielded Armored): 25 at the start, 57.5 at Stage 10, 65 from Stage 18. Regular Solar kills grant no energy, including Runner bonuses and Leech refunds; ordinary non-energy rewards remain. Boss kills still restore player/Ruby HP and energy fully |
+| Queen | Lunar Echo | Stationary decoy with 12 connected hits; 21-tick invulnerability after each hit; no time limit |
+| Reaper | Jupiter Storm | Within 6 tiles: 25% boss max HP; regular aliens take 60 × the alien skill scale (60 at the start, 156 from Stage 18). Enemies hit move at 50% speed for 60 ticks (1 second); recasts refresh the duration |
+| Devourer | Singularity | One fixed version: 5-tile-radius field for 18s. Normal pull one tile/15 ticks; boss pull one tile/30 ticks, walls respected. Enemies inside cannot teleport; overdue Queen/Warden relocation waits until they leave or the field expires, without spawning echoes or granting jump healing while blocked. Damage once per second: 6 × the alien skill scale to regular aliens (grows with the stage like their HP, up to Stage 18), 1.5% max HP to bosses |
+| Warden | Saturn Guard | Player and Ruby absorb shields refilled to at least 40 + 1 per stage each (58 from Stage 18), with celestial appearance until depleted; not stacking |
+| Prayer | Sirius Surge | At least 6s powered mode, clears star gauge, free speed burst, resets laser/bullet/wave/bomb/speed cooldowns. Existing placed bomb remains |
+| Chanter | Neptune's Tide | Heals player/Ruby 40 + 1 per stage each (58 from Stage 18), matching Saturn Guard; pushes enemies within 8 tiles 3 tiles away |
+| Aegis | Venus Veil | For 10s, damage to player and placed Ruby is cut to 35% (after Delphinus/Cassiopeia, before shields). Direct enemy attacks also return their full pre-reduction damage to the attacker; bosses take at most 3% max HP per reflected hit. Meteors, explosions, poison, Thorn fields, Supernova, pylon overloads and the player's own bomb are reduced but not reflected. Reflection still happens under Invincible, but not when Lunar Echo takes the hit |
+| Twins | Binary Star | For 15s, an untargetable mirror twin stands on the first open tile beside placed Ruby (beside the player while carrying). Every laser, bullet and wave also fires from the twin, and each bomb detonation adds a twin blast there, all at 60% damage. Twin attacks use the same powered state, push, Supernova triggers and kill rewards; the twin blast never hurts the player |
+| Weaver | Gaia's Roots | Stationary tile-aligned 12×12 field for 30s, floor only; enemies move 40% slower, take 4 × the alien skill scale damage/sec (grows with the stage like alien HP, up to Stage 18) or 1% boss max HP/sec |
+
+Skill damage respects shields and enemy vulnerabilities, but does not feed diving Chanter. Persistent fields pulse once per second and expire before a pulse on the exact expiry tick; listed DPS×duration is not necessarily the exact total. For example, max Singularity lasts 24s but delivers 23 whole pulses: 46% boss max HP before shields/vulnerability if continuously inside. Gaia also excludes the exact-expiry pulse. Recasts replace the existing field/decoy of that type.
+
+Values in the celestial table are before applicable Constellation modifiers. All stage-based skill scaling stops at Stage 18 (`SKILL_SCALE_STAGE_CAP`), even though aliens keep growing after that.
