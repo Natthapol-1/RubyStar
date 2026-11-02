@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
+@font-face{font-family:'Press Start 2P';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/press-start-2p.ttf') format('truetype')}
+@font-face{font-family:'Share Tech Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/share-tech-mono.ttf') format('truetype')}
 
 :root {
   --void: #050508;
@@ -518,3 +519,14 @@ button {
   transition: width 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
 }
 
+
+/* Shared blocky scrollbars for game panels, guides and settings. */
+*::-webkit-scrollbar { width:10px; height:10px; }
+*::-webkit-scrollbar-track { background:#0a1322; border-left:1px solid #25364d; }
+*::-webkit-scrollbar-thumb { background:#526e8a; border:2px solid #0a1322; border-radius:0; min-height:28px; }
+*::-webkit-scrollbar-thumb:hover { background:#8ac8c2; }
+*::-webkit-scrollbar-thumb:active { background:#c0e9da; }
+*::-webkit-scrollbar-corner { background:#0a1322; }
+@supports (-moz-appearance:none) {
+  * { scrollbar-width:thin; scrollbar-color:#6d8ca6 #0a1322; }
+}

@@ -1,5 +1,6 @@
 import { TILE_SIZE, AEGIS_RESHIELD_WARNING_TICKS, TWIN_RANGED_WINDUP, TWIN_REVIVE_TICKS, CHAMBER_BOUNDS, chamberOfTile, PYLON_OVERLOAD_WINDUP, TWIN_TRANSFER_FX_TICKS } from './constants';
 import type { Enemy, GameState } from './engine';
+import { drawEnemyHealthBar } from './enemy-health-art';
 
 // Code-native sprites adapted directly from the approved prototype sheet.
 function spritePainter(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
@@ -261,8 +262,9 @@ export function drawEncounterEnemy(ctx: CanvasRenderingContext2D, e: Readonly<En
   ctx.restore();
   ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   if (!showHealth) { ctx.restore(); return true; }
-  const barY = e.type === 'aegis_sentinel' ? -49 : e.type === 'aegis_construct' ? -40 : -43;
-  const width = e.type === 'aegis_construct' ? 32 : 52;
+  if (e.type === 'aegis_construct') { ctx.restore(); drawEnemyHealthBar(ctx,e,sx,sy); return true; }
+  const barY = e.type === 'aegis_sentinel' ? -49 : -43;
+  const width = 52;
   ctx.fillStyle = '#0a101b'; ctx.fillRect(-width / 2 - 1, barY - 1, width + 2, 7);
   ctx.strokeStyle = color + '88'; ctx.lineWidth = 1; ctx.strokeRect(-width / 2 - .5, barY - .5, width + 1, 6);
   if (downed) {

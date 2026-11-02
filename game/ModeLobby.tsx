@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PixelArrow from '@/components/PixelArrow';
+import { canEnter, getProfile, highestStage, isDesktop } from './profile';
+import RulesModal from '@/components/RulesModal';
+import RubyStarGuide from './RubyStarGuide';
+import MenuButton from './MenuButton';
+import GameSettings from './GameSettings';
+import LobbyUtilityIcon from './LobbyUtilityIcon';
+import ExplorationTerminal from './ExplorationTerminal';
+import CelestialBackdrop from './CelestialBackdrop';
 import { playUiSfx, UiSfx } from './ui-sfx';
 
 type ModeCard = { id: string; title: string; tag?: string; description: string; path?: string; color: string; sound: UiSfx };
@@ -46,10 +54,15 @@ function Emblem({ id }: { id: string }) {
 
 export default function RubyStarLobby() {
   const router = useRouter();
+  const [terminal,setTerminal]=useState(false);
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [rulesOpen,setRulesOpen]=useState(false);
   const [query, setQuery] = useState('');
+  const [, refreshProfile] = useState(0);
+  useEffect(() => { const refresh=()=>refreshProfile(value=>value+1);window.addEventListener('ruby-profile',refresh);return ()=>window.removeEventListener('ruby-profile',refresh); }, []);
   const [index, setIndex] = useState(0); // First Orbit (the tutorial) starts centred
   // Debug query flags such as ?god=1 carry through to the chosen mode.
-  useEffect(() => { setQuery(window.location.search); }, []);
+  useEffect(() => { setQuery(window.location.search);if(isDesktop()&&getProfile().tutorialCompleted)setIndex(1); }, []);
 
   const rotate = useCallback((step: number) => {
     playUiSfx(step > 0 ? 'page' : 'back');
@@ -57,33 +70,39 @@ export default function RubyStarLobby() {
   }, []);
 
   const choose = useCallback((mode: ModeCard) => {
+    if(!canEnter(mode.id)){playUiSfx('locked');return;}
     playUiSfx(mode.sound);
     if (mode.path) setTimeout(() => router.push(mode.path + query), 180);
   }, [router, query]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if(terminal||settingsOpen||rulesOpen)return;
       if (event.key === 'ArrowLeft') { event.preventDefault(); rotate(-1); }
       else if (event.key === 'ArrowRight') { event.preventDefault(); rotate(1); }
       else if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) choose(MODES[index]);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rotate, choose, index]);
+  }, [rotate, choose, index, terminal, settingsOpen, rulesOpen]);
 
   return (
     <main className="ruby-star-ui rs-lobby">
       <style>{`
         body:has(.ruby-star-ui)::after { display: none; }
-        .rs-lobby { min-height: 100vh; box-sizing: border-box; padding: 20px 24px 40px; color: #e7e9f6; overflow: hidden;
+        .rs-lobby { height:100dvh; min-height:0; display:grid; place-items:center; box-sizing: border-box; padding:16px 24px; color: #e7e9f6; overflow: hidden;
           background: radial-gradient(circle at 50% 18%, #2a1230 0%, transparent 42%), radial-gradient(circle at 80% 85%, #10203a 0%, transparent 45%), #07080f; }
         .rs-lobby-stars { position: fixed; inset: 0; pointer-events: none; opacity: .55;
           background-image: radial-gradient(#ffffff 1px, transparent 1px), radial-gradient(#9fb6ff 1px, transparent 1px);
           background-size: 97px 89px, 151px 137px; background-position: 13px 29px, 61px 7px; }
-        .rs-lobby-inner { position: relative; max-width: 1100px; margin: 0 auto; }
-        .rs-lobby-title { margin: 28px 0 6px; text-align: center; font-family: var(--font-pixel); font-size: clamp(2rem, 5vw, 3.2rem);
+        .rs-lobby-inner { position:relative; width:100%; max-width:1200px; margin:0 auto; }
+        .rs-lobby-title { margin:0 0 6px; text-align: center; font-family: var(--font-pixel); font-size: clamp(2rem, 5vw, 3.2rem);
           letter-spacing: .12em; color: #ff6f9f; text-shadow: 0 0 18px #ff2f6f88, 4px 4px 0 #3a0f22; }
         .rs-lobby-sub { text-align: center; font-family: var(--font-mono); font-size: .8rem; letter-spacing: .3em; color: #8d93b3; margin: 0 0 18px; }
+        .rs-lobby-records { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:10px 18px; margin:0 auto 8px; font-family:var(--font-pixel); font-size:.52rem; line-height:1.8; color:#b2bad2; }
+        .rs-lobby-records > strong { color:#f5d78e; letter-spacing:.08em; }
+        .rs-lobby-records > span { padding:6px 10px; border:1px solid #8b774b88; background:#131727dc; }
+        .rs-lobby-records b { margin-left:8px; color:#f5d78e; }
         .rs-carousel { position: relative; height: 470px; display: flex; align-items: center; justify-content: center; }
         .rs-card { position: absolute; width: 400px; height: 400px; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column;
           align-items: center; text-align: center; background: #10131ff2; color: inherit; font: inherit; cursor: pointer;
@@ -94,24 +113,34 @@ export default function RubyStarLobby() {
         .rs-card[data-slot="-1"] { z-index: 2; transform: translateX(-370px) scale(.72); opacity: .45; filter: saturate(.6); }
         .rs-card[data-slot="1"] { z-index: 2; transform: translateX(370px) scale(.72); opacity: .45; filter: saturate(.6); }
         .rs-card[data-slot="-1"]:hover, .rs-card[data-slot="1"]:hover { opacity: .7; }
-        .rs-card[aria-disabled][data-slot="0"] { border-style: dashed; }
+        .rs-card[aria-disabled="true"][data-slot] { filter:grayscale(1); opacity:.42; border-style:dashed; }
+        .rs-mode-lock { position:absolute; right:20px; top:20px; width:22px; height:18px; background:#b8c1d0; box-shadow:inset -4px -4px 0 #687186; }
+        .rs-mode-lock::before { content:''; position:absolute; left:5px; top:-10px; width:12px; height:12px; border:3px solid #b8c1d0; border-bottom:0; box-sizing:border-box; }
+        .rs-mode-lock::after { content:''; position:absolute; left:10px; top:6px; width:3px; height:7px; background:#263044; }
         .rs-card[data-hidden] { z-index: 1; transform: scale(.5); opacity: 0; pointer-events: none; }
-        .rs-card-name { margin-top: 18px; font-family: var(--font-pixel); font-size: 1.1rem; line-height: 1.6; color: var(--mode); }
-        .rs-card-tag { display: inline-block; margin-top: 8px; font-family: var(--font-pixel); font-size: .7rem; padding: 4px 8px; color: #10131f; background: var(--mode); }
-        .rs-card-desc { margin-top: 12px; font-family: var(--font-mono); font-size: .85rem; line-height: 1.5; color: #b9bdd6; }
-        .rs-card-go { margin-top: auto; font-family: var(--font-pixel); font-size: .8rem; color: var(--mode); }
+        .rs-card-name { margin-top: 18px; font-family: var(--font-pixel); font-size:1.35rem; line-height:1.5; color:var(--mode); text-shadow:0 0 14px color-mix(in srgb,var(--mode) 22%,transparent); }
+        .rs-card-tag { display: inline-block; margin-top: 8px; font-family: var(--font-pixel); font-size:.6rem; padding:3px 7px; color:var(--mode); border:1px solid color-mix(in srgb,var(--mode) 45%,transparent); background:transparent; }
+        .rs-card-desc { margin-top: 12px; font-family: var(--font-mono); font-size:.78rem; line-height:1.5; color:#9ba6bd; }
+        .rs-card-go { margin-top: auto; font-family: var(--font-pixel); font-size:.65rem; color:var(--mode); opacity:.8; }
         .rs-arrow { position: absolute; top: 50%; z-index: 4; transform: translateY(-50%); width: 64px; height: 64px; display: grid; place-items: center; transform-origin: center;
           background: #141a2bf0; color: #e7e9f6; border: 2px solid #4a5478; cursor: pointer; transition: border-color 150ms, color 150ms, box-shadow 150ms; }
         .rs-arrow svg { width: 28px; height: 28px; }
         .rs-arrow:hover, .rs-arrow:focus-visible { outline: none; border-color: #ff6f9f; color: #ff6f9f; box-shadow: 0 0 16px #ff2f6f66; }
-        .rs-arrow-left { left: calc(50% - 610px); }
-        .rs-arrow-right { right: calc(50% - 610px); }
+        .rs-arrow-left { left:0; }
+        .rs-arrow-right { right:0; }
         .rs-dots { display: flex; justify-content: center; gap: 10px; }
         .rs-dot { width: 12px; height: 12px; padding: 0; border: 2px solid #4a5478; background: transparent; cursor: pointer; }
         .rs-dot[aria-current="true"] { background: var(--mode); border-color: var(--mode); }
+        .rs-card .rs-emblem { transform:scale(1.25); margin:16px 0 22px; }
         .rs-emblem { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
         .rs-gem { position: absolute; left: 42px; top: 42px; width: 56px; height: 56px; background: #ff4f8b; transform: rotate(45deg);
           box-shadow: 0 0 26px #ff2f6f, inset -12px -12px 0 #b8255a, inset 10px 10px 0 #ffb3cc; animation: rsGemFloat 2.4s ease-in-out infinite; }
+        .rs-gem-small { left:52px; top:52px; width:36px; height:36px; box-shadow:0 0 18px #ff2f6f88,inset -7px -7px 0 #b8255a,inset 6px 6px 0 #ffb3cc; }
+        .rs-orbit-path { position:absolute; inset:16px; border:2px dashed #7fd7ff66; }
+        .rs-orbit-arm { position:absolute; inset:16px; }
+        .rs-orbit-ship { position:absolute; width:20px; height:20px; left:-10px; top:-10px; animation:rsFirstOrbit 9s linear infinite; background:#ffd35c; border:2px solid #fff0ab; box-shadow:inset -3px -3px 0 #ae772d,0 0 8px #7fd7ff66; }
+        .rs-orbit-ship::after { content:''; position:absolute; left:5px; top:3px; width:8px; height:5px; background:#6ecbff; }
+        @keyframes rsFirstOrbit { 0% { transform:translate(0,0); } 25% { transform:translate(108px,0); } 50% { transform:translate(108px,108px); } 75% { transform:translate(0,108px); } 100% { transform:translate(0,0); } }
         .rs-gem-ascended { background: #c99bff; box-shadow: 0 0 30px #a56bff, inset -12px -12px 0 #7a45c8, inset 10px 10px 0 #efe0ff; }
         .rs-crown { position: absolute; left: 46px; top: 4px; width: 48px; height: 16px; background:
           linear-gradient(#ffe477, #ffe477) 0 8px / 48px 8px no-repeat, linear-gradient(#ffe477, #ffe477) 0 0 / 8px 8px no-repeat,
@@ -132,13 +161,30 @@ export default function RubyStarLobby() {
           linear-gradient(#ffffff, #ffffff) 50% 0 / 2px 100% no-repeat, linear-gradient(#ffffff, #ffffff) 0 50% / 100% 2px no-repeat;
           animation: rsTwinkle 1.8s ease-in-out infinite; }
         .rs-tp-spark-a { left: 14px; top: 18px; } .rs-tp-spark-b { left: 114px; top: 108px; animation-delay: .9s; }
+        @media(max-height:700px) {
+          .rs-lobby-title { font-size:2rem; }.rs-lobby-sub { margin-bottom:8px; }
+          .rs-carousel { height:400px; }.rs-card { width:350px; height:350px; padding:20px; }
+          .rs-card .rs-emblem { transform:scale(1.1); margin:4px 0 8px; }
+          .rs-card-name { font-size:1.15rem; margin-top:12px; }.rs-card-desc { font-size:.72rem; margin-top:8px; }
+          .rs-card[data-slot="-1"] { transform:translateX(-310px) scale(.68); }.rs-card[data-slot="1"] { transform:translateX(310px) scale(.68); }
+        }
         @keyframes rsTwinkle { 0%, 100% { opacity: .25; transform: scale(.6); } 50% { opacity: 1; transform: scale(1); } }
         @keyframes rsGemFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
       `}</style>
-      <div className="rs-lobby-stars" aria-hidden="true" />
+      <CelestialBackdrop/>
+      {isDesktop()&&<MenuButton sound="back" className="btn" style={{position:'fixed',left:24,top:18,zIndex:10,minHeight:44,padding:'8px 16px'}} onClick={()=>void window.rubyDesktop?.quit()}>QUIT</MenuButton>}
+      <div style={{position:'fixed',top:18,right:24,zIndex:10,display:'flex',gap:12}}>
+       <MenuButton sound="page" aria-label="Rules" title="Rules" onClick={()=>setRulesOpen(true)} style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid #778cae',color:'#c7ddec',fontFamily:'var(--font-pixel)',fontSize:18,cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a'}}>?</MenuButton>
+       {(['book','settings'] as const).map(kind=><MenuButton key={kind} sound="page" aria-label={kind==='book'?'Exploration terminal':'Settings'} title={kind==='book'?'Exploration terminal · Guidebook':'Settings'} onClick={()=>{if(kind==='book')setTerminal(true);else setSettingsOpen(true);}}
+        style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid '+(kind==='book'?'#827bb1':'#639d9a'),cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c'}}><LobbyUtilityIcon kind={kind}/></MenuButton>)}
+      </div>
+      <RulesModal isOpen={rulesOpen} onClose={()=>setRulesOpen(false)} title=":: ENDLESS SPACE" playSound={kind=>playUiSfx(kind)}><RubyStarGuide showEnemyGuide={false} endlessOnly/></RulesModal>
+      {settingsOpen&&<GameSettings onClose={()=>setSettingsOpen(false)}/>}
+      {terminal&&<ExplorationTerminal onClose={()=>setTerminal(false)}/>}
       <div className="rs-lobby-inner">
         <h1 className="rs-lobby-title">RUBY STAR</h1>
         <p className="rs-lobby-sub">SELECT MODE</p>
+        {isDesktop()&&<div className="rs-lobby-records" aria-label="Highest run"><strong>HIGHEST RUN</strong><span>ENDLESS<b>{highestStage('endless')>0?`STAGE ${highestStage('endless')}`:'—'}</b></span></div>}
         <div className="rs-carousel" role="group" aria-label="Game modes">
           <button type="button" className="rs-arrow rs-arrow-left" aria-label="Previous mode"
             onMouseEnter={() => playUiSfx('hover')} onClick={() => rotate(-1)}><PixelArrow direction="left" /></button>
@@ -148,12 +194,13 @@ export default function RubyStarLobby() {
             if (slot < -1) slot += MODES.length;
             const center = slot === 0;
             return (
-              <button key={mode.id} type="button" className="rs-card" data-slot={slot} data-hidden={Math.abs(slot) > 1 || undefined} aria-hidden={Math.abs(slot) > 1 || undefined} aria-disabled={!mode.path || undefined}
+              <button key={mode.id} type="button" className="rs-card" data-slot={slot} data-hidden={Math.abs(slot) > 1 || undefined} aria-hidden={Math.abs(slot) > 1 || undefined} aria-disabled={!mode.path || !canEnter(mode.id) || undefined}
                 aria-label={`${mode.title}${mode.tag ? ' ' + mode.tag : ''}${mode.path ? '' : ' (coming soon)'}`}
                 tabIndex={center ? 0 : -1} style={{ ['--mode' as string]: mode.color }}
                 onMouseEnter={() => playUiSfx('hover')}
                 onClick={() => center ? choose(mode) : rotate(slot)}>
                 <Emblem id={mode.id} />
+                {!canEnter(mode.id)&&<span className="rs-mode-lock" aria-hidden="true"/>}
                 <span className="rs-card-name">{mode.title}</span>
                 {mode.tag && <span className="rs-card-tag">{mode.tag}</span>}
                 <span className="rs-card-desc">{mode.description}</span>

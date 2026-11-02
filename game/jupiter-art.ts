@@ -13,6 +13,9 @@ export function jupiterTint(state:GameState,warm:string,cold:string) {
 export function jupiterColors(state: GameState) { return JUPITER_WARM.map((color,i)=>jupiterTint(state,color,JUPITER_STORM[i])); }
 const rect = (ctx: CanvasRenderingContext2D,x:number,y:number,w:number,h:number,color:string) => {ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),w,h);};
 
+function jupiterPlasmaPalette(state:GameState) {
+  return [jupiterTint(state,'#9d806c','#2fa58c'),jupiterTint(state,'#e5ba7f','#52ffd6'),jupiterTint(state,'#ffe8c8','#e2fff0')];
+}
 export function drawJupiterBackdrop(ctx: CanvasRenderingContext2D,state:GameState,w:number,h:number,camX:number,camY:number,tick:number) {
   const storm=state.jupiter?.stage==='pursuit';ctx.save();
   rect(ctx,0,0,w,h,jupiterTint(state,'#211921','#071c25'));
@@ -44,11 +47,10 @@ export function drawJupiterBackdrop(ctx: CanvasRenderingContext2D,state:GameStat
     const x=w*(i?.94:.085)-Math.sin(camX*.0003+i)*16,y=-h*.08;
     const fade=Math.pow(1-age/life,1.4);
     ctx.globalAlpha=fade*(storm?.055:.035);rect(ctx,0,0,w,h,jupiterTint(state,'#eac59f','#89e5d9'));
-    ctx.globalAlpha=fade*(storm?.8:.6);ctx.strokeStyle=jupiterTint(state,'#9d806c','#307e83');ctx.lineWidth=storm?15:10;
-    ctx.beginPath();ctx.moveTo(x+24,y);ctx.lineTo(x-35,y+h*.27);ctx.lineTo(x+18,y+h*.27);ctx.lineTo(x-52,y+h*.59);ctx.lineTo(x+5,y+h*.59);ctx.lineTo(x-80,y+h*1.1);ctx.stroke();
-    ctx.strokeStyle=jupiterTint(state,'#ffe8c8','#c4fff1');ctx.lineWidth=storm?4:3;ctx.stroke();
-    ctx.globalAlpha=fade*(storm?.65:.4);ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(x-20,y+h*.23);ctx.lineTo(x+100,y+h*.42);ctx.lineTo(x+65,y+h*.55);ctx.lineTo(x+145,y+h*.77);ctx.stroke();
+    ctx.save();ctx.translate(x,y);
+    drawReaperPlasma(ctx,[[16,0],[16,h*.22],[-22,h*.22],[-22,h*.48],[8,h*.48],[8,h*.72],[-36,h*.72],[-36,h*1.1]],fade*(storm?.7:.42),jupiterPlasmaPalette(state));
+    drawReaperPlasma(ctx,[[-22,h*.22],[60,h*.22],[60,h*.4],[95,h*.4],[95,h*.54]],fade*.35,jupiterPlasmaPalette(state));
+    ctx.restore();
   }
 
   ctx.restore();
@@ -86,30 +88,73 @@ export function drawJupiterTile(ctx:CanvasRenderingContext2D,state:GameState,tx:
   }
   const period=cover?(storm?100:180):230,age=(state.gameTick+tx*17+ty*29)%period;
   if(age<(cover?(storm?18:12):10)&&(cover||(tx*11+ty*7)%7===0)) {
-    ctx.globalAlpha=(1-age/(cover?20:12))*(cover?.85:.45);
-    ctx.strokeStyle=storm?'#a2ffe9':'#e9c89a';ctx.lineWidth=cover?2:1;
-    ctx.shadowColor=storm?'#52ffd6':'#e5ba7f';ctx.shadowBlur=cover?3:0;
-    const yy=y+(cover?8:35),hop=Math.floor(age/3)%2?4:-4;
-    ctx.beginPath();ctx.moveTo(x+5,yy);ctx.lineTo(x+15,yy+hop);ctx.lineTo(x+21,yy-3);ctx.lineTo(x+32,yy+hop);ctx.lineTo(x+43,yy);ctx.stroke();
-    if(cover){ctx.beginPath();ctx.moveTo(x+43,yy);ctx.lineTo(x+39,y+19);ctx.lineTo(x+45,y+27);ctx.lineTo(x+41,y+40);ctx.stroke();rect(ctx,x+41,y+39,3,3,'#e0fff0');}
+    const fade=(1-age/(cover?20:12))*(cover?.7:.4);
+    ctx.save();ctx.translate(x+6,y+(cover?9:33));ctx.scale(.55,.55);
+    const flip=Math.floor(age/3)%2?1:-1;
+    drawReaperPlasma(ctx,[[0,0],[18,0],[18,flip*6],[39,flip*6],[39,0],[64,0]],fade,jupiterPlasmaPalette(state));ctx.restore();
+    if(cover){ctx.save();ctx.translate(x+41,y+10);ctx.scale(.7,.7);drawReaperPlasma(ctx,[[0,0],[0,12],[-5,12],[-5,24],[2,24],[2,42]],fade,jupiterPlasmaPalette(state));ctx.restore();}
   }
   ctx.restore();
 }
-export function drawVoltFence(ctx:CanvasRenderingContext2D,x:number,y:number,vertical:boolean,half:number,tick:number,fade=1) {
-  ctx.save();ctx.translate(Math.round(x),Math.round(y));if(!vertical)ctx.rotate(Math.PI/2);ctx.shadowBlur=0;
-  // Same axis-aligned plasma cuts and layered palette as Reaper's melee lightning.
-  const flip=Math.floor(tick/6)%2?1:-1,span=half*2;
-  const points=[[0,-half],[0,-half+span*.16],[-5*flip,-half+span*.16],[-5*flip,-half+span*.38],
-    [5*flip,-half+span*.38],[5*flip,-half+span*.65],[-3*flip,-half+span*.65],[-3*flip,-half+span*.84],[0,-half+span*.84],[0,half]];
-  for(const [width,color,alpha]of [[10,'#2fa58c',.55],[6,'#52ffd6',.95],[2,'#e2fff0',1]] as const) {
+function drawReaperBeam(ctx:CanvasRenderingContext2D,ax:number,ay:number,bx:number,by:number,width:number,color:string){rect(ctx,Math.min(ax,bx)-width/2,Math.min(ay,by)-width/2,Math.max(width,Math.abs(ax-bx)+width),Math.max(width,Math.abs(ay-by)+width),color);}
+export function drawReaperStrike(ctx: CanvasRenderingContext2D, x: number, y: number, rawAngle: number, remaining: number) {
+ // Snap to the nearest right angle: the stepped cut stays axis-aligned instead of a diagonal scribble.
+ const angle=Math.round(rawAngle/(Math.PI/2))*(Math.PI/2);
+ const age=1-remaining, reach=TILE_SIZE*(.6+age*.7),cos=Math.cos(angle),sin=Math.sin(angle);
+ const at=(px: number,py: number)=>[x+px*cos-py*sin,y+px*sin+py*cos] as const;
+ ctx.save();
+ // Twin stepped plasma cuts cross the victim, drawn as axis-aligned pixel beams.
+ for(const side of [-1,1]){
+  const pts=[[-reach,-.45],[-.45,-.45],[-.45,-.15],[.1,-.15],[.1,.2],[.6,.2],[.6,.45],[1,.45]].map(([u,v],i)=>at(i===0?u:u*reach,v*reach*side));
+  for(const [width,color,alpha] of [[9,'#2fa58c',.55],[6,'#52ffd6',.95],[3,'#e2fff0',1]] as const){
+   ctx.globalAlpha=remaining*alpha;
+   for(let i=1;i<pts.length;i++)drawReaperBeam(ctx,pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1],width,color);
+  }
+ }
+ // An axis-aligned square shock front and four stepped ion bolts.
+ const r=10+age*43;ctx.globalAlpha=remaining*.6;ctx.strokeStyle='#35c9ad';ctx.lineWidth=4;
+ ctx.strokeRect(Math.round(x-r),Math.round(y-r),Math.round(r*2),Math.round(r*2));
+ for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const inner=12+age*22,tip=inner+12+age*18;
+  ctx.globalAlpha=remaining*.85;
+  drawReaperBeam(ctx,x+dx*inner,y+dy*inner,x+dx*(inner+8),y+dy*(inner+8),6,'#52ffd6');
+  drawReaperBeam(ctx,x+dx*(inner+8)-dy*6,y+dy*(inner+8)+dx*6,x+dx*tip-dy*6,y+dy*tip+dx*6,3,'#e2fff0');
+ }
+ ctx.globalAlpha=Math.max(0,1-age*4)*.65;ctx.fillStyle='#ebfff4';ctx.fillRect(Math.round(x)-11,Math.round(y)-11,22,22);
+ ctx.restore();
+}
+function drawReaperPlasma(ctx:CanvasRenderingContext2D,points:number[][],fade:number,palette:readonly string[]=['#2fa58c','#52ffd6','#e2fff0']) {
+  for(const [width,color,alpha]of [[10,palette[0],.55],[6,palette[1],.95],[2,palette[2],1]] as const) {
     ctx.globalAlpha=fade*alpha;
     for(let i=1;i<points.length;i++) {
       const [ax,ay]=points[i-1],[bx,by]=points[i];
       rect(ctx,Math.min(ax,bx)-width/2,Math.min(ay,by)-width/2,Math.max(width,Math.abs(ax-bx)+width),Math.max(width,Math.abs(ay-by)+width),color);
     }
   }
+}
+export function drawVoltFence(ctx:CanvasRenderingContext2D,x:number,y:number,vertical:boolean,half:number,tick:number,fade=1,negative=half,positive=half) {
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));if(!vertical)ctx.rotate(Math.PI/2);ctx.shadowBlur=0;
+  // Same axis-aligned plasma cuts and layered palette as Reaper's melee lightning.
+  const flip=Math.floor(tick/6)%2?1:-1,span=negative+positive;
+  const points=[[0,-negative],[0,-negative+span*.16],[-5*flip,-negative+span*.16],[-5*flip,-negative+span*.38],
+    [5*flip,-negative+span*.38],[5*flip,-negative+span*.65],[-3*flip,-negative+span*.65],[-3*flip,-negative+span*.84],[0,-negative+span*.84],[0,positive]];
+  drawReaperPlasma(ctx,points,fade);
   ctx.globalAlpha=fade;
-  for(const side of [-1,1]) {rect(ctx,-8,side*half-7,16,14,'#193f43');rect(ctx,-8,side*half-7,16,3,'#8cffe0');rect(ctx,-3,side*half-4,6,8,'#e3fff5');}
+  for(const end of [-negative,positive]) {rect(ctx,-8,end-7,16,14,'#193f43');rect(ctx,-8,end-7,16,3,'#8cffe0');rect(ctx,-3,end-4,6,8,'#e3fff5');}
+  ctx.restore();
+}
+
+export function drawPursuitFragment(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,overdrive=false) {
+  ctx.save();ctx.translate(Math.round(x),Math.round(y+Math.sin(tick*.05)*2));
+  // Broken capacitor halves, rather than the race's golden star-shaped jewel.
+  for(const side of [-1,1]) {
+    rect(ctx,side*15-5,-17,10,34,'#153d39');rect(ctx,side*15-5,-17,10,3,'#9fffe1');
+    rect(ctx,side*15-3,-11,6,22,'#3caf93');rect(ctx,side*22-3,-8,6,16,'#1d5b50');
+    rect(ctx,side*22-2,-8,4,5,'#a8ffe3');
+  }
+  const flip=Math.floor(tick/6)%2?1:-1;
+  drawReaperPlasma(ctx,[[2,-16],[2,-7],[-4*flip,-7],[-4*flip,3],[4*flip,3],[4*flip,12],[0,12],[0,18]],overdrive?1:.8);
+  if(overdrive){ctx.globalAlpha=.5+.4*Math.sin(tick*.2);for(const side of [-1,1]){rect(ctx,side*29-2,-14,3,9,'#dffff0');rect(ctx,side*29-2,6,3,9,'#dffff0');}}
   ctx.restore();
 }
 
@@ -141,11 +186,10 @@ function drawShardEffects(ctx:CanvasRenderingContext2D,state:GameState,camX:numb
       ctx.strokeStyle='#83f5bb';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(bx,by);ctx.stroke();
       rect(ctx,bx-3,by-16,6,32,'#9affe0');rect(ctx,bx-16,by-3,32,6,'#9affe0');
     } else if(age<16) {
-      const points=[[bx-25,by-330],[bx+15,by-230],[bx-13,by-230],[bx+18,by-104],[bx-8,by-104],[bx,by]];
-      for(const [width,c]of [[7,'#73d8b1'],[2,'#f1fff3']] as const) {
-        ctx.strokeStyle=c;ctx.lineWidth=width;ctx.beginPath();points.forEach(([px,py],i)=>i?ctx.lineTo(px,py):ctx.moveTo(px,py));ctx.stroke();
-      }
-      for(let k=0;k<6;k++){const a=k*Math.PI/3,r=12+age*2;rect(ctx,bx+Math.cos(a)*r-2,by+Math.sin(a)*r-2,4,4,'#e2ffed');}
+      // The same stepped cuts as his melee hit, with a vertical incoming plasma column.
+      const fall=[[bx+8,by-300],[bx+8,by-240],[bx-10,by-240],[bx-10,by-180],[bx+7,by-180],[bx+7,by-110],[bx-5,by-110],[bx-5,by-48],[bx,by-48],[bx,by]];
+      drawReaperPlasma(ctx,fall,fade);
+      drawReaperStrike(ctx,bx,by,Math.PI/2,Math.max(0,1-age/18));
     }
     ctx.restore();
   }
@@ -157,10 +201,7 @@ export function drawJupiterGround(ctx:CanvasRenderingContext2D,state:GameState,c
   drawJupiterDischarge(ctx,state,camX,camY,tick);
   for(const fragment of j.fragments??[]) {
     const x=(fragment.x+.5)*TILE_SIZE-camX,y=(fragment.y+.5)*TILE_SIZE-camY;
-    ctx.save();ctx.translate(x,y);ctx.scale(.85,.85);drawStormShard(ctx,0,0,tick,fragment.id);ctx.restore();
-    const left=Math.ceil(fragment.charge/JUPITER.fragmentChargeTicks*8);
-    for(let k=0;k<8;k++)rect(ctx,x-23+k*6,y+29,4,4,k<left?'#bc9aff':'#392d51');
-    if(j.fragmentOverdrive){ctx.strokeStyle='#dfb0ff';ctx.lineWidth=2;ctx.strokeRect(x-24,y-27,48,64);}
+    drawPursuitFragment(ctx,x,y,tick,j.fragmentOverdrive);
   }
   for(const storm of j.miniStorms??[])drawMiniStorm(ctx,storm.x-camX,storm.y-camY,tick,storm.id);
   if(j.stage==='escape')for(const shard of j.shards??[])drawStormShard(ctx,(shard.x+.5)*TILE_SIZE-camX,(shard.y+.5)*TILE_SIZE-camY,tick,shard.id);
@@ -193,10 +234,8 @@ export function drawJupiterGround(ctx:CanvasRenderingContext2D,state:GameState,c
       const strike=(tick+room*11)%40;
       if(!warning&&strike<15)for(let bolt=0;bolt<2;bolt++) {
         const lx=x+w*(bolt?.72:.28)+(Math.floor(tick/40)%3-1)*28;
-        ctx.globalAlpha=(1-strike/16)*.9;ctx.strokeStyle='#49bfae';ctx.lineWidth=12;ctx.shadowColor='#8cffe4';ctx.shadowBlur=5;
-        ctx.beginPath();ctx.moveTo(lx,y+30);ctx.lineTo(lx-45,y+h*.3);ctx.lineTo(lx+12,y+h*.3);ctx.lineTo(lx-54,y+h*.65);ctx.lineTo(lx-10,y+h*.65);ctx.lineTo(lx-70,y+h);ctx.stroke();
-        ctx.strokeStyle='#d8fff0';ctx.lineWidth=3;ctx.stroke();ctx.shadowBlur=0;
-        ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(lx-28,y+h*.24);ctx.lineTo(lx+80,y+h*.38);ctx.lineTo(lx+56,y+h*.5);ctx.stroke();
+        drawReaperPlasma(ctx,[[lx,y+30],[lx,y+h*.25],[lx-28,y+h*.25],[lx-28,y+h*.52],[lx+8,y+h*.52],[lx+8,y+h*.78],[lx-35,y+h*.78],[lx-35,y+h]],(1-strike/16)*.9,jupiterPlasmaPalette(state));
+        drawReaperPlasma(ctx,[[lx-28,y+h*.25],[lx+55,y+h*.25],[lx+55,y+h*.4],[lx+80,y+h*.4]],(1-strike/16)*.6,jupiterPlasmaPalette(state));
       }
       ctx.restore();
     }
@@ -206,16 +245,16 @@ export function drawJupiterGround(ctx:CanvasRenderingContext2D,state:GameState,c
     for(let side=0;side<2;side++) {
       const age=(tick+room*39+side*61)%160;if(age>14)continue;
       const x=(side?c2:c1+1)*TILE_SIZE-camX,y=(r1+3+Math.floor((tick+room*29)/160)%12)*TILE_SIZE-camY;
-      ctx.globalAlpha=(1-age/15)*.65;ctx.strokeStyle=j.stage==='pursuit'?'#a3ffe6':'#edcea0';ctx.lineWidth=2;
-      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+(side?-6:6),y+12);ctx.lineTo(x-3,y+20);ctx.lineTo(x,y+36);ctx.stroke();
+      ctx.save();ctx.translate(x,y);ctx.scale(.7,.7);
+      drawReaperPlasma(ctx,[[0,0],[0,12],[side?-7:7,12],[side?-7:7,30],[0,30],[0,50]],(1-age/15)*.65,jupiterPlasmaPalette(state));ctx.restore();
     }
   });
   ctx.globalAlpha=1;
-  for(const wall of j.walls)drawVoltFence(ctx,wall.x-camX,wall.y-camY,wall.vertical,wall.half,tick,Math.min(1,(JUPITER.wallTicks-wall.age)/60));
+  for(const wall of j.walls)drawVoltFence(ctx,wall.x-camX,wall.y-camY,wall.vertical,wall.half,tick,Math.min(1,(JUPITER.wallTicks-wall.age)/60),wall.negative??wall.half,wall.positive??wall.half);
   for(const b of j.bursts) {
     ctx.globalAlpha=b.ticks/24;const x=b.x-camX,y=b.y-camY,r=(1-b.ticks/24)*38;
     ctx.strokeStyle='#d5fff1';ctx.lineWidth=3;ctx.strokeRect(x-r,y-r,r*2,r*2);
-    drawVoltFence(ctx,x,y,b.vertical,b.half,tick,b.ticks/24);
+    drawVoltFence(ctx,x,y,b.vertical,b.half,tick,b.ticks/24,b.negative??b.half,b.positive??b.half);
   }
   ctx.restore();
 }
@@ -231,18 +270,48 @@ export function drawChargedTile(ctx:CanvasRenderingContext2D,x:number,y:number,t
 }
 
 export function drawMiniStorm(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,id=0) {
-  ctx.save();ctx.translate(Math.round(x),Math.round(y));
-  ctx.fillStyle='#143d40cc';ctx.fillRect(-24,-20,48,40);
-  // Broken rectangular wind bands share the Reaper's sharp, stepped electricity.
-  for(let k=0;k<3;k++) {
-    const r=12+k*7,side=(Math.floor(tick/5)+k+id)%4;
-    ctx.strokeStyle=k===0?'#dcfff1':'#63cdb3';ctx.globalAlpha=.9-k*.18;ctx.lineWidth=k===0?3:2;
-    ctx.beginPath();
-    if(side%2){ctx.moveTo(-r,-r+5);ctx.lineTo(-r,r);ctx.lineTo(r-7,r);}
-    else{ctx.moveTo(-r+7,-r);ctx.lineTo(r,-r);ctx.lineTo(r,r-5);}
-    ctx.stroke();
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;
+  const random=(seed:number)=>{const n=Math.sin(seed*127.1+id*71.7)*43758.5453;return n-Math.floor(n);};
+  const colors=[['#438c85','#75beaa','#5cae9b'],['#337b7a','#55a99c','#438f89'],['#286568','#438d88','#337b7d']];
+  for(let layer=0;layer<3;layer++) {
+    const width=72-layer*22,yy=-32+layer*22,drift=Math.round(Math.sin(tick*.08-layer*1.3+id)*5),left=drift-width/2,right=drift+width/2;
+    ctx.save();ctx.beginPath();
+    const outline=[[left+5,yy],[right-5,yy],[right-5,yy+4],[right,yy+4],[right,yy+14],[right-6,yy+14],[right-6,yy+18],[left+4,yy+18],[left+4,yy+14],[left,yy+14],[left,yy+4],[left+5,yy+4]];
+    outline.forEach(([px,py],i)=>i?ctx.lineTo(px,py):ctx.moveTo(px,py));ctx.closePath();ctx.clip();
+    ctx.globalAlpha=.6;rect(ctx,left,yy,width,18,colors[layer][0]);
+    // Broad broken color ribbons travel through each wind layer, without beveled edges.
+    for(let band=0;band<3;band++) {
+      const travel=(tick*(layer%2?-1.25:1.1)+band*width*.55+id*9)%(width*1.6),start=left+((travel+width*1.6)%(width*1.6))-width*.5,top=yy+2+band*5;
+      ctx.globalAlpha=band===1?.62:.44;ctx.fillStyle=colors[layer][1+band%2];
+      ctx.beginPath();ctx.moveTo(start,top);ctx.lineTo(start+width*.47,top);ctx.lineTo(start+width*.47,top+3);ctx.lineTo(start+width*.7,top+3);ctx.lineTo(start+width*.7,top+6);ctx.lineTo(start+width*.15,top+6);ctx.lineTo(start+width*.15,top+4);ctx.lineTo(start,top+4);ctx.closePath();ctx.fill();
+    }
+    ctx.restore();
   }
-  ctx.globalAlpha=1;ctx.strokeStyle='#ecfff5';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(4,-15);ctx.lineTo(-5,-2);ctx.lineTo(5,-2);ctx.lineTo(-3,14);ctx.stroke();
+  // Thin branching current traverses the whole funnel; its topology changes every three ticks.
+  const epoch=Math.floor(tick/3),burst=(tick+id*17)%44;
+  const electricity=(points:number[][],alpha:number)=>{
+    for(const [width,color,opacity]of [[3,'#65d9b7',.48],[1,'#dcfff0',1]] as const){
+      ctx.globalAlpha=alpha*opacity;
+      for(let k=1;k<points.length;k++)drawReaperBeam(ctx,points[k-1][0],points[k-1][1],points[k][0],points[k][1],width,color);
+    }
+  };
+  if(burst<24)for(let arc=0;arc<2;arc++) {
+    const y0=-27+arc*23,reach=arc?27:40,points:number[][]=[[-reach,y0]];
+    for(let step=1;step<=6;step++){
+      const px=-reach+step*reach/3,py=Math.round((y0+(random(epoch*19+step*7+arc*43)-.5)*15)/2)*2;
+      points.push([px,points[points.length-1][1]],[px,py]);
+    }
+    electricity(points,.5+random(epoch+arc*31)*.45);
+    const fork=points[6];electricity([fork,[fork[0],fork[1]-8],[fork[0]+(arc?-7:9),fork[1]-8],[fork[0]+(arc?-7:9),fork[1]-14]],.55);
+  }
+  if(burst>15&&burst<37) {
+    const points:number[][]=[[4,-40]];
+    for(let step=1;step<=7;step++){
+      const yy=-40+step*11,xx=Math.round((random(epoch*23+step*11)-.5)*(25-step*2));
+      points.push([points[points.length-1][0],yy],[xx,yy]);
+    }
+    electricity(points,.75);
+  }
   ctx.restore();
 }
 
@@ -257,7 +326,12 @@ function drawJupiterDischarge(ctx:CanvasRenderingContext2D,state:GameState,camX:
     const boss=state.enemies.find(e=>e.id===j.bossId),bx=(boss?.x??((c1+c2+1)/2)*TILE_SIZE)-camX,by=(boss?.y??((r1+r2+1)/2)*TILE_SIZE)-camY;
     for(let i=0;i<3;i++){const reach=Math.max(0,age*2-i*.2)*Math.max(w,h);ctx.globalAlpha=(1-age)*(.8-i*.15);ctx.strokeStyle=i?'#74f4d9':'#f0fff7';ctx.lineWidth=i?4:8;ctx.strokeRect(bx-reach,by-reach,reach*2,reach*2);}
     ctx.globalAlpha=(1-age)*.8;ctx.strokeStyle='#d8fff2';ctx.lineWidth=4;
-    for(let i=0;i<8;i++){const angle=i*Math.PI/4,dx=Math.cos(angle),dy=Math.sin(angle),r=100+age*900;ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+dx*r*.4-dy*22,by+dy*r*.4+dx*22);ctx.lineTo(bx+dx*r*.6+dy*12,by+dy*r*.6-dx*12);ctx.lineTo(bx+dx*r,by+dy*r);ctx.stroke();}
+    // Repeat his actual attack cut across the chamber, instead of stretching thin rays.
+    for(let i=0;i<6;i++) {
+      const px=x+w*(i%2?.72:.28),py=y+h*(.22+Math.floor(i/2)*.28),life=Math.max(0,1-age-i*.015);
+      ctx.save();ctx.translate(px,py);ctx.scale(1.8,1.8);drawReaperStrike(ctx,0,0,i%2?Math.PI/2:0,life);ctx.restore();
+    }
+    ctx.save();ctx.translate(bx,by);ctx.scale(2.3,2.3);drawReaperStrike(ctx,0,0,Math.PI/2,1-age);ctx.restore();
   } else {
     const progress=j.energy/100,color=j.round===2?'#c5a4ff':'#72ffd9';
     ctx.globalAlpha=.05+progress*.08;rect(ctx,x,y,w,h,color);
@@ -267,45 +341,29 @@ function drawJupiterDischarge(ctx:CanvasRenderingContext2D,state:GameState,camX:
   ctx.restore();
 }
 export function drawReaperCharge(ctx:CanvasRenderingContext2D,x:number,y:number,progress:number,tick:number,second=false,front=false) {
-  const p=Math.max(0,Math.min(1,progress)),color=second?'#c5a4ff':'#52ffd6',core=second?'#f2e9ff':'#dcfff2';
-  ctx.save();ctx.translate(Math.round(x),Math.round(y));
+  const p=Math.max(0,Math.min(1,progress)),flip=Math.floor(tick/6)%2?1:-1;
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;
   if(!front) {
-    // Low pressure ripples tighten under him while the body lifts and the blades accelerate.
-    for(let wave=0;wave<2;wave++) {
-      const t=(tick*(.012+p*.012)+wave*.5)%1,r=95-t*58;
-      ctx.globalAlpha=Math.sin(t*Math.PI)*(.1+p*.18);ctx.strokeStyle=color;ctx.lineWidth=2;
-      ctx.beginPath();for(let k=0;k<8;k++){const angle=k*Math.PI/4,px=Math.cos(angle)*r,py=Math.sin(angle)*r*.55;if(k===0)ctx.moveTo(px,py+24);else ctx.lineTo(px,py+24);}ctx.closePath();ctx.stroke();
+    // Inward feeds use the same layered rectangular plasma cuts as Volt Fence.
+    for(const side of [-1,1])for(const upper of [-1,1]) {
+      const reach=74+p*20,yy=upper*34,kink=flip*6*upper;
+      drawReaperPlasma(ctx,[[side*reach,yy],[side*(reach-16),yy],[side*(reach-16),yy+kink],
+        [side*50,yy+kink],[side*50,upper*18],[side*34,upper*18],[side*34,upper*10],[side*23,upper*10]],(.25+p*.65)*(upper<0?1:.7));
+      const travel=(tick*(.025+p*.025)+(side+upper)*.19)%1,px=side*(reach-(reach-26)*travel);
+      ctx.globalAlpha=Math.sin(travel*Math.PI)*(.4+p*.5);rect(ctx,px-3,yy-2,6,4,'#e2fff0');
     }
-    // Four staggered electrical feeds converge on the body. No enclosing warning box.
-    for(let i=0;i<4;i++) {
-      const sx=i%2?1:-1,sy=i<2?-1:1,travel=(tick*(.022+p*.025)+i*.27)%1;
-      const ax=sx*(82-p*12),ay=sy*48,bx=sx*28,by=sy*12;
-      ctx.globalAlpha=.16+p*.26;ctx.strokeStyle=color;ctx.lineWidth=4;
-      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(sx*55,ay);ctx.lineTo(sx*45,sy*24);ctx.lineTo(bx,by);ctx.stroke();
-      ctx.globalAlpha=.45+p*.4;ctx.strokeStyle=core;ctx.lineWidth=1.5;
-      const kink=Math.sin(Math.floor(tick/3)+i*3)*(2+p*4);
-      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(sx*60,ay+kink);ctx.lineTo(sx*48+kink,sy*28);ctx.lineTo(bx,by);ctx.stroke();
-      const px=ax+(bx-ax)*travel,py=ay+(by-ay)*travel;
-      ctx.globalAlpha=Math.sin(travel*Math.PI)*(.5+p*.45);rect(ctx,px-4,py-2,8,4,core);
-      ctx.globalAlpha=.25+p*.25;rect(ctx,ax-6,ay-2,12,3,color);
-    }
+    const r=50-p*9,c=second?'#c5a4ff':'#72d9bb';ctx.globalAlpha=.2+p*.3;
+    for(const side of [-1,1]){rect(ctx,side*r-8,34,16,3,c);rect(ctx,side*r-2,28,4,12,c);}
   } else {
-    // Fill the shell's edges as the stored charge rises; the eye and face stay clear.
-    ctx.shadowColor=color;ctx.shadowBlur=4;ctx.globalAlpha=.35+p*.6;
-    const fill=5+p*32;
-    rect(ctx,-25,20-fill,3,fill,color);rect(ctx,22,20-fill,3,fill,color);
-    rect(ctx,-17,22,34,3,core);rect(ctx,-10,-25,20,3,color);
-    if(p>.6)for(const side of [-1,1]) {
-      const beat=Math.sin(tick*.5+side)*4;
-      ctx.globalAlpha=(p-.6)*1.7;ctx.strokeStyle=core;ctx.lineWidth=2;ctx.beginPath();
-      ctx.moveTo(side*23,-15);ctx.lineTo(side*(34+beat),-35);ctx.lineTo(side*26,-35);ctx.lineTo(side*(40-beat),-58);ctx.stroke();
-    }
+    // Rising side arcs and capacitor pips leave his face and animated blades clear.
     for(const side of [-1,1]) {
-      const beat=Math.floor(tick/4)%3;
-      ctx.globalAlpha=.3+p*.6;ctx.strokeStyle=color;ctx.lineWidth=3;ctx.shadowBlur=3;
-      ctx.beginPath();ctx.moveTo(side*36,31);ctx.lineTo(side*(49+beat*3),8);ctx.lineTo(side*39,4);ctx.lineTo(side*(54-beat*3),-29);ctx.lineTo(side*44,-34);ctx.lineTo(side*(50+p*16),-58-p*32);ctx.stroke();
-      ctx.globalAlpha=.55+p*.4;ctx.fillStyle=core;
-      for(let k=0;k<3;k++){const age=(tick*(.7+p)+k*29+side*7)%88;rect(ctx,side*(44+k*9)-2,34-age,3+k%2,6,core);}
+      const top=-36-p*54,xx=side*(44+flip*3);
+      drawReaperPlasma(ctx,[[side*34,26],[xx,26],[xx,8],[xx+side*7,8],[xx+side*7,-15],
+        [xx-side*3,-15],[xx-side*3,-37],[xx+side*5,-37],[xx+side*5,top]],.35+p*.65);
+      if(p>.72)drawReaperPlasma(ctx,[[xx+side*5,-37],[side*67,-37],[side*67,-56],[side*78,-56]],(p-.72)*2.4);
+      for(let k=0;k<5;k++)if(p>(k+1)/6){ctx.globalAlpha=.65;rect(ctx,side*23-2,19-k*8,4,5,k%2?'#e2fff0':'#52ffd6');}
+      const age=(tick*(.6+p)+side*17)%72;ctx.globalAlpha=(1-age/72)*p;
+      rect(ctx,side*(54+Math.floor(age/24)*6)-2,24-age,4,6,'#dffff0');
     }
   }
   ctx.restore();
@@ -317,13 +375,14 @@ export function drawJupiterBossEffect(ctx:CanvasRenderingContext2D,state:GameSta
   if(j.stage==='charging') {
     drawReaperCharge(ctx,x+Math.sin(tick*.65)*Math.pow(j.energy/100,2)*2,y-j.energy/100*9+Math.sin(tick*.1)*2,j.energy/100,tick,j.round===2,true);
   }
+  if((j.overdriveBurstTicks??0)>0){
+    const age=1-j.overdriveBurstTicks/30;ctx.save();ctx.translate(x,y);
+    for(let i=0;i<4;i++){ctx.save();ctx.rotate(i*Math.PI/2);const r=30+age*90;
+      drawReaperPlasma(ctx,[[26,0],[r*.6,0],[r*.6,-6],[r,-6],[r,4],[r+14,4]],(1-age)*.95);ctx.restore();}
+    ctx.restore();
+  }
   if(j.stage==='pursuit'&&j.stormAge<18) {
-    const age=j.stormAge/18;
-    ctx.globalAlpha=(1-age)*.8;ctx.strokeStyle=j.round===2?'#e4d5ff':'#d8fff1';ctx.lineWidth=3;
-    for(let i=0;i<4;i++) {
-      ctx.save();ctx.translate(x,y);ctx.rotate(i*Math.PI/2);
-      ctx.beginPath();ctx.moveTo(28+age*24,0);ctx.lineTo(50+age*65,-6);ctx.lineTo(55+age*65,3);ctx.lineTo(72+age*100,0);ctx.stroke();ctx.restore();
-    }
+    ctx.save();ctx.translate(x,y);ctx.scale(1.4,1.4);drawReaperStrike(ctx,0,0,0,1-j.stormAge/18);ctx.restore();
   }
   if(j.stage==='escape') {
     const boss=state.enemies.find(e=>e.id===j.bossId);
@@ -348,7 +407,7 @@ export function drawJupiterBossEffect(ctx:CanvasRenderingContext2D,state:GameSta
 }
 export function drawJupiterMinimap(ctx:CanvasRenderingContext2D,state:GameState,mx:number,my:number,scale:number) {
   const j=state.jupiter;if(!j)return;ctx.save();
-  for(const f of j.fragments??[]){const x=mx+(f.x+.5)*scale,y=my+(f.y+.5)*scale;rect(ctx,x-3,y-3,6,6,j.fragmentOverdrive?'#e5b4ff':'#c5a4ff');rect(ctx,x-1,y-1,2,2,'#fff4d2');}
+  for(const f of j.fragments??[]){const x=mx+(f.x+.5)*scale,y=my+(f.y+.5)*scale;rect(ctx,x-4,y-3,3,6,'#65d5b6');rect(ctx,x+1,y-3,3,6,'#65d5b6');rect(ctx,x-1,y-2,2,4,j.fragmentOverdrive?'#ffffff':'#caffed');}
   for(const s of j.miniStorms??[]) {ctx.strokeStyle='#b1f4df';ctx.lineWidth=1;ctx.strokeRect(mx+s.x/TILE_SIZE*scale-3,my+s.y/TILE_SIZE*scale-3,6,6);}
   if(j.stage==='escape')for(const shard of j.shards??[]) {
     const x=mx+(shard.x+.5)*scale,y=my+(shard.y+.5)*scale;
@@ -381,18 +440,20 @@ export function drawJupiterGuard(ctx:CanvasRenderingContext2D,state:GameState,ca
     const x=Math.round(state.playerX-camX),y=Math.round(state.playerY-camY);
     const fade=Math.min(1,state.jupiter!.slowTicks/12),frame=Math.floor(tick/5);
     ctx.save();ctx.globalAlpha=fade*.8;
-    // Small grounding contacts and intermittent ankle arcs, using the player's crisp geometry.
-    // Leave the face and body clear; this is a debuff, not an enclosing shield or stacked waves.
+    ctx.translate(x,y);
+    const pulse=frame%3!==0;
     for(const side of [-1,1]) {
-      const xx=x+side*11;
-      rect(ctx,xx-5,y+16,10,4,'#183e50');rect(ctx,xx-4,y+16,8,2,'#83d5ed');
-      if((frame+(side===1?2:0))%4<2) {
-        ctx.strokeStyle='#86d7f0';ctx.lineWidth=2;ctx.beginPath();
-        ctx.moveTo(x+side*14,y+7);ctx.lineTo(x+side*19,y+11);ctx.lineTo(x+side*15,y+15);ctx.lineTo(xx,y+18);ctx.stroke();
-        rect(ctx,xx-2,y+16,4,2,'#def9ff');
+      ctx.save();ctx.scale(.5,.5);
+      const xx=side*(state.playerCarryingRuby?48:33),flip=frame%2?1:-1;
+      drawReaperPlasma(ctx,[[xx,-37],[xx,-17],[xx+side*8,-17],[xx+side*8,3],[xx-side*5,3],[xx-side*5,25],[xx+side*6,25],[xx+side*6,42]],fade*(pulse?.95:.45),['#285781','#70bfff','#e3f6ff']);
+      ctx.restore();
+      for(let k=0;k<3;k++){
+        const life=(tick+k*17+side*13)%44,r=20+life*.35,yy=-25+k*19;
+        ctx.globalAlpha=fade*(1-life/44);rect(ctx,side*r-1,yy,3,5,k%2?'#e1f5ff':'#8bcfff');
       }
-      if((frame+(side===1?1:0))%3===0)rect(ctx,x+side*23-1,y+13+(frame%2)*4,2,2,'#b9efff');
     }
+    // Brief current crossing the shoulder and boots, without obscuring the visor.
+    if(frame%2===0){ctx.globalAlpha=fade*.65;rect(ctx,-13,-19,10,2,'#e1f5ff');rect(ctx,3,18,10,2,'#9dd7ff');}
     ctx.restore();
   }
   const left=state.jupiter?.guardTicks??0;if(left<=0)return;
@@ -425,9 +486,9 @@ export function drawJupiterTransition(ctx:CanvasRenderingContext2D,state:GameSta
   ctx.globalAlpha=impact*.1;rect(ctx,0,0,w,h,entering?'#8affdf':'#ffcc8d');
   const front=w*(progress*1.4-.2);
   ctx.globalAlpha=impact*.16;rect(ctx,front-64,0,128,h,entering?'#52ffd6':'#ffc18a');
-  ctx.globalAlpha=impact*.8;ctx.strokeStyle=entering?'#d8fff1':'#ffecd0';ctx.lineWidth=3;ctx.shadowColor=entering?'#52ffd6':'#ffc18a';ctx.shadowBlur=5;
-  ctx.beginPath();ctx.moveTo(front,0);
-  for(let i=1;i<=8;i++)ctx.lineTo(front+(i%2?18:-18),h*i/8);ctx.stroke();ctx.shadowBlur=0;
+  const sweepPoints:number[][]=[[front,0]];
+  for(let i=1;i<=8;i++){const px=front+(i%2?18:-18),yy=h*i/8;sweepPoints.push([sweepPoints[sweepPoints.length-1][0],yy],[px,yy]);}
+  drawReaperPlasma(ctx,sweepPoints,impact*.65,jupiterPlasmaPalette(state));
   // Long cardinal streaks convey pressure changing across the whole arena.
   for(let i=0;i<6;i++) {
     const y=h*(i+.5)/6,x=(tick*12+i*173)%w;

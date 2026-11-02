@@ -187,7 +187,7 @@ test('diving roams when safe, flees nearby player, and resumes roaming once play
  const {state,sea}=fresh();position(sea,39,39);sea.pathTimer=0;dive(sea);
  engine.tick(state);assert.equal(sea.sea.diveFleeing,false);assert.ok(sea.path.length>0);
  const destination=sea.path.at(-1);assert.ok(Math.hypot(destination[0]-39,destination[1]-39)<=10);
- const startX=sea.x,startY=sea.y;for(let i=0;i<180;i++)engine.tick(state);assert.ok(Math.hypot(sea.x-startX,sea.y-startY)>constants.TILE_SIZE);
+ const startX=sea.x,startY=sea.y;let furthest=0;for(let i=0;i<180;i++){engine.tick(state);furthest=Math.max(furthest,Math.hypot(sea.x-startX,sea.y-startY));}assert.ok(furthest>constants.TILE_SIZE,'roaming travels beyond the starting tile even if its route later returns nearby');
  position(sea,15,10);sea.pathTimer=0;engine.tick(state);assert.equal(sea.sea.diveFleeing,true);
  const end=sea.path.at(-1);assert.ok(Math.hypot(end[0]-state.playerTileX,end[1]-state.playerTileY)>18);
  state.playerTileX=state.playerTargetX=39;state.playerTileY=state.playerTargetY=39;state.playerX=39.5*constants.TILE_SIZE;state.playerY=39.5*constants.TILE_SIZE;

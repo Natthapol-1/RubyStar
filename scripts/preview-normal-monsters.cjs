@@ -2,7 +2,9 @@ const fs=require('fs'),path=require('path'),Module=require('module'),ts=require(
 require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,f);
 const {createCanvas}=require('@napi-rs/canvas');
 const c=require('../game/constants.ts'),engine=require('../game/engine.ts'),source=fs.readFileSync('game/RubyStarGame.tsx','utf8');
-const code='const {'+Object.keys(c).join(',')+"}=require('./constants.ts');const {"+Object.keys(engine).filter(k=>!(k in c)).join(',')+"}=require('./engine.ts');const {drawNeptuneUnit,drawNeptuneOverlay,drawSkyLaserImpact}=require('./neptune-art.ts');const {drawEncounterEnemy,drawEncounterTelegraphs,drawEncounterEffects}=require('./encounter-art.ts');"+source.slice(source.indexOf('const BG_COLOR'),source.indexOf('// Challenge HUD centre: the guardian'))+';exports.drawEnemy=drawEnemy;exports.drawGame=drawGame;';
+const modules='field-art|blessing-art|blessing-effects|endless-build-art|warning-art|singularity-art|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun';
+const imports=[...source.matchAll(new RegExp("^import\\s+(\\{[^}]*\\})\\s+from\\s+'\\./("+modules+")';",'gm'))].map(m=>`const ${m[1].replace(/\btype\s+/g,'')}=require('./${m[2]}.ts');`).join('');
+const code='const {'+Object.keys(c).join(',')+"}=require('./constants.ts');const {"+Object.keys(engine).filter(k=>!(k in c)).join(',')+"}=require('./engine.ts');"+imports+source.slice(source.indexOf('const BG_COLOR'),source.indexOf('// Challenge HUD centre: the guardian'))+';exports.drawEnemy=drawEnemy;exports.drawGame=drawGame;';
 const renderer=new Module(path.resolve('game/mob-preview.cjs'),module);renderer.filename=path.resolve('game/mob-preview.cjs');renderer.paths=module.paths;
 renderer._compile(ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,renderer.filename);
 const output=process.argv[2]||'.',prefix=process.argv[3]||'normal-monsters';

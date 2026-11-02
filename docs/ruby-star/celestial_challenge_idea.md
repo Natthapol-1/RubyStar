@@ -99,6 +99,10 @@ Every challenge world turns off random space events and gives the boss a big mul
 - **Electrical hazards:** charged floor tiles burst, slowing you and feeding his pursuit energy. Finishing a charge blasts his entire room, so switch rooms before it ends.
 - **Opening:** after the second pursuit, his armor drops and storms end. Chase him and use Jupiter Storm for heavy damage before the loop restarts.
 
+### Saturn (Frost Warden): managing shields
+
+Stack permanent shields, steal enemy shields by charging and releasing Snowball, and ram the Warden's otherwise invulnerable barrier. Blizzard covers the map in three intensities; shielded units avoid its slows. Breaking the barrier hurts him and briefly stops the storm. Snowbowls steal shields, Frosticles drop dodgeable icicles that freeze nearby floor, and Ice Cubs knock you toward ice. All three HP phases currently share this loop. See [Saturn](SATURN.md).
+
 ## Not built yet
 
-Venus, Saturn, Sirius, Binary Star and The Singularity are locked on the star map. Each needs its own multi-phase fight, a world mechanic, a C ability, new aliens that fit its guardian, and a reason its celestial skill matters there. The design rule so far: each world tests a different skill, and each later phase changes how you read the fight rather than just adding damage.
+Venus, Sirius and Binary Star are locked on the star map. The Singularity has a map preview with its existing guardian. These worlds still need their own multi-phase fights, world mechanics, C abilities, themed aliens and a reason their celestial skill matters there.

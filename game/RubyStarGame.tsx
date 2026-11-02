@@ -1,7 +1,20 @@
 'use client';
+import { drawEnemyHealthBar } from './enemy-health-art';
+import { drawSaturnShield, drawMobIceShield } from './ice-shield-art';
+import { canEnter, isDesktop, getProfile, highestStage, saveRun, restoreRun, resumeKey, updateProfile, flushProfile } from './profile';
+import { FrameMeter, observeDiscoveries } from './desktop-runtime';
 
+import MapSpecialSkillHint from './MapSpecialSkillHint';
+import ControlSettings from './ControlSettings';
+import {gameKey,mouseControl,bindingLabel,tutorialInstruction} from './controls';
+import MenuButton from './MenuButton';
+import AudioSliders from './AudioSliders';
+import BlessingAfterglow from './BlessingAfterglow';
+import {drawDiamondBlessingShield,drawBlessingBehindPlayer,drawBlessingCombatEffects,drawSapphireHitCorners} from './blessing-art';
+import {addStarEnergy,solarBlessingReady,emeraldBlessingFull,playerAttackTint} from './blessing-effects';
+import {drawSingularityFieldTiles} from './field-art';
 import { drawRunBuildEffects } from './endless-build-art';
-import { chooseCelestialBlessing, CELESTIAL_BLESSINGS } from './endless-builds';
+import { buildChargeField, openGodBlessings, closeGodBlessings, chooseCelestialBlessing, CELESTIAL_BLESSINGS } from './endless-builds';
 
 
 import { drawMinimapHazard } from './warning-art';
@@ -9,8 +22,12 @@ import { drawMinimapHazard } from './warning-art';
 import { VOID_CHAMBER_COLORS, isSingularityMap, drawVoidBackdrop, drawVoidTile } from './singularity-art';
 import SingularityGuide from './SingularityGuide';
 
-import { SATURN_CHAMBER_COLORS, isSaturnMap, drawSaturnBackdrop, drawSaturnTile, drawSaturnBlizzard } from './saturn-art';
+import { SATURN_CHAMBER_COLORS, isSaturnMap, drawSaturnBackdrop, drawSaturnTile, drawSaturnBlizzard, drawSaturnGround, drawSaturnUnit, drawSaturnPlayer, drawSaturnBarrier, drawSaturnAtmosphere, drawSaturnShatter } from './saturn-art';
 import SaturnGuide from './SaturnGuide';
+import SnowballStatus from './SnowballStatus';
+import BlizzardStatus from './BlizzardStatus';
+import ShieldAmount from './ShieldAmount';
+import { SATURN, beginSnowball, releaseSnowball, cancelSnowball, saturnBlizzard, saturnShieldChilled, godSetSaturnPhase } from './saturn';
 
 import { stopAmbientEventSounds, pauseAmbientEventSounds } from './event-audio';
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -25,14 +42,15 @@ import SunGuide from './SunGuide';
 import JupiterGuide from './JupiterGuide';
 import VoltFenceStatus from './VoltFenceStatus';
 import { jupiterMaxEnergy, godSetJupiterPhase, godSetJupiterStage, useVoltFence } from './jupiter';
-import { jupiterColors, drawJupiterBackdrop, drawJupiterTile, drawJupiterGround, drawJupiterBossEffect, drawJupiterMinimap, drawJupiterGuard, drawJupiterTransition } from './jupiter-art';
+import { drawReaperStrike, jupiterColors, drawJupiterBackdrop, drawJupiterTile, drawJupiterGround, drawJupiterBossEffect, drawJupiterMinimap, drawJupiterGuard, drawJupiterTransition } from './jupiter-art';
 import CoolingWaveStatus from './CoolingWaveStatus';
 import { godSetMoonPhase, isMoonBoss, isMoonRevealed, moonHiddenInDark, moonWearsGuise, useMoonMark } from './moon';
 import BackButton from '@/components/BackButton';
 import { useRouter } from 'next/navigation';
 import PixelArrow from '@/components/PixelArrow';
 import RulesModal from '@/components/RulesModal';
-import RubyStarGuide, { bosses as BOSS_GUIDE } from './RubyStarGuide';
+import RubyStarGuide from './RubyStarGuide';
+import {bosses as BOSS_GUIDE} from './guide-data';
 import NeptuneGuide from './NeptuneGuide';
 import GaiaGuide from './GaiaGuide';
 import MoonGuide from './MoonGuide';
@@ -66,7 +84,7 @@ import {
 import {
   GameState, RubyStarMode, createModeState, tick, CONSTELLATIONS, chooseConstellation, openGodConstellations, closeGodConstellations, getBombRadius,
   AMBIENT_EVENTS, STAR_FALL_TICKS, SUPERNOVA_CHARGE_TICKS, SUPERNOVA_BLAST_TICKS, triggerAmbientEvent, AmbientEventKind,
-  useLaser, useBullet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage,
+  useLaser, useBullet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
   chooseStartingSkill, chooseSkyLaser, cancelSkyLaser, toggleCarryRuby, tryActivateTeleport, isNearTeleportPad, doTeleport, cancelTeleport,
   healRuby, isPlayerChilled, isMovementReversed, isSeaChanterDiving, isEnemyVisibleOnMinimap, startChargeSound, stopChargeSound, stopPoisonSound, stopSingularitySound, stopGaiaFieldSound,
   METEOR_CLOCKWISE_ORDER, getMirrorTwinTile, devourerBodyScale,
@@ -624,6 +642,9 @@ function drawMinimap(
 
   const mirrorTwin=getMirrorTwinTile(state);
   if(mirrorTwin){ctx.save();ctx.fillStyle='#7fb4ff';ctx.fillRect(MX+mirrorTwin.tileX*S-1,MY+mirrorTwin.tileY*S-1,S+2,S+2);ctx.restore();}
+  for(const decoy of [...(state.build.decoy?[state.build.decoy]:[]),...(state.build.queenDecoys??[])]){
+    ctx.save();ctx.strokeStyle='#d6b5ff';ctx.lineWidth=2;ctx.globalAlpha=.85;ctx.strokeRect(MX+decoy.tileX*S-3,MY+decoy.tileY*S-3,S+6,S+6);ctx.fillStyle='#ead6ff';ctx.fillRect(MX+decoy.tileX*S,MY+decoy.tileY*S,2,2);ctx.restore();
+  }
   if(state.lunarDecoy){
     ctx.save();ctx.strokeStyle='#d3aaff';ctx.lineWidth=1;
     ctx.strokeRect(MX+state.lunarDecoy.tileX*S-2,MY+state.lunarDecoy.tileY*S-2,S+4,S+4);ctx.restore();
@@ -1117,7 +1138,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, sx: number, sy: number, state
 
   // Gradually shrink to tiny while charging (200ms → full charge collapses to 30%) — full
   // charge takes longer while chilled by a Frost Warden sharing the player's chamber
-  const waveChargeMs = (isPlayerChilled(state) ? 1500 : 1000)*(state.build.quickWave ? .65 : 1);
+  const waveChargeMs = (isPlayerChilled(state) ? (saturnShieldChilled(state) ? 1000/SATURN.shieldedChillMult : 1500) : 1000)*(state.build.quickWave ? .65 : 1);
   const chargeProgress = (chargingMs >= 200 && state.waveCooldown <= 0)
     ? Math.min(1, (chargingMs - 200) / (waveChargeMs - 200))
     : 0;
@@ -1204,7 +1225,8 @@ function drawPlayer(ctx: CanvasRenderingContext2D, sx: number, sy: number, state
 
   // Blue shield from Armored kills; teal is reserved for Ruby protection.
   if (shielded) {
-    if(state.playerSaturnShield)drawSaturnShield(ctx,sx,sy,TILE_SIZE*.62,tickN);
+    if(state.build?.blessings?.includes('frost_warden'))drawDiamondBlessingShield(ctx,sx,sy,tickN);
+    else if(state.playerSaturnShield)drawSaturnShield(ctx,sx,sy,TILE_SIZE*.62,tickN);
     else drawRewardShield(ctx, sx, sy, TILE_SIZE * 0.6, tickN, '#4488ff');
   }
   if(state.venusVeilTicks>0)drawVenusVeil(ctx,sx,sy,TILE_SIZE*(carrying?.88:.68),tickN,state.venusVeilTicks);
@@ -1764,34 +1786,8 @@ function drawStormReaperModel(ctx: CanvasRenderingContext2D, tickN: number, flas
  ctx.restore();
 }
 
-function drawStormReaperStrike(ctx: CanvasRenderingContext2D, x: number, y: number, rawAngle: number, remaining: number) {
- // Snap to the nearest right angle: the stepped cut stays axis-aligned instead of a diagonal scribble.
- const angle=Math.round(rawAngle/(Math.PI/2))*(Math.PI/2);
- const age=1-remaining, reach=TILE_SIZE*(.6+age*.7),cos=Math.cos(angle),sin=Math.sin(angle);
- const at=(px: number,py: number)=>[x+px*cos-py*sin,y+px*sin+py*cos] as const;
- ctx.save();
- // Twin stepped plasma cuts cross the victim, drawn as axis-aligned pixel beams.
- for(const side of [-1,1]){
-  const pts=[[-reach,-.45],[-.45,-.45],[-.45,-.15],[.1,-.15],[.1,.2],[.6,.2],[.6,.45],[1,.45]].map(([u,v],i)=>at(i===0?u:u*reach,v*reach*side));
-  for(const [width,color,alpha] of [[9,'#2fa58c',.55],[6,'#52ffd6',.95],[3,'#e2fff0',1]] as const){
-   ctx.globalAlpha=remaining*alpha;
-   for(let i=1;i<pts.length;i++)drawPixelBeam(ctx,pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1],width,color);
-  }
- }
- // An axis-aligned square shock front and four stepped ion bolts.
- const r=10+age*43;ctx.globalAlpha=remaining*.6;ctx.strokeStyle='#35c9ad';ctx.lineWidth=4;
- ctx.strokeRect(Math.round(x-r),Math.round(y-r),Math.round(r*2),Math.round(r*2));
- for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-  const inner=12+age*22,tip=inner+12+age*18;
-  ctx.globalAlpha=remaining*.85;
-  drawPixelBeam(ctx,x+dx*inner,y+dy*inner,x+dx*(inner+8),y+dy*(inner+8),6,'#52ffd6');
-  drawPixelBeam(ctx,x+dx*(inner+8)-dy*6,y+dy*(inner+8)+dx*6,x+dx*tip-dy*6,y+dy*tip+dx*6,3,'#e2fff0');
- }
- ctx.globalAlpha=Math.max(0,1-age*4)*.65;ctx.fillStyle='#ebfff4';ctx.fillRect(Math.round(x)-11,Math.round(y)-11,22,22);
- ctx.restore();
-}
+function drawStormReaperStrike(ctx:CanvasRenderingContext2D,x:number,y:number,angle:number,remaining:number){drawReaperStrike(ctx,x,y,angle,remaining);}
 
-// Small elemental space accents tie the approved boss silhouettes to the cosmic setting.
 function drawCosmicBossAccents(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, size: number, tick: number) {
   ctx.save();ctx.translate(x,y);ctx.shadowBlur=0;
   const baseAlpha=ctx.globalAlpha;
@@ -2088,10 +2084,10 @@ function drawPixelBeam(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2
   ctx.fillStyle=color;ctx.fill();
 }
 
-function drawPlayerLaser(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, powered: boolean, ticks: number) {
-  ctx.save();ctx.lineCap='square';const fade=Math.min(1,ticks/18),base=powered?'#ffcc00':'#44ddff',light=powered?'#ffee88':'#aaffff';
+function drawPlayerLaser(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, powered: boolean, ticks: number, beamWidth?:number,tint?:'solar'|'emerald'|'opal'|'amber') {
+  ctx.save();ctx.lineCap='square';const fade=Math.min(1,ticks/18),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#33e89b':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff';
   for(const [width,color,alpha,glow]of [[powered?60:48,base,.4,18],[powered?27:18,light,.85,10],[powered?6:3,'#ffffff',1,0]] as const){
-    ctx.globalAlpha=fade*alpha;ctx.shadowColor=base;ctx.shadowBlur=glow;ctx.strokeStyle=color;ctx.lineWidth=width;
+    ctx.globalAlpha=fade*alpha;ctx.shadowColor=base;ctx.shadowBlur=glow;ctx.strokeStyle=color;ctx.lineWidth=beamWidth?width*(beamWidth/(powered?60:48)):width;
     ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
   }
   ctx.restore();
@@ -2107,8 +2103,8 @@ function drawPlayerChain(ctx: CanvasRenderingContext2D, x1: number, y1: number, 
   ctx.restore();
 }
 
-function drawPlayerWave(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, powered: boolean, ticks: number) {
-  ctx.save();const fade=Math.min(1,ticks/30),base=powered?'#ffbb22':'#22cfff',light=powered?'#fff4b8':'#e4ffff',accent=powered?'#ff6d37':'#9b7cff';
+function drawPlayerWave(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, powered: boolean, ticks: number,tint?:'solar'|'emerald'|'opal'|'amber') {
+  ctx.save();const fade=Math.min(1,ticks/30),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#33e89b':tint==='solar'?'#ff5b66':powered?'#ffbb22':'#22cfff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffe0ca':tint==='amber'?'#ffd65b':powered?'#fff4b8':'#e4ffff',accent=tint==='opal'?'#ed99cc':tint==='emerald'?'#19a96c':tint==='solar'?'#e63956':tint==='amber'?'#ffad24':powered?'#ff6d37':'#9b7cff';
   ctx.shadowColor=base;ctx.shadowBlur=Math.min(6,32);ctx.globalAlpha=fade*.85;ctx.strokeStyle=base;ctx.lineWidth=18;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
   ctx.shadowBlur=Math.min(6,10);ctx.globalAlpha=fade;ctx.strokeStyle=light;ctx.lineWidth=6;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
   for(const [ratio,color,alpha]of [[.76,accent,.65],[.5,base,.35]] as const){
@@ -2139,10 +2135,10 @@ function drawPlayerCharge(ctx: CanvasRenderingContext2D, x: number, y: number, h
   ctx.restore();
 }
 
-function drawPlayerBullet(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number, powered: boolean, ticks: number) {
+function drawPlayerBullet(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number, powered: boolean, ticks: number,tint?:'solar'|'lunar'|'emerald'|'opal'|'amber') {
   ctx.save();ctx.lineCap='square';const len=Math.hypot(dx,dy)||1,nx=dx/len,ny=dy/len;
   const tail=Math.min(TILE_SIZE*1.5,Math.max(0,ticks)*BULLET_SPEED*TILE_SIZE),width=powered?30:18;
-  const base=powered?'#ffcc00':'#44ddff',light=powered?'#ffee88':'#aaffff';
+  const base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#33e89b':tint==='lunar'?'#c18bfa':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='lunar'?'#f2dfff':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff';
   for(const [w,color,alpha,glow]of [[width*1.8,base,.3,22],[width,base,.8,10],[Math.max(4,width*.4),light,1,0]] as const){
     ctx.globalAlpha=alpha;ctx.shadowColor=base;ctx.shadowBlur=glow;ctx.strokeStyle=color;ctx.lineWidth=w;
     ctx.beginPath();ctx.moveTo(x-nx*tail,y-ny*tail);ctx.lineTo(x+nx*TILE_SIZE*.4,y+ny*TILE_SIZE*.4);ctx.stroke();
@@ -2186,26 +2182,7 @@ function drawPrayerRitual(ctx: CanvasRenderingContext2D, state: GameState, camX:
   ctx.restore();
 }
 
-function drawSaturnShield(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, tick: number) {
-  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;
-  const extent=Math.ceil(radius/4)*4,pulse=.75+.25*Math.abs(Math.sin(tick*.055));
-  // A faceted turquoise ward, with sharp steps and a dim translucent interior.
-  for(let py=-extent;py<=extent;py+=4)for(let px=-extent;px<=extent;px+=4){
-    const ax=Math.abs(px),ay=Math.abs(py),edge=Math.max(ax,ay)+Math.min(ax,ay)*.4;
-    if(edge>extent)continue;
-    const rim=edge>extent-4;
-    ctx.globalAlpha=rim?pulse*(py<0?.5:.8):.035;
-    ctx.fillStyle=rim?(py<0?'#67b8aa':'#b6f8e4'):'#76cbbb';ctx.fillRect(px-2,py-2,4,4);
-  }
-  // Moving orbit lights carry the Saturn identity without blurring the shell.
-  for(let i=0;i<4;i++){
-    const angle=tick*.025+i*Math.PI/2;
-    const px=Math.round(Math.cos(angle)*(extent+6)/3)*3,py=Math.round(Math.sin(angle)*(extent+6)*.55/3)*3;
-    ctx.globalAlpha=.55+.25*Math.sin(angle)**2;ctx.shadowColor='#76cbbb';ctx.shadowBlur=6;
-    ctx.fillStyle='#dbfff2';ctx.fillRect(px-2,py-2,4,4);
-  }
-  ctx.restore();
-}
+
 
 // Venus Veil: a pearl square shell of mirror plates; one bright glint sweeps around it.
 function drawVenusVeil(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, tick: number, ticksLeft: number) {
@@ -2432,25 +2409,31 @@ function drawBombDevice(ctx: CanvasRenderingContext2D, x: number, y: number, pow
   drawCompassStar(ctx,15,-27,12,light);ctx.fillStyle='#ffffff';ctx.fillRect(14,-28,2,2);ctx.restore();
 }
 
-function drawBombBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number) {
+function drawBombBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number,opal=false,amber=false) {
   ctx.save();const fade=Math.min(1,ticks/28),progress=1-fade,r=Math.max(0,radius);
-  ctx.shadowColor='#ff6a25';ctx.shadowBlur=Math.min(6,30);ctx.globalAlpha=fade*.8;ctx.strokeStyle='#ff9c38';ctx.lineWidth=18;ctx.strokeRect(x-r,y-r,r*2,r*2);
-  ctx.shadowBlur=Math.min(6,10);ctx.globalAlpha=fade;ctx.strokeStyle='#fff1b6';ctx.lineWidth=5;ctx.strokeRect(x-r,y-r,r*2,r*2);
-  const inner=r*.65;ctx.globalAlpha=fade*.6;ctx.strokeStyle='#ffce53';ctx.lineWidth=6;ctx.strokeRect(x-inner,y-inner,inner*2,inner*2);
-  ctx.shadowBlur=Math.min(6,0);ctx.globalAlpha=fade*.14;ctx.fillStyle='#ff6a25';ctx.fillRect(x-r,y-r,r*2,r*2);
-  ctx.shadowColor='#ff8833';ctx.shadowBlur=Math.min(6,10);
+  const glow=opal||amber?'#83bfff':'#ff6a25',base=opal||amber?'#8fcaff':'#ff9c38',light=opal?'#ffd0eb':amber?'#ffd65b':'#fff1b6',accent=opal?'#ed99cc':amber?'#ffad24':'#ffce53';
+  ctx.shadowColor=glow;ctx.shadowBlur=Math.min(6,30);ctx.globalAlpha=fade*.8;ctx.strokeStyle=base;ctx.lineWidth=18;ctx.strokeRect(x-r,y-r,r*2,r*2);
+  ctx.shadowBlur=Math.min(6,10);ctx.globalAlpha=fade;ctx.strokeStyle=light;ctx.lineWidth=5;ctx.strokeRect(x-r,y-r,r*2,r*2);
+  const inner=r*.65;ctx.globalAlpha=fade*.6;ctx.strokeStyle=accent;ctx.lineWidth=6;ctx.strokeRect(x-inner,y-inner,inner*2,inner*2);
+  ctx.shadowBlur=Math.min(6,0);ctx.globalAlpha=fade*.14;ctx.fillStyle=opal||amber?'#83bfff':'#ff6a25';ctx.fillRect(x-r,y-r,r*2,r*2);
+  ctx.shadowColor=opal||amber?'#a8cfff':'#ff8833';ctx.shadowBlur=Math.min(6,10);
   for(let i=0;i<12;i++){
     const angle=i*Math.PI/6,reach=r*(.6+progress*.4),px=x+Math.cos(angle)*reach,py=y+Math.sin(angle)*reach;
-    const height=9+Math.sin(progress*Math.PI)*(12+i%3*6);ctx.globalAlpha=fade*.8;ctx.fillStyle=i%2?'#ff833d':'#ffcf6c';
-    ctx.fillRect(Math.round(px)-4,Math.round(py-height),8,height);ctx.fillStyle='#fff2c7';ctx.fillRect(Math.round(px)-1,Math.round(py-height)+3,3,Math.max(3,height*.45));
+    const height=9+Math.sin(progress*Math.PI)*(12+i%3*6);ctx.globalAlpha=fade*.8;ctx.fillStyle=i%2?(opal||amber?'#8fcaff':'#ff833d'):(opal?'#ed99cc':amber?'#ffad24':'#ffcf6c');
+    ctx.fillRect(Math.round(px)-4,Math.round(py-height),8,height);ctx.fillStyle=opal?'#fff0fa':amber?'#fff2a3':'#fff2c7';ctx.fillRect(Math.round(px)-1,Math.round(py-height)+3,3,Math.max(3,height*.45));
   }
-  ctx.globalAlpha=fade*.75;drawCompassStar(ctx,x,y,66+progress*54,'#ffb744');ctx.globalAlpha=fade*fade*.9;drawCompassStar(ctx,x,y,36,'#fff2c7');ctx.restore();
+  ctx.globalAlpha=fade*.75;drawCompassStar(ctx,x,y,66+progress*54,(opal?'#b3d7ff':amber?'#ffcf4a':'#ffb744'));ctx.globalAlpha=fade*fade*.9;drawCompassStar(ctx,x,y,36,(opal?'#fff0fa':amber?'#fff2a3':'#fff2c7'));ctx.restore();
 }
 
-function drawResourcePickup(ctx: CanvasRenderingContext2D, x: number, y: number, health: boolean, tick: number) {
+function drawResourcePickup(ctx: CanvasRenderingContext2D, x: number, y: number, health: boolean | 'shield', tick: number) {
   ctx.save();ctx.translate(Math.round(x),Math.round(y));const pulse=.7+.3*Math.abs(Math.sin(tick*.07));
-  ctx.shadowColor=health?'#ff4466':'#66aaff';ctx.shadowBlur=Math.min(6,10*pulse);
-  if(health){
+  const shield=health==='shield';
+  ctx.shadowColor=shield?'#67d8c7':health?'#ff4466':'#66aaff';ctx.shadowBlur=Math.min(6,10*pulse);
+  if(shield){
+    ctx.fillStyle='#67d8c7';ctx.fillRect(-15,-15,30,21);ctx.fillRect(-12,6,24,6);ctx.fillRect(-6,12,12,3);
+    ctx.shadowBlur=0;ctx.fillStyle='#277c83';ctx.fillRect(-12,-12,24,15);ctx.fillRect(-9,3,18,6);ctx.fillRect(-3,9,6,3);
+    ctx.fillStyle='#c9fff0';ctx.fillRect(-9,-12,9,3);
+  }else if(health){
     ctx.fillStyle='#ff4466';ctx.fillRect(-15,-6,30,12);ctx.fillRect(-6,-15,12,30);
     ctx.shadowBlur=Math.min(6,0);ctx.fillStyle='#bd3052';ctx.fillRect(-12,-3,24,6);ctx.fillRect(-3,-12,6,24);
     ctx.fillStyle='#ffb4c8';ctx.fillRect(-3,-11,3,6);
@@ -2458,7 +2441,7 @@ function drawResourcePickup(ctx: CanvasRenderingContext2D, x: number, y: number,
     drawPixelBolt(ctx,0,0,32,'#66aaff');ctx.shadowBlur=Math.min(6,0);drawPixelBolt(ctx,0,0,24,'#2e65a6');
     ctx.fillStyle='#cde5ff';ctx.fillRect(3,-12,3,6);
   }
-  ctx.shadowBlur=Math.min(6,5);ctx.fillStyle=health?'#fff0f3':'#e6f3ff';ctx.fillRect(-2,-2,4,4);
+  ctx.shadowBlur=Math.min(6,5);ctx.fillStyle=shield?'#e1fff5':health?'#fff0f3':'#e6f3ff';ctx.fillRect(-2,-2,4,4);
   for(let i=0;i<2;i++){
     const life=((tick+i*32)%64)/64;ctx.globalAlpha=(1-life)*.45;
     ctx.fillRect((i?1:-1)*19-1,10-Math.floor(life*8)*3,3,3);
@@ -2476,23 +2459,10 @@ function drawMobBrackets(ctx: CanvasRenderingContext2D, x: number, y: number, ra
   ctx.save();ctx.shadowColor=color;ctx.shadowBlur=Math.min(6,12);ctx.strokeStyle=color;ctx.globalAlpha*=alpha;ctx.lineWidth=width;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);ctx.restore();
 }
 
-// Ice shield: a stepped octagonal frame of solid ice blocks with four pale corner crystals and a small glow.
-function drawMobIceShield(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, tick: number) {
-  ctx.save();ctx.translate(Math.round(x),Math.round(y));
-  const pulse=.75+.25*Math.abs(Math.sin(tick*.15)),r=Math.round(radius*1.3/6)*6,cut=Math.round(r*.36/6)*6,w=6;
-  ctx.globalAlpha=pulse;ctx.shadowColor='#aaeeff';ctx.shadowBlur=4;ctx.fillStyle='#aaeeff';
-  // Four straight sides and four 45° corner steps, all axis-aligned blocks.
-  ctx.fillRect(-r+cut,-r,(r-cut)*2,w);ctx.fillRect(-r+cut,r-w,(r-cut)*2,w);
-  ctx.fillRect(-r,-r+cut,w,(r-cut)*2);ctx.fillRect(r-w,-r+cut,w,(r-cut)*2);
-  for(const [sx,sy] of [[-1,-1],[1,-1],[1,1],[-1,1]])for(let k=0;k<cut;k+=w)
-    ctx.fillRect(sx>0?r-cut+k:-r+cut-k-w,sy>0?r-w-k:-r+k,w,w);
-  ctx.shadowBlur=0;ctx.fillStyle='#ffffff';
-  for(const [sx,sy] of [[-1,-1],[1,-1],[1,1],[-1,1]])ctx.fillRect(sx*(r-cut/2)-3,sy*(r-cut/2)-3,6,6);
-  ctx.restore();
-}
+
 
 function drawMobAttack(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, targetX: number, targetY: number, ticks: number, color: string) {
-  if(type==='sniper'||type==='healer'||type==='shielder'||type==='bomber')return;
+  if(type==='ice_caller'||type==='rime_brute'||type==='sniper'||type==='healer'||type==='shielder'||type==='bomber')return;
   ctx.save();ctx.shadowColor=color;ctx.shadowBlur=3;
   const fade=Math.min(1,ticks/14),progress=1-fade,dx=targetX-x,dy=targetY-y,len=Math.hypot(dx,dy)||1;
   if(type==='energy_leech'){
@@ -2575,6 +2545,15 @@ function drawGuideKing(ctx: CanvasRenderingContext2D, x: number, y: number, tick
   const hide = hideBossHeadBars; hideBossHeadBars = true;
   ctx.save(); ctx.translate(x, y); ctx.scale(.6, .6); drawEnemy(ctx, guideKing, 0, 0, tick); ctx.restore();
   hideBossHeadBars = hide;
+}
+
+let guideWarden: GameState['enemies'][0] | null = null;
+function drawGuideWarden(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,shielded=false,flash=false){
+  if(!guideWarden){const s=createInitialState();godSpawnBoss(s,'frost_warden');guideWarden=s.enemies.find(e=>e.type==='frost_warden')??null;}
+  if(!guideWarden)return;
+  guideWarden.hp=guideWarden.maxHp;guideWarden.windupTicks=0;guideWarden.shootTicks=0;guideWarden.flashTicks=flash?8:0;
+  const hide=hideBossHeadBars;hideBossHeadBars=true;
+  ctx.save();ctx.translate(x,y);ctx.scale(.75,.75);drawEnemy(ctx,guideWarden,0,0,tick);if(shielded)drawMobIceShield(ctx,0,0,34,tick);ctx.restore();hideBossHeadBars=hide;
 }
 
 let guideWeaver: GameState['enemies'][0] | null = null;
@@ -4145,21 +4124,7 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     ctx.fillRect(Math.round(sx)-2,Math.round(sy-half-18),4,4);ctx.restore();
   }
 
-  // ── HP bar ────────────────────────────────────────────────────────────
-  if (e.hp < e.maxHp) {
-    const barW = size + 4;
-    const barH = Math.max(5, Math.floor(size * 0.13));
-    const bx = sx - barW / 2;
-    const by = sy - half - antH - dotSz - barH - 3;
-    const pct = e.hp / e.maxHp;
-    ctx.fillStyle = '#330000';
-    ctx.fillRect(bx, by, barW, barH);
-    ctx.fillStyle = pct > 0.5 ? '#00cc44' : pct > 0.25 ? '#ffaa00' : '#ff3300';
-    ctx.fillRect(bx, by, barW * pct, barH);
-    ctx.strokeStyle = '#ffffff22';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bx, by, barW, barH);
-  }
+  drawEnemyHealthBar(ctx,e,sx,sy);
 }
 
 // Battlefield geometry stays in the map; these helpers only paint its surfaces.
@@ -4189,18 +4154,20 @@ function drawBattlefieldPad(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
-function drawBattlefieldIce(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number) {
-  ctx.save();const pulse=.6+.4*Math.abs(Math.sin(tick*.06)),size=TILE_SIZE;
+function drawBattlefieldIce(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number, opacity=1) {
+  ctx.save();const pulse=.6+.4*Math.abs(Math.sin(tick*.06)),size=TILE_SIZE,alpha=ctx.globalAlpha*Math.max(0,Math.min(1,opacity));ctx.globalAlpha=alpha;
   ctx.shadowColor='#aaeeff';ctx.shadowBlur=10*pulse;ctx.fillStyle='rgba(170,238,255,'+.4*pulse+')';ctx.fillRect(x,y,size,size);
   ctx.shadowBlur=0;ctx.strokeStyle='rgba(255,255,255,'+.7*pulse+')';ctx.lineWidth=2;ctx.strokeRect(x+2,y+2,size-4,size-4);
-  ctx.shadowBlur=0;ctx.globalAlpha=.55*pulse;ctx.fillStyle='#d4edf6';
+  ctx.shadowBlur=0;ctx.globalAlpha=.55*pulse*alpha;ctx.fillStyle='#d4edf6';
   for(const [px,py,w,h]of [[9,12,12,3],[18,12,3,12],[18,21,12,3],[27,21,3,12],[12,30,9,3],[12,30,3,9]])ctx.fillRect(x+px,y+py,w,h);
-  ctx.globalAlpha=.8*pulse;ctx.shadowColor='#d4edf6';ctx.shadowBlur=4;ctx.fillStyle='#f0fcff';ctx.fillRect(x+9,y+9,3,3);
+  ctx.globalAlpha=.8*pulse*alpha;ctx.shadowColor='#d4edf6';ctx.shadowBlur=4;ctx.fillStyle='#f0fcff';ctx.fillRect(x+9,y+9,3,3);
   ctx.restore();
 }
 
 function drawBattlefield(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, viewW: number, viewH: number, tick: number) {
-  ctx.save();const size=TILE_SIZE,ice=new Set(state.frostIceTiles.map(([x,y])=>x+','+y)),eclipse=eclipseVisualStrength(state);
+  ctx.save();const size=TILE_SIZE,ice=new Set([...state.frostIceTiles.map(([x,y])=>x+','+y),...(state.saturn?.temporaryIce??[]).map(t=>t.x+','+t.y)]),eclipse=eclipseVisualStrength(state);
+  const lastingIce=new Set(state.frostIceTiles.map(([x,y])=>x+','+y));
+  const iceFades=new Map((state.saturn?.temporaryIce??[]).map(t=>[t.x+','+t.y,Math.min(1,t.ticks/30)]));
   const x0=Math.max(0,Math.floor(camX/size)-1),y0=Math.max(0,Math.floor(camY/size)-1),x1=Math.min(MAP_COLS-1,Math.ceil((camX+viewW)/size)+1),y1=Math.min(MAP_ROWS-1,Math.ceil((camY+viewH)/size)+1);
   const ocean=!!state.neptune,solar=!!state.sun,forest=!!state.gaia,moon=isMoonMap(state);
   const battlefieldColor=(ch:number)=>{
@@ -4248,7 +4215,7 @@ function drawBattlefield(ctx: CanvasRenderingContext2D, state: GameState, camX: 
     ctx.stroke();ctx.shadowBlur=0;
     if(state.map[ty][tx]===T_TELEPORT){if(solar)drawSunPad(ctx,x,y,state.gameTick,ch);else drawBattlefieldPad(ctx,x,y,color,tick,ch);} // pads stay visible in the dark too
     if(onlyRoom!==undefined)continue; // a redraw over the dark keeps only the outline and pad
-    if(ice.has(tx+','+ty))drawBattlefieldIce(ctx,x,y,tick);
+    if(ice.has(tx+','+ty))drawBattlefieldIce(ctx,x,y,tick,lastingIce.has(tx+','+ty)?1:iceFades.get(tx+','+ty)??1);
   }};
   drawBorders();
   if(ocean)drawOceanAmbience(ctx,state,camX,camY,x0,y0,x1,y1,tick);
@@ -4563,7 +4530,8 @@ function drawGame(
   else drawSpaceBackdrop(ctx, viewW, viewH, camX, camY, tickN); // endless: a quiet starfield behind the station
 
   drawBattlefield(ctx,state,camX,camY,viewW,viewH,tickN);
-  if(isSaturnMap(state))drawSaturnBlizzard(ctx,viewW,viewH,camX,camY,state.gameTick);
+  if(saturnBlizzard(state))drawSaturnBlizzard(ctx,viewW,viewH,camX,camY,state.gameTick,state.saturn!.level);
+  if(state.saturn)drawSaturnGround(ctx,state,camX,camY);
   if(state.jupiter)drawJupiterGround(ctx,state,camX,camY,state.gameTick);
   drawAmbientEvents(ctx,state,camX,camY,viewW,viewH);
   drawReaperHallwaySeal(ctx,state,camX,camY,tickN);
@@ -4572,7 +4540,7 @@ function drawGame(
   // Frost Warden chill field — persistent icy wash + frosty border over whichever chamber
   // she currently occupies, so the chill debuff is visible, not just felt
   const frostWarden = state.enemies.find(e => e.type === 'frost_warden');
-  if (frostWarden) {
+  if (frostWarden && !state.saturn) {
     const fwChamber = chamberOfTile(frostWarden.tileX, frostWarden.tileY);
     if (fwChamber >= 0) {
       const [r1, c1, r2, c2] = CHAMBER_BOUNDS[fwChamber];
@@ -4594,21 +4562,7 @@ function drawGame(
   drawEncounterTelegraphs(ctx, state, camX, camY);
   if(state.singularity){
     const field=state.singularity,x=field.x-camX,y=field.y-camY,fade=Math.min(1,field.ticks/90);
-    ctx.save();ctx.shadowBlur=0;
-    const radius=SPECIAL_SINGULARITY_RADIUS/TILE_SIZE,centerX=Math.floor(field.x/TILE_SIZE),centerY=Math.floor(field.y/TILE_SIZE);
-    const affected=(dx:number,dy:number)=>Math.hypot(dx,dy)<=radius && (state.map[centerY+dy]?.[centerX+dx]??T_WALL)!==T_WALL;
-    for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
-      if(!affected(dx,dy))continue;
-      const tx=(centerX+dx)*TILE_SIZE-camX,ty=(centerY+dy)*TILE_SIZE-camY;
-      ctx.globalAlpha=fade*(.09+.025*Math.abs(Math.sin(tickN*.04)));ctx.fillStyle='#b1b1c1';ctx.fillRect(tx+1,ty+1,TILE_SIZE-2,TILE_SIZE-2);
-      const pulse=.5+.5*Math.sin(tickN*.065-(Math.abs(dx)+Math.abs(dy))*.9);
-      ctx.globalAlpha=fade*(.4+pulse*.25);ctx.fillStyle='#a1a1b1';
-      if(!affected(dx-1,dy))ctx.fillRect(tx,ty,4,TILE_SIZE);
-      if(!affected(dx+1,dy))ctx.fillRect(tx+TILE_SIZE-4,ty,4,TILE_SIZE);
-      if(!affected(dx,dy-1))ctx.fillRect(tx,ty,TILE_SIZE,4);
-      if(!affected(dx,dy+1))ctx.fillRect(tx,ty+TILE_SIZE-4,TILE_SIZE,4);
-    }
-    ctx.restore();
+    drawSingularityFieldTiles(ctx,state.map,field.x,field.y,SPECIAL_SINGULARITY_RADIUS/TILE_SIZE,camX,camY,tickN,fade);
     ctx.save();ctx.translate(x,y);ctx.shadowBlur=0;
     ctx.globalAlpha=fade;drawCelestialCast(ctx,'devourer',0,0,0,tickN);
     for(let i=0;i<16;i++){
@@ -4702,7 +4656,7 @@ function drawGame(
   // Resource bodies stay sharp; only isolated glints glow.
   for(const resource of state.resources){
     if(moonHiddenInDark(state,resource.tileX,resource.tileY))continue;
-    drawResourcePickup(ctx,(resource.tileX+.5)*TILE_SIZE-camX,(resource.tileY+.5)*TILE_SIZE-camY,resource.type==='health',tickN+resource.tileX);
+    drawResourcePickup(ctx,(resource.tileX+.5)*TILE_SIZE-camX,(resource.tileY+.5)*TILE_SIZE-camY,resource.type==='shield'?'shield':resource.type==='health',tickN+resource.tileX);
   }
 
   // Placed bomb
@@ -4764,7 +4718,6 @@ function drawGame(
       if(state.rubySaturnShield)drawSaturnShield(ctx,rsx,rsy,TILE_SIZE*.7,tickN);
       else drawRewardShield(ctx, rsx, rsy, TILE_SIZE * 0.7, tickN, '#00ddcc');
     }
-    if(state.venusVeilTicks>0)drawVenusVeil(ctx,rsx,rsy,TILE_SIZE*.78,tickN,state.venusVeilTicks);
   }
 
   drawAstralTwinLinks(ctx, state, camX, camY, tickN);
@@ -4779,6 +4732,7 @@ function drawGame(
     if (state.sun?.bossId === e.id && state.sun.quenchedTicks > 0) {
       drawQuenchedKing(ctx, e, sx, sy); continue;
     }
+    if(state.saturn&&drawSaturnUnit(ctx,e,sx,sy,state.gameTick))continue;
     // Gaia: she fades into the soil while withering between phases.
     if (state.gaia && e.id === state.gaia.bossId && state.gaia.wither > 0) ctx.globalAlpha = .25 + .2 * Math.abs(Math.sin(tickN * .1));
     if (moonHiddenInDark(state, e.tileX, e.tileY, e.id)) continue; // Moon phase 3: unseen in the dark unless just hit
@@ -4787,6 +4741,7 @@ function drawGame(
       if (isMoonBoss(state, e)) drawMoonReflection(ctx, sx, sy, tickN);
       drawEnemy(ctx, { ...e, type: 'queen_echo' }, sx, sy, tickN, shieldedIds.has(e.id));
     } else drawEnemy(ctx, e, sx, sy, tickN, shieldedIds.has(e.id),state.jupiter?.bossId===e.id&&state.jupiter.stage==='escape',state.jupiter?.bossId===e.id&&state.jupiter.stage==='charging'?state.jupiter.energy/100:-1);
+    if(state.saturn?.bossId===e.id)drawSaturnBarrier(ctx,state,sx,sy);
     if(state.jupiter?.bossId===e.id)drawJupiterBossEffect(ctx,state,sx,sy,state.gameTick);
     ctx.globalAlpha = 1; // reset in case ghost modified it
   }
@@ -4815,6 +4770,17 @@ function drawGame(
     drawMobAttack(ctx,enemy.type,x,y,targetX,targetY,enemy.shootTicks,ENEMY_CONFIGS[enemy.type].color);
   }
 
+  if(state.build.decoy){
+    const decoy=state.build.decoy,x=decoy.x-camX,y=decoy.y-camY;
+    ctx.save();ctx.globalAlpha=.5*Math.min(1,decoy.ticks/30);
+    drawPlayer(ctx,x,y,{...state,specialSkill:null,playerCastTicks:0,playerCastKind:null,runnerEnergyFlashTicks:0,starEnergy:0,poweredTicks:0,speedActiveTicks:0,playerCarryingRuby:false,playerShieldHP:0,laserCooldown:0,bulletCooldown:0,electricBuffTicks:0,thornPoisonTicks:0},tickN);
+    ctx.globalAlpha=.7*Math.min(1,decoy.ticks/30);ctx.strokeStyle='#c6b8ff';ctx.lineWidth=2;ctx.shadowBlur=0;ctx.strokeRect(x-23,y-23,46,46);ctx.restore();
+  }
+
+  for(const decoy of state.build.queenDecoys??[]){
+    const x=decoy.x-camX,y=decoy.y-camY;
+    ctx.save();ctx.globalAlpha=.72;ctx.fillStyle='#ad79da';ctx.fillRect(x-17,y-17,34,34);ctx.fillStyle='#402553';ctx.fillRect(x-12,y-12,24,24);ctx.fillStyle='#c39aff';ctx.fillRect(x-3,y-11,6,22);ctx.fillRect(x-6,y-7,12,14);ctx.fillStyle='#7540a5';ctx.fillRect(x-3,y-7,6,14);ctx.fillStyle='#eedaff';ctx.fillRect(x-2,y-6,4,12);ctx.fillStyle='#ad79da';ctx.fillRect(x-3,y-23,6,6);ctx.strokeStyle='#d5acff';ctx.lineWidth=4;ctx.strokeRect(x-20,y-20,40,40);ctx.fillStyle='#cc9ff5';ctx.fillRect(x-17,y+23,34*Math.max(0,decoy.hp/12),2);ctx.restore();
+  }
   if(state.lunarDecoy){
     const decoy=state.lunarDecoy,x=decoy.x-camX,y=decoy.y-camY;
     ctx.save();ctx.globalAlpha=decoy.flashTicks>0?.95:decoy.invulnerableTicks>0?.5+.2*Math.abs(Math.sin(tickN*.7)):.8;
@@ -4830,7 +4796,8 @@ function drawGame(
     : 0;
   const psx = state.playerX - camX + jiggle;
   const psy = state.playerY - camY;
-  drawPlayer(ctx, psx, psy, state, tickN, chargingMs);
+  drawBlessingBehindPlayer(ctx,state,psx,psy);
+  if(!drawSaturnPlayer(ctx,state,psx,psy))drawPlayer(ctx, psx, psy, state, tickN, chargingMs);
   drawRewardPulses(ctx, state, camX, camY);
   drawPrayerRitual(ctx, state, camX, camY, tickN);
   drawPrayerMagic(ctx, state, camX, camY, tickN);
@@ -4855,9 +4822,11 @@ function drawGame(
     ctx.restore();
   }
 
+  drawBlessingCombatEffects(ctx,state,camX,camY);
+
   // Player bullets use the same crisp pixel vocabulary as celestial effects.
   for(const bullet of state.laserBullets || []){
-    drawPlayerBullet(ctx,bullet.x*TILE_SIZE-camX,bullet.y*TILE_SIZE-camY,bullet.dx,bullet.dy,bullet.powered,bullet.ticks);
+    drawPlayerBullet(ctx,bullet.x*TILE_SIZE-camX,bullet.y*TILE_SIZE-camY,bullet.dx,bullet.dy,bullet.powered,bullet.ticks,bullet.blessingDecoy?'lunar':playerAttackTint(state,!!bullet.blessingCopy,bullet.powered));
   }
 
   // Player electric buff chains have stable pixel steps and pale cores.
@@ -4876,7 +4845,7 @@ function drawGame(
       drawEnemyLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,Math.min(1,beam.ticks/22),['#ff3300','#ff7a40','#ffe0c8'],[16,6,2]);continue;
     }
     if(!beam.color){
-      drawPlayerLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,!!beam.powered,beam.ticks);
+      drawPlayerLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,!!beam.powered,beam.ticks,beam.width,playerAttackTint(state,!!beam.opal,!!beam.powered));
       continue;
     }
     if(beam.color==='#ffdd22'){
@@ -4893,13 +4862,13 @@ function drawGame(
 
   // Player charge waves keep square silhouettes and sharp layered bands.
   for(const wave of state.waveEffects){
-    drawPlayerWave(ctx,wave.cx-camX,wave.cy-camY,wave.radius,!!wave.powered,wave.ticks);
+    drawPlayerWave(ctx,wave.cx-camX,wave.cy-camY,wave.radius,!!wave.powered,wave.ticks,playerAttackTint(state,!!wave.opal,!!wave.powered));
   }
 
   // Crisp stepped blast and separated ember rays, with no blanket blur.
   for(const blast of state.bombBlasts){
     if(blast.water)drawWaterBurst(ctx,blast.cx-camX,blast.cy-camY,blast.maxRadius,blast.ticks);
-    else drawBombBlast(ctx,blast.cx-camX,blast.cy-camY,blast.radius,blast.ticks);
+    else drawBombBlast(ctx,blast.cx-camX,blast.cy-camY,blast.radius,blast.ticks,!!blast.opal,!blast.opal&&playerAttackTint(state,false,!!blast.powered)==='amber');
   }
 
   for(const fx of state.specialEffects){
@@ -4914,6 +4883,14 @@ function drawGame(
   drawGaiaOverlay(ctx, state, camX, camY, tickN);
   drawMeteorImpact(ctx, state, camX, camY);
   drawSkyLaserImpact(ctx, state, camX, camY);
+  for(const effect of state.sapphireHitEffects??[]){
+    if(effect.untilTick<=state.gameTick)continue;
+    const enemy=state.enemies.find(e=>e.id===effect.enemyId&&e.hp>0&&!e.twin?.downedTicks);
+    if(!enemy)continue;
+    const x=enemy.x-camX,y=enemy.y-camY;
+    const radius=TILE_SIZE*ENEMY_CONFIGS[enemy.type].bodyFraction*.5+16;
+    drawSapphireHitCorners(ctx,x,y,radius,state.gameTick,effect.untilTick);
+  }
 
   ctx.restore(); // back to true physical-pixel space — unaffected by the world zoom above
   drawKingArenaEffects(ctx, state, canvasW, canvasH);
@@ -4932,6 +4909,8 @@ function drawGame(
   }
 
   drawSunAtmosphere(ctx, state, canvasW, canvasH, state.gameTick);
+  if(state.saturn)drawSaturnAtmosphere(ctx,state,canvasW,canvasH);
+  if(state.saturn?.shatter)drawSaturnShatter(ctx,state,canvasW,canvasH,camX,camY,worldZoom);
   if(state.jupiter)drawJupiterTransition(ctx,state,canvasW,canvasH,state.gameTick);
   drawEclipseShadow(ctx, state, canvasW, canvasH);
   drawSupernovaSky(ctx, state, canvasW, canvasH);
@@ -4954,11 +4933,23 @@ function GuardianBar({ state }: { state: GameState }) {
   const hp = bodies.reduce((sum, e) => sum + ((e.twin?.downedTicks ?? 0) > 0 ? 0 : e.hp), 0);
   const max = bodies.reduce((sum, e) => sum + e.maxHp, 0);
   const present = bodies.length > 0, pct = present && max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
+  const saturn = state.saturn;
+  if(saturn)return <div className="rs-guardian rs-jupiter-guardian" style={{['--guardian' as string]:'#9de7ee'}}>
+    <div style={{flex:1,minWidth:0}}>
+    <div role="meter" aria-label="Frost Warden health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct*100)}>
+      <span className="rs-guardian-name">{present?`FROST WARDEN · PHASE ${saturn.phase}`:'GUARDIAN INCOMING'}</span>
+      <span className="rs-guardian-segments">{[3,2,1].map(phase=><span key={phase} className="rs-guardian-bar" data-active={phase===saturn.phase||undefined}><span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-(3-phase)*SATURN.phaseHP)/SATURN.phaseHP))*100:0}%`,opacity:phase===saturn.phase?1:.55}}/></span>)}</span>
+    </div>
+    {present&&<><div role="meter" aria-label="Warden barrier" aria-valuemin={0} aria-valuemax={SATURN.barrier} aria-valuenow={saturn.barrier} style={{height:5,border:'1px solid #89d9ef',marginTop:4}}><div style={{height:'100%',width:`${saturn.barrier/SATURN.barrier*100}%`,background:'#c1f7ff'}}/></div>
+      {saturn.weakTicks>0&&<span className="rs-guardian-name" style={{fontSize:10,marginTop:3}}>EXPOSED · {Math.ceil(saturn.weakTicks/60)}s</span>}</>}
+    </div>
+    {present&&<BlizzardStatus saturn={saturn}/>}
+  </div>;
   const j = state.jupiter;
   if (j) {
     const energyColor=j.stage==='escape'?'#ffca8b':j.round===2?'#c5a4ff':j.stage==='pursuit'?'#52ffd6':'#e9b679';
-    return <div className="rs-guardian" style={{['--guardian' as string]:energyColor}}>
-      <div role="meter" aria-label="Storm Reaper health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct*100)}>
+    return <div className="rs-guardian rs-jupiter-guardian" style={{['--guardian' as string]:energyColor}}>
+      <div className="rs-jupiter-vitals"><div role="meter" aria-label="Storm Reaper health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct*100)}>
         <span className="rs-guardian-name">{present?`STORM REAPER · PHASE ${j.phase}`:'GUARDIAN INCOMING'}</span>
         <span className="rs-guardian-segments">{[3,2,1].map(phase=><span key={phase} className="rs-guardian-bar" data-active={phase===j.phase||undefined}>
           <span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-(3-phase)*JUPITER.phaseHP)/JUPITER.phaseHP))*100:0}%`,opacity:phase===j.phase?1:.55}}/>
@@ -4967,6 +4958,9 @@ function GuardianBar({ state }: { state: GameState }) {
       {present&&<div role="meter" aria-label="Reaper energy" aria-valuemin={0} aria-valuemax={jupiterMaxEnergy(j)} aria-valuenow={Math.round(j.energy)} style={{marginTop:5,color:energyColor}}>
 
         <div style={{height:6,background:'#151826',border:'1px solid '+energyColor}}><div style={{height:'100%',width:`${Math.max(0,Math.min(100,j.energy/jupiterMaxEnergy(j)*100))}%`,background:energyColor}}/></div>
+      </div>}</div>
+      {present&&j.phase>=2&&j.stage==='pursuit'&&<div className="rs-rage" role="meter" aria-label="Reaper overdrive" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((j.overdriveCharge??0)/JUPITER.fragmentChargeTicks*100)} title="Overdrive" style={{color:j.fragmentOverdrive?'#e2fff0':'#52ffd6'}}>
+        <span className="rs-rage-track"><span className="rs-rage-fill" style={{height:Math.min(100,(j.overdriveCharge??0)/JUPITER.fragmentChargeTicks*100)+'%'}}/></span>
       </div>}
     </div>;
   }
@@ -5070,7 +5064,7 @@ function TutorialPanel({ tutorial }: { tutorial: NonNullable<GameState['tutorial
         {cleared ? '✓ NICE!' : step.title}
       </div>
       <div style={{ color: '#e1e4f4', fontFamily: 'var(--font-mono)', fontSize: 14, lineHeight: 1.5 }}>
-        {tutorial.retry && step.id === 'meteor' ? 'Too close! The meteor hit you. Try again: leave the room this time.' : step.text}
+        {tutorial.retry && step.id === 'meteor' ? 'Too close! The meteor hit you. Try again: leave the room this time.' : tutorialInstruction(step.id,step.text)}
       </div>
       {!done && step.goal > 1 && <div aria-hidden="true" style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8 }}>
         {Array.from({ length: step.goal }, (_, i) => <span key={i} style={{ width: 10, height: 10, background: i < tutorial.count ? '#c6ff8a' : 'transparent', border: '2px solid #5f6a8f' }} />)}
@@ -5148,12 +5142,12 @@ function BossSpawnButton({ type, onSpawn }: { type: BossType; onSpawn: () => voi
         ctx.save();ctx.translate(index?31:12,index?15:30);ctx.scale(.42,.42);drawEncounterEnemy(ctx,enemy,0,0,40,false);ctx.restore();
       }
     }else{
-      ctx.save();ctx.translate(22,25);const scale=type==='splitter_queen'?.54:.37;ctx.scale(scale,scale);drawEnemy(ctx,enemy,0,0,40);ctx.restore();
+      ctx.save();ctx.translate(22,25);const scale=type==='splitter_queen'?.54:.37;ctx.scale(scale,scale);if(!drawSaturnUnit(ctx,enemy,0,0,40))drawEnemy(ctx,enemy,0,0,40);ctx.restore();
     }
     ctx.restore();
   },[type,drawEncounterEnemy]);
   return <button title={'Spawn '+BOSS_NAMES[type]} aria-label={'Spawn '+BOSS_NAMES[type]} onClick={onSpawn}
-    style={{ width:40,height:40,padding:1,background:'#242830',border:'1px solid '+ENEMY_CONFIGS[type].color,borderRadius:3,cursor:'pointer',display:'grid',placeItems:'center' }}>
+    style={{ width:44,height:44,padding:1,background:'#242830',border:'1px solid '+ENEMY_CONFIGS[type].color,borderRadius:3,cursor:'pointer',display:'grid',placeItems:'center' }}>
     <canvas ref={iconRef} width={72} height={72} aria-hidden="true" style={{width:36,height:36}} />
   </button>;
 }
@@ -5212,7 +5206,7 @@ function CelestialSkillButton({ kind, state, selected, onGrant }: {
     ctx.clearRect(0,0,36,36);ctx.save();ctx.translate(18,21);ctx.scale(.5,.5);drawPlayer(ctx,0,0,preview,40);ctx.restore();
   },[kind,state]);
   return <button type="button" title={'Grant '+skill.name} aria-label={'Grant '+skill.name} aria-pressed={selected} onClick={onGrant}
-    style={{width:40,height:40,padding:1,background:selected?'#394363':'#242830',border:(selected?'2px':'1px')+' solid '+color,
+    style={{width:44,height:44,padding:1,background:selected?'#394363':'#242830',border:(selected?'2px':'1px')+' solid '+color,
       boxShadow:selected?'0 0 8px '+color+'66':'none',borderRadius:3,cursor:'pointer',display:'grid',placeItems:'center'}}>
     <canvas ref={iconRef} width={36} height={36} aria-hidden="true" style={{width:36,height:36}} />
   </button>;
@@ -5246,7 +5240,30 @@ function TouchAbilityButton({ label, color, size = 56, onDown, onUp, className, 
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+export function EnemyPortrait({type,size=88}:{type:GameState['enemies'][0]['type'];size?:number}){
+ const ref=useRef<HTMLCanvasElement>(null);
+ useEffect(()=>{const ctx=ref.current?.getContext('2d');if(!ctx)return;const cfg=ENEMY_CONFIGS[type];
+ const enemy={id:0,type,x:0,y:0,tileX:0,tileY:0,hp:cfg.maxHp,maxHp:cfg.maxHp,path:[],flashTicks:0,healFlashTicks:0,shootTicks:0,windupTicks:0,phaseTimer:10000,icyShieldHP:0} as unknown as GameState['enemies'][0];
+ ctx.clearRect(0,0,96,96);ctx.save();ctx.translate(48,52);const scale=isBossType(type)?(type==='splitter_queen'?.9:.7):1.15;ctx.scale(scale,scale);if(!drawSaturnUnit(ctx,enemy,0,0,40))drawEnemy(ctx,enemy,0,0,40);ctx.restore();
+ },[type]);
+ return <canvas ref={ref} width={96} height={96} aria-label={type.replaceAll('_',' ')} style={{width:size,height:size,objectFit:'contain'}}/>;
+}
+
+export function SkillPortrait({kind}:{kind:SpecialSkill}){
+ const ref=useRef<HTMLCanvasElement>(null);
+ useEffect(()=>{const ctx=ref.current?.getContext('2d');if(!ctx)return;const state=createInitialState();state.specialSkill=kind;ctx.clearRect(0,0,128,128);ctx.save();ctx.translate(64,70);ctx.scale(1.05,1.05);drawPlayer(ctx,0,0,state,40);ctx.restore();},[kind]);
+ return <canvas width={128} height={128} ref={ref} aria-label={kind+' player suit'} style={{width:96,height:96}}/>;
+}
+
 export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; trialId?: TrialBody }) {
+  const godPanelRef=useRef<HTMLDivElement>(null);
+  const [godPanelScale,setGodPanelScale]=useState(1);
+  const [showPause,setShowPause]=useState(false);
+  const [showControlSettings,setShowControlSettings]=useState(false);
+  const [resumePrompt,setResumePrompt]=useState(false);
+  const resumePendingRef=useRef(false);
+  const perfEnabled=useRef(false);
+  const frameMeter=useRef(new FrameMeter());
   const trialInfo = trialId ? findTrial(trialId) : undefined;
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -5259,12 +5276,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const startMusic = () => { if (musicEnabledRef.current) bgmRef.current?.playMusic(); };
   const toggleMusic = () => {
     const enabled = !musicEnabledRef.current; musicEnabledRef.current = enabled; setMusicEnabled(enabled);
+    updateProfile(p=>{p.settings.music=enabled?1:0;});window.dispatchEvent(new Event('ruby-audio'));
     try { localStorage.setItem('rubyStar.music', enabled ? 'on' : 'off'); } catch {}
     if (enabled) bgmRef.current?.playMusic(); else bgmRef.current?.pauseMusic();
   };
   // Music starts on entry; if the browser blocks autoplay, the first key or click starts it.
   useEffect(() => {
-    try { musicEnabledRef.current = localStorage.getItem('rubyStar.music') !== 'off'; } catch {}
+    try { musicEnabledRef.current = isDesktop()?getProfile().settings.music>0:localStorage.getItem('rubyStar.music') !== 'off'; } catch {}
     setMusicEnabled(musicEnabledRef.current);
     const start = () => { if (musicEnabledRef.current) bgmRef.current?.playMusic(); };
     const timer = setTimeout(start, 0);
@@ -5272,6 +5290,10 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     window.addEventListener('keydown', start, { once: true });
     return () => { clearTimeout(timer); window.removeEventListener('pointerdown', start); window.removeEventListener('keydown', start); };
   }, []);
+  useEffect(()=>{
+    const refresh=()=>{if(!isDesktop())return;const enabled=getProfile().settings.music>0;musicEnabledRef.current=enabled;setMusicEnabled(enabled);if(enabled)bgmRef.current?.playMusic();else bgmRef.current?.pauseMusic();};
+    window.addEventListener('ruby-audio',refresh);return ()=>window.removeEventListener('ruby-audio',refresh);
+  },[]);
   const singularityMap = trialInfo?.boss === 'devourer';
   const saturnMap = trialInfo?.boss === 'frost_warden';
   const sunMap = trialInfo?.boss === 'fiery_king', jupiterMap = trialInfo?.boss === 'storm_reaper';
@@ -5279,6 +5301,12 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const [showRules, setShowRules] = useState(singularityMap || saturnMap || jupiterMap || sunMap || neptuneMap || gaiaMap || moonMap); // play starts at once (Neptune opens its own sheet first); RULES opens the sheet
   const [, forceRender] = useState(0);
   const [isGodQuery, setIsGodQuery] = useState(false);
+  useEffect(()=>{
+    const panel=godPanelRef.current;if(!panel)return;
+    const fit=()=>setGodPanelScale(Math.min(1,Math.max(.5,((panel.parentElement?.clientHeight??800)-16)/Math.max(1,panel.scrollHeight))));
+    const observer=new ResizeObserver(fit);observer.observe(panel);if(panel.parentElement)observer.observe(panel.parentElement);fit();
+    return ()=>observer.disconnect();
+  },[isGodQuery]);
   // Ref (not state) — read imperatively inside the rAF draw loop, whose effect doesn't
   // re-run on state changes, so a plain useState here would risk a stale closure.
   const isMobileTouchRef = useRef(false);
@@ -5289,6 +5317,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const pointerLaserHeldRef = useRef(false);
   const keyboardLaserHeldRef = useRef(false);
   const keyboardBulletHeldRef = useRef(false);
+  const snowballMouseHeldRef = useRef(false);
+  const snowballKeyHeldRef = useRef(false);
 
   // ── Mobile virtual joystick ──────────────────────────────────────────────
   const [joyThumb, setJoyThumb] = useState({ x: 0, y: 0 });
@@ -5388,9 +5418,11 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
+    if(!canEnter(mode,trialInfo?.boss)){router.replace(mode==='ascension'?'/':'/challenge');return;}
     stateRef.current = createModeState(mode, trialInfo?.boss);
+    if(isDesktop()&&restoreRun(mode,trialId)){resumePendingRef.current=true;setResumePrompt(true);setShowRules(true);}
     if (typeof window !== 'undefined') {
-      setIsGodQuery(true); // God panel is always on for testing (was: only with ?god=1)
+      setIsGodQuery(process.env.NODE_ENV !== 'production');
       // Require all three signals — some desktop setups (touchscreen laptops/monitors)
       // misreport hover/pointer and still have maxTouchPoints > 0, so also require a
       // phone/tablet-sized viewport (a real desktop display is essentially never this narrow,
@@ -5407,11 +5439,19 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   }, []);
 
   useEffect(() => {
-    const cancelCharge = () => { if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); };
-    const onVisibility = () => { if (document.hidden) { cancelCharge(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); } };
+    const save=()=>{if(isDesktop()&&stateRef.current&&!resumePendingRef.current){saveRun(stateRef.current,trialId);void flushProfile();}};
+    const pause=()=>{if(isDesktop()&&stateRef.current&&!resumePendingRef.current&&stateRef.current.gamePhase!=='won'&&stateRef.current?.gamePhase!=='lost'){setShowPause(true);setShowRules(true);}};
+    const desktopKey=(e:KeyboardEvent)=>{if(e.key==='F3'&&process.env.NODE_ENV!=='production'){e.preventDefault();perfEnabled.current=!perfEnabled.current;}if(e.key==='Escape'&&!e.repeat&&isDesktop()&&stateRef.current?.gamePhase==='playing'){pause();}};
+    window.addEventListener('ruby-save-run',save);window.addEventListener('keydown',desktopKey);window.addEventListener('blur',pause);
+    const autosave=window.setInterval(save,15000);
+    window.addEventListener('blur',save);window.addEventListener('pagehide',save);
+    const cancelCharge = () => { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if(stateRef.current?.saturn?.charging)cancelSnowball(stateRef.current); if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); };
+    const onVisibility = () => { if (document.hidden) { save();cancelCharge(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); } };
     window.addEventListener('blur', cancelCharge);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      window.removeEventListener('ruby-save-run',save);window.removeEventListener('keydown',desktopKey);window.removeEventListener('blur',pause);
+      window.clearInterval(autosave);window.removeEventListener('blur',save);window.removeEventListener('pagehide',save);
       window.removeEventListener('blur', cancelCharge);
       document.removeEventListener('visibilitychange', onVisibility);
       cancelCharge();
@@ -5421,12 +5461,14 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
   // ── Game loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (showRules) { if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); return; }
+    if (showRules) { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if(stateRef.current?.saturn?.charging)cancelSnowball(stateRef.current); if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); return; }
     const canvas = canvasRef.current;
     if (!canvas) return;
+    frameMeter.current=new FrameMeter();
     const TARGET_MS = 1000 / 60;
     let lastTime = 0;
     let accumulator = 0;
+    let lastHudTick = -1;
 
     // Runs exactly one 60Hz game tick's worth of logic — pulled out of loop() so it can be
     // invoked 0, 1, or several times per rendered frame depending on real elapsed time,
@@ -5434,6 +5476,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     function runOneTick(state: GameState) {
       tickRef.current++;
       if (state.gamePhase !== 'playing') {
+        snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if(state.saturn?.charging)cancelSnowball(state);
         if (state.sun) state.sun.charging = false;
         mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false;
       }
@@ -5441,7 +5484,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if(mouseDownTimeRef.current>0&&(state.waveCooldown>0||state.gamePhase!=='playing'))mouseDownTimeRef.current=Date.now();
       const chargingMsNow = mouseDownTimeRef.current > 0 ? Date.now() - mouseDownTimeRef.current : 0;
       // Full charge takes longer while chilled by a Frost Warden sharing the player's chamber
-      const waveChargeMsNow = (isPlayerChilled(state) ? 1500 : 1000)*(state.build.quickWave ? .65 : 1);
+      const waveChargeMsNow = (isPlayerChilled(state) ? (saturnShieldChilled(state) ? 1000/SATURN.shieldedChillMult : 1500) : 1000)*(state.build.quickWave ? .65 : 1);
       // Auto-fire wave once the hold reaches full charge (only if wave not on cooldown)
       if (chargingMsNow >= waveChargeMsNow && state.gamePhase === 'playing' && state.waveCooldown <= 0) {
         activateWave(state);
@@ -5450,6 +5493,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       // One slowed play fills the remaining charge window, without looping its intro.
       if (chargingMsNow >= 200 && state.waveCooldown <= 0 && state.gamePhase === 'playing') {
         startChargeSound((waveChargeMsNow - 200) / 1000);
+        buildChargeField(state);
       } else stopChargeSound();
       // Lock movement while ACTIVELY charging (not during cooldown)
       if (chargingMsNow >= 200 && state.waveCooldown <= 0) {
@@ -5461,7 +5505,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if ((rightMouseHeldRef.current || keyboardBulletHeldRef.current) && state.gamePhase === 'playing' && state.bulletCooldown <= 0) {
         useBullet(state);
       }
+      const previousPhase=state.gamePhase;
       if (state.gamePhase !== 'lost') tick(state);
+      if(previousPhase!==state.gamePhase&&(state.gamePhase==='won'||state.gamePhase==='lost'))saveRun(state,trialId);
       if (state.gamePhase !== 'playing') stopChargeSound();
     }
 
@@ -5497,7 +5543,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       ctx.imageSmoothingEnabled = false;
       const chargingMs = mouseDownTimeRef.current > 0 ? Date.now() - mouseDownTimeRef.current : 0;
       drawGame(ctx, state, W, H, t, chargingMs, isMobileTouchRef.current);
-      if (t % 6 === 0) rerender();
+      if(process.env.NODE_ENV!=='production')frameMeter.current.draw(ctx,ts,perfEnabled.current);
+      if(t%60===0)observeDiscoveries(state);
+      if (t % 6 === 0 && t !== lastHudTick) { lastHudTick=t;rerender(); }
     }
     rafRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(rafRef.current); stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); };
@@ -5524,7 +5572,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     if(state.gamePhase==='laserTarget'){cancelSkyLaser(state);playUiSfx('close');rerender();return;}
     if(state.gamePhase!=='playing')return;
     let used=false;
-    if(state.jupiter)used=useVoltFence(state);
+    if(state.saturn){used=state.saturn.charging || beginSnowball(state);mouseDownTimeRef.current=0;rightMouseHeldRef.current=pointerLaserHeldRef.current=keyboardLaserHeldRef.current=keyboardBulletHeldRef.current=false;stopChargeSound();}
+    else if(state.jupiter)used=useVoltFence(state);
     else if(state.sun)used=useCoolingWave(state);
     else if(state.gaia)used=useSunfire(state);
     else if(state.moon)used=useMoonMark(state);
@@ -5540,6 +5589,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     if (showRules) return;
     const onKey = (e: KeyboardEvent) => {
       const state = stateRef.current;
+      const key=state&&(state.gamePhase==='teleporting'||state.gamePhase==='laserTarget')&&/^[1-4]$/.test(e.key)?e.key:gameKey(e);
       if (!state || state.gamePhase === 'lost') return;
 
       if (state.gamePhase === 'constellation'||state.gamePhase==='blessing') return;
@@ -5548,36 +5598,36 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if (state.gamePhase === 'laserTarget') {
         e.preventDefault();
         if (e.repeat) return;
-        if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') { cancelSkyLaser(state); playUiSfx('close'); rerender(); return; }
-        const room = ({ '1': 0, '2': 1, '3': 2, '4': 3 } as Record<string, number>)[e.key];
+        if (key === 'Escape' || key === 'c' || key === 'C') { cancelSkyLaser(state); playUiSfx('close'); rerender(); return; }
+        const room = ({ '1': 0, '2': 1, '3': 2, '4': 3 } as Record<string, number>)[key];
         if (room !== undefined && chooseSkyLaser(state, room)) { playUiSfx('ascension'); rerender(); }
         return;
       }
 
       // Teleport menu
       if (state.gamePhase === 'teleporting') {
-        if (e.key === 'Escape' || e.key === 'x' || e.key === 'X') {
+        if (key === 'Escape' || key === 'x' || key === 'X') {
           e.preventDefault();
           if(!e.repeat){cancelTeleport(state);playUiSfx('close');rerender();}
           return;
         }
         if(e.code==='Space'){e.preventDefault();return;}
         const numMap: Record<string, number> = { '1': 0, '2': 1, '3': 2, '4': 3 };
-        const dest = numMap[e.key];
+        const dest = numMap[key];
         if (dest !== undefined && state.teleportDestOptions.includes(dest)) {
           doTeleport(state, dest); rerender(); return;
         }
         return;
       }
 
-      if (e.key.toLowerCase() === 'k') {
+      if (key.toLowerCase() === 'k') {
         e.preventDefault();
         if (e.repeat || keyboardLaserHeldRef.current) return;
         keyboardLaserHeldRef.current = true;
         if (!mouseDownTimeRef.current) mouseDownTimeRef.current = Date.now();
         useLaser(state); rerender(); return;
       }
-      if (e.key.toLowerCase() === 'l') {
+      if (key.toLowerCase() === 'l') {
         e.preventDefault();
         if (e.repeat || keyboardBulletHeldRef.current) return;
         keyboardBulletHeldRef.current = true;
@@ -5591,45 +5641,48 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         ArrowLeft: [-1, 0], a: [-1, 0], A: [-1, 0],
         ArrowRight: [1, 0], d: [1, 0], D: [1, 0],
       };
-      const dir = dirMap[e.key];
+      const dir = dirMap[key];
       if (dir) {
         e.preventDefault();
+        if(state.saturn?.charging){state.playerDirX=dir[0];state.playerDirY=dir[1];}
         state.playerQueuedDirX = dir[0];
         state.playerQueuedDirY = dir[1];
         return;
       }
 
-      if (e.key === ' ') {
+      if (key === ' ') {
         e.preventDefault();
         if (state.sun) state.sun.charging = true;
         if (!sunStationNearPlayer(state)) healRuby(state);
         rerender();
         return;
       }
-      if (e.key === 'x' || e.key === 'X') {
+      if (key === 'x' || key === 'X') {
         e.preventDefault();
         if(!e.repeat){if(tryActivateTeleport(state))playUiSfx('teleport');rerender();}
         return;
       }
-      if (e.key === 'c' || e.key === 'C') {
-        e.preventDefault();if(!e.repeat)activateMapSkill(state);return;
+      if (key === 'c' || key === 'C') {
+        e.preventDefault();if(!e.repeat){snowballKeyHeldRef.current=true;activateMapSkill(state);}return;
       }
-      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'r' || e.key === 'R') { e.preventDefault(); useSpeedBoost(state); rerender(); return; }
-      if (e.key === 'e' || e.key === 'E') {
+      if (key === 'r') { e.preventDefault(); useSpeedBoost(state); rerender(); return; }
+      if (key === 'e' || key === 'E') {
         toggleCarryRuby(state); rerender(); return;
       }
-      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); if (!e.repeat) useSpecialSkill(state); rerender(); return; }
-      if (e.key === 'q' || e.key === 'Q') { useBomb(state); rerender(); return; }
+      if (key === 'f' || key === 'F') { e.preventDefault(); if (!e.repeat) useSpecialSkill(state); rerender(); return; }
+      if (key === 'q' || key === 'Q') { useBomb(state); rerender(); return; }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === ' ' && stateRef.current?.sun) stateRef.current.sun.charging = false;
-      if (e.key.toLowerCase() === 'k') {
+      const key=gameKey(e);
+      if(key.toLowerCase()==='c'){snowballKeyHeldRef.current=false;if(stateRef.current?.saturn&&!snowballMouseHeldRef.current){releaseSnowball(stateRef.current);rerender();}return;}
+      if (key === ' ' && stateRef.current?.sun) stateRef.current.sun.charging = false;
+      if (key.toLowerCase() === 'k') {
         keyboardLaserHeldRef.current = false;
         if (!pointerLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
         return;
       }
-      if (e.key.toLowerCase() === 'l') { keyboardBulletHeldRef.current = false; return; }
+      if (key.toLowerCase() === 'l') { keyboardBulletHeldRef.current = false; return; }
       const state = stateRef.current;
       if (!state) return;
       const dirMap: Record<string, [number, number]> = {
@@ -5638,7 +5691,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         ArrowLeft: [-1, 0], a: [-1, 0], A: [-1, 0],
         ArrowRight: [1, 0], d: [1, 0], D: [1, 0],
       };
-      const dir = dirMap[e.key];
+      const dir = dirMap[key];
       if (dir && state.playerQueuedDirX === dir[0] && state.playerQueuedDirY === dir[1]) {
         state.playerQueuedDirX = 0;
         state.playerQueuedDirY = 0;
@@ -5656,34 +5709,40 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   // ── Mouse input ───────────────────────────────────────────────────────────
   const handleMouseDown = (e: React.MouseEvent) => {
     const state = stateRef.current;
-    if(e.button===1){
+    const action=mouseControl(e.button);
+    if(action==='mapSkill'){
       e.preventDefault();
-      if(state&&!showRules)activateMapSkill(state);
+      if(state&&!showRules){snowballMouseHeldRef.current=true;activateMapSkill(state);}
       return;
     }
-    if (!state || state.gamePhase !== 'playing') return;
-    if (e.button === 0) {
+    if (!state || showRules || state.gamePhase !== 'playing') return;
+    if (action === 'laser') {
 
       pointerLaserHeldRef.current = true;
       if (!mouseDownTimeRef.current) mouseDownTimeRef.current = Date.now();
       useLaser(state);
       rerender();
-    } else if (e.button === 2) {
+    } else if (action === 'bullet') {
       e.preventDefault();
       rightMouseHeldRef.current = true;
       useBullet(state);
       rerender();
-    }
+    }else if(action==='boost'){useSpeedBoost(state);rerender();}else if(action==='bomb'){useBomb(state);rerender();}else if(action==='ruby'){toggleCarryRuby(state);rerender();}else if(action==='heal'){if(state.sun)state.sun.charging=true;if(!sunStationNearPlayer(state))healRuby(state);rerender();}else if(action==='teleport'){if(tryActivateTeleport(state))playUiSfx('teleport');rerender();}else if(action==='celestial'){useSpecialSkill(state);rerender();}
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
-    if (e.button === 2) { rightMouseHeldRef.current = false; return; }
-    if (e.button !== 0) return;
+    const action=mouseControl(e.button);
+    if(action==='mapSkill'){snowballMouseHeldRef.current=false;if(stateRef.current?.saturn&&!snowballKeyHeldRef.current){releaseSnowball(stateRef.current);rerender();}return;}
+    if(action==='heal'&&stateRef.current?.sun)stateRef.current.sun.charging=false;
+    if (action === 'bullet') { rightMouseHeldRef.current = false; return; }
+    if (action !== 'laser') return;
     pointerLaserHeldRef.current = false;
     if (!keyboardLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
   };
 
   const handleMouseLeave = () => {
+    snowballMouseHeldRef.current=false;
+    if(stateRef.current?.saturn?.charging&&!snowballKeyHeldRef.current)cancelSnowball(stateRef.current);
     rightMouseHeldRef.current = false; pointerLaserHeldRef.current = false;
     if (!keyboardLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
   };
@@ -5721,12 +5780,14 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
   const handleRestart = () => {
     stopAmbientEventSounds();
+    snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;
     const s = createModeState(mode, trialInfo?.boss);
     s.godMode = stateRef.current?.godMode ?? false;
     s.immortal = stateRef.current?.immortal ?? false;
     s.noMobs = stateRef.current?.noMobs ?? false;
     if (s.sun) godSetNoWisps(s, stateRef.current?.sun?.noWisps ?? false);
     s.noBossSpawns = stateRef.current?.noBossSpawns ?? false;
+    if(s.saturn&&stateRef.current?.saturn?.permaShield){s.saturn.permaShield=true;s.playerShieldHP=Math.max(40,stateRef.current.playerShieldHP);s.rubyShieldHP=Math.max(40,stateRef.current.rubyShieldHP);s.playerSaturnShield=s.rubySaturnShield=true;}
     stateRef.current = s;
     tickRef.current = 0;
     rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false;
@@ -5752,7 +5813,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const powered = (state?.poweredTicks ?? 0) > 0 || (state?.starEnergy ?? 0) >= STAR_ENERGY_MAX;
   const carrying = state?.playerCarryingRuby ?? true;
   const godPanelTop = 8;
-  const godPanelWidth = 254;
+  const godPanelWidth = 320;
   const prayerSpawnWarning = phase === 'playing' && (state?.bossSpawnTicks ?? 0) > 0 && !!state && isMovementReversed(state);
   const playerStatuses: { key: string; label: string; color: string; seconds?: number; progress?: number }[] = [];
   if(state){
@@ -5760,6 +5821,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     else if(isPlayerChilled(state))playerStatuses.push({key:'chilled',label:'CHILLED · MOVE & ATTACK SLOW',color:'#8ecfe9'});
     if((state.jupiter?.slowTicks??0)>0)playerStatuses.push({key:'static',label:'STATIC · SLOWED',color:'#9fd8ff',seconds:state.jupiter!.slowTicks/60,progress:state.jupiter!.slowTicks/JUPITER.shockSlowTicks});
     if(isMovementReversed(state))playerStatuses.push({key:'reversed',label:'CONTROLS REVERSED',color:'#ffe477'});
+    if(state.build.decoy)playerStatuses.push({key:'pyxis-decoy',label:'DECOY · '+CHAMBER_LABELS[chamberOfTile(state.build.decoy.tileX,state.build.decoy.tileY)],color:'#c6b8ff',progress:state.build.decoy.ticks/360});
     if(state.rubyPlacedFlashTicks>0)playerStatuses.push({key:'ruby-placed',label:'RUBY PLACED',color:'#ffa5c3',progress:state.rubyPlacedFlashTicks/120});
   }
 
@@ -5844,15 +5906,21 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-guide-skill strong { font-size: 14px; }
         .rs-guide-nav button, .rs-guide-back { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; }
         .rs-guide .rs-guide-back { background: #203b58; border: 2px solid #7198be; color: #eff7ff; padding: 10px 14px; }
-        .rs-god-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+        .rs-god-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
         .ruby-star-ui .rs-god-panel { z-index: 80 !important; }
-        .ruby-star-ui .rs-game-over { z-index: 120; background: #050a14ed; padding: 12px; box-sizing: border-box; overflow: auto; }
-        .rs-end-panel { box-sizing: border-box; width: min(620px, 100%); max-height: 100%; overflow: auto; padding: 24px; background: #0e1a2d; border: 2px solid #9a86c5; box-shadow: 0 0 28px #9966cc22; }
+        .ruby-star-ui .rs-god-panel [role="group"] { gap:4px; }
+        .ruby-star-ui .rs-god-panel .rs-boss-controls button, .ruby-star-ui .rs-god-panel .rs-celestial-controls button { width:50px !important; height:50px !important; }
+        .ruby-star-ui .rs-game-over { position:fixed;inset:0;display:grid;place-items:center;z-index: 120; background: #050a14ed; padding: 12px; box-sizing: border-box; overflow: auto; }
+        .rs-end-panel { position:relative; box-sizing: border-box; width: min(620px, 100%); max-height: 100%; overflow: auto; padding: 24px; background: #0e1a2d; border: 2px solid #9a86c5; box-shadow: 0 0 28px #9966cc22; }
         .rs-end-panel h2 { margin: 0 0 22px; color: #f1e8ff; font-family: var(--font-pixel); font-size: 22px; line-height: 1.5; text-align: center; text-shadow: 0 0 14px #b976ff55; }
         .rs-end-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 22px; align-items: center; }
         .rs-end-stage { text-align: center; color: #e8cbff; }
         .rs-end-stage > span { display: block; font-family: var(--font-mono); font-size: 15px; font-weight: 700; letter-spacing: .15em; margin-bottom: 12px; }
         .rs-end-stage > strong { display: block; font-family: var(--font-pixel); font-size: 54px; line-height: 1.3; color: #f0dfff; text-shadow: 0 0 18px #b978ff66; }
+        .rs-end-record { position:absolute; top:24px; right:24px; text-align:right; font-family:var(--font-pixel); line-height:1.7; color:#f5d78e; }
+        .rs-end-panel:has(.rs-end-record) h2 { text-align:center; margin-bottom:30px; }
+        .rs-end-record > span { display:block; font-size:8px; }
+        .rs-end-record > strong { display:block; margin-top:4px; font-size:16px; text-shadow:0 0 8px #e8bd4933; }
         .rs-end-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; font-family: var(--font-mono); font-weight: 700; }
         .rs-end-stats > div { padding: 10px 12px; background: #182c45; border: 1px solid #3b5877; }
         .rs-end-stats dt { font-size: 13px; letter-spacing: .05em; color: #b6cee5; margin-bottom: 5px; }
@@ -5873,7 +5941,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-event-banner { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: calc(100% - 32px); width: max-content; padding: 7px 12px; border: 2px solid; background: #11182bef; font-family: var(--font-mono); font-weight: 700; text-align: center; pointer-events: none; }
         .rs-event-banner strong { font-size: 14px; letter-spacing: .05em; }
         .rs-event-banner span { color: #d9e4f4; font-size: 13px; }
-        .rs-god-actions button { min-height: 34px; padding: 5px 3px; border-radius: 0; }
+        .rs-god-actions button { min-height: 30px; padding: 3px 2px; border-radius: 0; }
         .ruby-star-ui .rs-hud { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; flex-shrink: 0; padding: var(--bar-pad); background: #090f1c; border-bottom: 1px solid rgba(124,158,196,.24); }
         .rs-hud-left, .rs-hud-right, .rs-hud-vitals { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .rs-hud-left > :first-child { flex-shrink: 0; white-space: nowrap; }
@@ -5888,6 +5956,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-guardian-bar[data-active] { border-color: #ffffff; }
         .rs-guardian-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #e8fbff; box-shadow: 0 0 4px #9fe4ff; }
         .rs-guardian-fill { display: block; height: 100%; background: var(--guardian); box-shadow: 0 0 10px var(--guardian), inset 0 -4px 0 rgba(0,0,0,.25), inset 0 3px 0 rgba(255,255,255,.3); transition: width 160ms linear; }
+        .rs-jupiter-guardian { display:flex; align-items:center; gap:10px; }
+        .rs-jupiter-vitals { flex:1; min-width:0; }
         .rs-sun-guardian { display: flex; align-items: center; gap: 10px; }
         .rs-sun-health { flex: 1; min-width: 0; }
         .rs-rage { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 28px; flex-shrink: 0; }
@@ -5899,6 +5969,18 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-stage > strong { display: block; font-family: var(--font-pixel); font-size: 30px; line-height: 1.15; color: #f4e7ff; text-shadow: 0 0 14px #bb75ff99; }
         .rs-time { display: flex; gap: 6px; align-items: center; font-size: var(--font-stat); color: #b8cce0; font-weight: 700; }
         .rs-time > span:last-child { font-family: var(--font-pixel); font-size: var(--font-score); color: #a5bfd7; }
+        @media (min-width: 850px) and (max-width: 1300px) {
+          .ruby-star-ui .rs-saturn-hud { grid-template-columns: minmax(0,1fr) 240px auto; gap: 10px; }
+          .rs-saturn-hud .rs-hud-vitals { display: grid; grid-template-columns: repeat(2,max-content); gap: 5px 8px; }
+          .rs-saturn-hud .rs-hud-vitals > :last-child { grid-column: 1 / -1; }
+          .rs-saturn-hud .rs-hud-left, .rs-saturn-hud .rs-hud-right { gap: 8px; }
+          .rs-saturn-hud .rs-guardian { width: 240px; }
+          .rs-saturn-hud .rs-guardian-name { font-size: 10px; }
+        }
+        @media (min-width: 850px) and (max-width: 1150px) {
+          .rs-saturn-hud .rs-hud-vitals { grid-template-columns: max-content; }
+          .rs-saturn-hud .rs-hud-vitals > :last-child { grid-column: auto; }
+        }
         @media (max-width: 1000px) {
           .ruby-star-ui .rs-hud { gap: 8px; }
           .rs-hud-left, .rs-hud-right { gap: 8px; }
@@ -5921,7 +6003,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .ruby-star-ui .rs-hud button:hover { background: #2d5175 !important; border-color: #b6e4ff !important; }
         .ruby-star-ui .rs-hud button[aria-pressed="true"] { background: #19513b !important; border-color: #86efb0 !important; color: #dcffea !important; }
         .ruby-star-ui .rs-hud button:active { transform: translateY(1px); box-shadow: inset 0 1px 0 #ffffff16, 0 1px 0 #030811; }
-        .ruby-star-ui .rs-god-panel button, .ruby-star-ui .rs-god-panel select { font-size: 13px !important; font-weight: 700; }
+        .ruby-star-ui .rs-god-panel button, .ruby-star-ui .rs-god-panel select { font-size: 14px !important; font-weight: 700; }
+        .ruby-star-ui .rs-god-panel .rs-event-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+        .ruby-star-ui .rs-god-panel .rs-event-controls button { min-height:34px; height:34px; padding:4px 3px; line-height:1.1; }
         .ruby-star-ui .rs-god-panel > button { min-height: 34px; border-width: 2px !important; }
         .ruby-star-ui .rs-guide button { font-size: 14px; font-weight: 700; }
         .ruby-star-ui button:focus-visible { outline: 2px solid #cceeff; outline-offset: 3px; }
@@ -5961,6 +6045,21 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         }
       `}</style>
 
+      <style>{`.rs-pause-panel .btn{width:100%;text-align:left;justify-content:flex-start;font-family:var(--font-pixel);font-size:10px;line-height:1.6;padding:9px 12px;background:#18263c;border:1px solid #4a6380;color:#dfedf5}.rs-pause-panel .btn:hover{background:#243b55;border-color:#9bc7d8}`}</style>
+      {(showPause||resumePrompt)&&<div role="dialog" aria-modal="true" aria-label={resumePrompt?'Resume saved run':'Paused'} onClick={e=>{if(e.target===e.currentTarget&&!resumePrompt){playUiSfx('close');setShowPause(false);setShowRules(false);rerender();}}} style={{position:'fixed',inset:0,zIndex:300,background:'#050810ed',display:'grid',placeItems:'center'}} onKeyDown={e=>e.stopPropagation()}>
+        <div className="rs-pause-panel" style={{border:'2px solid #9aa8ff',background:'#10131f',padding:28,color:'#e7e9f6',width:440,maxWidth:"calc(100vw - 48px)",boxSizing:"border-box",fontFamily:"var(--font-pixel)",textAlign:"left",display:'grid',gap:12}}>
+          <h2 style={{fontSize:16,margin:"0 0 4px",color:'#ff6f9f'}}>{resumePrompt?'SAVED ORBIT':'PAUSED'}</h2>
+          <MenuButton autoFocus className="btn" onClick={()=>{if(resumePrompt){const saved=restoreRun(mode,trialId);if(saved)stateRef.current=saved;}resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(false);rerender();}}>{resumePrompt?'RESUME SAVED RUN':'CONTINUE'}</MenuButton>
+          {resumePrompt?<MenuButton className="btn" onClick={()=>{updateProfile(p=>{delete p.resumes[resumeKey(mode,trialId)];});resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(!!trialInfo);}}>START NEW RUN</MenuButton>:<>
+            <MenuButton className="btn" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void flushProfile().then(()=>router.push('/'));}}>SAVE & RETURN TO LOBBY</MenuButton>
+            <AudioSliders/>
+            <MenuButton className="btn" sound="page" onClick={()=>setShowControlSettings(true)}>CONTROLS</MenuButton>
+            <MenuButton className="btn" onClick={()=>void window.rubyDesktop?.fullscreen()}>FULLSCREEN / WINDOW · F11</MenuButton>
+            <MenuButton className="btn" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void window.rubyDesktop?.quit();}}>SAVE & QUIT</MenuButton>
+          </>}
+        </div>
+      </div>}
+      {showControlSettings&&<ControlSettings onClose={()=>setShowControlSettings(false)}/>}
       <BGMController ref={bgmRef} visible={false} src={['/sounds/rubyStarBGM.mp3']} volume={[0.29]} />
 
       {/* Rotate prompt */}
@@ -5979,12 +6078,12 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       </div>
 
       <RulesModal
-        isOpen={showRules}
+        isOpen={showRules && !showPause && !resumePrompt}
         onClose={() => { setShowRules(false); startMusic(); }}
         title={singularityMap ? ':: THE SINGULARITY' : saturnMap ? ':: SATURN' : jupiterMap ? ':: JUPITER' : sunMap ? ':: THE SUN' : neptuneMap ? ':: NEPTUNE' : gaiaMap ? ':: GAIA' : moonMap ? ':: THE MOON' : ':: RUBY STAR'}
         playSound={button => playUiSfx(button)}
       >
-        {singularityMap ? <SingularityGuide drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'devourer', age, tick)} /> : saturnMap ? <SaturnGuide drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'frost_warden', age, tick)} /> : jupiterMap ? <JupiterGuide drawBoss={drawGuideReaper} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'storm_reaper', age, tick)} /> : sunMap ? <SunGuide drawKing={drawGuideKing} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'fiery_king', age, tick)} /> : neptuneMap ? <NeptuneGuide drawBoss={drawGuideBoss} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'sea_chanter', age, tick)} /> : gaiaMap ? <GaiaGuide drawBoss={drawGuideWeaver} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'thorn_weaver', age, tick)} /> : moonMap ? <MoonGuide drawQueen={drawGuideQueen} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'splitter_queen', age, tick)} /> : <RubyStarGuide />}
+        {singularityMap ? <SingularityGuide drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'devourer', age, tick)} /> : saturnMap ? <SaturnGuide drawBoss={drawGuideWarden} drawFrozenTile={drawBattlefieldIce} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'frost_warden', age, tick)} /> : jupiterMap ? <JupiterGuide drawBoss={drawGuideReaper} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'storm_reaper', age, tick)} /> : sunMap ? <SunGuide drawKing={drawGuideKing} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'fiery_king', age, tick)} /> : neptuneMap ? <NeptuneGuide drawBoss={drawGuideBoss} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'sea_chanter', age, tick)} /> : gaiaMap ? <GaiaGuide drawBoss={drawGuideWeaver} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'thorn_weaver', age, tick)} /> : moonMap ? <MoonGuide drawQueen={drawGuideQueen} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'splitter_queen', age, tick)} /> : <RubyStarGuide />}
       </RulesModal>
 
       {state?.gamePhase === 'skillChoice' && !showRules && <StartingSkillChoice state={state}
@@ -6001,7 +6100,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         }}
       />}
 
-      {state?.gamePhase==='blessing'&&!showRules&&<ConstellationChoice blessing choices={state.build.blessingChoices} onChoose={kind=>{
+      {state?.gamePhase==='blessing'&&!showRules&&<ConstellationChoice blessing choices={state.build.blessingChoices} toggleMode={state.build.godBlessingMode} active={state.build.blessings} onClose={()=>{closeGodBlessings(state);rerender();}} onChoose={kind=>{
         if(chooseCelestialBlessing(state,kind)){
           mouseDownTimeRef.current=0;rightMouseHeldRef.current=pointerLaserHeldRef.current=keyboardLaserHeldRef.current=keyboardBulletHeldRef.current=false;
           touchStartRef.current=null;setJoyThumb({x:0,y:0});rerender();
@@ -6021,9 +6120,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       </div>}
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className="rs-hud">
+      <div className={state?.saturn?'rs-hud rs-saturn-hud':'rs-hud'}>
         <div className="rs-hud-left">
-          <BackButton href={trialInfo ? '/challenge' : '/'} playSound={() => playUiSfx('back')} arrow={<PixelArrow direction="left" />} />
+          <BackButton href={trialInfo ? '/challenge' : '/'} playSound={() => {if(stateRef.current)saveRun(stateRef.current,trialId);playUiSfx('back');}} arrow={<PixelArrow direction="left" />} />
           <div className="rs-hud-vitals">
           {/* Player HP */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -6041,6 +6140,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               <div className="battery-fill" style={{ width: `${rubyHpPct}%`, background: rubyBattColor, boxShadow: `0 0 8px ${rubyBattColor}` }} />
               <div className="battery-nub" style={{ borderLeftColor: RUBY_COLOR + '66' }} />
             </div>
+            {state?.saturn&&<ShieldAmount amount={state.rubyShieldHP} ruby/>}
           </div>
 
           {state?.sun && <div role="meter" aria-label="Temperature" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.sun.heat)} title="Temperature — cool it with stations and Cooling Wave" style={{display:'flex',alignItems:'center',gap:6}}>
@@ -6050,7 +6150,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.neptune && (() => {
             const charge = state.neptune.healCharge / NEPTUNE_HEAL_CHARGE_MAX, ready = charge >= 1;
             return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} role="meter" aria-label="Trident charge"
-              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(charge * 100)} title={ready ? 'Trident ready — press C' : 'Healing charges the Trident'}>
+              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(charge * 100)} title={ready ? 'Trident ready — '+bindingLabel('mapSkill') : 'Healing charges the Trident'}>
               <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
                 <path d="M7 1H9V4H11V7H13V12H11V14H5V12H3V7H5V4H7Z" fill={ready ? '#e8fbff' : '#59c8ff'} />
               </svg>
@@ -6059,7 +6159,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
                 <div style={{ height: '100%', width: `${charge * 100}%`, background: ready ? '#e8fbff' : '#2f9be0',
                   boxShadow: ready ? '0 0 10px #9fe4ff' : 'none', animation: ready ? 'pulseGlow 0.8s ease-in-out infinite' : undefined }} />
               </div>
-              {ready && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: '#e8fbff' }}>C</span>}
+              {ready && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: '#e8fbff' }}><MapSpecialSkillHint/></span>}
             </div>;
           })()}
 
@@ -6075,7 +6175,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
                 <div style={{ height: '100%', width: `${charge * 100}%`, background: ready ? '#fff3b8' : '#e0a83a',
                   boxShadow: ready ? '0 0 10px #ffd36a' : 'none', animation: ready ? 'pulseGlow 0.8s ease-in-out infinite' : undefined }} />
               </div>
-              {usable && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: ready ? '#fff3b8' : '#c9a24a' }}>C</span>}
+              {usable && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: ready ? '#fff3b8' : '#c9a24a' }}><MapSpecialSkillHint/></span>}
             </div>;
           })()}
 
@@ -6096,6 +6196,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
                 background: powered ? '#ffffff' : 'rgba(255,255,255,0.2)', borderRadius: '0 2px 2px 0'
               }} />
             </div>
+            {state?.saturn&&<ShieldAmount amount={state.playerShieldHP}/>}
           </div>
 
           </div>
@@ -6115,6 +6216,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.trial && <CelestialStatus name={SPECIAL_SKILLS[state.trial.skill].name}
             color={state.trial.skill === 'devourer' ? '#bcbccd' : SPECIAL_SKILLS[state.trial.skill].color}
             cooldown={state.specialSkill ? 0 : state.trial.cooldown || trialSkillCooldown(state.trial.skill)} totalCooldown={trialSkillCooldown(state.trial.skill)} />}
+          {state?.saturn && <SnowballStatus saturn={state.saturn}/> }
           {state?.jupiter && <VoltFenceStatus cooldown={state.jupiter.wallCooldown} />}
           {state?.sun && <CoolingWaveStatus cooldown={state.sun.waveCooldown} empowered={state.sun.quenchedTicks > 0} casts={state.sun.empoweredCasts} />}
           {state?.moon && <MoonMarkStatus cooldown={state.moon.markCooldown} totalCooldown={MOON_MARK_COOLDOWN} />}
@@ -6130,9 +6232,10 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               onClick={() => { if (stateRef.current) { stateRef.current.godMode = !stateRef.current.godMode; if(stateRef.current.godMode)stateRef.current.immortal=false; rerender(); } }}
             >GOD</button>
           )}
-          <button className="btn btn-ghost" aria-pressed={musicEnabled} title={musicEnabled ? 'Mute background music' : 'Play background music'} style={{ fontSize: '0.7rem', padding: '4px 10px' }} onClick={toggleMusic}>MUSIC</button>
-          <button className="btn btn-ghost" style={{ fontSize: '0.7rem', padding: '4px 10px' }}
-            onClick={() => { playUiSfx('page'); setShowRules(true); }}>RULES</button>
+          {isDesktop()&&<MenuButton className="btn btn-ghost" aria-label="Pause" title="Pause" style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={()=>{setShowPause(true);setShowRules(true);}}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M5 3H10V21H5ZM14 3H19V21H14Z" fill="#b8dfed"/><path d="M6 5H8V18H6ZM15 5H17V18H15Z" fill="#edfaff"/></svg></MenuButton>}
+          <MenuButton className="btn btn-ghost" aria-label="Music" aria-pressed={musicEnabled} title={musicEnabled ? 'Mute background music' : 'Play background music'} style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={toggleMusic}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{opacity:musicEnabled?1:.5,filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M8 3H21V17H18V20H13V15H18V8H11V20H8V23H3V18H8Z" fill="currentColor"/><path d="M11 4H19V6H11Z" fill="#f1fff8"/></svg></MenuButton>
+          <MenuButton className="btn btn-ghost" sound="page" aria-label="Rules" title="Rules" style={{width:42,padding:8,display:'grid',placeItems:'center'}}
+            onClick={() => setShowRules(true)}><span aria-hidden="true" style={{fontFamily:'var(--font-pixel)',fontSize:18,lineHeight:1}}>?</span></MenuButton>
         </div>
       </div>
 
@@ -6149,6 +6252,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         onTouchCancel={handleTouchEnd}
       >
         {phase === 'playing' && !showRules && state?.constellationReveal && <ConstellationAfterglow kind={state.constellationReveal.kind} ticks={state.constellationReveal.ticks} />}
+        {phase==='playing'&&!showRules&&state?.build.blessingReveal&&<BlessingAfterglow kind={state.build.blessingReveal.kind} ticks={state.build.blessingReveal.ticks} readTicks={()=>stateRef.current?.build.blessingReveal?.ticks??0}/>}
         <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
         {phase==='playing'&&playerStatuses.length>0&&<div className="rs-player-status" role="status" aria-live="polite" style={{left:isGodQuery?godPanelWidth+24:12,maxWidth:isGodQuery?`calc(100% - ${godPanelWidth+244}px)`:undefined}}>
           {playerStatuses.map(status=><div key={status.key} className="rs-status-tag" data-status={status.key} style={{color:status.color,borderColor:status.color+'88'}}>
@@ -6160,15 +6264,15 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
       {/* God Mode UI */}
       {isGodQuery && (
-        <div className="rs-god-panel" aria-label="God mode controls"
+        <div ref={godPanelRef} className="rs-god-panel" aria-label="God mode controls"
           onMouseDown={e => e.stopPropagation()} onMouseUp={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}
           onKeyDown={e => e.stopPropagation()}
           style={{
           position: 'absolute', top: godPanelTop, left: 8,
           background: 'rgba(0,0,0,0.85)', border: '1px solid #ffcc00',
-          padding: '8px', width:godPanelWidth, boxSizing:'border-box', maxHeight:`calc(100% - ${godPanelTop + 8}px)`, overflowY:'auto', touchAction:'pan-y', borderRadius: '2px', zIndex: 20,
-          display: 'flex', flexDirection: 'column', gap: '6px'
+          padding: '6px', width:godPanelWidth, boxSizing:'border-box', transform:`scale(${godPanelScale})`,transformOrigin:'top left',overflow:'visible', touchAction:'pan-y', borderRadius: '2px', zIndex: 20,
+          display: 'flex', flexDirection: 'column', gap: '4px'
         }}>
           <div style={{ color: '#ffcc00', fontWeight: 'bold', fontSize: '0.8rem', textAlign: 'center' }}>{trialInfo ? 'GOD MODE · CHALLENGE' : 'GOD MODE'}</div>
           <div className="rs-god-actions" role="group" aria-label="Protection modes">
@@ -6184,12 +6288,15 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               style={{cursor:phase==='lost'?'default':'pointer',background:'#203e34',color:'#bdffda',border:'2px solid #68cd96',fontWeight:700,opacity:phase==='lost'?.5:1}}
               onClick={() => {const current=stateRef.current;if(current&&current.gamePhase!=='lost'){current.playerHP=PLAYER_MAX_HP;current.rubyHP=RUBY_MAX_HP;}rerender();}}>Full HP</button>
             <button type="button" style={{background:'#283b51',color:'#c9e9ff',border:'2px solid #72b5e7',cursor:'pointer'}}
-              onClick={() => {if(stateRef.current)stateRef.current.starEnergy=STAR_ENERGY_MAX;rerender();}}>Full Energy</button>
+              onClick={() => {if(stateRef.current)addStarEnergy(stateRef.current,STAR_ENERGY_MAX-stateRef.current.starEnergy,false);rerender();}}>Full Energy</button>
           </div>
-          {state?.trial && <div className="rs-god-actions" role="group" aria-label="Celestial skill and C bar">
+          {state?.trial && <div className="rs-god-actions" role="group" aria-label="Celestial skill and map special bar">
           {state?.trial && <button type="button" title="Give the celestial skill back now, skipping its cooldown"
             style={{background:'#2c2347',color:'#e6dcff',border:'2px solid #a58cff',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={() => {const current=stateRef.current;if(current?.trial){current.trial.cooldown=0;current.specialLockTicks=0;if(!current.specialSkill){current.specialSkill=current.trial.skill;playStrikeCharged();}}rerender();}}>Skill Ready</button>}
+          {state?.saturn && <button type="button" title="Recharge Snowball now"
+            style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',padding:'7px',fontWeight:700,cursor:'pointer'}}
+            onClick={()=>{const s=stateRef.current;if(s?.saturn&&s.saturn.cooldown>0){s.saturn.cooldown=0;playUiSfx('fenceReady');}rerender();}}>Snowball Ready</button>}
           {state?.jupiter && <button type="button" title="Recharge Volt Fence now"
             style={{background:'#173b38',color:'#d7fff0',border:'2px solid #68dcb9',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={()=>{if(stateRef.current?.jupiter&&stateRef.current.jupiter.wallCooldown>0){stateRef.current.jupiter.wallCooldown=0;playUiSfx('fenceReady');}rerender();}}>Fence Ready</button>}
@@ -6213,6 +6320,17 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.moon && <button type="button" title="Recharge the Moon Mark so C marks at once"
             style={{background:'#1c2c40',color:'#e8fbff',border:'2px solid #a9e6ff',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={() => {const current=stateRef.current;if(current?.moon){current.moon.markCooldown=0;playStrikeCharged();}rerender();}}>Mark Ready</button>}
+          </div>}
+          {state?.saturn && <div className="rs-god-actions" role="group" aria-label="Saturn controls" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
+            {([1,2,3] as const).map(n=><button key={n} type="button" aria-pressed={state.saturn?.phase===n} style={{background:state.saturn?.phase===n?'#9bdde8':'#173b4c',color:state.saturn?.phase===n?'#102632':'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSetSaturnPhase(stateRef.current,n);rerender();}}>Phase {n}</button>)}
+          </div>}
+          {state?.saturn&&<div className="rs-god-actions" role="group" aria-label="Saturn encounter controls">
+            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.playerShieldHP+=40;s.rubyShieldHP+=40;s.playerSaturnShield=s.rubySaturnShield=true;}rerender();}}>Shield +40</button>
+            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.permaShield=false;s.playerShieldHP=s.rubyShieldHP=0;s.playerSaturnShield=s.rubySaturnShield=false;}rerender();}}>Remove Shield</button>
+            <button type="button" aria-pressed={state.saturn.permaShield} style={{background:state.saturn.permaShield?'#9bdde8':'#173b4c',color:state.saturn.permaShield?'#102632':'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.permaShield=true;s.playerShieldHP=Math.max(40,s.playerShieldHP);s.rubyShieldHP=Math.max(40,s.rubyShieldHP);s.playerSaturnShield=s.rubySaturnShield=true;}rerender();}}>Perma Shield</button>
+            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.level=Math.min(3,s.saturn.level+1) as 1|2|3;s.saturn.levelTicks=0;}rerender();}}>Blizzard +1</button>
+            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.level=Math.max(1,s.saturn.level-1) as 1|2|3;s.saturn.levelTicks=0;}rerender();}}>Blizzard −1</button>
+            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.barrier=0;s.saturn.weakTicks=SATURN.weakTicks;s.frostIceTiles=[];}rerender();}}>Expose</button>
           </div>}
           {state?.jupiter && <>
             <div className="rs-god-actions" role="group" aria-label="Jupiter controls" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
@@ -6266,13 +6384,21 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           </div>
 
 
-          {!trialInfo && <button type="button" disabled={phase!=='playing'||!!state?.constellationChoices.length}
-            style={{background:'#352949',color:'#e8d6ff',border:'2px solid #b68ee9',padding:'7px',fontWeight:700,cursor:'pointer'}}
-            onClick={() => {if(stateRef.current)openGodConstellations(stateRef.current);rerender();}}>Constellations</button>}
-          <div className="rs-god-actions">
+          {!trialInfo&&<div className="rs-god-actions" role="group" aria-label="Run upgrades">
+            <button type="button" disabled={phase!=='playing'||!!state?.constellationChoices.length}
+              style={{background:'#352949',color:'#e8d6ff',border:'2px solid #b68ee9',fontWeight:700,cursor:'pointer'}}
+              onClick={()=>{if(stateRef.current)openGodConstellations(stateRef.current);rerender();}}>Constellations</button>
+            <button type="button" disabled={phase!=='playing'||!!state?.constellationChoices.length}
+              style={{background:'#352949',color:'#e8d6ff',border:'2px solid #b68ee9',fontWeight:700,cursor:'pointer'}}
+              onClick={()=>{if(stateRef.current)openGodBlessings(stateRef.current);rerender();}}>Blessings</button>
+          </div>}
+          <div className="rs-god-actions" style={{gridTemplateColumns:trialInfo?undefined:"repeat(3,minmax(0,1fr))"}}>
             {!trialInfo && <button type="button" disabled={phase !== 'playing' || !!state?.constellationChoices.length}
               style={{ cursor: phase === 'playing' ? 'pointer' : 'default', background: '#243148', color: '#bce2ff', border: '2px solid #72baff', opacity: phase === 'playing' ? 1 : 0.5 }}
               onClick={() => { if (stateRef.current) godAdvanceStage(stateRef.current); rerender(); }}>Stage +1</button>}
+            {(mode==='endless'||mode==='ascension')&&<button type="button" disabled={phase!=='playing'||!!state?.constellationChoices.length||(state?.bossesKilled??0)>=20}
+              title="Jump to Stage 20 while keeping the current run" style={{background:'#243148',color:'#bce2ff',border:'2px solid #72baff',cursor:'pointer'}}
+              onMouseEnter={()=>playUiSfx('hover')} onClick={()=>{playUiSfx('ascension');if(stateRef.current)godJumpStage20(stateRef.current);rerender();}}>STAGE 20</button>}
             <button type="button" aria-label="Reset game" onClick={handleRestart}
               style={{ background: '#422936', color: '#ffd3dc', border: '2px solid #e895ac', cursor: 'pointer' }}>RESET</button>
           </div>
@@ -6289,14 +6415,14 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
           {!trialInfo && <>
           <div style={{color:'#cbd6ef',fontSize:'.65rem',fontWeight:700,textAlign:'center'}}>BOSSES</div>
-          <div className="rs-boss-controls" role="group" aria-label="Summon bosses" style={{ display:'grid',gridTemplateColumns:'repeat(5, 40px)',gap:4,justifyContent:'center' }}>
+          <div className="rs-boss-controls" role="group" aria-label="Summon bosses" style={{ display:'grid',gridTemplateColumns:'repeat(5, 50px)',gap:4,justifyContent:'center' }}>
             {BOSS_TYPES.map(type => <BossSpawnButton key={type} type={type} onSpawn={() => {
               if(stateRef.current)godSpawnBoss(stateRef.current,type);rerender();
             }} />)}
           </div>
           <div style={{color:'#cbd6ef',fontSize:'.65rem',fontWeight:700,textAlign:'center'}}>CELESTIAL SKILLS</div>
           <div className="rs-celestial-controls" role="group" aria-label="Grant celestial skills"
-            style={{display:'grid',gridTemplateColumns:'repeat(5, 40px)',gap:4,justifyContent:'center'}}>
+            style={{display:'grid',gridTemplateColumns:'repeat(5, 50px)',gap:4,justifyContent:'center'}}>
             {state && (Object.keys(SPECIAL_SKILLS) as (keyof typeof SPECIAL_SKILLS)[]).map(kind => <CelestialSkillButton
               key={kind} kind={kind} state={state} selected={state.specialSkill===kind} onGrant={() => {
                 const current=stateRef.current;if(current)current.specialSkill=kind;rerender();
@@ -6346,7 +6472,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#b9bdd6', marginTop: -10 }}>{state.gaia ? 'It burns 3s later. Get yourself and Ruby out of that room!' : 'It strikes 3s later. Get out of that room!'}</p>
             <TeleportMinimap state={state} available={[0, 1, 2, 3]} onPick={ch => { if (chooseSkyLaser(state, ch)) { playUiSfx('ascension'); rerender(); } }} />
             <button className="btn btn-ghost" style={{ fontSize: '0.7rem', padding: '6px 14px' }}
-              onClick={() => { cancelSkyLaser(state); playUiSfx('close'); rerender(); }}>ESC / C — CANCEL</button>
+              onClick={() => { cancelSkyLaser(state); playUiSfx('close'); rerender(); }}>ESC / {bindingLabel('mapSkill')} — CANCEL</button>
           </div>
         )}
 
@@ -6480,7 +6606,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
         {/* Game over */}
         {phase === 'won' && trialInfo && (
-          <VictoryScreen title={`${BOSS_NAMES[trialInfo.boss]} DEFEATED`} world={trialInfo.name}
+          <VictoryScreen title={`${BOSS_NAMES[trialInfo.boss]} DEFEATED`} world={trialInfo.name} gemstone={state?.gemstoneReward}
             color={SPECIAL_SKILLS[BOSS_SKILL_REWARDS[trialInfo.boss]].color === '#303036' ? '#bcbccd' : SPECIAL_SKILLS[BOSS_SKILL_REWARDS[trialInfo.boss]].color}
             onPlayAgain={handleRestart} onStarMap={() => { playUiSfx('back'); router.push('/challenge'); }} />
         )}
@@ -6488,6 +6614,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         {phase === 'lost' && (
           <div className="game-over-overlay rs-game-over">
             <section className="rs-end-panel" role="dialog" aria-modal="true" aria-labelledby="rs-end-title">
+              {!trialInfo&&isDesktop()&&(mode==='endless'||mode==='ascension')&&<div className="rs-end-record"><span>HIGHEST RUN</span><strong>STAGE {Math.max(highestStage(mode),state?.bossesKilled??0)}</strong></div>}
               <h2 id="rs-end-title">{trialInfo ? 'GAME OVER' : 'RUBY STAR'}</h2>
               {!trialInfo && <div className="rs-end-body">
                 <div className="rs-end-stage"><span>STAGE</span><strong>{state?.bossesKilled ?? 0}</strong></div>

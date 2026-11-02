@@ -1,4 +1,5 @@
 'use client';
+import { channelVolume } from '@/game/audio-settings';
 
 import {
   useState,
@@ -31,9 +32,11 @@ const BGMController = forwardRef<BGMControllerHandle, BGMControllerProps>(
 
     useEffect(() => {
       audioRefs.current.forEach((a, i) => {
-        if (a) a.volume = vols[i] ?? 0.1;
+        if (a) a.volume = (vols[i] ?? 0.1)*channelVolume('music');
       });
     }, [volume]);
+
+    useEffect(()=>{const refresh=()=>audioRefs.current.forEach((a,i)=>{if(a)a.volume=(vols[i]??0.1)*channelVolume('music');});window.addEventListener('ruby-audio',refresh);return ()=>window.removeEventListener('ruby-audio',refresh);},[volume]);
 
     // Stop the music when the page unmounts, so it never keeps playing after you leave.
     useEffect(() => {

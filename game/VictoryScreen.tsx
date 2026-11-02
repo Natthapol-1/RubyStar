@@ -1,12 +1,14 @@
 'use client';
 
+import BlessingGem from './BlessingGem';
+import {CELESTIAL_BLESSINGS,type CelestialBlessing} from './endless-builds';
 import { useEffect, useRef } from 'react';
 import { playUiSfx } from './ui-sfx';
 
 // Challenge victory: a blocky celebration in the world's colour. Expanding stepped rings, a pulsing pixel star
 // behind the title and rising sparks, with a short fanfare. The buttons slide in once the title has landed.
-export default function VictoryScreen({ title, world, color, onPlayAgain, onStarMap }: {
-  title: string; world: string; color: string; onPlayAgain: () => void; onStarMap: () => void;
+export default function VictoryScreen({ title, world, color, gemstone, onPlayAgain, onStarMap }: {
+  gemstone?: CelestialBlessing; title: string; world: string; color: string; onPlayAgain: () => void; onStarMap: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -55,7 +57,7 @@ export default function VictoryScreen({ title, world, color, onPlayAgain, onStar
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }, [color]);
 
-  return <div className="game-over-overlay rs-game-over rs-victory" style={{ ['--win' as string]: color }} role="dialog" aria-modal="true" aria-labelledby="rs-win-title">
+  return <div className="game-over-overlay rs-game-over rs-victory" style={{ ['--win' as string]: color,position:'fixed',inset:0 }} role="dialog" aria-modal="true" aria-labelledby="rs-win-title">
     <style>{`
       .rs-victory { position: fixed; z-index: 120; background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--win) 22%, #050a14) 0%, #050a14f2 60%); display: flex; align-items: center; justify-content: center; }
       .rs-victory canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: pixelated; }
@@ -77,6 +79,7 @@ export default function VictoryScreen({ title, world, color, onPlayAgain, onStar
     <div className="rs-victory-inner">
       <div className="rs-victory-kicker">★ {world} CLEARED ★</div>
       <h2 id="rs-win-title">{title}</h2>
+      {gemstone&&<div style={{margin:"20px auto 0",color:CELESTIAL_BLESSINGS[gemstone].color}}><div style={{width:112,margin:"auto"}}><BlessingGem kind={gemstone}/></div><strong>{CELESTIAL_BLESSINGS[gemstone].name.toUpperCase()} ACQUIRED</strong><p>Celestial blessing unlocked for Endless Space.</p></div>}
       <div className="rs-victory-actions">
         <button type="button" autoFocus onClick={onPlayAgain}>PLAY AGAIN</button>
         <button type="button" onClick={onStarMap}>BACK TO STAR MAP</button>

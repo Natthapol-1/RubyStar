@@ -203,7 +203,7 @@ export function hallwayOfTile(tileX: number, tileY: number): number {
 export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
   | 'fish_blue' | 'fish_red' | 'stinger' | 'water_clone' | 'water_bomb' | 'jellyfish' | 'pufferfish'
   | 'seed_pod' | 'blossom' | 'sporeling' | 'vine_crawler' | 'angry_mushroom' | 'lifebloom'
-  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_mimic' | 'cinder_wisp' | 'emberling' | 'scorch_sapper';
+  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_mimic' | 'cinder_wisp' | 'emberling' | 'scorch_sapper' | 'frost_raider' | 'ice_caller' | 'rime_brute';
 
 export const ENERGY_LEECH_DRAIN = 20;
 
@@ -233,7 +233,7 @@ export const JUPITER = {
   shockTileCount: 20, shockTileRespawn: 180, shockSlowTicks: 120, shockSlow: .55, shockEnergy: 12,
   chargeBlastDamage: 60, chargeBlastTicks: 42,
   shardCount: 32, shardShare: .01, shardReach: .55,
-  fragmentCount: 3, fragmentChargeTicks: 480, fragmentRespawnTicks: 180, fragmentBoost: 1.35,
+  fragmentCount: 2, fragmentChargeTicks: 480, fragmentBoost: 1.35,
   miniStormsPerRoom: 2, miniStormSpeed: 2.8, miniStormChaseSpeed: 4.6, miniStormChaseRange: 6,
   miniStormDamage: 12, miniStormHitCooldown: 60,
   celestialShare: .2, meteorShare: .1,
@@ -262,6 +262,18 @@ export const SUN = {
 } as const;
 
 export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
+  ice_caller: {
+    maxHp: 12, speed: 0, color: '#b8cffb', shieldColor: '#e4ffff', bodyFraction: .7, scoreValue: 20,
+    damageToPlayer: 12, damageToRuby: 12, attackCooldown: 480, attackRange: 8, bombExplodeRange: 0,
+  },
+  rime_brute: {
+    maxHp: 30, speed: 3.2, color: '#94b9e9', shieldColor: '#e4ffff', bodyFraction: .9, scoreValue: 30,
+    damageToPlayer: 12, damageToRuby: 12, attackCooldown: 180, attackRange: 0, bombExplodeRange: 0,
+  },
+  frost_raider: {
+    maxHp: 18, speed: 1.5, color: '#91dff5', shieldColor: '#e4ffff', bodyFraction: .7, scoreValue: 25,
+    damageToPlayer: 10, damageToRuby: 10, attackCooldown: 180, attackRange: 0, bombExplodeRange: 0,
+  },
   cinder_wisp: {
     maxHp: 3, speed: 0, color: '#ff9c42', shieldColor: '#ffe3a0', bodyFraction: .5, scoreValue: 0,
     damageToPlayer: 0, damageToRuby: 0, attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
@@ -755,11 +767,11 @@ export const RUBY_HEAL_CLEAR_RANGE = 6;  // no enemies within this many tiles
 // Tutorial mode: short guided steps, shown one at a time with a goal counter.
 export type TutorialStepId = 'move' | 'laser' | 'bullet' | 'wave' | 'speed' | 'bomb' | 'energy' | 'carry' | 'heal' | 'teleport' | 'meteor' | 'celestial' | 'done';
 export const TUTORIAL_STEPS: { id: TutorialStepId; title: string; text: string; goal: number }[] = [
-  { id: 'move', title: 'MOVE', text: 'Move with WASD or the arrow keys.', goal: 8 },
-  { id: 'laser', title: 'LASER', text: 'Left-click or K fires your laser in four directions. Defeat the aliens.', goal: 2 },
-  { id: 'bullet', title: 'BULLETS', text: 'Right-click or L shoots bullets. Hold to keep firing. Defeat the aliens.', goal: 2 },
-  { id: 'wave', title: 'CHARGED WAVE', text: 'Hold left-click or K to charge, then release for a wave that hits and pushes aliens back.', goal: 1 },
-  { id: 'speed', title: 'SPEED BURST', text: 'Press R, Shift or Ctrl for a quick speed burst.', goal: 1 },
+  { id: 'move', title: 'MOVE', text: 'Move with W A S D.', goal: 8 },
+  { id: 'laser', title: 'LASER', text: 'Left-click fires your laser in four directions. Defeat the aliens.', goal: 2 },
+  { id: 'bullet', title: 'BULLETS', text: 'Right-click shoots bullets. Hold to keep firing. Defeat the aliens.', goal: 2 },
+  { id: 'wave', title: 'CHARGED WAVE', text: 'Hold left-click to charge, then release for a wave that hits and pushes aliens back.', goal: 1 },
+  { id: 'speed', title: 'SPEED BURST', text: 'Press R or Left Shift for a quick speed burst.', goal: 1 },
   { id: 'bomb', title: 'BOMB', text: 'Press Q to drop a bomb, step away, then press Q again to detonate. Your own blast hurts you.', goal: 1 },
   { id: 'energy', title: 'STAR ENERGY', text: 'Defeating aliens fills your energy bar (top left). When it is full, your next attack turns POWERED for 2 seconds. Fill it and fire!', goal: 1 },
   { id: 'carry', title: 'RUBY', text: 'Protect Ruby! Stand next to it and press E to pick it up, then E again to put it down.', goal: 2 },

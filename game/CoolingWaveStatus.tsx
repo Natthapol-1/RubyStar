@@ -1,4 +1,6 @@
 'use client';
+import {SvgMapSkillHint} from './MapSpecialSkillHint';
+import {bindingLabel} from './controls';
 
 import { SUN } from './constants';
 
@@ -8,8 +10,8 @@ export default function CoolingWaveStatus({ cooldown, empowered, casts }: {
 }) {
   const cooling = cooldown > 0, total = empowered ? SUN.rapidCooldown : SUN.waveCooldown;
   const progress = Math.max(0, Math.min(1, 1 - cooldown / total));
-  const label = empowered ? `Cooling Wave empowered — ${casts} casts left${cooling ? ', recharging' : ' — C to cast'}`
-    : cooling ? `Cooling Wave recharging — ${Math.ceil(cooldown / 60)} seconds` : 'Cooling Wave ready — C to cast';
+  const label = empowered ? `Cooling Wave empowered — ${casts} casts left${cooling ? ', recharging' : ' — '+bindingLabel('mapSkill')+' to cast'}`
+    : cooling ? `Cooling Wave recharging — ${Math.ceil(cooldown / 60)} seconds` : 'Cooling Wave ready — '+bindingLabel('mapSkill')+' to cast';
   const color = cooling ? '#526b7e' : empowered ? '#dcffff' : '#8be7f7';
   return <div className="cooling-status" role="img" aria-label={label} title={label}
     data-cooling-state={cooling ? 'cooldown' : empowered ? 'empowered' : 'ready'}>
@@ -22,7 +24,7 @@ export default function CoolingWaveStatus({ cooldown, empowered, casts }: {
         <path d="M7 23V27H11V30H29V27H33V23M12 24V26H28V24" fill="none" stroke={color} strokeWidth="2" />
       </g>
       {empowered && Array.from({ length: 5 }, (_, i) => <rect key={i} x={7 + i * 5} y="4" width="3" height="2" fill={i < casts ? '#e5ffff' : '#304353'} />)}
-      <text x="33" y="37" textAnchor="middle" fontSize="8" fontFamily="var(--font-pixel)" fill={cooling ? '#687080' : '#e7e9f6'}>C</text>
+      <SvgMapSkillHint/>
     </svg>
     <style jsx>{`
       .cooling-status { width: 42px; height: 42px; flex-shrink: 0; }

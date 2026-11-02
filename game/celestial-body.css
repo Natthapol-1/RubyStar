@@ -1,0 +1,20 @@
+        .sm-pulse { animation: smRays 2.4s ease-in-out infinite; }
+        @keyframes smRays { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+        .sm-twin-link { position: absolute; left: 22%; top: 30%; width: 56%; height: 34%; border-top: 2px dashed #ffffff55; transform: rotate(-30deg); }
+        .sm-orbit-a { animation: smBob 2.6s ease-in-out infinite; } .sm-orbit-b { animation: smBob 2.6s ease-in-out infinite reverse; }
+        @keyframes smBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 3px; } }
+        .sm-spark { position: absolute; width: 10px; height: 10px; pointer-events: none; animation: smTwinkle 2.2s ease-in-out infinite;
+          background: linear-gradient(#ffffff, #ffffff) 50% 0 / 2px 100% no-repeat, linear-gradient(#ffffff, #ffffff) 0 50% / 100% 2px no-repeat; }
+        @keyframes smTwinkle { 0%, 100% { opacity: .15; transform: scale(.5); } 50% { opacity: .9; transform: scale(1); } }
+        .sm-orb { position: absolute; inset: 0; z-index: 1; clip-path: polygon(28% 0, 72% 0, 100% 28%, 100% 72%, 72% 100%, 28% 100%, 0 72%, 0 28%); }
+        .sm-core { position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -50%);
+          clip-path: polygon(28% 0, 72% 0, 100% 28%, 100% 72%, 72% 100%, 28% 100%, 0 72%, 0 28%); }
+        .sm-spot { position: absolute; z-index: 2; }
+        .sm-ray { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #ffcf5a; }
+        .sm-ray-h { width: 150%; height: 6px; } .sm-ray-v { width: 6px; height: 150%; }
+        .sm-diamond { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(45deg); }
+        .sm-twin { position: absolute; }
+        .sm-ring { position: absolute; left: 50%; top: 50%; box-sizing: border-box; border-style: solid; }
+        .sm-ring-back { clip-path: inset(0 0 50% 0); }
+        .sm-ring-front { clip-path: inset(50% 0 0 0); z-index: 2; }
+        .sm-ring-slot { display: none; }

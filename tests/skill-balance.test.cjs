@@ -39,10 +39,10 @@ test('Shooting Star grants four-second next power, combines with Phoenix, and Si
 });
 
 test('God Constellation screen freezes play and toggles every upgrade without progression or duplicates',()=>{
- const s=fresh();assert.equal(e.openGodConstellations(s),true);assert.equal(s.constellationChoices.length,29);assert.equal(s.gamePhase,'constellation');
+ const s=fresh();assert.equal(e.openGodConstellations(s),true);assert.equal(s.constellationChoices.length,40);assert.equal(s.gamePhase,'constellation');
  const before=s.gameTick;ticks(s,60);assert.equal(s.gameTick,before);
  for(const kind of Object.keys(e.CONSTELLATIONS)){assert.equal(e.chooseConstellation(s,kind),true);assert.ok(s.constellations.includes(kind));}
- assert.equal(new Set(s.constellations).size,29);assert.equal(s.bossesKilled,0);assert.equal(e.chooseConstellation(s,'invalid'),false);
+ assert.equal(new Set(s.constellations).size,40);assert.equal(s.bossesKilled,0);assert.equal(e.chooseConstellation(s,'invalid'),false);
  for(const kind of Object.keys(e.CONSTELLATIONS))e.chooseConstellation(s,kind);assert.deepEqual(s.constellations,[]);
  assert.equal(e.closeGodConstellations(s),true);assert.equal(s.gamePhase,'playing');assert.deepEqual(s.constellationChoices,[]);assert.equal(s.godConstellationMode,false);
  s.gamePhase='lost';assert.equal(e.openGodConstellations(s),false);assert.equal(e.createInitialState().godConstellationMode,false);

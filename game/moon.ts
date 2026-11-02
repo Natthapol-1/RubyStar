@@ -1,3 +1,4 @@
+import { gameAudio, channelVolume } from './audio-settings';
 import {
   CHAMBER_BOUNDS, CHAMBER_SPAWN_TILES, MAP_COLS, TELEPORT_PADS, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile, type EnemyType,
   MOON_PHASE_HP, MOON_FIRST_CLONES, MOON_CLONES_PER_JUMP, MOON_CLONE_CAPS, MOON_MIRROR_STRIPS, MOON_MIRROR_LENGTH, MOON_MIRROR_SHIFT, MOON_MIRROR_FADE, MOON_REVEAL_TICKS, MOON_REVEAL_DAMAGE_MULT,
@@ -275,7 +276,7 @@ export function godSetMoonPhase(state: GameState, phase: 1 | 2 | 3) {
 // The Lunar Echo chime, skipping its silent first 0.1s and played 1.6× faster (pitch up), so it lands with the reveal.
 function playRevealChime() {
   try {
-    const sound = new Audio('/sounds/celestial/lunar-echo.wav');
+    const sound = gameAudio('/sounds/celestial/lunar-echo.wav');
     sound.volume = Math.min(1, 1.1 * .9 * ATTACK_SFX_VOLUME); sound.playbackRate = 1.6; sound.preservesPitch = false; sound.currentTime = .1;
     sound.play().catch(() => {});
   } catch { }

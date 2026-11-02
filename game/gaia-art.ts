@@ -1,3 +1,4 @@
+import { drawEnemyHealthBar } from './enemy-health-art';
 import { TILE_SIZE, MAP_COLS, CHAMBER_BOUNDS, T_FLOOR, GAIA_POD_FUSE, GAIA_SUN_WARNING, GAIA_SCORCH_TICKS, GAIA_STONE_TRAVEL, GAIA_STONE_RELIGHT,
   GAIA_STONE_DRIFT_TICKS, GAIA_RING_RADIUS, GAIA_RING_WARN, GAIA_WARD_RADIUS, GAIA_SPORE_RADIUS, GAIA_SPORE_TICKS, GAIA_WITHER_TICKS, GAIA_SNARE_ROOT } from './constants';
 import { ENEMY_CONFIGS } from './constants';
@@ -285,14 +286,7 @@ export function drawGaiaUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, 
     block(ctx, 12, -3 + wave(2), 3, 3, '#0b1020');
   }
   ctx.restore();
-  if (e.type === 'lifebloom') { /* no HP bar: one hit breaks it */ }
-  else if (e.type === 'seed_pod' || e.type === 'blossom') {
-    const pips = Math.ceil(e.hp / e.maxHp * 4);
-    for (let i = 0; i < 4; i++) block(ctx, Math.round(sx) - 15 + i * 8, Math.round(sy) - 34, 6, 3, i < pips ? '#eaffb0' : '#1b2a1d');
-  } else { // aliens: a thin bar like the stinger's
-    const width = 30, x = Math.round(sx) - width / 2, y = Math.round(sy) - (e.type === 'vine_crawler' ? 22 : 28);
-    block(ctx, x, y, width, 4, '#0a101b'); block(ctx, x, y, Math.floor(width * Math.max(0, e.hp / e.maxHp)), 4, ENEMY_CONFIGS[e.type].color);
-  }
+  drawEnemyHealthBar(ctx,e,sx,sy);
   return true;
 }
 

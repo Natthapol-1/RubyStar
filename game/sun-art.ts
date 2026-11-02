@@ -1,3 +1,4 @@
+import { drawEnemyHealthBar } from './enemy-health-art';
 import { drawChamberCountdown } from './warning-art';
 import { SUN, TILE_SIZE, T_WALL, TELEPORT_PADS, ENEMY_CONFIGS, CHAMBER_BOUNDS, chamberOfTile } from './constants';
 import type { Enemy, GameState } from './engine';
@@ -210,7 +211,7 @@ export function drawSunPad(ctx: CanvasRenderingContext2D, x: number, y: number, 
 }
 
 export function drawSunUnit(ctx: CanvasRenderingContext2D, e: Enemy, x: number, y: number, tick: number): boolean {
-  if (e.type === 'scorch_sapper') { drawScorchSapper(ctx, e, x, y, tick); return true; }
+  if (e.type === 'scorch_sapper') { drawScorchSapper(ctx, e, x, y, tick); drawEnemyHealthBar(ctx,e,x,y); return true; }
   if (e.type !== 'cinder_wisp' && e.type !== 'emberling') return false;
   const cold = !!e.extinguished, wisp = e.type === 'cinder_wisp';
   ctx.save(); ctx.translate(Math.round(x), Math.round(y));
@@ -238,7 +239,7 @@ export function drawSunUnit(ctx: CanvasRenderingContext2D, e: Enemy, x: number, 
       ctx.globalAlpha = .75; ctx.strokeStyle = '#ffc66d'; ctx.lineWidth = 2.5; ctx.strokeRect(-20, -18, 40, 38);
     } else { ctx.fillStyle = '#a9d6e0'; ctx.fillRect(-16, 16, 32, 3); }
   }
-  ctx.restore(); return true;
+  ctx.restore(); drawEnemyHealthBar(ctx,e,x,y); return true;
 }
 
 // The same King's square armor, shoulders, crown and four eyes, cooled to an inert brown husk.

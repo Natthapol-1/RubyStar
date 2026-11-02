@@ -64,7 +64,7 @@ test('laser activation respects its tile footprint, range upgrades and walls',()
 
 
 test('full-strength Supernova deals 100 damage with normal guard, shield and God protection',()=>{
- for(const [guard,shield,god,hp,remaining]of [[false,0,false,0,0],[true,0,false,10,0],[false,40,false,40,0],[true,100,false,100,10],[false,0,true,100,0]]){
+ for(const [guard,shield,god,hp,remaining]of [[false,0,false,0,0],[true,0,false,15,0],[false,40,false,40,0],[true,100,false,100,15],[false,0,true,100,0]]){
   const s=fresh(),a=active(s);position(s,14,10);s.godMode=god;s.playerShieldHP=shield;if(guard)s.constellations=['playerGuard'];
   events.hitSupernova(s,()=>true);a.chargeTicks=1;e.tick(s);assert.equal(s.playerHP,hp);assert.equal(s.playerShieldHP,remaining);assert.equal(s.gamePhase,hp===0?'lost':'playing');
  }

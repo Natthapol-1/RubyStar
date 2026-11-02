@@ -1,4 +1,5 @@
 'use client';
+import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
@@ -10,12 +11,12 @@ const cards = [
   ['TEMPERATURE', 'Heat starts halfway. Charge cooling stations to reduce the heat. At full heat, an eruption devastates everyone except the King, then heat returns to half.'],
   ['CINDER WISPS', 'Each wisp slowly heats the arena. Clear them before they multiply; Solar Flare clears them everywhere.'],
   ['THE KING', 'He chases you and Ruby. Keep hitting him to interrupt his arena attack and its swarm of wisps.'],
-  ['SPECIAL SKILL (PRESS MIDDLE CLICK OR C)', 'Cooling Wave: send out water to clear nearby wisps, cool the arena and calm the King. It also charges nearby stations.'],
+  ['MAP SPECIAL SKILL', 'Cooling Wave: send out water to clear nearby wisps, cool the arena and calm the King. It also charges nearby stations.'],
   ['EMBERLINGS', 'Heavy and armored while burning, knocking you back on hit. Extinguish them with water to leave a helpless, fragile husk.'],
   ['COOLING STATIONS', 'Hold Space nearby to charge and cool. A full station heals you and Ruby 25 HP, releases water, removes heat and moves. The King resets nearby stations.'],
   ['RAGE', 'Rage builds over time, making the King faster and spawning more wisps. Water and hitting him calm it.'],
   ['BURNING TRAIL (PHASE 2)', 'When his rage is high, the King leaves burning ground that hurts you and adds heat. Water puts it out.'],
-  ['EXTINGUISH THE KING', <>Reach zero heat to stun him and get a speed burst. Get close and press C <strong style={{ color: '#ffe6a6', fontWeight: 800, textShadow: '0 0 5px #ffc75e44' }}>FIVE TIMES</strong> for rapid waves that deal heavy damage.</>],
+  ['EXTINGUISH THE KING', <>Reach zero heat to stun him and get a speed burst. Get close and use your map special skill <strong style={{ color: '#ffe6a6', fontWeight: 800, textShadow: '0 0 5px #ffc75e44' }}>FIVE TIMES</strong> for rapid waves that deal heavy damage.</>],
   ['SCORCH SAPPER (PHASE 2)', 'It ignores you and goes for your cooling stations, draining them. Water destroys it.'],
   ['SUNBURST (PHASE 3)', 'A gold sun marker counts down before the room bursts, burning anyone inside and heating the arena. Land water in it or cast Solar Flare to stop it.'],
 ] as const;
@@ -82,7 +83,7 @@ export default function SunGuide({ drawCelestial, drawKing }: { drawCelestial: C
       <CelestialSkillGuideCard name="Solar Flare" description="Burns every enemy, clears all Cinder Wisps and deals 2% of one boss phase." color="#ff8c80" draw={drawCelestial} />
       {cards.map(([title, text], i) => <article key={title} className="rs-nep-card" style={{ borderColor: '#ffac5a66' }}>
       <canvas ref={el => { refs.current[i] = el; }} width={200} height={120} aria-hidden="true" />
-      <h5 style={{ color: i === 3 || i === 5 || i === 8 ? '#a5efff' : '#ffb46b' }}>{title}</h5><p>{text}</p>
+      <h5 style={{ color: i === 3 || i === 5 || i === 8 ? '#a5efff' : '#ffb46b' }}>{title==='MAP SPECIAL SKILL'?'MAP SPECIAL SKILL ('+bindingLabel('mapSkill')+')':title}</h5><p>{text}</p>
     </article>)}</div>
   </div>;
 }

@@ -1,0 +1,4 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,f);
+const {FrameMeter}=require('../game/desktop-runtime.ts');
+test('frame meter follows render intervals, rolls over five seconds, and is silent while hidden',()=>{const texts=[];const ctx={textAlign:'center',canvas:{height:720},save(){},restore(){},fillRect(){},strokeRect(){},fillText(text){assert.equal(this.textAlign,'left');texts.push(text);}};const meter=new FrameMeter();for(let i=1;i<=360;i++)meter.draw(ctx,i*1000/60,false);assert.deepEqual(texts,[]);meter.draw(ctx,361*1000/60,true);assert.match(texts[0],/FPS 60 · 5s 60/);assert.match(texts[1],/16.67 ms/);assert.ok(meter.samples.every(s=>s.time>=361*1000/60-5000));});

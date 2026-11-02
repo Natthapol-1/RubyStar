@@ -33,7 +33,7 @@ test('every third boss defeat offers three distinct eligible choices; tenth stil
    assert.ok(s.constellationChoices.every(k=>!s.constellations.includes(k)));assert.equal(e.chooseConstellation(s,s.constellationChoices[0]),true);
   }else assert.equal(s.gamePhase,'playing');
   if(n===10){assert.equal(s.specialSkill,'frost_warden');assert.equal(s.ascensionBannerTicks,360);}
- }assert.equal(s.constellations.length,total);assert.equal(total,29);
+ }assert.equal(s.constellations.length,total);assert.equal(total,40);
 });
 test('choice freezes simulation and all gameplay; invalid/duplicate picks fail; restart clears upgrades',()=>{
  const s=fresh();s.bossesKilled=2;defeat(s);const before=JSON.stringify(s);ticks(s,120);
@@ -60,19 +60,19 @@ test('Ruby protection reduces meteor damage before shields while player damage r
 test('Delphinus reduces incoming player damage before shields without protecting Ruby or increasing shards',()=>{
  for(const shield of [0,20]){
   const s=fresh(['playerGuard']);s.rubyTileX=s.rubyTileY=10;s.playerShieldHP=shield;s.meteoriteWarning=0;s.meteoriteStrikeIn=1;e.tick(s);
-  near(s.playerHP,100-(c.METEORITE_PLAYER_DMG*.9-shield));assert.equal(s.playerShieldHP,0);assert.equal(s.rubyHP,100-c.METEORITE_RUBY_DMG);
+  near(s.playerHP,100-(c.METEORITE_PLAYER_DMG*.85-shield));assert.equal(s.playerShieldHP,0);assert.equal(s.rubyHP,100-c.METEORITE_RUBY_DMG);
  }
  const s=fresh(['playerGuard']);s.playerHP=20;s.resources=[{type:'health',tileX:10,tileY:10}];e.tick(s);assert.equal(s.playerHP,20+c.HEAL_AMOUNT);
- s.bomb={tileX:10,tileY:10,powered:false};e.useBomb(s);near(s.playerHP,20+c.HEAL_AMOUNT-Math.floor(c.BOMB_DMG*.35)*.9);
+ s.bomb={tileX:10,tileY:10,powered:false};e.useBomb(s);near(s.playerHP,20+c.HEAL_AMOUNT-Math.floor(c.BOMB_DMG*.35)*.85);
 });
 test('power adds one second to gauge activation and Sirius without extending on each attack',()=>{
  const s=fresh(['power']);s.starEnergy=100;e.useBullet(s);assert.equal(s.poweredTicks,180);e.useLaser(s);assert.equal(s.poweredTicks,180);
  s.specialSkill='blind_prayer';e.useSpecialSkill(s);assert.equal(s.poweredTicks,c.SPECIAL_PRAYER_DURATION+60);
 });
-test('manual healing is twenty percent faster with unchanged amounts and enemy-clear rules',()=>{
+test('manual healing is fifty percent faster with unchanged amounts and enemy-clear rules',()=>{
  const s=fresh(['healing']);s.playerCarryingRuby=true;s.rubyTileX=s.rubyTileY=-1;s.playerHP=s.rubyHP=50;
- assert.equal(e.healRuby(s),true);assert.equal(s.rubyHP,55);assert.equal(s.playerHP,53);assert.equal(s.rubyHealCooldown,15);
- ticks(s,14);assert.equal(e.healRuby(s),false);e.tick(s);assert.equal(e.healRuby(s),true);
+ assert.equal(e.healRuby(s),true);assert.equal(s.rubyHP,55);assert.equal(s.playerHP,53);assert.equal(s.rubyHealCooldown,12);
+ ticks(s,11);assert.equal(e.healRuby(s),false);e.tick(s);assert.equal(e.healRuby(s),true);
  enemy(s);s.rubyHealCooldown=0;assert.equal(e.healRuby(s),false);
 });
 test('speed scales normal, carrying and burst movement by eight percent',()=>{
@@ -92,9 +92,9 @@ test('bomb gains one tile matching blast visuals, preserves self damage and Ruby
   assert.equal(s.bombBlasts[0].maxRadius,radius*c.TILE_SIZE);assert.equal(e.getBombRadius(s,powered),radius);assert.equal(s.rubyHP,100);assert.ok(s.playerHP<100);
  }
 });
-test('regular spawn and split-child HP gain five percent per milestone to thirty, then two percent per stage after 18 and three after 20',()=>{
+test('regular spawn and split-child HP gain five percent per milestone to thirty, then two percent per defeat after 18',()=>{
  for(const kills of [0,2,3,5,6,8,9,18,19,20,21,30]){
-  const s=fresh();s.bossesKilled=kills;const mult=1+Math.min(6,Math.floor(kills/3))*.05+Math.max(0,kills-18)*.02+Math.max(0,kills-20)*.01;near(e.constellationAlienHPMult(s),mult);
+  const s=fresh();s.bossesKilled=kills;const mult=1+Math.min(6,Math.floor(kills/3))*.05+Math.max(0,kills-18)*.02;near(e.constellationAlienHPMult(s),mult);
   enemy(s,'splitter',.01);e.useLaser(s);assert.equal(s.enemies.length,2);for(const a of s.enemies)near(a.maxHp,c.ENEMY_CONFIGS.mini_splitter.maxHp*c.REGULAR_ENEMY_HP_MULT*mult);
   s.enemies=[];s.noMobs=false;s.spawnTimer=100000;e.tick(s);assert.ok(s.enemies.length>0);
   for(const a of s.enemies)near(a.maxHp,Math.ceil(c.ENEMY_CONFIGS[a.type].maxHp*c.DIFFICULTY_TIERS[s.difficultyLevel].hpMult)*c.REGULAR_ENEMY_HP_MULT*mult);
@@ -104,7 +104,7 @@ test('owned choices are rejected and never offered again, including the final si
  const s=fresh();s.constellations=Object.keys(e.CONSTELLATIONS).filter(k=>k!=='wave');s.bossesKilled=59;defeat(s);
  assert.deepEqual(s.constellationChoices,['wave']);assert.equal(e.chooseConstellation(s,'laser'),false);
  assert.equal(e.chooseConstellation(s,'wave'),true);s.bossesKilled=62;defeat(s);
- assert.equal(s.gamePhase,'playing');assert.deepEqual(s.constellationChoices,[]);assert.equal(new Set(s.constellations).size,29);
+ assert.equal(s.gamePhase,'playing');assert.deepEqual(s.constellationChoices,[]);assert.equal(new Set(s.constellations).size,40);
 });
 test('Draco changes only damage, Cygnus changes reach/push, and both combine at either power level',()=>{
  for(const powered of [false,true])for(const upgrades of [[],['wave'],['waveReach'],['wave','waveReach']]){
@@ -143,7 +143,7 @@ test('longer speed bursts apply to manual, powered and free energy-shard boosts'
 });
 test('healing alternatives improve only their intended sources and meteor kills skip kill healing',()=>{
  const s=fresh(['manualHealing','playerGuard','killHealing']);s.playerCarryingRuby=true;s.rubyTileX=s.rubyTileY=-1;s.playerHP=s.rubyHP=20;
- e.healRuby(s);assert.equal(s.playerHP,24);assert.equal(s.rubyHP,27);
+ e.healRuby(s);assert.equal(s.playerHP,24);assert.equal(s.rubyHP,26);
  s.resources=[{type:'health',tileX:10,tileY:10}];e.tick(s);near(s.playerHP,24+c.HEAL_AMOUNT);
  enemy(s,'normal',.01);s.laserCooldown=0;const before=s.playerHP;e.useLaser(s);near(s.playerHP,before+7);
  enemy(s,'normal',.01);s.meteoriteWarning=0;s.meteoriteStrikeIn=1;s.godMode=true;const preMeteor=s.playerHP;e.tick(s);near(s.playerHP,preMeteor);

@@ -123,3 +123,11 @@ test('Volt Fence recharge uses the recorded skill-ready cue once per dispatch',(
  assert.equal(played.length,1);assert.equal(played[0].src,'/sounds/celestial/skill-ready.wav');assert.equal(played[0].volume,.3825);
  assert.ok(fs.existsSync('public'+played[0].src));
 }));
+
+test('bomb readiness uses the supplied power-up recording once instead of the synthesized cue',()=>mock(played=>{
+ const ui=require('../game/ui-sfx.ts');ui.playUiSfx('bombReady');assert.equal(played.length,1);assert.equal(played[0].src,'/sounds/bomb-ready.wav');assert.equal(played[0].volume,.85);assert.ok(fs.existsSync('public'+played[0].src));
+}));
+
+test('Amethyst firing cue is higher-pitched and quieter than the player bullet',()=>mock(played=>{
+ e.playSFX_laserBullet();e.playSFX_laserBullet(1.4,.45);assert.equal(played.length,2);assert.equal(played[1].src,played[0].src);assert.equal(played[0].playbackRate,1);assert.equal(played[1].playbackRate,1.4);assert.equal(played[1].preservesPitch,false);assert.ok(Math.abs(played[1].volume/played[0].volume-.45)<1e-9);
+}));

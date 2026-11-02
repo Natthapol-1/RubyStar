@@ -1,3 +1,4 @@
+import { drawEnemyHealthBar } from './enemy-health-art';
 import { TILE_SIZE, CHAMBER_BOUNDS, T_WALL, chamberOfTile, ENEMY_CONFIGS, NEPTUNE_PUFF_TICKS, NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_RADIUS, NEPTUNE_LASER_WARNING } from './constants';
 import type { Enemy, GameState } from './engine';
 
@@ -101,8 +102,7 @@ function drawClone(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: numb
   // One slow light band sweeps down the shell, so it reads as water rather than a solid body.
   ctx.globalAlpha = shimmer * .6; block(ctx, -20, -19 + Math.floor((tick * .4 + e.id * 7) % 34), 40, 4, pale);
   ctx.restore();
-  const pips = Math.ceil(e.hp / e.maxHp * 4);
-  for (let i = 0; i < 4; i++) block(ctx, -15 + i * 8, -36, 6, 3, i < pips ? '#d8f2ff' : '#1b2a3d');
+
 }
 
 // Water ball: a glowing orb whose ring empties as the fuse burns, with its blast area marked on the floor.
@@ -173,16 +173,14 @@ export function drawNeptuneUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy
   if (e.type === 'jellyfish') { ctx.scale(1.3, 1.3); drawJellyfish(ctx, e, tick); }
   else if (e.type === 'pufferfish') {
     ctx.save(); ctx.scale(1.3, 1.3); drawPufferfish(ctx, e, tick); ctx.restore();
-    const width = 30; block(ctx, -width / 2, -28, width, 4, '#0a101b'); block(ctx, -width / 2, -28, Math.floor(width * Math.max(0, e.hp / e.maxHp)), 4, ENEMY_CONFIGS.pufferfish.color);
   }
   else if (e.type === 'water_bomb') drawWaterBall(ctx, e, tick);
   else if (e.type === 'water_clone') drawClone(ctx, e, tick);
   else if (e.type === 'stinger') {
     ctx.save(); ctx.scale(1.15, 1.15); drawStinger(ctx, e, tick); ctx.restore();
-    const width = 30; block(ctx, -width / 2, -22, width, 4, '#0a101b');
-    block(ctx, -width / 2, -22, Math.floor(width * Math.max(0, e.hp / e.maxHp)), 4, ENEMY_CONFIGS.stinger.color);
   } else { ctx.scale(1.4, 1.4); drawFish(ctx, e, tick); }
   ctx.restore();
+  drawEnemyHealthBar(ctx,e,sx,sy);
   return true;
 }
 

@@ -1,0 +1,10 @@
+{
+  "name": "ruby-star",
+  "productName": "Ruby Star",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Protect Ruby. Survive the stars.",
+  "main": "main.cjs",
+  "author": "Ruby Star",
+  "dependencies": {}
+}

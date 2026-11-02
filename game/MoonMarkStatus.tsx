@@ -1,4 +1,6 @@
 'use client';
+import {SvgMapSkillHint} from './MapSpecialSkillHint';
+import {bindingLabel} from './controls';
 
 // HUD icon for the Moon Mark (Moon challenge, C), in the same style as CelestialStatus: the ice-blue mark sigil glows
 // when ready, and dims with a filling perimeter while recharging.
@@ -6,7 +8,7 @@ const ICE = '#a9e6ff';
 
 export default function MoonMarkStatus({ cooldown, totalCooldown }: { cooldown: number; totalCooldown: number }) {
   const cooling = cooldown > 0;
-  const label = cooling ? `Moon Mark recharging — ${Math.ceil(cooldown / 60)} seconds` : 'Moon Mark ready — C marks the nearest Queen';
+  const label = cooling ? `Moon Mark recharging — ${Math.ceil(cooldown / 60)} seconds` : 'Moon Mark ready — '+bindingLabel('mapSkill')+' marks the nearest Queen';
   const progress = Math.max(0, Math.min(1, 1 - cooldown / totalCooldown));
   const fill = cooling ? '#536176' : ICE;
   return <div className={`mark-status ${cooling ? 'cooldown' : 'ready'}`} role="img" aria-label={label} title={label}
@@ -20,7 +22,7 @@ export default function MoonMarkStatus({ cooldown, totalCooldown }: { cooldown: 
         <path d="M18 13H22V15H24V18H26V22H24V25H22V27H18V25H16V22H14V18H16V15H18Z" fill="currentColor" />
         <rect x="18" y="18" width="4" height="4" fill={cooling ? '#687080' : '#ffffff'} />
       </g>
-      <text x="33" y="37" textAnchor="middle" fontSize="8" fontFamily="var(--font-pixel)" fill={cooling ? '#687080' : '#e7e9f6'}>C</text>
+      <SvgMapSkillHint/>
     </svg>
     <style jsx>{`
       .mark-status { width: 42px; height: 42px; flex-shrink: 0; }

@@ -1,3 +1,4 @@
+import { gameAudio, channelVolume } from './audio-settings';
 import type { AmbientEventKind } from './events';
 import { JUPITER } from './constants';
 
@@ -46,7 +47,7 @@ function releaseVoice(voice: HTMLAudioElement) {
 export function playJupiterAmbientSound() {
   if (jupiterAmbient || paused || typeof Audio === 'undefined' || (typeof document !== 'undefined' && document.hidden)) return;
   try {
-    const voice = new Audio('/sounds/jupiter-electric-ambient.mp3');
+    const voice = gameAudio('/sounds/jupiter-electric-ambient.mp3');
     voice.volume = .3; voice.loop = false; jupiterAmbient = voice; voices.add(voice);
     voice.onended = voice.onerror = () => releaseVoice(voice);
     voice.play().catch(() => releaseVoice(voice));
@@ -61,7 +62,7 @@ export function playJupiterChargeSound() {
   stopJupiterChargeSound();
   if (paused || typeof Audio === 'undefined' || (typeof document !== 'undefined' && document.hidden)) return;
   try {
-    const voice = new Audio('/sounds/jupiter-charge-power-up.wav');
+    const voice = gameAudio('/sounds/jupiter-charge-power-up.wav');
     voice.volume = .75; voice.loop = false; jupiterCharge = voice; voices.add(voice);
     voice.preservesPitch = true;
     const fitCharge = () => {
@@ -128,7 +129,7 @@ export function playAmbientEventSound(kind: AmbientEventKind, stage: Stage) {
   }
   for (const [file, gain, rate, seconds] of cues[kind][stage] ?? []) {
     try {
-      const voice = new Audio('/sounds/' + file);
+      const voice = gameAudio('/sounds/' + file);
       if (repeat) repeat.voices.add(voice);
       voice.volume = gain; voice.playbackRate = rate; voice.preservesPitch = false;
       const release = () => releaseVoice(voice);

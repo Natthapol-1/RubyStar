@@ -49,3 +49,5 @@ A shadowy crystal cavern under the lunar surface: crystalline, magical and myste
 - **Backdrop:** the dark of a vast geode. Stepped crystal spires rise from below and hang from above in two parallax layers; the near ones have glowing tips and pulsing veins. Faint prism shafts sway, deep violet mist drifts, lone crystal shards turn slowly, crystal dust twinkles, and a shadow vignette closes in at the top and bottom.
 
 References, rendered from the real drawing code by `scripts/preview-moon.cjs`: [world at three animation ages](visual-reference/moon-world.png) [crystal cover glint sweep](visual-reference/moon-crystal-cover.png), [disguised Queen among illusions vs revealed](visual-reference/moon-illusions.png), [phase 2 mirrors with a bounced shot](visual-reference/moon-mirrors.png), and [phase 3 darkness with a just-hit illusion](visual-reference/moon-dark.png).
+
+Distant floor and ceiling crystal spires retain continuous parallax while their bases extend beyond the corresponding viewport edge. Lower-room camera movement cannot expose an empty strip beneath the floor spires; their lit faces and central veins continue through the extended stems.

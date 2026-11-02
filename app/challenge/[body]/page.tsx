@@ -1,6 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
 import RubyStarGame from '@/game/RubyStarGame';
-import { findTrial } from '@/game/trials';
+import { TRIALS, findTrial } from '@/game/trials';
+
+export function generateStaticParams() { return TRIALS.map(trial => ({ body: trial.id })); }
 
 // A challenge world. Locked (not yet built) challenges send you back to the star map.
 export default async function CelestialTrialPage({ params }: { params: Promise<{ body: string }> }) {

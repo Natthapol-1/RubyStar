@@ -1,3 +1,4 @@
+import { gameAudio, channelVolume } from './audio-settings';
 import {
   CHAMBER_BOUNDS, ENEMY_CONFIGS, MAP_COLS, MAP_ROWS, METEORITE_PLAYER_DMG, METEORITE_RUBY_DMG, NEPTUNE_BOMB_DAMAGE,
   NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_INTERVAL, NEPTUNE_BOMB_RADIUS, NEPTUNE_CLONES, NEPTUNE_CLONE_HEAL, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_TICKS,
@@ -217,7 +218,7 @@ export function updateNeptune(state: GameState) {
   // Sky laser countdown and strike.
   if (neptune.laser) {
     // Incoming: a brighter, faster take on the meteor's fall lands with the strike, with an electric crackle at the end.
-    if (neptune.laser.ticks === TRIDENT_FALL_TICKS) { try { const a = new Audio('/sounds/meteorFalling.mp3'); a.volume = .5; a.preservesPitch = false; a.playbackRate = 1.6; a.play().catch(() => {}); } catch { } }
+    if (neptune.laser.ticks === TRIDENT_FALL_TICKS) { try { const a = gameAudio('/sounds/meteorFalling.mp3'); a.volume = .5; a.preservesPitch = false; a.playbackRate = 1.6; a.play().catch(() => {}); } catch { } }
     if (neptune.laser.ticks === 30) playCelestialSound('neptune_electric', .8);
   }
   if (neptune.laser && --neptune.laser.ticks <= 0) { neptuneStrike(state, neptune.laser.chamber); neptune.laser = null; }

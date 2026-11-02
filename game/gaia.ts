@@ -1,3 +1,4 @@
+import { gameAudio, channelVolume } from './audio-settings';
 import {
   CHAMBER_BOUNDS, ENEMY_CONFIGS, GAIA_BLOSSOM_GAP, GAIA_BLOSSOM_HEAL, GAIA_BLOSSOM_MAX, GAIA_BLOSSOM_SHOT_DAMAGE, GAIA_BLOSSOM_SHOT_GAP,
   GAIA_BLOSSOM_SHOT_RANGE, GAIA_CREEP_CAP, GAIA_CREEP_CHANCE, GAIA_CREEP_GAP, GAIA_LIFEBLOOM_GAP, GAIA_LIFEBLOOM_LIFE, GAIA_LIFEBLOOM_MAX,
@@ -114,7 +115,7 @@ export function addGaiaSunCharge(state: GameState, amount: number) {
 // A room strike (Trident or full Sunfire) is ready: the sci-fi "acquired" cue over the bright chime.
 export function playStrikeCharged() {
   playUiSfx('charged');
-  try { const a = new Audio('/sounds/strike-charged.wav'); a.volume = .55; a.play().catch(() => {}); } catch { }
+  try { const a = gameAudio('/sounds/strike-charged.wav'); a.volume = .55; a.play().catch(() => {}); } catch { }
 }
 export function gaiaClearArea(state: GameState, cx: number, cy: number, radius: number) {
   if (!state.gaia) return;
@@ -399,7 +400,7 @@ function updateGaiaPlants(state: GameState, boss: Enemy | undefined, second: boo
       for (let x = pod.tileX - GAIA_POD_BURST_RADIUS; x <= pod.tileX + GAIA_POD_BURST_RADIUS; x++)
         if (tileEuclidDist(x, y, pod.tileX, pod.tileY) <= GAIA_POD_BURST_RADIUS) gaiaSet(state, x, y, 3);
     state.enemies.splice(state.enemies.indexOf(pod), 1);
-    try { const sound = new Audio('/sounds/place-plant.mp3'); sound.volume = .5 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
+    try { const sound = gameAudio('/sounds/place-plant.mp3', 'attack'); sound.volume = .5 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
   }
   const active = boss && gaia.wither === 0;
   if (active && GAIA_POD_GAP[gaia.phase] && --gaia.podTimer <= 0) {

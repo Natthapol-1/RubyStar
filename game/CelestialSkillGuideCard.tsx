@@ -1,4 +1,5 @@
 'use client';
+import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
 
@@ -26,7 +27,7 @@ export default function CelestialSkillGuideCard({ name, description, color, draw
   }, [draw]);
   return <article className="rs-nep-card" style={{ borderColor: color + '66' }}>
     <canvas ref={canvasRef} width={200} height={120} aria-hidden="true" />
-    <h5 style={{ color }}>CELESTIAL SKILL (PRESS F)</h5>
+    <h5 style={{ color }}>CELESTIAL SKILL ({bindingLabel('celestial')})</h5>
     <p>{name}: {description}</p>
   </article>;
 }

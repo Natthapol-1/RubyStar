@@ -29,7 +29,7 @@ export default function RulesModal({ isOpen, onClose, title, children, playSound
 
   return (
     <div className="modal-overlay" onClick={() => handleClose()}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content rs-rules-modal" style={{width:"min(960px, calc(100vw - 48px))",maxWidth:960,maxHeight:"calc(100dvh - 64px)",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{title}</h2>
           <button
@@ -57,7 +57,7 @@ export default function RulesModal({ isOpen, onClose, title, children, playSound
             ✕
           </button>
         </div>
-        <div className="modal-body">
+        <div className="modal-body" style={{minHeight:0,overflowY:"auto",overflowX:"hidden"}}>
           {children}
         </div>
         <div className="modal-footer">

@@ -1,4 +1,5 @@
 'use client';
+import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
@@ -46,13 +47,13 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
       tiles(ctx, 4, 24, [[1, 2, 2, 3, 3, 2, 2, 1].map((l, x) => x < cut + 2 && x > 0 ? 0 : l), [2, 3, 3, 2, 2, 3, 2, 2], [1, 2, 2, 2, 3, 2, 1, 1]], t);
       player(ctx, 16, 36); ctx.fillStyle = '#ffe14a'; ctx.fillRect(26, 34, 30 + cut * 24, 4);
     } },
-    { title: 'SPECIAL SKILL (PRESS MIDDLE CLICK OR C)', color: '#ffd36a', text: 'Sunfire: clearing vines charges it. Press to damage everything nearby and burn vines, or once fully charged, pick a room for a bigger hit.', paint: (ctx, t) => {
+    { title: 'MAP SPECIAL SKILL', color: '#ffd36a', text: 'Sunfire: clearing vines charges it. Press to damage everything nearby and burn vines, or once fully charged, pick a room for a bigger hit.', paint: (ctx, t) => {
       const fill = Math.min(1, (t % 160) / 120);
       ctx.fillStyle = '#1a140a'; ctx.fillRect(14, 98, 72, 10); ctx.fillStyle = fill >= 1 ? '#fff3b8' : '#e0a83a'; ctx.fillRect(15, 99, 70 * fill, 8);
       player(ctx, 140, 58);
       const burst = fill >= 1 ? ((t % 160) - 120) / 40 : 0;
       if (burst > 0) { const half = 10 + burst * 50; ctx.globalAlpha = 1 - burst; ctx.strokeStyle = '#fff3b8'; ctx.lineWidth = 6; ctx.strokeRect(140 - half, 58 - half, half * 2, half * 2); ctx.globalAlpha = 1; }
-      label(ctx, 'C', 50, 90, '#fff3b8');
+      label(ctx, bindingLabel('mapSkill'), 50, 90, '#fff3b8');
     } },
     { title: 'SUNSTONES', color: '#ffd36a', text: 'Bait the boss field onto a gold stone. It burns away and hurts the boss.', paint: (ctx, t) => {
       const phase = t % 120;
@@ -144,7 +145,7 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
 
       {cards.map((card, i) => <article key={card.title} className="rs-nep-card" style={{ borderColor: card.color + '66' }}>
         <canvas ref={el => { refs.current[i] = el; }} width={W} height={H} aria-hidden="true" />
-        <h5 style={{ color: card.color }}>{card.title}</h5>
+        <h5 style={{ color: card.color }}>{card.title==='MAP SPECIAL SKILL'?'MAP SPECIAL SKILL ('+bindingLabel('mapSkill')+')':card.title}</h5>
         <p>{card.text}</p>
       </article>)}
     </div>

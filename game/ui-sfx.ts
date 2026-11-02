@@ -1,3 +1,4 @@
+import { gameAudio, channelVolume } from './audio-settings';
 // Sci-fi UI cues for Ruby Star menus and in-game readiness, with a recorded cue for Volt Fence recharge.
 let ctx: AudioContext | null = null;
 const UI_VOLUME = 5; // master boost for every menu cue
@@ -13,6 +14,8 @@ function audio(): AudioContext | null {
 
 // One oscillator voice with a pitch sweep and a quick attack/decay envelope.
 function blip(type: OscillatorType, from: number, to: number, start: number, dur: number, vol: number) {
+  if(channelVolume('effects')===0)return;
+  vol*=channelVolume('effects');
   const ac = audio(); if (!ac) return;
   const t = ac.currentTime + start, osc = ac.createOscillator(), gain = ac.createGain();
   osc.type = type;
@@ -25,10 +28,18 @@ function blip(type: OscillatorType, from: number, to: number, start: number, dur
   osc.start(t); osc.stop(t + dur + 0.02);
 }
 
-export type UiSfx = 'hover' | 'endless' | 'ascension' | 'locked' | 'page' | 'back' | 'close' | 'confirm' | 'teleport' | 'victory' | 'charged' | 'bombReady' | 'markReady' | 'markCast' | 'stationCharge' | 'coolingUltimate' | 'sunExtinguish' | 'sunburstWarning' | 'sunHeatWarning' | 'jupiterExposed' | 'jupiterDash' | 'voltFence' | 'fenceReady' | 'voltBreak' | 'waveReady';
+export type UiSfx = 'hover' | 'endless' | 'ascension' | 'locked' | 'page' | 'back' | 'close' | 'confirm' | 'teleport' | 'victory' | 'charged' | 'bombReady' | 'markReady' | 'markCast' | 'stationCharge' | 'coolingUltimate' | 'sunExtinguish' | 'sunburstWarning' | 'sunHeatWarning' | 'jupiterExposed' | 'jupiterDash' | 'voltFence' | 'fenceReady' | 'voltBreak' | 'waveReady' | 'gemBlessing' | 'gemPassive' | 'gemFieldHit' | 'gemDecoyShot';
 
 export function playUiSfx(kind: UiSfx) {
   switch (kind) {
+    case 'gemBlessing':
+      try{const sound=gameAudio('/sounds/gem_passive_trigger.wav','effects');sound.volume=.75;sound.play().catch(()=>{});}catch{}break;
+    case 'gemPassive':
+      try{const sound=gameAudio('/sounds/gem_passive_2.wav','effects');sound.volume=.85;sound.play().catch(()=>{});}catch{}break;
+    case 'gemDecoyShot':
+      try{const sound=gameAudio('/sounds/gem_passive_2.wav','effects');sound.volume=.6;sound.playbackRate=1.4;sound.preservesPitch=false;sound.play().catch(()=>{});}catch{}break;
+    case 'gemFieldHit':
+      try{const sound=gameAudio('/sounds/gem_field_hit.wav','effects');sound.volume=.35;sound.play().catch(()=>{});}catch{}break;
     case 'hover': // tiny scanner tick
       blip('triangle', 2400, 1800, 0, .035, .035); break;
     case 'endless': // warp-in: rising sweep with a bright landing ping
@@ -54,8 +65,9 @@ export function playUiSfx(kind: UiSfx) {
     case 'charged': // a room strike is ready: bright rising chime with a sustained shimmer
       blip('square', 784, 784, 0, .08, .05); blip('square', 1175, 1175, .08, .08, .05); blip('square', 1568, 1568, .16, .18, .055);
       blip('triangle', 3136, 2637, .2, .35, .035); break;
-    case 'bombReady': // the bomb is ready again: a warm two-note click
-      blip('square', 392, 392, 0, .05, .055); blip('triangle', 784, 784, .05, .1, .075); break;
+    case 'bombReady': // supplied powerUp.wav recording, through Other Game SFX
+      try{const sound=gameAudio('/sounds/bomb-ready.wav','effects');sound.volume=.85;sound.play().catch(()=>{});}catch{}
+      break;
     case 'stationCharge': // a short coolant-pump pulse, repeated only while Space adds charge
       blip('triangle', 420, 620, 0, .09, .075); blip('sine', 1240, 980, .015, .12, .054); break;
     case 'coolingUltimate': // heavy pressure impact under the empowered water crash
@@ -71,7 +83,7 @@ export function playUiSfx(kind: UiSfx) {
       blip('triangle', 1320, 220, 0, .3, .08); blip('sine', 660, 880, .3, .2, .07); break;
     case 'fenceReady':
       try {
-        const sound=new Audio('/sounds/celestial/skill-ready.wav');sound.volume=.3825;
+        const sound=gameAudio('/sounds/celestial/skill-ready.wav');sound.volume=.3825;
         sound.play().catch(()=>{});
       } catch {}
       break;

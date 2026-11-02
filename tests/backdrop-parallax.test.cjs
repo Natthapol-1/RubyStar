@@ -7,7 +7,7 @@ const source=fs.readFileSync(path.join(__dirname,'../game/RubyStarGame.tsx'),'ut
 // Neptune's backdrop is self-contained apart from the shared deterministic hash.
 const a=source.indexOf('function drawOceanBackdrop('),b=source.indexOf('\nfunction ',a+1);
 const renderer=new Module(path.join(__dirname,'ocean-preview.cjs'),module);renderer.paths=module.paths;
-renderer._compile(compile('const MAP_ROWS=51,TILE_SIZE=48;'+source.slice(a,b)+';exports.draw=drawOceanBackdrop;'),renderer.filename||'ocean-preview.cjs');
+renderer._compile(compile('const MAP_ROWS=51,TILE_SIZE=48;'+source.slice(a,b)+'\n;exports.draw=drawOceanBackdrop;'),renderer.filename||'ocean-preview.cjs');
 const width=960,height=540;
 function raster(draw,camY){const cv=createCanvas(width,height);draw(cv.getContext('2d'),width,height,300,camY,120);return cv.getContext('2d').getImageData(0,0,width,height).data;}
 for(const [name,draw,boundaries]of[
@@ -19,4 +19,10 @@ for(const [name,draw,boundaries]of[
   for(let i=0;i<before.length;i+=4)difference+=Math.abs(before[i]-after[i])+Math.abs(before[i+1]-after[i+1])+Math.abs(before[i+2]-after[i+2]);
   const mean=difference/(width*height*3);assert.ok(mean<.4,`${name} jumped at camera Y=${y}: mean pixel change ${mean}`);
  }
+});
+
+test('Moon lower spires reach the viewport bottom after moving into lower rooms',()=>{
+ const data=raster(drawMoonBackdrop,1908);let grounded=0;
+ for(let x=0;x<width;x++){const i=((height-1)*width+x)*4;if(data[i+2]>=14&&data[i]>=6)grounded++;}
+ assert.ok(grounded>60,'The lower crystal stems must cover the bottom edge rather than float above an empty strip');
 });

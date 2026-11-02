@@ -6,7 +6,7 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const c = require('../game/constants.ts'), engine = require('../game/engine.ts');
 const source = fs.readFileSync('game/RubyStarGame.tsx', 'utf8');
 // Local art modules keep their real imports; React/UI imports are dropped since only canvas drawing runs.
-const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(endless-build-art|warning-art|singularity-art|saturn-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun)';/gm)]
+const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(field-art|blessing-art|blessing-effects|endless-build-art|warning-art|singularity-art|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun)';/gm)]
   .map(m => `const ${m[1].replace(/\btype\s+/g, '')}=require('./${m[2]}.ts');`).join('');
 const code = 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
   + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;exports.drawMinimap=drawMinimap;exports.drawGuideCelestial=drawGuideCelestial;';

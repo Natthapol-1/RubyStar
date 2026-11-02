@@ -1,37 +1,20 @@
-import { CELESTIAL_BLESSINGS, type CelestialBlessing } from './endless-builds';
+import {GEM_CUTS,gemMaterial} from './gemstone-cuts';
+import {CELESTIAL_BLESSINGS,type CelestialBlessing} from './endless-builds';
 
-const CUTS = {
-  brilliant: [[18,16],[26,10],[54,10],[62,16],[68,28],[40,60],[12,28]],
-  prism: [[30,6],[50,6],[58,18],[58,50],[50,62],[30,62],[22,50],[22,18]],
-  cushion: [[22,12],[58,12],[66,20],[66,48],[58,56],[22,56],[14,48],[14,20]],
-  emerald: [[28,8],[52,8],[62,18],[62,50],[52,60],[28,60],[18,50],[18,18]],
-  crystal: [[32,6],[46,12],[56,6],[62,28],[56,54],[38,62],[20,50],[22,22]],
-  shard: [[42,4],[60,18],[54,34],[62,52],[34,62],[20,42],[24,16]],
-  twin: [[24,10],[40,18],[56,10],[66,26],[56,54],[40,62],[24,54],[14,26]],
-  kite: [[40,6],[60,18],[66,34],[54,52],[40,62],[26,52],[14,34],[20,18]],
-  hexagon: [[26,10],[54,10],[68,34],[54,58],[26,58],[12,34]],
-  square: [[20,12],[60,12],[64,16],[64,52],[60,56],[20,56],[16,52],[16,16]],
-} satisfies Record<string, number[][]>;
-
-function tint(hex:string,amount:number) {
-  const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
-  return '#'+rgb.map(v=>Math.round(amount>=0?v+(255-v)*amount:v*(1+amount)).toString(16).padStart(2,'0')).join('');
-}
-
-/** Code-native cut gemstones: restrained facets, crisp silhouettes, no bitmap assets. */
-export default function BlessingGem({kind}:{kind:CelestialBlessing}) {
-  const gem=CELESTIAL_BLESSINGS[kind],outline=CUTS[gem.cut];
-  const table=outline.map(([x,y])=>[Math.round((40+(x-40)*.5)/2)*2,Math.round((34+(y-34)*.5)/2)*2]);
-  const points=(coords:number[][])=>coords.map(p=>p.join(',')).join(' ');
-  return <svg viewBox="0 0 80 68" aria-hidden="true" data-gemstone={kind} shapeRendering="crispEdges">
-    <path d="M10 18V8H20 M60 8H70V18 M10 50V60H20 M60 60H70V50" fill="none" stroke={gem.color} strokeWidth="1" opacity=".3"/>
-    <polygon points={points(outline)} fill={tint(gem.color,-.7)} stroke={tint(gem.color,.25)} strokeWidth="1.5"/>
-    {outline.map((p,i)=>{
-      const n=(i+1)%outline.length,shade=i<2?.35:i<4?-.25:i<6?-.48:-.05;
-      return <polygon key={i} points={points([p,outline[n],table[n],table[i]])} fill={tint(gem.color,shade)} />;
-    })}
-    <polygon points={points(table)} fill={tint(gem.color,gem.cut==='shard'?-.5:.02)} stroke={tint(gem.color,.5)} strokeWidth=".7"/>
-    <path d={`M${table[0][0]} ${table[0][1]+8}V${table[0][1]}H${table[1][0]}`} fill="none" stroke={tint(gem.color,.8)} strokeWidth="2"/>
-    <rect x="35" y="31" width="4" height="4" fill={tint(gem.color,.7)} opacity=".8"/>
-  </svg>;
+// The desktop Ruby icon's solid rim, deep inset, broad highlight and luminous core.
+export default function BlessingGem({kind}:{kind:CelestialBlessing}){
+ const gem=CELESTIAL_BLESSINGS[kind],[outline,table]=GEM_CUTS[gem.cut],m=gemMaterial(kind,gem.color);
+ const glintX=gem.cut==='shard'?32:gem.cut==='crystal'?34:gem.cut==='prism'?28:25;
+ return <svg viewBox="0 0 80 68" aria-hidden="true" data-gemstone={kind} style={{overflow:'visible',filter:`drop-shadow(0 0 3px ${gem.color}a0) drop-shadow(0 0 7px ${gem.color}40)`}} shapeRendering="crispEdges">
+  <path d={outline} fill={m.rim}/>
+  <path d={outline} fill={m.shade} transform="translate(40 34) scale(.82) translate(-40 -34)"/>
+  <path d={table} fill={m.body}/>
+  {gem.cut==='twin'?<><rect x="22" y="25" width="6" height="16" fill={m.light}/><rect x="51" y="25" width="6" height="16" fill={m.core}/><rect x="26" y="33" width="5" height="7" fill="#efb5ea"/><rect x="49" y="28" width="5" height="5" fill="#a3f0df"/></>:
+   <><rect x={glintX} y={gem.cut==='crystal'?17:21} width="5" height={gem.cut==='prism'?21:14} fill={m.light}/><rect x={glintX+5} y={gem.cut==='crystal'?17:21} width="9" height="4" fill={m.light}/>
+   <path d={table} fill={m.core} transform={`translate(40 34) scale(${kind==='aegis_sentinel'?'.6 .65':kind==='devourer'?'.22 .54':'.42 .56'}) translate(-40 -34)`}/></>}
+  {kind==='blind_prayer'&&<g fill="#995010"><rect x="43" y="39" width="3" height="5"/><rect x="34" y="45" width="3" height="3"/></g>}
+  {kind==='aegis_sentinel'&&<path d="M48 46H54V40H58V45H54V51H47V54H36V50H48Z" fill="#cb9eac"/>}
+  <path d="M58 6H61V11H66V14H61V19H58V14H53V11H58Z" fill={m.core}/>
+  <rect x="18" y="53" width="3" height="3" fill={gem.color}/>
+ </svg>;
 }

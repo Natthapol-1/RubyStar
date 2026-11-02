@@ -1,0 +1,28 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{_electron}=require('playwright');
+const root=path.resolve(__dirname,'..'),dir=fs.mkdtempSync(path.join(root,'.tmp/desktop-autosave-'));
+const file=path.join(dir,'saves/profile-v1.json');
+fs.mkdirSync(path.dirname(file));
+fs.writeFileSync(file,JSON.stringify({version:1,tutorialCompleted:true,highestEndless:20,defeated:['fiery_king'],completed:['fiery_king'],encountered:[],constellations:[],skills:[],settings:{music:0,attack:0,effects:0},resumes:{}}));
+const state=()=>{const canvas=document.querySelector('.rs-hud').parentElement.querySelector('canvas');let fiber=canvas[Object.keys(canvas).find(k=>k.startsWith('__reactFiber'))];for(;fiber;fiber=fiber.return)for(let h=fiber.memoizedState;h;h=h.next){const s=h.memoizedState?.current;if(s?.gamePhase&&s?.map)return s;}throw Error('Missing run');};
+let app;
+(async()=>{try{
+ app=await _electron.launch({timeout:120000,args:[path.join(root,'desktop/main.cjs'),'--dev'],env:{...process.env,RUBY_STAR_TEST_DATA:dir}});
+ const page=await app.firstWindow({timeout:120000});page.setDefaultTimeout(120000);
+ await page.locator('.rs-card').first().waitFor();
+ await page.goto('http://127.0.0.1:3001/endless',{waitUntil:'domcontentloaded',timeout:180000});await page.locator('.rs-hud').waitFor();
+ await page.evaluate(`window.__state=${state.toString()}`);
+ await page.evaluate(()=>{const s=window.__state();s.noMobs=s.noBossSpawns=s.godMode=true;s.playerHP=37;s.meteoriteTimer=s.ambientEvents.timer=1e8;window.dispatchEvent(new Event('blur'));});
+ await page.waitForFunction(async()=>{const p=(await window.rubyDesktop.load()).data;return p?.resumes?.endless?.state.playerHP===37;});
+ await page.reload();await page.getByRole('button',{name:'RESUME SAVED RUN',exact:true}).waitFor();
+ await page.waitForTimeout(16000);
+ assert.equal(JSON.parse(fs.readFileSync(file)).resumes.endless.state.playerHP,37,'unanswered resume prompt preserves checkpoint');
+ await page.getByRole('button',{name:'RESUME SAVED RUN',exact:true}).click();
+ await page.evaluate(`window.__state=${state.toString()}`);
+ assert.equal(await page.evaluate(()=>window.__state().playerHP),37);
+ await page.evaluate(()=>{window.__state().playerHP=29;});
+ await page.waitForFunction(async()=>{const p=(await window.rubyDesktop.load()).data;return p?.resumes?.endless?.state.playerHP===29;},{},{timeout:22000});
+ await page.reload();await page.getByRole('button',{name:'RESUME SAVED RUN',exact:true}).click();
+ await page.evaluate(`window.__state=${state.toString()}`);assert.equal(await page.evaluate(()=>window.__state().playerHP),29);
+ const saved=JSON.parse(fs.readFileSync(file));assert.equal(saved.tutorialCompleted,true);assert.equal(saved.highestEndless,20);assert.deepEqual(saved.completed,['fiery_king']);
+ console.log('Desktop autosave passed: blur flush, periodic checkpoint, reload/resume, pending-resume protection and permanent unlock preservation.');
+}finally{await app?.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

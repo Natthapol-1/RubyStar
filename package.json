@@ -8,7 +8,14 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.cjs",
-    "test:desktop": "node scripts/check-endless-builds.cjs"
+    "test:desktop": "node --test tests/desktop-*.test.cjs",
+    "dev:web": "next dev",
+    "build:web": "next build",
+    "dev:desktop": "node desktop/dev.cjs",
+    "build:desktop": "node desktop/build.cjs",
+    "package:windows": "npm run build:desktop && electron-builder --win nsis zip",
+    "test:game-ui": "node scripts/check-endless-builds.cjs",
+    "check:desktop": "node scripts/check-desktop.cjs"
   },
   "dependencies": {
     "next": "^15.3.4",
@@ -16,16 +23,55 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "0.1.100",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "typescript": "^5.8.0",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.3.4",
-    "@napi-rs/canvas": "0.1.100",
-    "playwright": "1.62.1"
+    "playwright": "1.62.1",
+    "typescript": "^5.8.0"
   },
   "engines": {
     "node": ">=20"
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "com.rubystar.game",
+    "productName": "Ruby Star",
+    "directories": {
+      "output": "dist",
+      "app": "desktop"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "save-store.cjs",
+      "package.json",
+      "icon.ico",
+      "!node_modules{,/**/*}"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "Ruby-Star-${version}-${arch}.${ext}",
+      "icon": "desktop/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "extraResources": [
+      {
+        "from": "out",
+        "to": "game"
+      }
+    ]
   }
 }

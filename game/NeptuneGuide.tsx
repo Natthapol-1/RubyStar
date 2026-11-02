@@ -1,4 +1,5 @@
 'use client';
+import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
@@ -33,10 +34,10 @@ function cross(ctx: CanvasRenderingContext2D, x: number, y: number, color: strin
 
 export default function NeptuneGuide({ drawBoss, drawCelestial }: { drawCelestial: CelestialGuidePainter; drawBoss: (ctx: CanvasRenderingContext2D, x: number, y: number, tick: number, diving: boolean) => void }) {
   const cards: { title: string; color: string; text: string; paint: Paint }[] = [
-    { title: 'SPECIAL SKILL (PRESS MIDDLE CLICK OR C)', color: '#a0ecff', text: 'Trident: healing you and Ruby charges it. Once fully charged, pick a room to strike: it wipes out aliens there and hurts the boss.', paint: (ctx, t) => {
+    { title: 'MAP SPECIAL SKILL', color: '#a0ecff', text: 'Trident: healing you and Ruby charges it. Once fully charged, pick a room to strike: it wipes out aliens there and hurts the boss.', paint: (ctx, t) => {
       ctx.fillStyle = '#0a1422'; ctx.fillRect(14, 96, 70, 10);
       const fill = Math.min(1, (t % 120) / 90); ctx.fillStyle = fill >= 1 ? '#e8fbff' : '#59c8ff'; ctx.fillRect(15, 97, 68 * fill, 8);
-      label(ctx, 'C', 50, 84, '#ffffff');
+      label(ctx, bindingLabel('mapSkill'), 50, 84, '#ffffff');
       ctx.strokeStyle = '#59c8ff'; ctx.lineWidth = 2; ctx.strokeRect(112, 50, 70, 56);
       if (fill >= 1) {
         const beam = 30 * (1 - ((t % 120) - 90) / 30);
@@ -139,7 +140,7 @@ export default function NeptuneGuide({ drawBoss, drawCelestial }: { drawCelestia
 
       {cards.map((card, i) => <article key={card.title} className="rs-nep-card" style={{ borderColor: card.color + '66' }}>
         <canvas ref={el => { refs.current[i] = el; }} width={W} height={H} aria-hidden="true" />
-        <h5 style={{ color: card.color }}>{card.title}</h5>
+        <h5 style={{ color: card.color }}>{card.title==='MAP SPECIAL SKILL'?'MAP SPECIAL SKILL ('+bindingLabel('mapSkill')+')':card.title}</h5>
         <p>{card.text}</p>
       </article>)}
     </div>

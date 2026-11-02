@@ -8,6 +8,17 @@ import { CONSTELLATIONS, type Constellation } from './engine';
 import { CELESTIAL_BLESSINGS, type CelestialBlessing } from './endless-builds';
 
 export const CONSTELLATION_STARS: Record<Constellation, [number, number][]> = {
+  chargeField:[[16,44],[16,24],[36,12],[56,24],[56,44],[36,52],[16,44]],
+  deathField:[[12,16],[28,28],[44,16],[60,28],[44,44],[60,56]],
+  bombStun:[[16,16],[40,28],[64,16],[52,44],[28,44],[16,16]],
+  bulletShield:[[16,16],[64,16],[64,40],[40,56],[16,40],[16,16]],
+  wallSlam: [[12,44],[32,44],[44,24],[64,24],[64,52]],
+  rubyDefense: [[16,40],[28,20],[40,32],[52,20],[64,40],[40,52]],
+  laserWire: [[12,16],[64,16],[64,52],[12,52],[12,16]],
+  teleportDecoy: [[12,32],[28,16],[44,32],[60,16],[68,48]],
+  wallStep: [[12,44],[28,44],[28,16],[48,16],[48,44],[68,44]],
+  bulletBurst: [[12,32],[32,24],[40,12],[48,24],[68,32],[48,40],[40,56],[32,40],[12,32]],
+  waveLaser: [[12,48],[28,32],[44,48],[44,16],[68,16]],
   twinShot: [[16,16],[40,28],[64,16],[40,28],[16,52],[40,40],[64,52]],
   ricochet: [[12,44],[52,44],[52,16],[28,16],[28,32]],
   waveEcho: [[12,24],[28,40],[44,24],[60,40],[68,24]],
@@ -68,9 +79,10 @@ export default function ConstellationChoice<K extends Constellation|CelestialBle
   }, []);
 
   return <div className={"constellation-backdrop"+(toggleMode?" toggle-mode":"")+(blessing?" blessing-mode":"")} onContextMenu={e => e.preventDefault()}
-    onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+    onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+    onClick={e=>{if(toggleMode&&e.target===e.currentTarget)onClose?.();}}>
     <div ref={panel} className="constellation-panel" role="dialog" aria-modal="true"
-      aria-label={blessing?"CELESTIAL BLESSING":"CONSTELLATIONS"}
+      aria-label={blessing?(toggleMode?"CELESTIAL BLESSINGS":"CELESTIAL BLESSING"):"CONSTELLATIONS"}
       onKeyDown={e => {
         if (e.key === 'Tab') {
           const buttons = panel.current?.querySelectorAll('button');
@@ -84,8 +96,8 @@ export default function ConstellationChoice<K extends Constellation|CelestialBle
         }
         e.stopPropagation();
       }}>
-      {toggleMode && <div className="toggle-header"><strong>CONSTELLATIONS</strong><button type="button" onClick={onClose}>DONE</button></div>}
-      {blessing&&<h2>CELESTIAL BLESSING</h2>}
+      {toggleMode && <div className="toggle-header"><strong>{blessing?'CELESTIAL BLESSINGS':'CONSTELLATIONS'}</strong><button type="button" onClick={onClose}>DONE</button></div>}
+      {blessing&&!toggleMode&&<h2>CELESTIAL BLESSING</h2>}
       <div className="constellation-cards">
         {choices.map((kind, index) => {
           const upgrade = (blessing?CELESTIAL_BLESSINGS:CONSTELLATIONS)[kind as never] as {name:string;description:string;color:string;celestial?:string};
@@ -123,7 +135,7 @@ export default function ConstellationChoice<K extends Constellation|CelestialBle
     </div>
     <style jsx>{`
       .constellation-backdrop { position: fixed; inset: 0; z-index: 2000; background: #030611e8; display: grid; place-items: center; padding: 16px; overflow: auto; }
-      .constellation-panel { width: min(680px, 100%); max-height: calc(100dvh - 32px); overflow: auto; box-sizing: border-box; padding: 6px; text-align: center; color: #dbe5ff; font-family: var(--font-mono); }
+      .constellation-panel { width: min(1000px, 100%); max-height: calc(100dvh - 32px); overflow: auto; box-sizing: border-box; padding: 6px; text-align: center; color: #dbe5ff; font-family: var(--font-mono); }
       h2 { font-family:var(--font-pixel); font-size:15px; color:#ffdf98; margin:0 0 24px; }
       .constellation-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
       button { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 12px; border: 3px solid var(--star-color); border-radius: 0; background: #1a2d47; box-shadow: inset 0 1px 0 #ffffff18, 0 4px 0 #030811; color: var(--star-color); cursor: pointer; font-family: inherit; }

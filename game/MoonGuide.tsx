@@ -1,4 +1,5 @@
 'use client';
+import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
@@ -44,14 +45,14 @@ export default function MoonGuide({ drawQueen, drawCelestial }: { drawQueen: Dra
       if (revealed && cycle < 110) { const k = (cycle - 90) / 20; ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#f4eaff'; ctx.lineWidth = 3; ctx.strokeRect(110 - 20 - k * 20, 60 - 20 - k * 20, 40 + k * 40, 40 + k * 40); ctx.globalAlpha = 1; }
       player(ctx, 30, 60); if (revealed) { ctx.fillStyle = '#ffe14a'; ctx.fillRect(40, 58, 52, 4); }
     } },
-    { title: 'SPECIAL SKILL (PRESS MIDDLE CLICK OR C)', color: '#a9e6ff', text: 'Moon Mark: tag the nearest Queen for a few seconds. If it is her, the mark follows her jump.', paint: (ctx, t) => {
+    { title: 'MAP SPECIAL SKILL', color: '#a9e6ff', text: 'Moon Mark: tag the nearest Queen for a few seconds. If it is her, the mark follows her jump.', paint: (ctx, t) => {
       const cycle = t % 200, jumped = cycle >= 110, x = jumped ? 160 : 60, y = jumped ? 70 : 50;
       if (!jumped) drawQueen(ctx, x, y, t, true); else { drawQueen(ctx, 60, 50, t, true); drawQueen(ctx, x, y, t, true); }
       if (cycle > 20 && (cycle < 180 || Math.floor(t / 6) % 2 === 0)) {
         const mx = jumped ? x : 60, my = jumped ? y : 50; ctx.fillStyle = '#a9e6ff';
         for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.fillRect(mx + dx * 20 - (dx > 0 ? 6 : 0), my + dy * 20 - (dy > 0 ? 2 : 0), 6, 2); ctx.fillRect(mx + dx * 20 - (dx > 0 ? 2 : 0), my + dy * 20 - (dy > 0 ? 6 : 0), 2, 6); }
       }
-      if (cycle < 30) { ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#e8fbff'; ctx.fillText('C', 100, 104); }
+      if (cycle < 30) { ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#e8fbff'; ctx.fillText(bindingLabel('mapSkill'), 100, 104); }
     } },
     { title: 'MIRROR MITE', color: '#c6b8ff', text: 'Fragile. Killing one heals you and shows two rooms on the map. She is in one of them.', paint: (ctx, t) => {
       const cycle = t % 120, x = 60 + Math.min(50, cycle * .8);
@@ -118,7 +119,7 @@ export default function MoonGuide({ drawQueen, drawCelestial }: { drawQueen: Dra
 
       {cards.map((card, i) => <article key={card.title} className="rs-nep-card" style={{ borderColor: card.color + '66' }}>
         <canvas ref={el => { refs.current[i] = el; }} width={W} height={H} aria-hidden="true" />
-        <h5 style={{ color: card.color }}>{card.title}</h5>
+        <h5 style={{ color: card.color }}>{card.title==='MAP SPECIAL SKILL'?'MAP SPECIAL SKILL ('+bindingLabel('mapSkill')+')':card.title}</h5>
         <p>{card.text}</p>
       </article>)}
     </div>

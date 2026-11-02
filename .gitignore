@@ -40,3 +40,7 @@ test-results/
 playwright-report/
 
 *.log
+
+.next-desktop/
+
+.next-desktop-dev/

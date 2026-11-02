@@ -1,4 +1,8 @@
-import { createRunBuildState, updateRunBuilds, buildCastMultiplier, buildBulletHit, buildLaserHit, buildWaveHit, emitBuildWave, buildMeteorZones, buildSlowMultiplier, hasBlessing, pullBuildEnemies, offerCelestialBlessing, prepareBlessingChoice, type RunBuildState } from './endless-builds';
+import {obsidianBossHit,blessingDeath,rubyBlessingCopy,addStarEnergy,blessingAttack,blessingLandedAttack,blessingDamageMultiplier,blessingSpeedMultiplier,blessingHit,blessingHealed,blessingIncoming,blessingReflectIncoming,blessingAfterHit,leaveQueenBlessingDecoy,solarBlessingReady} from './blessing-effects';
+import { gameAudio, channelVolume } from './audio-settings';
+import { recordBoss, recordStage, updateProfile, getProfile } from './profile';
+import { createRunBuildState, updateRunBuilds, buildBulletHit, buildWaveHit, emitBuildWave, buildSlowMultiplier, hasBlessing, pullBuildEnemies, storeLaserTripwires, offerCelestialBlessing, prepareBlessingChoice, buildDeathField, buildBombStun, type RunBuildState } from './endless-builds';
+import { SATURN, createSaturnState, initializeSaturnBoss, clearSaturnEncounter, updateSaturn, updateFrostRaider, updateIceCaller, updateRimeBrute, saturnIceAt, saturnBlizzard, saturnShieldChilled, moveSaturnPlayer, cancelSnowball, freezeSaturnPlayer, grantSaturnShield, type SaturnState } from './saturn';
 import { createJupiterState, initializeJupiterBoss, clearJupiterEncounter, drainJupiterEnergy, jupiterDamageTaken, jupiterBoss, jupiterPlayerSpeed, updateJupiterReaper, updateJupiter, type JupiterState } from './jupiter';
 import { JUPITER, SUN } from './constants';
 import { clearSunEncounter, createSunState, defuseSunFlare, updateScorchSapper, initializeSunBoss, spawnSunWisps, sunStationNearPlayer, updateSun, type SunState } from './sun';
@@ -95,7 +99,17 @@ export type { MoonShard, MoonState } from './moon';
 export const METEOR_CLOCKWISE_ORDER = [0, 1, 3, 2];
 
 export const CONSTELLATIONS = {
-  healing: { name: 'Ophiuchus', description: 'Manual healing recharges 20% faster.', color: '#ff9cae' },
+  chargeField:{name:'Dorado',description:'Charging a Wave leaves a small field that hurts and slows aliens.',color:'#8ecfdc'},
+  deathField:{name:'Serpens',description:'Defeated aliens leave a brief damaging slow field.',color:'#9ebde7'},
+  bombStun:{name:'Vulpecula',description:'Bombs briefly stun survivors. Bosses recover faster.',color:'#ffcb93'},
+  bulletShield:{name:'Circinus',description:'Eight bullet hits restore a small player shield.',color:'#a5dfcf'},
+  wallSlam: {name:'Sculptor',description:'Waves slam aliens into walls for bonus damage.',color:'#e5b48b'},
+  rubyDefense: {name:'Columba',description:'Healing Ruby stores a weaker Wave that fires when enemies approach.',color:'#f4a6c6'},
+  laserWire: {name:'Reticulum',description:'Your last two Laser casts leave tripwires that hurt and briefly stop crossing enemies.',color:'#9edfff'},
+  teleportDecoy: {name:'Pyxis',description:'Teleporting leaves a fragile decoy that draws nearby aliens.',color:'#c6b8ff'},
+  wallStep: {name:'Caelum',description:'Speed Boost can cross one piece of cover, ending the boost.',color:'#a2e9ce'},
+  bulletBurst: {name:'Ara',description:'Bullet hits trigger a small explosion, with a short cooldown.',color:'#ffbc89'},
+  healing: { name: 'Ophiuchus', description: 'Manual healing recharges 50% faster.', color: '#ff9cae' },
   laser: { name: 'Lyra', description: 'Lasers deal 20% more damage.', color: '#7ee8f5' },
   speed: { name: 'Pegasus', description: 'Move 8% faster, including while carrying Ruby.', color: '#89e5c6' },
   energy: { name: 'Aquarius', description: 'Gain 20% more energy from alien kills and blue shards.', color: '#8aafff' },
@@ -110,12 +124,13 @@ export const CONSTELLATIONS = {
   burstDuration: { name: 'Taurus', description: 'All speed bursts last 25% longer.', color: '#8de6b1' },
   burstRate: { name: 'Vela', description: 'Speed-burst cooldown is 20% shorter.', color: '#a0ead8' },
   waveRate: { name: 'Centaurus', description: 'Wave cooldown is 15% shorter.', color: '#d1b1ff' },
-  playerGuard: { name: 'Delphinus', description: 'Take 10% less damage, including hits to your shields.', color: '#ffabbf' },
-  manualHealing: { name: 'Libra', description: 'Each manual heal restores 2 extra Ruby HP and 1 extra player HP.', color: '#f6b4df' },
+  playerGuard: { name: 'Delphinus', description: 'Take 15% less damage, including hits to your shields.', color: '#ffabbf' },
+  manualHealing: { name: 'Libra', description: 'Each manual heal restores 1 extra HP to you and Ruby.', color: '#f6b4df' },
   killHealing: { name: 'Hercules', description: 'Ordinary alien defeats restore 2 extra player HP.', color: '#e5b48b' },
   bombRate: { name: 'Cepheus', description: 'Bomb cooldown is 20% shorter.', color: '#ffc88a' },
   laserRange: { name: 'Crux', description: 'Lasers reach two tiles farther.', color: '#9ce7ef' },
-  twinShot: { name: 'Lepus', description: 'Fire two bullets, each dealing 60% damage.', color: '#9ed9ff' },
+  waveLaser: { name: 'Andromeda', description: 'A fully charged Wave makes your next Laser wider and pierce one wall.', color: '#a9e4ff' },
+  twinShot: { name: 'Lepus', description: 'Fire two bullets at different enemies, each dealing 60% damage.', color: '#9ed9ff' },
   ricochet: { name: 'Sagitta', description: 'Lasers reflect off a wall once with reduced damage.', color: '#91eff0' },
   waveEcho: { name: 'Eridanus', description: 'Charge Wave leaves a weaker delayed wave.', color: '#bbadff' },
   bombPull: { name: 'Fornax', description: 'Bombs pull nearby aliens just before exploding.', color: '#f5b28b' },
@@ -139,9 +154,7 @@ export function getBombRadius(state: GameState, powered: boolean): number {
 
 // Extra health applies only to new regular aliens, including Splitter children.
 export const LATE_ALIEN_HP_FROM = 18;        // milestone bonus tops out here (+30%)...
-export const LATE_ALIEN_HP_PER_STAGE = 0.02; // ...then every further boss defeat adds 2%, without a cap...
-export const LATER_ALIEN_HP_FROM = 20;       // ...and from here each defeat adds 1% more (3% in all)
-export const LATER_ALIEN_HP_EXTRA = 0.01;
+export const LATE_ALIEN_HP_PER_STAGE = 0.02; // ...then every further boss defeat adds 2%, without a cap
 
 // Celestial skill scaling (Solar, Jupiter, Singularity and Gaia's Roots alien damage; Saturn Guard; Neptune's Tide) follows the stage
 // only up to SKILL_SCALE_STAGE_CAP; past that the skills stop growing.
@@ -155,8 +168,7 @@ export function skillAlienScale(state: GameState): number {
 export function constellationAlienHPMult(state: GameState): number { return alienHPMultAt(state.bossesKilled); }
 function alienHPMultAt(kills: number): number {
   return 1 + Math.min(6, Math.floor(kills / CONSTELLATION_INTERVAL)) * 0.05
-    + Math.max(0, kills - LATE_ALIEN_HP_FROM) * LATE_ALIEN_HP_PER_STAGE
-    + Math.max(0, kills - LATER_ALIEN_HP_FROM) * LATER_ALIEN_HP_EXTRA;
+    + Math.max(0, kills - LATE_ALIEN_HP_FROM) * LATE_ALIEN_HP_PER_STAGE;
 }
 
 // force skips the every-third-boss check (used for Ascension's starting picks).
@@ -178,13 +190,21 @@ export function chooseConstellation(state: GameState, kind: Constellation): bool
   if (state.godConstellationMode) {
     const index=state.constellations.indexOf(kind);
     if(index>=0)state.constellations.splice(index,1);else state.constellations.push(kind);
+    if(kind==='waveLaser'&&index>=0)state.build.waveLaserReady=false;
+    if(index>=0){
+      if(kind==='rubyDefense')state.build.rubyWaveStored=false;
+      if(kind==='wallStep')state.build.wallStepReady=false;
+      if(kind==='laserWire')state.build.tripwires=[];
+      if(kind==='teleportDecoy'){state.build.decoy=null;state.enemies.forEach(enemy=>enemy.pathTimer=0);}
+      if(kind==='wallSlam')state.enemies.forEach(enemy=>enemy.buildWallDamage=undefined);
+    }
     return true;
   }
   if (state.constellations.includes(kind)) return false;
   state.constellations.push(kind);
   state.constellationReveal = { kind, ticks: CONSTELLATION_REVEAL_TICKS };
   try {
-    const sound = new Audio('/sounds/constellation-chosen.wav'); sound.volume = .6; sound.play().catch(() => {});
+    const sound = gameAudio('/sounds/constellation-chosen.wav'); sound.volume = .6; sound.play().catch(() => {});
   } catch { }
   state.constellationChoices = [];
   state.playerQueuedDirX = state.playerQueuedDirY = 0;
@@ -199,7 +219,7 @@ export function openGodConstellations(state: GameState): boolean {
   if(state.gamePhase!=='playing'||state.constellationChoices.length)return false;
   state.godConstellationMode=true;state.constellationChoices=Object.keys(CONSTELLATIONS) as Constellation[];
   state.gamePhase='constellation';state.playerQueuedDirX=state.playerQueuedDirY=0;
-  try { const sound=new Audio('/sounds/constellation-choice.wav');sound.volume=.6;sound.play().catch(()=>{}); } catch {}
+  try { const sound=gameAudio('/sounds/constellation-choice.wav');sound.volume=.6;sound.play().catch(()=>{}); } catch {}
   return true;
 }
 
@@ -274,6 +294,8 @@ export interface PrayerWave {
 
 export interface Enemy {
   encounterId?: number;
+  blessingReaperStacks?:number; blessingReaperUntil?:number;
+  sapphireWeakenUntil?:number;
   buildMarks?: number; buildMarkUntil?: number; buildRootHits?: number; buildRootUntil?: number; buildSlowUntil?: number; buildSlow?: number;
   mimic?: { disguised: boolean; timer: number; seek?: [number, number]; wander?: [number, number] }; // Moon mimic: posing yet, ticks before it goes to pose, its spot and wander goal
   id: number;
@@ -297,6 +319,7 @@ export interface Enemy {
   attackTimer: number; // ticks until next attack
   targeting: 'player' | 'ruby';
   // push state (from charge wave)
+  buildWallDamage?: number; buildStopUntil?: number;
   pushDirX: number;
   pushDirY: number;
   pushTiles: number; // remaining push tiles
@@ -321,6 +344,8 @@ export interface Enemy {
   phaseTimer: number;
   // frost_warden specific — remaining absorb capacity of an icy shield she granted this
   // ally; damageEnemy drains this before touching real hp. 0 = no shield.
+  frostRollLeft?: number; frostStole?: boolean;
+  saturnSnowballKill?: boolean;
   icyShieldHP: number;
   prayer?: PrayerAbilities;
   king?: KingAbilities;
@@ -344,10 +369,14 @@ export interface Bomb {
 export interface Resource {
   tileX: number;
   tileY: number;
-  type: 'health' | 'energy';
+  type: 'health' | 'energy' | 'shield';
 }
 
 export interface LaserBeam {
+  opal?:boolean;
+  solar?:boolean;
+  buildDamage?: number;
+  width?: number;
   fromX: number; fromY: number;
   dirX: number; dirY: number;
   endX: number; endY: number;
@@ -357,6 +386,8 @@ export interface LaserBeam {
 }
 
 export interface WaveEffect {
+  opal?:boolean;
+  solar?:boolean;
   cx: number; cy: number;
   radius: number;
   maxRadius: number;
@@ -365,6 +396,8 @@ export interface WaveEffect {
 }
 
 export interface BombBlast {
+  opal?:boolean;
+  powered?:boolean;
   cx: number; cy: number;
   radius: number;
   maxRadius: number;
@@ -373,6 +406,8 @@ export interface BombBlast {
 }
 
 export interface LaserBullet {
+  solar?:boolean; blessingCopy?:boolean; blessingDecoy?:boolean; blessingDamage?:number;
+  avoidEnemyId?: number; // Lepus splits a volley between distinct targets when possible.
   damageScale?: number;
   x: number;
   y: number;
@@ -406,6 +441,13 @@ export interface DeathParticle {
   color: string;
 }
 
+export interface SapphireHitEffect {
+  enemyId: number;
+  x: number;
+  y: number;
+  untilTick: number;
+}
+
 export type GamePhase = 'playing' | 'teleporting' | 'laserTarget' | 'constellation' | 'blessing' | 'skillChoice' | 'won' | 'lost';
 
 export interface RewardEffect {
@@ -415,6 +457,7 @@ export interface RewardEffect {
 }
 
 export interface GameState {
+  gemstoneReward?: BossType;
   mode: RubyStarMode;
   build: RunBuildState;
   queuedConstellationRewards: number;
@@ -426,6 +469,7 @@ export interface GameState {
   moon: MoonState | null;
   sun: SunState | null;
   jupiter: JupiterState | null;
+  saturn: SaturnState | null;
   ambientEvents: AmbientEventState;
   map: number[][];
   gameTick: number;
@@ -517,6 +561,7 @@ export interface GameState {
   lightningArcs: LightningArc[];
   slashEffects: SlashEffect[];
   deathParticles: DeathParticle[];
+  sapphireHitEffects: SapphireHitEffect[];
   rewardEffects: RewardEffect[];
   prayerWaves: PrayerWave[];
   thornPatches: ThornPatch[];
@@ -636,6 +681,8 @@ function getAudioCtx(): AudioContext | null {
 
 function playTone(freq: number, dur: number, vol = 0.16, type: OscillatorType = 'square') {
   try {
+    if(channelVolume('effects')===0)return;
+    vol*=channelVolume('effects');
     const ctx = getAudioCtx(); if (!ctx) return;
     const t = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -664,9 +711,10 @@ export function playCelestialSound(cue: keyof typeof CELESTIAL_AUDIO, multiplier
   playAudioOneShot('/sounds/celestial/' + clip.file, clip.gain * ATTACK_SFX_VOLUME * multiplier);
 }
 
-export function playAudioOneShot(file: string, level: number) {
+export function playAudioOneShot(file: string, level: number, pitch = 1) {
   try {
-    const sound = new Audio(file); sound.volume = Math.min(1, level); sound.loop = false;
+    const sound = gameAudio(file); sound.volume = Math.min(1, level); sound.loop = false;
+    if(pitch!==1){sound.playbackRate=pitch;sound.preservesPitch=false;}
     let cleanup = () => {};
     if (level > 1) {
       const ctx = getAudioCtx();
@@ -693,7 +741,7 @@ function updateSingularitySound(state: GameState) {
   if (singularityVoice) return;
   try {
     const clip = CELESTIAL_AUDIO.devourer;
-    const voice = new Audio('/sounds/celestial/' + clip.file);
+    const voice = gameAudio('/sounds/celestial/' + clip.file);
     voice.volume = clip.gain * ATTACK_SFX_VOLUME; voice.loop = true;
     singularityVoice = voice;
     voice.play().catch(() => { if (singularityVoice === voice) stopSingularitySound(); });
@@ -702,79 +750,80 @@ function updateSingularitySound(state: GameState) {
 
 export function playSFX_laser(volumeMultiplier = 1) {
   try {
-    const a = new Audio('/sounds/laserBeam.mp3'); a.volume = 0.3045 * ATTACK_SFX_VOLUME * volumeMultiplier; a.play().catch(() => {});
+    const a = gameAudio('/sounds/laserBeam.mp3', 'attack'); a.volume = 0.3045 * ATTACK_SFX_VOLUME * volumeMultiplier; a.play().catch(() => {});
   } catch { }
 }
 
-export function playSFX_laserBullet() {
+export function playSFX_laserBullet(pitch = 1, volumeMultiplier = 1) {
   try {
-    const a = new Audio('/sounds/laserBullet.mp3'); a.volume = 0.2541 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const a = gameAudio('/sounds/laserBullet.mp3', 'attack'); a.volume = 0.2541 * ATTACK_SFX_VOLUME * volumeMultiplier; a.playbackRate = pitch; if(pitch!==1)a.preservesPitch=false; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_wave() {
   try {
-    const a = new Audio('/sounds/chargeWave.mp3'); a.volume = 0.768 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const a2 = new Audio('/sounds/chargeWave.mp3'); a2.volume = 0.768 * ATTACK_SFX_VOLUME; a2.play().catch(() => {});
+    const a = gameAudio('/sounds/chargeWave.mp3', 'attack'); a.volume = 0.768 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const a2 = gameAudio('/sounds/chargeWave.mp3', 'attack'); a2.volume = 0.768 * ATTACK_SFX_VOLUME; a2.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_alienHit() {
   try {
-    const a = new Audio('/sounds/alienGetDamaged.wav'); a.volume = 0.1933155; a.play().catch(() => {});
+    const a = gameAudio('/sounds/alienGetDamaged.wav'); a.volume = 0.1933155; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_alienDeath() {
   try {
-    const a = new Audio('/sounds/alienDeath.mp3'); a.volume = 0.13; a.play().catch(() => {});
+    const a = gameAudio('/sounds/alienDeath.mp3'); a.volume = 0.13; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_bossDeath() {
   try {
-    const a = new Audio('/sounds/shield.mp3'); a.volume = 0.55; a.play().catch(() => {});
+    const a = gameAudio('/sounds/shield.mp3'); a.volume = 0.55; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_decoyDeath() {
   try {
-    const a = new Audio('/sounds/decoyDeath.mp3'); a.volume = 0.4; a.play().catch(() => {});
+    const a = gameAudio('/sounds/decoyDeath.mp3'); a.volume = 0.4; a.play().catch(() => {});
   } catch { }
 }
 
-function playSFX_alienShoot() {
+export function playSFX_alienShoot(volumeMultiplier = 1, pitch = 1) {
   try {
-    const a = new Audio('/sounds/alienShootLaser.wav'); a.volume = 0.2 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const a = gameAudio('/sounds/alienShootLaser.wav', 'attack'); a.volume = 0.2 * ATTACK_SFX_VOLUME * volumeMultiplier;
+    a.playbackRate = pitch; if(pitch!==1)a.preservesPitch=false; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_queenAttack() {
   try {
-    const a = new Audio('/sounds/bossQueenAttack1.mp3'); a.volume = 0.765 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const b = new Audio('/sounds/gameModeClick.mp3'); b.volume = 0.72 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/bossQueenAttack1.mp3', 'attack'); a.volume = 0.765 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const b = gameAudio('/sounds/gameModeClick.mp3', 'attack'); b.volume = 0.72 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_bossLaser() {
   try {
     for (let i = 0; i < 3; i++) {
-      const a = new Audio('/sounds/chargeWave.mp3'); a.volume = 0.855 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+      const a = gameAudio('/sounds/chargeWave.mp3', 'attack'); a.volume = 0.855 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
     }
-    const b = new Audio('/sounds/laserBeam.mp3'); b.volume = 0.45 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const b = gameAudio('/sounds/laserBeam.mp3', 'attack'); b.volume = 0.45 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_bomb() {
   try {
-    const a = new Audio('/sounds/bombExplode.wav'); a.volume = 0.832 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const a = gameAudio('/sounds/bombExplode.wav', 'attack'); a.volume = 0.832 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_supernova() {
   for (const [file, volume] of [['bombExplode.wav', 1], ['meteorExplode.mp3', .85]] as const) {
     try {
-      const sound = new Audio('/sounds/' + file); sound.volume = volume; sound.play().catch(() => {});
+      const sound = gameAudio('/sounds/' + file); sound.volume = volume; sound.play().catch(() => {});
     } catch { }
   }
   playTone(65, .8, .3, 'sawtooth');
@@ -784,19 +833,19 @@ function announceAscension(state: GameState) {
   state.ascensionBannerTicks = 360;
   if (state.gamePhase === 'lost') return;
   try {
-    const sound = new Audio('/sounds/ascension-unlock.mp3'); sound.volume = .7; sound.play().catch(() => {});
+    const sound = gameAudio('/sounds/ascension-unlock.mp3'); sound.volume = .7; sound.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_hit() {
   try {
-    const a = new Audio('/sounds/hitHurt.wav'); a.volume = 0.22; a.play().catch(() => {});
+    const a = gameAudio('/sounds/hitHurt.wav'); a.volume = 0.22; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_chargerImpact() {
   try {
-    const sound = new Audio('/sounds/hitHurt.wav');
+    const sound = gameAudio('/sounds/hitHurt.wav');
     sound.volume = .55; sound.playbackRate = .7; sound.preservesPitch = false;
     sound.play().catch(() => {});
   } catch { }
@@ -807,19 +856,19 @@ export function playSFX_pickup() { playCelestialSound('pickup'); }
 
 function playSFX_healPickup() {
   try {
-    const a = new Audio('/sounds/grow.wav'); a.volume = 0.32; a.play().catch(() => {});
+    const a = gameAudio('/sounds/grow.wav'); a.volume = 0.32; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_powerUp() {
   try {
-    const a = new Audio('/sounds/powerUpBoost.mp3'); a.volume = 0.38; a.play().catch(() => {});
+    const a = gameAudio('/sounds/powerUpBoost.mp3'); a.volume = 0.38; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_speed() {
   try {
-    const a = new Audio('/sounds/speedBoost.mp3'); a.volume = 0.35; a.play().catch(() => {});
+    const a = gameAudio('/sounds/speedBoost.mp3'); a.volume = 0.35; a.play().catch(() => {});
   } catch { }
 }
 
@@ -827,7 +876,7 @@ let _chargeSound: HTMLAudioElement | null = null;
 let _chargeHolding = false;
 function getChargeSound(): HTMLAudioElement {
   if (!_chargeSound) {
-    _chargeSound = new Audio('/sounds/charging.wav');
+    _chargeSound = gameAudio('/sounds/charging.wav');
     _chargeSound.preload = 'auto';
     _chargeSound.volume = 0.85 * ATTACK_SFX_VOLUME;
   }
@@ -872,7 +921,7 @@ function playSFX_enemyAttack(enemy?: Enemy) {
   if (!file) { playSFX_alienShoot(); return; }
   if (enemy?.type === 'astral_twins' && enemy.twin?.index === 1) playCelestialSound('neptune_electric', 3.5);
   try {
-    const sound = new Audio('/sounds/' + file);
+    const sound = gameAudio('/sounds/' + file);
     sound.volume = (file === 'celestial/jupiter-storm.wav' ? 1.3 : .8) * ATTACK_SFX_VOLUME; sound.loop = false;
     sound.play().catch(() => {});
   } catch { }
@@ -880,7 +929,7 @@ function playSFX_enemyAttack(enemy?: Enemy) {
 
 function playSFX_twinRevive() {
   try {
-    const sound = new Audio('/sounds/twin-revive.mp3');
+    const sound = gameAudio('/sounds/twin-revive.mp3');
     sound.volume = .85 * ATTACK_SFX_VOLUME; sound.loop = false;
     sound.play().catch(() => {});
   } catch { }
@@ -900,7 +949,7 @@ export function playSFX_objectBreak(kind: 'frost' | 'pylon' | 'aegis') {
 
 function playSFX_pylonExplosion() {
   try {
-    const sound = new Audio('/sounds/pylon-explode.mp3');
+    const sound = gameAudio('/sounds/pylon-explode.mp3');
     sound.volume = .9 * ATTACK_SFX_VOLUME; sound.loop = false;
     sound.play().catch(() => {});
   } catch { }
@@ -908,19 +957,19 @@ function playSFX_pylonExplosion() {
 
 function playSFX_rubyHit() {
   try {
-    const a = new Audio('/sounds/shieldBreak.mp3'); a.volume = 0.42; a.play().catch(() => {});
+    const a = gameAudio('/sounds/shieldBreak.mp3'); a.volume = 0.42; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_rubyToggle() {
   try {
-    const a = new Audio('/sounds/levelup.mp3'); a.volume = 0.38; a.play().catch(() => {});
+    const a = gameAudio('/sounds/levelup.mp3'); a.volume = 0.38; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_teleport() {
   try {
-    const sound = new Audio('/sounds/gameModeClick.mp3');
+    const sound = gameAudio('/sounds/gameModeClick.mp3');
     sound.volume = 0.64;
     sound.play().catch(() => {});
   } catch { }
@@ -928,54 +977,54 @@ export function playSFX_teleport() {
 
 export function playSFX_queenTeleport() {
   try {
-    const a = new Audio('/sounds/ghostHunt2.mp3'); a.volume = 0.5; a.play().catch(() => {});
+    const a = gameAudio('/sounds/ghostHunt2.mp3'); a.volume = 0.5; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_reaperStrike() {
   try {
-    const a = new Audio('/sounds/slash.mp3'); a.volume = 1.0 * ATTACK_SFX_VOLUME; a.play().catch(() => {}); // base file is quiet, so retain its higher mix level
-    const b = new Audio('/sounds/laserBullet.mp3'); b.volume = 0.6 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/slash.mp3', 'attack'); a.volume = 1.0 * ATTACK_SFX_VOLUME; a.play().catch(() => {}); // base file is quiet, so retain its higher mix level
+    const b = gameAudio('/sounds/laserBullet.mp3', 'attack'); b.volume = 0.6 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_devourerBite() {
   try {
-    const a = new Audio('/sounds/soundWaveAttack.mp3'); a.volume = 0.7 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const b = new Audio('/sounds/slash.mp3'); b.volume = 0.5 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/soundWaveAttack.mp3', 'attack'); a.volume = 0.7 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const b = gameAudio('/sounds/slash.mp3', 'attack'); b.volume = 0.5 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_devourerAbsorb() {
   try {
-    const a = new Audio('/sounds/reverse.mp3'); a.volume = 0.7 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const b = new Audio('/sounds/grow.wav'); b.volume = 0.5 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/reverse.mp3', 'attack'); a.volume = 0.7 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const b = gameAudio('/sounds/grow.wav', 'attack'); b.volume = 0.5 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_hallwaySeal() {
   try {
-    const a = new Audio('/sounds/shieldBreak.mp3'); a.volume = 0.6; a.play().catch(() => {});
+    const a = gameAudio('/sounds/shieldBreak.mp3'); a.volume = 0.6; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_frostFreeze() {
   try {
-    const a = new Audio('/sounds/freeze.mp3'); a.volume = 1.0; a.play().catch(() => {});
+    const a = gameAudio('/sounds/freeze.mp3'); a.volume = 1.0; a.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_frostFieldEnter() {
   try {
-    const a = new Audio('/sounds/swap.mp3'); a.volume = 0.5; a.play().catch(() => {});
-    const b = new Audio('/sounds/freeze.mp3'); b.volume = 0.5; b.play().catch(() => {});
+    const a = gameAudio('/sounds/swap.mp3'); a.volume = 0.5; a.play().catch(() => {});
+    const b = gameAudio('/sounds/freeze.mp3'); b.volume = 0.5; b.play().catch(() => {});
   } catch { }
 }
 
 function playSFX_frostRelocate() {
   try {
-    const a = new Audio('/sounds/ice.mp3'); a.volume = 0.5; a.play().catch(() => {});
-    const b = new Audio('/sounds/slash.mp3'); b.volume = 1.0; b.play().catch(() => {});
+    const a = gameAudio('/sounds/ice.mp3'); a.volume = 0.5; a.play().catch(() => {});
+    const b = gameAudio('/sounds/slash.mp3'); b.volume = 1.0; b.play().catch(() => {});
   } catch { }
 }
 
@@ -983,19 +1032,19 @@ function playSFX_frostRelocate() {
 // playSFX_frostRelocate above (kept the two "thaw" sounds from overlapping in meaning).
 function playSFX_thaw() {
   try {
-    const a = new Audio('/sounds/thaw.wav'); a.volume = 0.6; a.play().catch(() => {});
+    const a = gameAudio('/sounds/thaw.wav'); a.volume = 0.6; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_meteorite() {
   try {
-    const a = new Audio('/sounds/meteorExplode.mp3'); a.volume = 0.38; a.play().catch(() => {});
+    const a = gameAudio('/sounds/meteorExplode.mp3'); a.volume = 0.38; a.play().catch(() => {});
   } catch { }
 }
 
 export function playSFX_meteorFalling() {
   try {
-    const a = new Audio('/sounds/meteorFalling.mp3'); a.volume = 0.45; a.play().catch(() => {});
+    const a = gameAudio('/sounds/meteorFalling.mp3'); a.volume = 0.45; a.play().catch(() => {});
   } catch { }
 }
 
@@ -1077,19 +1126,7 @@ export function createModeState(mode: RubyStarMode, trialBoss?: BossType): GameS
       }
       state.noBossSpawns = true;
     }
-    if (trialBoss === 'frost_warden') {
-      state.trial.mapOnly = true;
-      state.noMobs = true;
-      godSpawnBoss(state, 'frost_warden');
-      const warden = state.enemies.find(enemy => enemy.type === 'frost_warden');
-      if (warden) {
-        warden.tileX = warden.targetTileX = 14; warden.tileY = warden.targetTileY = 10;
-        warden.x = 14.5 * TILE_SIZE; warden.y = 10.5 * TILE_SIZE;
-        state.frostIceTiles = [];
-        scatterFrostIceTiles(state, chamberOfTile(14, 10));
-      }
-      state.noBossSpawns = true;
-    }
+    if (trialBoss === 'frost_warden') createSaturnState(state);
   }
   if (mode === 'tutorial') {
     // A safe sandbox: no natural aliens, bosses, meteors or events; you and Ruby never drop below 1 HP.
@@ -1108,7 +1145,7 @@ export function createInitialState(): GameState {
   const map = generateMap();
   const [px, py] = PLAYER_START;
   return {
-    mode: 'endless', build: createRunBuildState(), queuedConstellationRewards: 0, bossOverlapTicks: 0, tutorial: null, trial: null, neptune: null, gaia: null, moon: null, sun: null, jupiter: null,
+    mode: 'endless', build: createRunBuildState(), queuedConstellationRewards: 0, bossOverlapTicks: 0, tutorial: null, trial: null, neptune: null, gaia: null, moon: null, sun: null, jupiter: null, saturn: null,
     map,
     gameTick: 0,
     gamePhase: 'playing',
@@ -1190,6 +1227,7 @@ export function createInitialState(): GameState {
     lightningArcs: [],
     slashEffects: [],
     deathParticles: [],
+    sapphireHitEffects: [],
     rewardEffects: [],
     prayerWaves: [],
     thornPatches: [], encounterEffects: [], thornPoisonTicks: 0, thornPoisonTimer: 0, thornWasInside: false, thornContactTimer: 0,
@@ -1247,6 +1285,16 @@ export function isFloorTile(map: number[][], tx: number, ty: number) {
 }
 
 function damageLunarDecoy(state: GameState, amount: number) {
+  if(state.build.queenTargetId!==undefined){
+    const decoy=state.build.queenDecoys?.find(d=>d.id===state.build.queenTargetId);if(!decoy||amount<=0)return;
+    decoy.hp-=amount;if(decoy.hp<=0){state.build.queenDecoys=state.build.queenDecoys!.filter(d=>d!==decoy);state.enemies.forEach(e=>e.pathTimer=0);playSFX_decoyDeath();}return;
+  }
+  if(state.build.decoyTargetActive){
+    const decoy=state.build.decoy;if(!decoy||amount<=0)return;
+    state.build.decoy=null;state.enemies.forEach(enemy=>enemy.pathTimer=0);
+    for(let i=0;i<8;i++)state.deathParticles.push({x:decoy.x,y:decoy.y,vx:Math.cos(i*Math.PI/4)*2,vy:Math.sin(i*Math.PI/4)*2,ticks:18,maxTicks:18,size:3,color:'#c6b8ff'});
+    return;
+  }
   const decoy=state.lunarDecoy;if(!decoy || amount<=0 || decoy.invulnerableTicks>0)return;
   decoy.hitsLeft=Math.max(0,decoy.hitsLeft-1);decoy.flashTicks=8;decoy.invulnerableTicks=SPECIAL_QUEEN_DECOY_INVULNERABILITY;
   if(decoy.hitsLeft<=0){
@@ -1259,12 +1307,13 @@ function damageLunarDecoy(state: GameState, amount: number) {
 function reflectVenusDamage(state: GameState, attacker: Enemy | undefined, amount: number, fromX: number, fromY: number) {
   if (state.venusVeilTicks <= 0 || !attacker || attacker.hp <= 0 || amount <= 0) return;
   const damage = isBossType(attacker.type) ? Math.min(amount, attacker.maxHp * SPECIAL_VENUS_BOSS_REFLECT_CAP) : amount;
-  damageEnemy(state, attacker, damage, 'special');
+  damageEnemy(state, attacker, damage, 'reflection');
   state.venusReflects.push({ fromX, fromY, toX: attacker.x, toY: attacker.y, ticks: 18 });
   if (state.venusReflects.length > 24) state.venusReflects.shift();
 }
 
-export function damagePlayer(state: GameState, amount: number, attacker?: Enemy) {
+export function damagePlayer(state: GameState, amount: number, attacker?: Enemy, silentHit = false, shieldCost = 1) {
+  if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=.9;
   if (attacker && isMoonBoss(state, attacker)) amount *= MOON_QUEEN_DAMAGE_MULT;
   if (state.neptune && attacker?.id === state.neptune.bossId) {
     amount *= NEPTUNE_ATTACK_MULT[state.neptune.phase];
@@ -1272,23 +1321,29 @@ export function damagePlayer(state: GameState, amount: number, attacker?: Enemy)
   }
   if(state.enemyDecoyActive){damageLunarDecoy(state,amount);return;}
   reflectVenusDamage(state, attacker, amount, state.playerX, state.playerY);
-  if (state.godMode) return;
+  if(state.godMode){const mitigated=amount*((state.jupiter?.guardTicks??0)>0?JUPITER.fenceGuardDamage:1)*(state.constellations.includes('playerGuard')?.85:1)*(state.venusVeilTicks>0?SPECIAL_VENUS_DAMAGE_MULT:1);blessingReflectIncoming(state,mitigated,attacker);return;}
   if ((state.jupiter?.guardTicks ?? 0) > 0) amount *= JUPITER.fenceGuardDamage;
-  amount *= state.constellations.includes('playerGuard') ? 0.9 : 1;
+  amount *= state.constellations.includes('playerGuard') ? 0.85 : 1;
   if (state.venusVeilTicks > 0) amount *= SPECIAL_VENUS_DAMAGE_MULT;
-  const absorbed = Math.min(state.playerShieldHP, amount);
-  state.playerShieldHP -= absorbed;
+  blessingIncoming(state,amount,attacker);
+  if(hasBlessing(state,'aegis_sentinel'))amount*=.8;
+  const incoming=amount;
+  const permanent = state.saturn?.permaShield && state.playerShieldHP > 0;
+  const absorbed = permanent ? amount : Math.min(state.playerShieldHP / shieldCost, amount);
+  if (!permanent) state.playerShieldHP = Math.max(0,state.playerShieldHP-absorbed*shieldCost);
   if(state.playerShieldHP<=0)state.playerSaturnShield=false;
   amount -= absorbed;
   if (absorbed > 0) showRewardEffect(state, 'player', 'shield');
-  if (amount <= 0) return;
+  if (amount <= 0) {blessingAfterHit(state,incoming);return;}
   state.playerHP = Math.max(state.immortal ? 1 : 0, state.playerHP - amount);
-  playSFX_hit();
+  blessingAfterHit(state,incoming);
+  if (!silentHit) playSFX_hit();
   if (state.playerHP <= 0) endGame(state);
 }
 
-export function damageRuby(state: GameState, amount: number, attacker?: Enemy) {
+export function damageRuby(state: GameState, amount: number, attacker?: Enemy, silentHit = false, shieldCost = 1) {
   if (state.rubyTileX === -1) return; // carried — ruby not vulnerable
+  if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=.9;
   if (attacker && isMoonBoss(state, attacker)) amount *= MOON_QUEEN_DAMAGE_MULT;
   if (state.neptune && attacker?.id === state.neptune.bossId) {
     amount *= NEPTUNE_ATTACK_MULT[state.neptune.phase];
@@ -1299,19 +1354,32 @@ export function damageRuby(state: GameState, amount: number, attacker?: Enemy) {
   if ((state.jupiter?.guardTicks ?? 0) > 0) amount *= JUPITER.fenceGuardDamage;
   amount *= 1 - 0.15 * constellationBonus(state, 'ruby');
   if (state.venusVeilTicks > 0) amount *= SPECIAL_VENUS_DAMAGE_MULT;
-  const absorbed = Math.min(state.rubyShieldHP, amount);
-  state.rubyShieldHP -= absorbed;
+  const permanent = state.saturn?.permaShield && state.rubyShieldHP > 0;
+  const absorbed = permanent ? amount : Math.min(state.rubyShieldHP / shieldCost, amount);
+  if (!permanent) state.rubyShieldHP = Math.max(0,state.rubyShieldHP-absorbed*shieldCost);
   if(state.rubyShieldHP<=0)state.rubySaturnShield=false;
   amount -= absorbed;
   if (absorbed > 0) showRewardEffect(state, 'ruby', 'shield');
   if (amount <= 0) return;
   state.rubyHP = Math.max(state.immortal ? 1 : 0, state.rubyHP - amount);
-  playSFX_rubyHit();
+  if (!silentHit) playSFX_rubyHit();
   if (state.rubyHP <= 0) endGame(state);
 }
 
-export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 'player' | 'meteor' | 'enemy' | 'special' = 'player') {
+export function shovePlayerFromEnemy(state:GameState,e:Enemy,tiles:number):boolean{
+  if(state.gamePhase!=='playing'||state.enemyDecoyActive||state.playerKnockback||state.saturn?.roll)return false;
+  const dx=state.playerTileX-e.tileX,dy=state.playerTileY-e.tileY;
+  const [kx,ky]=Math.abs(dx)>=Math.abs(dy)?[Math.sign(dx)||1,0]:[0,Math.sign(dy)||1];
+  const open=isFloorTile(state.map,state.playerTargetX+kx,state.playerTargetY+ky);
+  if(open)state.playerKnockback={dirX:kx,dirY:ky,started:false,tilesLeft:tiles};
+  state.screenShakeTicks=Math.max(state.screenShakeTicks,8);state.screenShakeAmt=Math.max(state.screenShakeAmt,4);
+  return open;
+}
+
+export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 'player' | 'meteor' | 'enemy' | 'special' | 'reflection' | 'summon' = 'player', sapphireHealing = 0, shieldCost = 1) {
   if (e.hp <= 0 || (e.twin?.downedTicks ?? 0) > 0 || amount <= 0) return;
+  if (state.saturn?.bossId === e.id && state.saturn.barrier > 0) return;
+  if(source==='player'||source==='special'){amount*=blessingDamageMultiplier(state);blessingHit(state,e);}
   const wasSeaHunting = e.type === 'sea_chanter' && !isSeaChanterDiving(e);
   const previousHP = e.hp;
   const shielded = state.enemies.some(s => s.type === 'shielder' && s.shieldTargetId === e.id);
@@ -1334,8 +1402,12 @@ export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 
   // Frost Warden's icy shield absorbs damage outright (a real HP pool, not a %-reduction
   // like the shielder's) — drains first, any overflow past its remaining capacity spills to hp.
   if (e.icyShieldHP > 0) {
-    const absorbed = Math.min(e.icyShieldHP, actual);
-    e.icyShieldHP -= absorbed;
+    const absorbed = Math.min(e.icyShieldHP / shieldCost, actual);
+    e.icyShieldHP = Math.max(0,e.icyShieldHP-absorbed*shieldCost);
+    if(state.saturn&&!isBossType(e.type)&&absorbed>0&&(source==='player'||source==='special')){
+      grantSaturnShield(state,'player',absorbed*shieldCost*SATURN.shieldDamageAbsorb);
+      showRewardEffect(state,'player','shield');
+    }
     if (absorbed > 0 && e.icyShieldHP <= 0) playSFX_objectBreak('frost');
     actual -= absorbed;
   }
@@ -1374,6 +1446,15 @@ export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 
     }
   }
   const hpLost = Math.min(Math.max(0, previousHP), Math.max(0, actual));
+  if(e.hp<=0)state.sapphireHitEffects=(state.sapphireHitEffects??[]).filter(hit=>hit.enemyId!==e.id);
+  if(e.hp>0&&hpLost>0&&previousHP>e.hp&&!isChallengeObject(e.type)&&state.build.blessings.includes('sea_chanter')&&(source==='player'||source==='special')){
+    if(source==='player'||sapphireHealing>0)e.sapphireWeakenUntil=state.gameTick+180;
+    const effects=state.sapphireHitEffects??=[];
+    const effect=effects.find(hit=>hit.enemyId===e.id);
+    if(effect){effect.x=e.x;effect.y=e.y;effect.untilTick=state.gameTick+72;}
+    else effects.push({enemyId:e.id,x:e.x,y:e.y,untilTick:state.gameTick+72});
+  }
+  if(previousHP>e.hp&&!isChallengeObject(e.type)&&(source==='player'||source==='special')){blessingLandedAttack(state,sapphireHealing);if(sapphireHealing>0)obsidianBossHit(state,e);}
   if (state.jupiter && hpLost > 0) drainJupiterEnergy(state, e, hpLost);
   if (state.sun && hpLost > 0 && e.id === state.sun.bossId) state.sun.rage = Math.max(0, state.sun.rage - hpLost * SUN.rageOnHit); // hurting the King cools his rage a little
   if (state.moon && amount > 0) moonSeenWhenHit(state, e); // a hit lights it up in the dark
@@ -1509,7 +1590,7 @@ function spawnResource(state: GameState) {
   }
   if (!candidates.length) return;
   const [tx, ty] = candidates[Math.floor(Math.random() * candidates.length)];
-  const type = Math.random() < 0.5 ? 'health' : 'energy';
+  const type: Resource['type'] = state.saturn ? (['health', 'energy', 'shield'] as const)[Math.floor(Math.random() * 3)] : Math.random() < 0.5 ? 'health' : 'energy';
   state.resources.push({ tileX: tx, tileY: ty, type });
 }
 
@@ -1584,6 +1665,7 @@ function setHallwayWalled(state: GameState, hallwayIdx: number, walled: boolean)
 // Whether the player currently shares a chamber with a living Frost Warden — drives both
 // the movement slow and the attack-speed slow, computed fresh each tick rather than stored.
 export function isPlayerChilled(state: GameState): boolean {
+  if (state.saturn) return saturnBlizzard(state) && (state.playerShieldHP <= 0 || saturnShieldChilled(state));
   const playerChamber = chamberOfTile(state.playerTileX, state.playerTileY);
   if (playerChamber === -1) return false;
   return state.enemies.some(e => e.type === 'frost_warden' && chamberOfTile(e.tileX, e.tileY) === playerChamber);
@@ -1610,7 +1692,7 @@ function scatterFrostIceTiles(state: GameState, chamberIdx: number) {
 }
 
 // Teleports the Frost Warden to a different chamber and re-scatters her ice tiles there.
-function relocateFrostWarden(state: GameState, e: Enemy) {
+export function relocateFrostWarden(state: GameState, e: Enemy) {
   if (isEnemyInSingularity(state,e)) return;
   const curChamber = chamberOfTile(e.tileX, e.tileY);
   const others = [0, 1, 2, 3].filter(ch => ch !== curChamber);
@@ -1621,7 +1703,8 @@ function relocateFrostWarden(state: GameState, e: Enemy) {
   e.x = tx * TILE_SIZE + TILE_SIZE / 2; e.y = ty * TILE_SIZE + TILE_SIZE / 2;
   e.stepProgress = 0;
   e.phaseTimer = FROST_RELOCATE_INTERVAL;
-  scatterFrostIceTiles(state, nextChamber);
+  if(!state.saturn)scatterFrostIceTiles(state, nextChamber);
+  else{state.saturn.iceTimer=0;state.saturn.iceWarning=0;state.saturn.nextIce=[];}
 
   // Doesn't grant the shield immediately — windupTicks (unused otherwise for this type)
   // counts down to when she fires the ice-laser shield cast, FROST_SHIELD_CAST_DELAY after
@@ -1650,7 +1733,7 @@ function castFrostShield(state: GameState, e: Enemy) {
     fromX: e.x, fromY: e.y, dirX: 0, dirY: 0,
     endX: ally.x, endY: ally.y, ticks: 30, color: '#aaeeff',
   });
-  try { const a = new Audio('/sounds/ice.mp3'); a.volume = 0.6 * ATTACK_SFX_VOLUME; a.play().catch(() => {}); } catch { }
+  try { const a = gameAudio('/sounds/ice.mp3', 'attack'); a.volume = 0.6 * ATTACK_SFX_VOLUME; a.play().catch(() => {}); } catch { }
 }
 
 // Teleports the Queen to a spawn tile in a different chamber (weighted toward whichever
@@ -1719,7 +1802,7 @@ export function playSeaSound(cue: SeaSound) {
     stopSeaSound(cue);
     const mix = { diveSinging: ['seaSinging4.mp3', 0.32], dive: ['seaDive.mp3', 0.28], attack: ['seaSong.mp3', 0.30], heal: ['seaHeal.mp3', 0.52], singing: ['seaSinging.mp3', 0.58] } as const;
     const [file, gain] = mix[cue];
-    const voice = new Audio('/sounds/' + file);
+    const voice = gameAudio('/sounds/' + file);
     voice.volume = Number(gain) * ATTACK_SFX_VOLUME;
     if (cue === 'singing') voice.playbackRate = 1; // full natural note overlaps the faster wave launch
     if (cue === 'heal') {
@@ -1883,6 +1966,7 @@ function initializeNewEncounter(state: GameState, boss: Enemy) {
   if (boss.type === 'splitter_queen' && state.moon) initializeMoonBoss(state, boss);
   if (boss.type === 'fiery_king' && state.sun) initializeSunBoss(state, boss);
   if (boss.type === 'storm_reaper' && state.jupiter) initializeJupiterBoss(state, boss);
+  if (boss.type === 'frost_warden' && state.saturn) initializeSaturnBoss(state, boss);
   if (boss.type === 'devourer') {
     boss.chargeDirX = DEVOURER_START_STACKS; // the original is born with one stack, so it always splits
     // Its swarm multiplies effective HP, so it scales slower than the usual +15 per defeat.
@@ -2095,7 +2179,7 @@ function updatePoisonSound(state: GameState) {
   if (poisonVoice) return;
   if (poisonSoundGap > 0) { poisonSoundGap--; return; }
   try {
-    const voice = new Audio('/sounds/poisoned.wav');
+    const voice = gameAudio('/sounds/poisoned.wav');
     voice.volume = .28 * ATTACK_SFX_VOLUME; voice.loop = false;
     voice.onended = () => {
       if (poisonVoice !== voice) return;
@@ -2109,11 +2193,11 @@ function updatePoisonSound(state: GameState) {
 // The Weaver's field: a falling sound timed to land as the seed hits and the thorns erupt.
 const THORN_FALL_SOUND_TICKS = 45; // falling-thing.wav is 0.75s long
 function playThornFall() {
-  try { const sound = new Audio('/sounds/falling-thing.wav'); sound.volume = 0.6 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
+  try { const sound = gameAudio('/sounds/falling-thing.wav', 'attack'); sound.volume = 0.6 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
 }
 
 export function playThornCut() {
-  try { const sound = new Audio('/sounds/cut.mp3'); sound.volume = 0.95 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
+  try { const sound = gameAudio('/sounds/cut.mp3', 'attack'); sound.volume = 0.95 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
 }
 function applyThornPoison(state: GameState) {
   state.thornPoisonTicks = THORN_POISON_TICKS;
@@ -2143,7 +2227,7 @@ function eruptThornField(state: GameState, e: Enemy, x: number, y: number, radiu
     if (rx >= b.left && rx < b.right && ry >= b.top && ry < b.bottom) { damageRuby(state, GAIA_THORN_RUBY_CUT, e); state.gaia.rubyThornTimer = THORN_CONTACT_INTERVAL; }
   }
   e.shootTicks = 14;
-  try { const sound = new Audio('/sounds/place-plant.mp3'); sound.volume = 0.4 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
+  try { const sound = gameAudio('/sounds/place-plant.mp3', 'attack'); sound.volume = 0.4 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
 }
 function updateThornWeaver(state: GameState, e: Enemy) {
   if (e.hp <= 0) return;
@@ -2399,7 +2483,7 @@ function createPrayerAbilities(): PrayerAbilities {
 function playSFX_kingArenaFire(warning: boolean) {
   // A soft warning followed by the supplied fire-spell cue on the arena pulse.
   try {
-    const sound = new Audio(warning ? '/sounds/kingFireWarning.wav' : '/sounds/kingFireSpell.mp3');
+    const sound = gameAudio(warning ? '/sounds/kingFireWarning.wav' : '/sounds/kingFireSpell.mp3');
     sound.volume = (warning ? 0.38 : 0.605) * ATTACK_SFX_VOLUME;
     sound.play().catch(() => {});
   } catch { }
@@ -2434,7 +2518,7 @@ function updateKingArenaAttack(state: GameState, e: Enemy) {
 }
 
 function playPrayerSound(path: string, volume: number) {
-  try { const sound = new Audio(path); sound.volume = volume; sound.play().catch(() => {}); } catch { }
+  try { const sound = gameAudio(path); sound.volume = volume; sound.play().catch(() => {}); } catch { }
 }
 
 function prayerBurst(state: GameState, x: number, y: number) {
@@ -2599,8 +2683,9 @@ function inCelestialField(state: GameState, e: Enemy): boolean {
   const tx=Math.floor(e.x/TILE_SIZE),ty=Math.floor(e.y/TILE_SIZE);
   return isFloorTile(state.map,tx,ty)&&tx>=(field.x-SPECIAL_WEAVER_RADIUS)/TILE_SIZE&&tx<(field.x+SPECIAL_WEAVER_RADIUS)/TILE_SIZE&&ty>=(field.y-SPECIAL_WEAVER_RADIUS)/TILE_SIZE&&ty<(field.y+SPECIAL_WEAVER_RADIUS)/TILE_SIZE;
 }
-export function stormSlowMultiplier(state:GameState,e:Enemy):number {
-  return Math.min(e.stormSlowUntilTick!==undefined&&state.gameTick<=e.stormSlowUntilTick?SPECIAL_REAPER_SLOW:1,buildSlowMultiplier(state,e));
+export function stormSlowMultiplier(state:GameState,e:Enemy,slowStrength=1):number {
+  const skillSlow=e.stormSlowUntilTick!==undefined&&state.gameTick<=e.stormSlowUntilTick?1-(1-SPECIAL_REAPER_SLOW)*slowStrength:1;
+  return Math.min(skillSlow,buildSlowMultiplier(state,e));
 }
 function celestialMoveMultiplier(state: GameState, e: Enemy): number { return (inCelestialField(state,e)?SPECIAL_WEAVER_SLOW:1) * Math.min((e.voltSlowTicks ?? 0)>0 ? JUPITER.wallSlow : 1,stormSlowMultiplier(state,e),buildSlowMultiplier(state,e)); }
 let gaiaFieldVoice: HTMLAudioElement | null = null;
@@ -2616,7 +2701,7 @@ function updateGaiaFieldSound(state: GameState) {
   }
   if (gaiaFieldVoice) return;
   try {
-    const voice = new Audio('/sounds/celestial/gaia-field-click.wav');
+    const voice = gameAudio('/sounds/celestial/gaia-field-click.wav');
     voice.volume = .4 * ATTACK_SFX_VOLUME; voice.loop = true;
     gaiaFieldVoice = voice;
     voice.play().catch(() => { if (gaiaFieldVoice === voice) stopGaiaFieldSound(); });
@@ -2636,8 +2721,31 @@ function updateCelestialField(state: GameState) {
 }
 
 function updateEnemyTargets(state: GameState) {
+  const decoy=state.build.decoy;
+  if(!decoy){updateQueenBlessingTargets(state);return;}
+  const lured=new Set(state.enemies.filter(enemy=>enemy.hp>0&&!isBossType(enemy.type)&&Math.hypot(enemy.x-decoy.x,enemy.y-decoy.y)<=10*TILE_SIZE).map(enemy=>enemy.id));
+  const saved={playerX:state.playerX,playerY:state.playerY,playerTileX:state.playerTileX,playerTileY:state.playerTileY,playerTargetX:state.playerTargetX,playerTargetY:state.playerTargetY,playerChamber:state.playerChamber,playerCarryingRuby:state.playerCarryingRuby};
+  state.enemyDecoyActive=state.build.decoyTargetActive=true;
+  Object.assign(state,{playerX:decoy.x,playerY:decoy.y,playerTileX:decoy.tileX,playerTileY:decoy.tileY,playerTargetX:decoy.tileX,playerTargetY:decoy.tileY,playerChamber:chamberOfTile(decoy.tileX,decoy.tileY),playerCarryingRuby:true});
+  try{updateEnemies(state,enemy=>lured.has(enemy.id));}finally{Object.assign(state,saved);state.enemyDecoyActive=state.build.decoyTargetActive=false;}
+  updateQueenBlessingTargets(state,enemy=>!lured.has(enemy.id));
+}
+function updateQueenBlessingTargets(state:GameState,only:(enemy:Enemy)=>boolean=()=>true){
+  const handled=new Set<number>();
+  for(const decoy of [...(state.build.queenDecoys??[])]){
+    if(decoy.hp<=0)continue;
+    const lured=new Set(state.enemies.filter(e=>only(e)&&!handled.has(e.id)&&e.hp>0&&!isBossType(e.type)&&Math.hypot(e.x-decoy.x,e.y-decoy.y)<=6*TILE_SIZE).map(e=>e.id));
+    const saved={playerX:state.playerX,playerY:state.playerY,playerTileX:state.playerTileX,playerTileY:state.playerTileY,playerTargetX:state.playerTargetX,playerTargetY:state.playerTargetY,playerChamber:state.playerChamber,playerCarryingRuby:state.playerCarryingRuby};
+    state.enemyDecoyActive=true;state.build.queenTargetId=decoy.id;
+    Object.assign(state,{playerX:decoy.x,playerY:decoy.y,playerTileX:decoy.tileX,playerTileY:decoy.tileY,playerTargetX:decoy.tileX,playerTargetY:decoy.tileY,playerChamber:chamberOfTile(decoy.tileX,decoy.tileY),playerCarryingRuby:true});
+    try{updateEnemies(state,e=>lured.has(e.id));}finally{Object.assign(state,saved);state.enemyDecoyActive=false;state.build.queenTargetId=undefined;}
+    for(const id of lured)handled.add(id);
+  }
+  updateLunarEnemyTargets(state,e=>only(e)&&!handled.has(e.id));
+}
+function updateLunarEnemyTargets(state: GameState,only:(enemy:Enemy)=>boolean=()=>true) {
   const decoy=state.lunarDecoy;
-  if(!decoy){updateEnemies(state);return;}
+  if(!decoy){updateEnemies(state,only);return;}
   const saved={playerX:state.playerX,playerY:state.playerY,playerTileX:state.playerTileX,playerTileY:state.playerTileY,
     playerTargetX:state.playerTargetX,playerTargetY:state.playerTargetY,playerChamber:state.playerChamber,playerCarryingRuby:state.playerCarryingRuby};
   state.enemyDecoyActive=true;
@@ -2645,8 +2753,8 @@ function updateEnemyTargets(state: GameState) {
     playerTargetX:decoy.tileX,playerTargetY:decoy.tileY,playerChamber:chamberOfTile(decoy.tileX,decoy.tileY),playerCarryingRuby:true});
   // The Moon Queen ignores the decoy and keeps after the real player; her illusions take the bait, which gives her away.
   const ignoresDecoy=(e:Enemy)=>isMoonBoss(state,e);
-  try{updateEnemies(state,e=>!ignoresDecoy(e));}finally{Object.assign(state,saved);state.enemyDecoyActive=false;}
-  if(state.moon)updateEnemies(state,ignoresDecoy);
+  try{updateEnemies(state,e=>only(e)&&!ignoresDecoy(e));}finally{Object.assign(state,saved);state.enemyDecoyActive=false;}
+  if(state.moon)updateEnemies(state,e=>only(e)&&ignoresDecoy(e));
 }
 
 // Shared by the standard Reaper and Jupiter: seal both end caps, leaving the corridor fightable.
@@ -2675,6 +2783,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
   for (const e of [...state.enemies].reverse()) {
     if (!state.enemies.includes(e) || e.hp <= 0 || (e.twin?.downedTicks ?? 0) > 0) continue;
     if (only && !only(e)) continue;
+    if((e.buildStopUntil??0)>state.gameTick)continue;
     if (e.type === 'moon_mimic' && updateMoonMimic(state, e)) continue; // disguised: stands still and never attacks
     if ((e.voltSlowTicks ?? 0) > 0) e.voltSlowTicks!--;
     if (state.jupiter?.bossId === e.id) {
@@ -2682,6 +2791,11 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
       if(e.healFlashTicks>0)e.healFlashTicks--;
       updateJupiterReaper(state,e); continue;
     }
+    if (state.saturn?.bossId === e.id) {
+      if (e.flashTicks > 0) e.flashTicks--; if (e.shootTicks > 0) e.shootTicks--;
+      e.pushTiles = 0; continue;
+    }
+    if (saturnBlizzard(state) && e.icyShieldHP <= 0 && state.gameTick % 2 !== 0) continue;
     if (e.flashTicks > 0) e.flashTicks--;
     if (e.healFlashTicks > 0) e.healFlashTicks--;
     if (e.shootTicks > 0) e.shootTicks--;
@@ -2719,15 +2833,25 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
         e.x = nx * TILE_SIZE + TILE_SIZE / 2;
         e.y = ny * TILE_SIZE + TILE_SIZE / 2;
       }
+      else if(e.buildWallDamage!==undefined){
+        damageEnemy(state,e,e.buildWallDamage,'special');
+        state.build.impacts.push({x:e.x+e.pushDirX*20,y:e.y+e.pushDirY*20,kind:'slam',ticks:18});
+        e.pushTiles=0;e.buildWallDamage=undefined;
+      }
       // Knockback overrides normal step interpolation — resync target/step state
       // so the resumed movement (or charger's charge) doesn't lerp toward a
       // stale pre-push tile (which visibly dragged the enemy across walls).
       e.targetTileX = e.tileX; e.targetTileY = e.tileY; e.stepProgress = 0;
+      if(state.saturn&&(e.type==='frost_raider'||e.type==='rime_brute')){e.windupTicks=0;e.frostRollLeft=0;e.attackTimer=120;}
       if (e.type === 'charger') { e.chargeDirX = 0; e.chargeDirY = 0; e.chargeWindupTicks=0; e.chargeTilesLeft=0; }
       e.pushTiles = Math.max(0, e.pushTiles - 1);
+      if(e.pushTiles===0)e.buildWallDamage=undefined;
       continue;
     }
 
+    if (state.saturn && e.type === 'frost_raider') { updateFrostRaider(state, e); continue; }
+    if (state.saturn && e.type === 'ice_caller') { updateIceCaller(state, e); continue; }
+    if (state.saturn && e.type === 'rime_brute') { updateRimeBrute(state, e); continue; }
     if (e.type === 'astral_twins' && e.twin) { updateAstralTwin(state, e); continue; }
     if (e.type === 'thorn_weaver') { updateThornWeaver(state, e); continue; }
     if (e.type === 'sea_chanter') {
@@ -3160,7 +3284,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
           }
         }
         if (healedAnyone) {
-          const a = new Audio('/sounds/swap.mp3'); a.volume = 0.15; a.play().catch(() => {});
+          const a = gameAudio('/sounds/swap.mp3'); a.volume = 0.15; a.play().catch(() => {});
         }
         e.attackTimer = HEALER_HEAL_INTERVAL;
       }
@@ -3248,7 +3372,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
               playSFX_chargerImpact();
               if (hitPlayer) {
                 damagePlayer(state,cCfg.damageToPlayer,e);
-                if (state.gamePhase !== 'lost' && !state.enemyDecoyActive && !state.playerKnockback) {
+                if (state.gamePhase !== 'lost' && !state.enemyDecoyActive && !state.playerKnockback && !state.saturn?.roll) {
                   state.playerKnockback = { dirX: e.chargeDirX, dirY: e.chargeDirY, started: false };
                 }
               } else damageRuby(state,cCfg.damageToRuby,e);
@@ -3455,18 +3579,8 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
           playSFX_enemyAttack(e);
           damagePlayer(state, cfg.damageToPlayer, e);
           if (e.type === 'stinger' && state.neptune) { state.neptune.poisonTicks = NEPTUNE_POISON_TICKS; state.neptune.poisonTimer ||= 60; }
-          if (e.type === 'angry_mushroom' && !state.enemyDecoyActive && !state.playerKnockback) { // shoved away along the main axis
-            const dx = state.playerTileX - e.tileX, dy = state.playerTileY - e.tileY;
-            const [kx, ky] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
-            if (isFloorTile(state.map, state.playerTargetX + kx, state.playerTargetY + ky)) state.playerKnockback = { dirX: kx, dirY: ky, started: false, tilesLeft: GAIA_MUSHROOM_KNOCKBACK };
-            state.screenShakeTicks = Math.max(state.screenShakeTicks, 8); state.screenShakeAmt = Math.max(state.screenShakeAmt, 4);
-          }
-          if (e.type === 'emberling' && !e.extinguished && !state.enemyDecoyActive && !state.playerKnockback) {
-            const dx = state.playerTileX - e.tileX, dy = state.playerTileY - e.tileY;
-            const [kx, ky] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
-            if (isFloorTile(state.map, state.playerTargetX + kx, state.playerTargetY + ky)) state.playerKnockback = { dirX: kx, dirY: ky, started: false, tilesLeft: SUN.emberlingKnockback };
-            state.screenShakeTicks = Math.max(state.screenShakeTicks, 8); state.screenShakeAmt = Math.max(state.screenShakeAmt, 4);
-          }
+          if (e.type === 'angry_mushroom') shovePlayerFromEnemy(state,e,GAIA_MUSHROOM_KNOCKBACK);
+          if (e.type === 'emberling' && !e.extinguished) shovePlayerFromEnemy(state,e,SUN.emberlingKnockback);
           if (e.aegis) encounterEffect(state, 'sentinel-hit', e, state.playerX, state.playerY, 18, '#78dedf');
           e.attackTimer = cfg.attackCooldown;
           e.shootTicks = 14;
@@ -3618,6 +3732,7 @@ export function healPlayer(state: GameState, amount: number, showEffect = true) 
   const before = state.playerHP;
   state.playerHP = Math.min(PLAYER_MAX_HP, Math.round((state.playerHP + amount) * 10) / 10);
   chargeNeptuneHealing(state, state.playerHP - before);
+  blessingHealed(state,state.playerHP-before);
   if (showEffect && state.playerHP > before) showRewardEffect(state, 'player', 'heal');
 }
 
@@ -3625,6 +3740,7 @@ export function healCore(state: GameState, amount: number) {
   const before = state.rubyHP;
   state.rubyHP = Math.min(RUBY_MAX_HP, state.rubyHP + amount);
   chargeNeptuneHealing(state, state.rubyHP - before);
+  blessingHealed(state,state.rubyHP-before);
   if (state.rubyHP > before) showRewardEffect(state, 'ruby', 'heal');
 }
 
@@ -3655,6 +3771,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
     return; // Objectives give no score, healing, energy, or stage progress.
   }
   if (victim.type === 'devourer') {
+    if(state.mode==='endless')recordBoss('devourer',state);
     spawnDevourerCopies(state, victim);
     if (state.enemies.some(other => other !== victim && other.type === 'devourer' && (other.encounterId ?? other.id) === (victim.encounterId ?? victim.id) && other.hp > 0)) {
       // Not the last of the family: no boss reward yet, but each body killed heals the player a little.
@@ -3701,12 +3818,19 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
   const recoveredEnergy = e.type === 'energy_leech' ? (e.stolenEnergy ?? 0) : 0;
   const wasMax = state.starEnergy >= STAR_ENERGY_MAX;
   const energyGain = suppressEnergy ? 0 : (skipRewards ? 0 : (STAR_ENERGY_PER_KILL + (e.type === 'fast' ? 8 : 0)) * (1 + 0.2 * constellationBonus(state, 'energy'))) + recoveredEnergy;
-  state.starEnergy = Math.min(STAR_ENERGY_MAX, state.starEnergy + energyGain);
+  addStarEnergy(state,Math.max(0,energyGain-(suppressEnergy?0:recoveredEnergy)));
+  if(!suppressEnergy)addStarEnergy(state,recoveredEnergy,false);
   if (!wasMax && state.starEnergy >= STAR_ENERGY_MAX && !isBossType(e.type)) playSFX_powerUp();
   // Stolen energy is returned even when a meteor defeats the Leech.
   if (recoveredEnergy > 0 && !suppressEnergy) state.runnerEnergyFlashTicks = 60;
   if (!skipRewards) {
     state.killScore += ENEMY_CONFIGS[e.type].scoreValue;
+    if (state.saturn && !isBossType(e.type)) {
+      grantSaturnShield(state, 'player', SATURN.killShield);
+      grantSaturnShield(state, 'ruby', SATURN.killShield);
+      showRewardEffect(state, 'player', 'shield');
+      showRewardEffect(state, 'ruby', 'shield');
+    }
 
     // Passive sustain — every kill heals a small flat amount, stacking on top of any
     // type-specific reward below (e.g. a healer kill grants this +24 more, not instead of).
@@ -3730,13 +3854,14 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
     } else if (e.type === 'fast') {
       if (!suppressEnergy) state.runnerEnergyFlashTicks = 60;
     } else if (e.type === 'armored') {
-      state.playerShieldHP = Math.max(state.playerShieldHP, KILL_SHIELD_HP);
+      if (state.saturn) {grantSaturnShield(state, 'player', KILL_SHIELD_HP);if(e.saturnSnowballKill)grantSaturnShield(state,'ruby',KILL_SHIELD_HP);}
+      else state.playerShieldHP = Math.max(state.playerShieldHP, KILL_SHIELD_HP);
       showRewardEffect(state, 'player', 'shield');
       playSFX_rubyToggle();
     } else if (e.type === 'healer') {
       healPlayer(state, 24);
       showRewardEffect(state, 'player', 'heal');
-      try { const a = new Audio('/sounds/grow.wav'); a.volume = 0.38; a.play().catch(() => {}); } catch {}
+      try { const a = gameAudio('/sounds/grow.wav'); a.volume = 0.38; a.play().catch(() => {}); } catch {}
     } else if (e.type === 'charger') {
       state.speedActiveTicks = Math.max(state.speedActiveTicks, 120);
       state.speedFlashTicks = 15;
@@ -3749,7 +3874,8 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       }
       playSFX_teleport();
     } else if (e.type === 'shielder') {
-      state.rubyShieldHP = Math.max(state.rubyShieldHP, KILL_SHIELD_HP);
+      if (state.saturn) grantSaturnShield(state, 'ruby', KILL_SHIELD_HP);
+      else state.rubyShieldHP = Math.max(state.rubyShieldHP, KILL_SHIELD_HP);
       showRewardEffect(state, 'ruby', 'shield');
       playSFX_rubyToggle();
     } else if (e.type === 'sniper') {
@@ -3783,11 +3909,15 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
     }
   }
 
+  buildDeathField(state,e);
+  if(!fromMeteor)blessingDeath(state,e);
+
   // Boss-tier full-restore reward — applies no matter how the kill happened (including a
   // meteor strike finishing it off), unlike the score/energy rewards above which meteor kills skip.
   if (isBossType(e.type)) {
     state.bossesKilled++;
-    if (state.trial) { state.gamePhase = 'won'; clearSunEncounter(state); clearJupiterEncounter(state); } // defeating the guardian clears the trial
+    recordBoss(e.type, state);
+    if (state.trial) { state.gamePhase = 'won'; clearSunEncounter(state); clearJupiterEncounter(state); clearSaturnEncounter(state); } // defeating the guardian clears the trial
     offerConstellation(state);
     offerCelestialBlessing(state);
     if (state.bossesKilled === SPECIAL_UNLOCK_KILLS) announceAscension(state);
@@ -3799,7 +3929,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
     healCore(state, RUBY_MAX_HP);
     showRewardEffect(state, 'player', 'restore');
     showRewardEffect(state, 'ruby', 'restore');
-    state.starEnergy = STAR_ENERGY_MAX;
+    addStarEnergy(state,STAR_ENERGY_MAX,false);
     if(state.bossesKilled>=SPECIAL_UNLOCK_KILLS)playCelestialSound('ready');else playSFX_powerUp();
     if (e.type === 'splitter_queen') {
       clearMoonIllusions(state);
@@ -3835,6 +3965,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
 // ─── Player movement ──────────────────────────────────────────────────────────
 
 function updatePlayer(state: GameState) {
+  if (moveSaturnPlayer(state)) return;
   // Frozen solid by a Frost Warden ice tile — no movement at all until it wears off
   if (state.playerFrozenTicks > 0 || (state.gaia?.snaredTicks ?? 0) > 0) { // frozen, or held by a Gaia root snare
     state.playerChamber = chamberOfTile(state.playerTileX, state.playerTileY);
@@ -3846,9 +3977,9 @@ function updatePlayer(state: GameState) {
   const speedMultiplier =
     (state.speedActiveTicks > 0 ? boostMultiplier :
     state.playerCarryingRuby ? PLAYER_CARRY_MULT : 1.0) *
-    (chilled ? FROST_CHILL_SPEED_MULT : 1) * (isPlayerInThorns(state) ? THORN_SLOW_MULT : 1);
+    (chilled ? (saturnShieldChilled(state) ? SATURN.shieldedChillMult : FROST_CHILL_SPEED_MULT) : 1) * (isPlayerInThorns(state) ? THORN_SLOW_MULT : 1);
   const knockback = state.playerKnockback;
-  const baseSpeed = knockback?.started ? PRAYER_KNOCKBACK_SPEED : PLAYER_BASE_SPEED * speedMultiplier * (1 + 0.08 * constellationBonus(state, 'speed')) * neptuneTideSpeed(state) * gaiaPlayerSpeed(state) * jupiterPlayerSpeed(state);
+  const baseSpeed = knockback?.started ? PRAYER_KNOCKBACK_SPEED : PLAYER_BASE_SPEED * speedMultiplier * (1 + 0.08 * constellationBonus(state, 'speed')) * neptuneTideSpeed(state) * gaiaPlayerSpeed(state) * jupiterPlayerSpeed(state) * blessingSpeedMultiplier(state);
 
   if (state.playerTileX === state.playerTargetX && state.playerTileY === state.playerTargetY) {
 
@@ -3879,6 +4010,14 @@ function updatePlayer(state: GameState) {
           state.playerDirX = qdx;
           state.playerDirY = qdy;
           state.playerStepProgress = 0;
+        } else if(state.build.wallStepReady&&state.speedActiveTicks>0&&Math.abs(qdx)+Math.abs(qdy)===1&&chamberOfTile(ntx,nty)>=0&&chamberOfTile(ntx,nty)===chamberOfTile(state.playerTileX,state.playerTileY)&&chamberOfTile(ntx+qdx,nty+qdy)===chamberOfTile(ntx,nty)&&isFloorTile(state.map,ntx+qdx,nty+qdy)){
+          state.build.impacts.push({x:state.playerX,y:state.playerY,kind:'phase',ticks:18});
+          state.playerTileX=state.playerTargetX=ntx+qdx;state.playerTileY=state.playerTargetY=nty+qdy;
+          state.playerX=(state.playerTileX+.5)*TILE_SIZE;state.playerY=(state.playerTileY+.5)*TILE_SIZE;
+          state.playerStepProgress=0;state.playerDirX=qdx;state.playerDirY=qdy;
+          state.speedActiveTicks=state.speedFlashTicks=0;state.build.wallStepReady=false;
+          state.build.impacts.push({x:state.playerX,y:state.playerY,kind:'phase',ticks:18});
+          if(state.frostIceTiles.some(([tx,ty])=>tx===state.playerTileX&&ty===state.playerTileY)||saturnIceAt(state,state.playerTileX,state.playerTileY)){state.playerFrozenTicks=FROST_FREEZE_DURATION;if(state.saturn)freezeSaturnPlayer(state);state.playerQueuedDirX=state.playerQueuedDirY=0;playSFX_frostFreeze();}
         } else if(jupiterDash) state.jupiter!.playerBoost=0;
       }
     }
@@ -3900,8 +4039,9 @@ function updatePlayer(state: GameState) {
       }
 
       // Stepped onto an active Frost Warden ice tile — freeze in place
-      if (state.frostIceTiles.some(([tx, ty]) => tx === state.playerTileX && ty === state.playerTileY)) {
+      if (state.frostIceTiles.some(([tx, ty]) => tx === state.playerTileX && ty === state.playerTileY) || saturnIceAt(state,state.playerTileX,state.playerTileY)) {
         state.playerFrozenTicks = FROST_FREEZE_DURATION;
+        if (state.saturn) freezeSaturnPlayer(state);
         state.playerQueuedDirX = 0; state.playerQueuedDirY = 0;
         playSFX_frostFreeze();
       }
@@ -3915,13 +4055,22 @@ function updatePlayer(state: GameState) {
   for (let i = state.resources.length - 1; i >= 0; i--) {
     const r = state.resources[i];
     if (r.tileX === state.playerTileX && r.tileY === state.playerTileY) {
-      if (r.type === 'health') {
+      if (r.type === 'shield') {
+        if (state.saturn) {
+          grantSaturnShield(state, 'player', SATURN.shardShield);
+          grantSaturnShield(state, 'ruby', SATURN.shardShield);
+          showRewardEffect(state, 'player', 'shield');
+          showRewardEffect(state, 'ruby', 'shield');
+          playSFX_pickup();
+        }
+        state.resources.splice(i, 1);
+      } else if (r.type === 'health') {
         healPlayer(state, HEAL_AMOUNT);
         state.resources.splice(i, 1);
         playSFX_healPickup();
       } else {
         const wasMax = state.starEnergy >= STAR_ENERGY_MAX;
-        state.starEnergy = Math.min(STAR_ENERGY_MAX, state.starEnergy + ENERGY_AMOUNT * (1 + 0.2 * constellationBonus(state, 'energy')));
+        addStarEnergy(state,ENERGY_AMOUNT*(1+0.2*constellationBonus(state,'energy')));
         showRewardEffect(state, 'player', 'energy');
         if (!wasMax && state.starEnergy >= STAR_ENERGY_MAX) {
           playSFX_powerUp();
@@ -3969,6 +4118,9 @@ function updateMeteorite(state: GameState) {
           } else if (state.jupiter && e.id === state.jupiter.bossId) {
             damageEnemy(state, e, JUPITER.phaseHP * JUPITER.meteorShare, 'meteor');
             if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
+          } else if (state.saturn && e.id === state.saturn.bossId) {
+            damageEnemy(state, e, e.maxHp / 3 * .1, 'meteor');
+            if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
           } else if (state.sun && e.id === state.sun.bossId) {
             damageEnemy(state, e, SUN.phaseHP * SUN.meteorShare, 'meteor');
             if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
@@ -4001,7 +4153,7 @@ function updateMeteorite(state: GameState) {
       if (state.rubyTileX !== -1 && chamberOfTile(state.rubyTileX, state.rubyTileY) === ch) {
         damageRuby(state, METEORITE_RUBY_DMG);
       }
-      buildMeteorZones(state,ch);
+
       gaiaScorchRoom(state, ch); // Gaia: a meteor scorches the room clean
       state.meteoriteTimer = METEORITE_CYCLE + Math.floor(Math.random() * 300 - 150);
     }
@@ -4020,7 +4172,8 @@ function updateMeteorite(state: GameState) {
 
 // Grants a free speed burst that ignores/doesn't touch the SPEED ability's own cooldown —
 // used as a passive bonus (energy pickups, entering the powered-up state), not a manual cast.
-export function grantInstantSpeedBoost(state: GameState, withSound = true) {
+export function grantInstantSpeedBoost(state: GameState, withSound = true, leaveDecoy = true) {
+  if(leaveDecoy)leaveQueenBlessingDecoy(state);
   state.speedActiveTicks = Math.max(state.speedActiveTicks, SPEED_DURATION * (state.constellations.includes('burstDuration') ? 1.25 : 1));
   state.speedFlashTicks = 30;
   if (withSound) playSFX_speed();
@@ -4030,7 +4183,7 @@ function checkAndConsumePower(state: GameState): boolean {
   if (state.poweredTicks > 0) return true;
   if (state.starEnergy >= STAR_ENERGY_MAX) {
     state.starEnergy = 0;
-    state.poweredTicks = 120 + state.stellarPowerBonusTicks + 60 * constellationBonus(state, 'power');
+    state.poweredTicks = 120 + state.stellarPowerBonusTicks + 60 * constellationBonus(state, 'power') + (hasBlessing(state,'blind_prayer')?60:0);
     state.stellarPowerBonusTicks = 0;
     grantInstantSpeedBoost(state);
     return true;
@@ -4047,52 +4200,86 @@ export function getMirrorTwinTile(state: GameState): { tileX: number; tileY: num
 }
 
 // Runs an attack from the player and, while Binary Star is active, again from the twin at reduced damage.
-function withMirrorTwin(state: GameState, attack: (tileX: number, tileY: number, mult: number) => boolean): boolean {
-  let hit = attack(state.playerTileX, state.playerTileY, 1);
+function withMirrorTwin(state: GameState, attack: (tileX: number, tileY: number, mult: number, secondary: boolean) => boolean): boolean {
+  let hit = attack(state.playerTileX, state.playerTileY, 1,false);
   const twin = getMirrorTwinTile(state);
-  if (twin) hit = attack(twin.tileX, twin.tileY, SPECIAL_TWIN_DAMAGE_MULT) || hit;
+  if (twin) hit = attack(twin.tileX, twin.tileY, SPECIAL_TWIN_DAMAGE_MULT,true) || hit;
+  const copy=rubyBlessingCopy(state);if(copy){const beams=state.laserBeams.length,waves=state.waveEffects.length;hit=attack(copy.tileX,copy.tileY,copy.mult,true)||hit;for(const beam of state.laserBeams.slice(beams))beam.opal=true;for(const wave of state.waveEffects.slice(waves))wave.opal=true;}
   return hit;
 }
 
 export function useLaser(state: GameState) {
-  if (state.gamePhase !== 'playing') return;
+  if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
+  if (cancelSnowball(state)) return;
   if (state.laserCooldown > 0) return;
+  const refreshBefore=state.build.siriusRefreshSerial??0;
+  blessingAttack(state,'laser');
+  const firstBeam=state.laserBeams.length;
   const powered = checkAndConsumePower(state);
+  const wide=state.constellations.includes('waveLaser')&&state.build.waveLaserReady;
+  const beamWidth=wide?(powered?96:72):undefined;
+  state.build.waveLaserReady=false;
   const range = Math.max(1, Math.round(((powered ? LASER_RANGE_PWR : LASER_RANGE) + 2 * constellationBonus(state, 'laserRange')) * gaiaLaserRangeMult(state)));
-  const baseDmg = (powered ? LASER_DMG_PWR : LASER_DMG) * (1 + 0.2 * constellationBonus(state, 'laser')) * buildCastMultiplier(state,'laser');
+  const baseDmg = (powered ? LASER_DMG_PWR : LASER_DMG) * (1 + 0.2 * constellationBonus(state, 'laser'));
 
   const emit=(originX:number,originY:number,mult:number,fromX:number,fromY:number,mirror=false)=> {
-    let hit=false;
+    let hit=false;const hitIds=new Set<number>();
+    const reflect=(startX:number,startY:number,vx:number,vy:number,remaining:number,damage:number)=>{
+      const turn=(Math.random()*2-1)*Math.PI/24,cos=Math.cos(turn),sin=Math.sin(turn),rx=-vx*cos+vy*sin,ry=-vx*sin-vy*cos;
+      let endX=startX,endY=startY;const touched=new Set<number>(),tiles=new Set<number>();
+      const thickness=beamWidth??(powered?60:48);
+      for(let distance=.2;distance<=remaining+.0001;distance+=.2){
+        const px=startX+rx*distance,py=startY+ry*distance,tx=Math.floor(px),ty=Math.floor(py);
+        if(!isFloorTile(state.map,tx,ty))break;
+        endX=px;endY=py;
+        const key=ty*MAP_COLS+tx;
+        if(!tiles.has(key)){tiles.add(key);if(!mirror&&isMoonMirror(state,tx,ty)){moonReflect(state,tx,ty,damage);break;}gaiaClearTile(state,tx,ty,1);}
+        hitSupernova(state,(x,y)=>Math.hypot(x/TILE_SIZE-px,y/TILE_SIZE-py)<=thickness/TILE_SIZE/2);
+        for(const enemy of [...state.enemies].reverse()){
+          if(!state.enemies.includes(enemy)||enemy.hp<=0||enemy.twin?.downedTicks||touched.has(enemy.id)||(wide&&hitIds.has(enemy.id)))continue;
+          const ex=enemy.x/TILE_SIZE-startX,ey=enemy.y/TILE_SIZE-startY,along=ex*rx+ey*ry,across=Math.abs(ex*ry-ey*rx)*TILE_SIZE;
+          if(along<0||along>distance+.02||across>thickness/2+TILE_SIZE*ENEMY_CONFIGS[enemy.type].bodyFraction/2)continue;
+          touched.add(enemy.id);hitIds.add(enemy.id);damageEnemy(state,enemy,damage,'player',mirror?0:1.5);chainElectric(state,enemy);hit=true;
+          if(enemy.hp<=0)killEnemy(state,state.enemies.indexOf(enemy));
+        }
+      }
+      state.laserBeams.push({fromX:startX*TILE_SIZE,fromY:startY*TILE_SIZE,endX:endX*TILE_SIZE,endY:endY*TILE_SIZE,dirX:rx,dirY:ry,ticks:18,powered,width:beamWidth,buildDamage:damage});
+    };
     for(const [startDX,startDY] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-      let dx=startDX,dy=startDY,tx=originX,ty=originY,bounced=false,segmentX=fromX,segmentY=fromY,dmg=baseDmg*mult;
-      const finishSegment=()=>state.laserBeams.push({fromX:segmentX,fromY:segmentY,dirX:dx,dirY:dy,endX:(tx+.5)*TILE_SIZE,endY:(ty+.5)*TILE_SIZE,ticks:18,powered});
+      let dx=startDX,dy=startDY,tx=originX,ty=originY,bounced=false,pierced=false,segmentX=fromX,segmentY=fromY,dmg=baseDmg*mult;
+      const finishSegment=()=>state.laserBeams.push({fromX:segmentX,fromY:segmentY,dirX:dx,dirY:dy,endX:(tx+.5)*TILE_SIZE,endY:(ty+.5)*TILE_SIZE,ticks:18,powered,width:beamWidth,buildDamage:dmg});
       for(let r=0;r<range;r++) {
         let nx=tx+dx,ny=ty+dy;
         if(!isFloorTile(state.map,nx,ny)) {
+          if(wide&&!pierced&&nx>0&&ny>0&&nx<MAP_COLS-1&&ny<MAP_ROWS-1&&state.map[ny]?.[nx]===T_WALL){pierced=true;tx=nx;ty=ny;continue;}
           if(!state.constellations.includes('ricochet')||bounced)break;
-          finishSegment();segmentX=(tx+.5)*TILE_SIZE;segmentY=(ty+.5)*TILE_SIZE;
-          dx=-dx;dy=-dy;bounced=true;dmg*=.3;nx=tx+dx;ny=ty+dy;
-          if(!isFloorTile(state.map,nx,ny))break;
+          finishSegment();bounced=true;reflect(tx+.5,ty+.5,dx,dy,range-r+2,dmg*.5);break;
         }
         tx=nx;ty=ny;
         if(!mirror&&isMoonMirror(state,tx,ty)){moonReflect(state,tx,ty,dmg);break;}
         gaiaClearTile(state,tx,ty,1);
         hitSupernova(state,(x,y)=>Math.floor(x/TILE_SIZE)===tx&&Math.floor(y/TILE_SIZE)===ty);
         for(const enemy of [...state.enemies].reverse()) {
-          if(!state.enemies.includes(enemy)||enemy.twin?.downedTicks||enemy.tileX!==tx||enemy.tileY!==ty)continue;
-          damageEnemy(state,enemy,dmg);buildLaserHit(state,enemy,dmg);chainElectric(state,enemy);hit=true;
+          if(!state.enemies.includes(enemy)||enemy.twin?.downedTicks)continue;
+          const bodyRadius=TILE_SIZE*ENEMY_CONFIGS[enemy.type].bodyFraction/2;
+          const inBeam=wide?(dx!==0?enemy.tileX===tx&&Math.abs(enemy.y-(ty+.5)*TILE_SIZE)<=beamWidth!/2+bodyRadius:enemy.tileY===ty&&Math.abs(enemy.x-(tx+.5)*TILE_SIZE)<=beamWidth!/2+bodyRadius):enemy.tileX===tx&&enemy.tileY===ty;
+          if(!inBeam||(wide&&hitIds.has(enemy.id)))continue;
+          hitIds.add(enemy.id);
+          damageEnemy(state,enemy,dmg,'player',mirror?0:1.5);chainElectric(state,enemy);hit=true;
           if(enemy.hp<=0)killEnemy(state,state.enemies.indexOf(enemy));
         }
       }
-      finishSegment();
+      if(!bounced)finishSegment();
     }
     return hit;
   };
-  let laserHit=withMirrorTwin(state,(x,y,mult)=>emit(x,y,mult,mult===1?state.playerX:(x+.5)*TILE_SIZE,mult===1?state.playerY:(y+.5)*TILE_SIZE,mult!==1));
+  let laserHit=withMirrorTwin(state,(x,y,mult,secondary)=>emit(x,y,mult,!secondary?state.playerX:(x+.5)*TILE_SIZE,!secondary?state.playerY:(y+.5)*TILE_SIZE,secondary));
   if(state.constellations.includes('rubyLaser')&&state.rubyTileX>=0&&Math.hypot(state.playerX-(state.rubyTileX+.5)*TILE_SIZE,state.playerY-(state.rubyTileY+.5)*TILE_SIZE)<=3*TILE_SIZE) {
-    laserHit=emit(state.rubyTileX,state.rubyTileY,.25,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,true)||laserHit;
+    laserHit=emit(state.rubyTileX,state.rubyTileY,.35,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,true)||laserHit;
   }
-  state.laserCooldown = LASER_COOLDOWN * (state.constellations.includes('laserRate') ? 0.85 : 1);
+  storeLaserTripwires(state,firstBeam,baseDmg);
+  for(const beam of state.laserBeams.slice(firstBeam))beam.solar=solarBlessingReady(state);
+  state.laserCooldown = (state.build.siriusRefreshSerial??0)!==refreshBefore?0:LASER_COOLDOWN * (state.constellations.includes('laserRate') ? 0.85 : 1);
   playSFX_laser();
   if (laserHit) playSFX_alienHit();
 }
@@ -4110,22 +4297,25 @@ export function pressCharge(state: GameState) {
 
 // Directly fire wave without charge count — used for hold-left-click and keyboard K
 export function activateWave(state: GameState) {
-  if (state.gamePhase !== 'playing') return;
+  if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
+  if (cancelSnowball(state)) return;
   if (state.waveCooldown > 0) return;
   fireWave(state);
 }
 
 function fireWave(state: GameState) {
   stopChargeSound();
+  const refreshBefore=state.build.siriusRefreshSerial??0;
+  blessingAttack(state,'wave');
   const powered = checkAndConsumePower(state);
   const radius = (powered ? WAVE_RADIUS_PWR : WAVE_RADIUS) + constellationBonus(state, 'waveReach');
-  const dmg = (powered ? WAVE_DMG_PWR : WAVE_DMG) * (1 + 0.25 * constellationBonus(state, 'wave')) * buildCastMultiplier(state,'wave');
+  const dmg = (powered ? WAVE_DMG_PWR : WAVE_DMG) * (1 + 0.25 * constellationBonus(state, 'wave'));
   const push = (powered ? WAVE_PUSH_TILES_PWR : WAVE_PUSH_TILES) + constellationBonus(state, 'waveReach');
 
-  const waveHit = withMirrorTwin(state, (originX, originY, mult) => {
+  const waveHit = withMirrorTwin(state, (originX, originY, mult, secondary) => {
     state.waveEffects.push({
-      cx: mult === 1 ? state.playerX : originX * TILE_SIZE + TILE_SIZE / 2, cy: mult === 1 ? state.playerY : originY * TILE_SIZE + TILE_SIZE / 2,
-      radius: 0, maxRadius: radius * TILE_SIZE, ticks: 30, powered
+      cx: !secondary ? state.playerX : originX * TILE_SIZE + TILE_SIZE / 2, cy: !secondary ? state.playerY : originY * TILE_SIZE + TILE_SIZE / 2,
+      radius: 0, maxRadius: radius * TILE_SIZE, ticks: 30, powered, solar:solarBlessingReady(state)
     });
     hitSupernova(state, (x, y) => Math.hypot(x / TILE_SIZE - .5 - originX, y / TILE_SIZE - .5 - originY) <= radius);
     gaiaClearArea(state, originX, originY, radius);
@@ -4134,7 +4324,7 @@ function fireWave(state: GameState) {
       if (!state.enemies.includes(e) || (e.twin?.downedTicks ?? 0) > 0) continue;
       const dist = tileEuclidDist(e.tileX, e.tileY, originX, originY);
       if (dist <= radius) {
-        damageEnemy(state, e, dmg * mult); buildWaveHit(state,e,dmg*mult); hit = true;
+        damageEnemy(state, e, dmg * mult,'player',!secondary?3:0); buildWaveHit(state,e,dmg*mult); hit = true;
         chainElectric(state, e);
         const edx = e.tileX - originX;
         const edy = e.tileY - originY;
@@ -4143,16 +4333,18 @@ function fireWave(state: GameState) {
         e.pushDirY = Math.round(edy / len);
         if (e.pushDirX === 0 && e.pushDirY === 0) e.pushDirX = 1;
         e.pushTiles = push;
+        e.buildWallDamage=state.constellations.includes('wallSlam')&&!isBossType(e.type)?dmg*mult*.5:undefined;
         if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e));
       }
     }
     return hit;
   });
-  if(state.constellations.includes('waveEcho'))state.build.echoes.push({x:state.playerX,y:state.playerY,radius,damage:dmg*.25,ticks:24});
-  if(state.constellations.includes('rubyWave')&&state.rubyTileX>=0)emitBuildWave(state,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,Math.max(1,radius*.6),dmg*.25);
+  if(state.constellations.includes('waveEcho'))state.build.echoes.push({x:state.playerX,y:state.playerY,radius,damage:dmg*.4,ticks:24});
+  if(state.constellations.includes('rubyWave')&&state.rubyTileX>=0)emitBuildWave(state,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,Math.max(1,radius*.6),dmg*.35);
+  if(state.constellations.includes('waveLaser'))state.build.waveLaserReady=true;
   state.chargeCount = 0;
   state.build.quickWave=false;
-  state.waveCooldown = WAVE_COOLDOWN * (state.constellations.includes('waveRate') ? 0.85 : 1);
+  state.waveCooldown = (state.build.siriusRefreshSerial??0)!==refreshBefore?0:WAVE_COOLDOWN * (state.constellations.includes('waveRate') ? 0.85 : 1);
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 8);
   state.screenShakeAmt = Math.max(state.screenShakeAmt, 3);
   playSFX_wave();
@@ -4163,26 +4355,27 @@ export function useSpeedBoost(state: GameState) {
   if (state.gamePhase !== 'playing') return;
   if (state.speedCooldown > 0) return;
   const powered = checkAndConsumePower(state);
+  leaveQueenBlessingDecoy(state);
   const dur = (powered ? SPEED_DURATION_PWR : SPEED_DURATION) * (state.constellations.includes('burstDuration') ? 1.25 : 1);
   state.speedActiveTicks = dur;
+  state.build.wallStepReady=state.constellations.includes('wallStep');
   if(state.constellations.includes('boostCharge'))state.build.quickWave=true;
   state.speedFlashTicks = 30;
   state.speedCooldown = SPEED_COOLDOWN * (state.constellations.includes('burstRate') ? 0.8 : 1);
   playSFX_speed();
 }
 
+export function playSFX_placeBomb() { playAudioOneShot('/sounds/place_bomb.wav', 0.1625 * ATTACK_SFX_VOLUME); }
+
 export function useBomb(state: GameState) {
-  if (state.gamePhase !== 'playing') return;
+  if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
+  if (cancelSnowball(state)) return;
   if (state.bomb === null) {
     if (state.bombCooldown > 0) return; // still on cooldown from last explosion
     const powered = checkAndConsumePower(state);
     state.bomb = { tileX: state.playerTileX, tileY: state.playerTileY, powered };
     state.playerCastTicks = 24; state.playerCastKind = 'bomb';
-    try {
-      const sound = new Audio('/sounds/place_bomb.wav');
-      sound.volume = 0.1625 * ATTACK_SFX_VOLUME;
-      sound.play().catch(() => {});
-    } catch { }
+    playSFX_placeBomb();
     useSpeedBoost(state); // Automatically try to use speed boost to escape
   } else {
     if(state.bomb.detonateTicks!==undefined)return;
@@ -4195,6 +4388,8 @@ function detonateBomb(state:GameState) {
     if(!state.bomb)return;
     state.playerCastTicks = 24; state.playerCastKind = 'bomb';
     const powered = state.bomb.powered;
+    const refreshBefore=state.build.siriusRefreshSerial??0;
+    blessingAttack(state,'bomb');
     const radius = getBombRadius(state, powered);
     const dmg = (powered ? BOMB_DMG_PWR : BOMB_DMG) * (1 + 0.2 * constellationBonus(state, 'bombDamage'));
 
@@ -4203,13 +4398,13 @@ function detonateBomb(state:GameState) {
     // Snapshot protection before any blast/chain hit can break a shield. The same
     // detonation must not then hit that enemy's HP through a later chained strike.
     const frostProtected = new Set(state.enemies.filter(e => e.icyShieldHP > 0).map(e => e.id));
-    const blastAt = (originX: number, originY: number, mult: number) => {
+    const blastAt = (originX: number, originY: number, mult: number, secondary=false) => {
       hitSupernova(state, (x, y) => Math.hypot(x / TILE_SIZE - .5 - originX, y / TILE_SIZE - .5 - originY) <= radius);
       gaiaClearArea(state, originX, originY, radius);
       state.bombBlasts.push({
         cx: originX * TILE_SIZE + TILE_SIZE / 2,
         cy: originY * TILE_SIZE + TILE_SIZE / 2,
-        radius: 0, maxRadius: radius * TILE_SIZE, ticks: 28,
+        radius: 0, maxRadius: radius * TILE_SIZE, ticks: 28, powered,
       });
       let hit = false;
       for (const e of [...state.enemies].reverse()) {
@@ -4218,7 +4413,9 @@ function detonateBomb(state:GameState) {
           // An active frost shield blocks this entire blast: it can lose shield HP,
           // but excess bomb damage never spills into the enemy's real HP.
           const damage = frostProtected.has(e.id) ? Math.min(dmg * mult, e.icyShieldHP) : dmg * mult;
-          if (damage > 0) damageEnemy(state, e, damage);
+          const hpBeforeBlast=e.hp;
+          if (damage > 0) damageEnemy(state, e, damage,'player',!secondary?4:0);
+          if(e.hp<hpBeforeBlast)buildBombStun(state,e);
           hit = true;
           chainElectric(state, e, frostProtected);
           if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e));
@@ -4229,15 +4426,15 @@ function detonateBomb(state:GameState) {
     let bombHit = blastAt(bx, by, 1);
     // The twin answers the detonation with its own blast where it stands; it never hurts the player.
     const twin = getMirrorTwinTile(state);
-    if (twin) bombHit = blastAt(twin.tileX, twin.tileY, SPECIAL_TWIN_DAMAGE_MULT) || bombHit;
+    if (twin) bombHit = blastAt(twin.tileX, twin.tileY, SPECIAL_TWIN_DAMAGE_MULT,true) || bombHit;
+    const copy=rubyBlessingCopy(state);if(copy){const first=state.bombBlasts.length;bombHit=blastAt(copy.tileX,copy.tileY,copy.mult,true)||bombHit;for(const blast of state.bombBlasts.slice(first))blast.opal=true;}
     if (bombHit) playSFX_alienHit();
     // Damage player if in blast radius (own bomb hurts you)
     if (tileEuclidDist(state.playerTileX, state.playerTileY, bx, by) <= radius) {
       damagePlayer(state, Math.floor(dmg * 0.35));
     }
-    if(hasBlessing(state,'devourer'))state.build.zones.push({x:(bx+.5)*TILE_SIZE,y:(by+.5)*TILE_SIZE,radius:radius+1,ticks:180,damage:dmg*.04,kind:'gravity'});
     state.bomb = null;
-    state.bombCooldown = 300 * (state.constellations.includes('bombRate') ? 0.8 : 1);
+    state.bombCooldown = (state.build.siriusRefreshSerial??0)!==refreshBefore?0:300 * (state.constellations.includes('bombRate') ? 0.8 : 1);
     state.screenShakeTicks = 22;
     state.screenShakeAmt = powered ? 18 : 12;
 }
@@ -4272,6 +4469,11 @@ export function doTeleport(state: GameState, chamberIdx: number) {
     ? ([[10,10],[39,10],[10,39],[39,39]] as [number,number][])[chamberIdx]
     : ([10, 10] as [number,number]);
 
+  leaveQueenBlessingDecoy(state);
+  if(state.constellations.includes('teleportDecoy')){
+    state.build.decoy={x:(state.playerTileX+.5)*TILE_SIZE,y:(state.playerTileY+.5)*TILE_SIZE,tileX:state.playerTileX,tileY:state.playerTileY,ticks:360};
+    state.enemies.forEach(enemy=>enemy.pathTimer=0);
+  }
   state.playerTileX = tx; state.playerTileY = ty;
   state.playerTargetX = tx; state.playerTargetY = ty;
   state.playerX = tx * TILE_SIZE + TILE_SIZE / 2;
@@ -4294,7 +4496,7 @@ export function doTeleport(state: GameState, chamberIdx: number) {
 
   // Every teleport grants a free speed burst (no cooldown interaction), not just ones
   // made while carrying the ruby.
-  grantInstantSpeedBoost(state, false);
+  grantInstantSpeedBoost(state, false, false);
 }
 
 // A pad works from its own tile or any of the eight tiles around it.
@@ -4308,12 +4510,13 @@ export function isNearTeleportPad(state: GameState): boolean {
 // Opens the teleport screen when the player is on or next to a pad.
 export function tryActivateTeleport(state: GameState): boolean {
   if (state.gamePhase !== 'playing') return false;
-  if (state.teleportCooldown > 0) return false;
-  
+  if (state.teleportCooldown > 0 || (state.saturn && state.playerFrozenTicks > 0)) return false;
+
   if (!isNearTeleportPad(state)) return false;
   const chamberIdx = state.playerChamber;
   const destinations = [0, 1, 2, 3].filter(c => c !== chamberIdx);
   state.teleportDestOptions = destinations;
+  cancelSnowball(state);
   state.gamePhase = 'teleporting';
   return true;
 }
@@ -4340,11 +4543,13 @@ export function healRuby(state: GameState): boolean {
   if (state.sun && sunStationNearPlayer(state)) return false; // Space charges a nearby cooling station instead
   if (!canHealRuby(state)) return false;
   if (state.rubyHealCooldown > 0) return false;
-  healCore(state, RUBY_HEAL_AMOUNT + 2 * constellationBonus(state, 'manualHealing'));
+  const rubyWasHurt=state.rubyHP<RUBY_MAX_HP;
+  healCore(state, RUBY_HEAL_AMOUNT + constellationBonus(state, 'manualHealing'));
+  if(rubyWasHurt&&state.constellations.includes('rubyDefense'))state.build.rubyWaveStored=true;
   healPlayer(state, 3 + constellationBonus(state, 'manualHealing'));
-  state.rubyHealCooldown = RUBY_HEAL_COOLDOWN / (1 + 0.2 * constellationBonus(state, 'healing'));
+  state.rubyHealCooldown = RUBY_HEAL_COOLDOWN / (1 + 0.5 * constellationBonus(state, 'healing'));
   state.healJiggleTicks = 18;
-  try { const a = new Audio('/sounds/deghost.wav'); a.volume = 0.32; a.play().catch(() => {}); } catch {}
+  try { const a = gameAudio('/sounds/deghost.wav'); a.volume = 0.32; a.play().catch(() => {}); } catch {}
   return true;
 }
 
@@ -4401,13 +4606,13 @@ function detonateSupernova(state: GameState) {
 
 // ─── Main tick ───────────────────────────────────────────────────────────────
 
-export const ENDLESS_BOSS_OVERLAP_TICKS=120*60;
+export const ENDLESS_BOSS_OVERLAP_TICKS=90*60;
 export function countBossEncounters(state:GameState,ignore?:Enemy):number {
   return new Set(state.enemies.filter(e=>e!==ignore&&e.hp>0&&isBossType(e.type)).map(e=>e.encounterId??e.twin?.pairId??e.id)).size;
 }
 
 export function tick(state: GameState) {
-  if (state.gamePhase !== 'playing') { if (state.sun) state.sun.charging = false; pauseAmbientEventSounds(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); return; }
+  if (state.gamePhase !== 'playing') { if (state.saturn?.charging) cancelSnowball(state); if (state.sun) state.sun.charging = false; pauseAmbientEventSounds(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); return; }
 
   prepareBlessingChoice(state);
   if(state.gamePhase!=='playing'){pauseAmbientEventSounds();stopChargeSound();stopPoisonSound();stopSingularitySound();stopGaiaFieldSound();return;}
@@ -4415,7 +4620,7 @@ export function tick(state: GameState) {
   if (state.constellationDelayTicks > 0 && --state.constellationDelayTicks === 0 && state.constellationChoices.length) {
     state.gamePhase = 'constellation';
     try {
-      const sound = new Audio('/sounds/constellation-choice.wav'); sound.volume = .6; sound.play().catch(() => {});
+      const sound = gameAudio('/sounds/constellation-choice.wav'); sound.volume = .6; sound.play().catch(() => {});
     } catch { }
     state.playerQueuedDirX = state.playerQueuedDirY = 0;
     stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound();
@@ -4425,7 +4630,7 @@ export function tick(state: GameState) {
   updateRunBuilds(state);
   if(state.bomb?.detonateTicks!==undefined){
     const b=state.bomb;
-    if(b.detonateTicks!>0&&b.detonateTicks!%6===0)pullBuildEnemies(state,(b.tileX+.5)*TILE_SIZE,(b.tileY+.5)*TILE_SIZE,getBombRadius(state,b.powered)+1);
+    if(b.detonateTicks!>0&&b.detonateTicks!%6===0)pullBuildEnemies(state,(b.tileX+.5)*TILE_SIZE,(b.tileY+.5)*TILE_SIZE,getBombRadius(state,b.powered)+2);
     if(--b.detonateTicks!<=0)detonateBomb(state);
   }
   if(state.gamePhase!=='playing')return;
@@ -4459,7 +4664,7 @@ export function tick(state: GameState) {
   const chilledNow = isPlayerChilled(state);
   if (chilledNow && !state.playerChilledPrev) playSFX_frostFieldEnter();
   state.playerChilledPrev = chilledNow;
-  const chillRate = chilledNow ? FROST_CHILL_TICK_RATE : 1;
+  const chillRate = chilledNow ? (saturnShieldChilled(state) ? SATURN.shieldedChillMult : FROST_CHILL_TICK_RATE) : 1;
   if (state.laserCooldown > 0) state.laserCooldown -= chillRate;
   if (state.bulletCooldown > 0) state.bulletCooldown -= chillRate;
   if (state.waveCooldown > 0) state.waveCooldown -= chillRate;
@@ -4536,7 +4741,7 @@ export function tick(state: GameState) {
             state.bossSpawnName = BOSS_NAMES[bossType];
             state.bossSpawnColor = cfg.color;
             state.bossSpawnTicks = BOSS_ANNOUNCEMENT_TICKS;
-            if (bossType === 'frost_warden') scatterFrostIceTiles(state, chamberOfTile(tx, ty));
+            if (bossType === 'frost_warden' && !state.saturn) scatterFrostIceTiles(state, chamberOfTile(tx, ty));
           }
         }
         state.bossTimer = BOSS_SPAWN_INTERVAL;
@@ -4561,12 +4766,12 @@ export function tick(state: GameState) {
   }
 
   // Minor events use the real player position before any Lunar AI substitution.
-  const ambientResult = state.trial?.mapOnly ? false : updateAmbientEvents(state);
+  const ambientResult = state.trial?.mapOnly || state.saturn ? false : updateAmbientEvents(state);
   if (ambientResult === 'supernova') detonateSupernova(state);
   if ((state as GameState).gamePhase === 'lost') return;
   if (ambientResult === true) {
     healPlayer(state, 20); healCore(state, 20);
-    state.starEnergy = STAR_ENERGY_MAX;
+    addStarEnergy(state,STAR_ENERGY_MAX,false);
     state.stellarPowerBonusTicks = Math.max(state.stellarPowerBonusTicks, 120);
     grantInstantSpeedBoost(state, false);
     showRewardEffect(state, 'player', 'energy');
@@ -4577,7 +4782,7 @@ export function tick(state: GameState) {
   updatePlayer(state);
 
   // Enemy spawning
-  const spawnRegularAliens = !state.noMobs && !state.jupiter;
+  const spawnRegularAliens = !state.noMobs && !state.jupiter && !state.saturn;
   if (spawnRegularAliens) state.spawnTimer++;
   const tier = DIFFICULTY_TIERS[Math.min(state.difficultyLevel, DIFFICULTY_TIERS.length - 1)];
   if (spawnRegularAliens && state.spawnTimer >= tier.spawnInterval * (state.gaia ? GAIA_SPAWN_RATE : 1)) {
@@ -4616,7 +4821,7 @@ export function tick(state: GameState) {
       state.laserBullets.splice(i, 1);
       continue;
     }
-    const dmg = (b.powered ? BULLET_DMG_PWR : BULLET_DMG) * (1 + 0.25 * constellationBonus(state, 'bullets')) * (b.mirror ? SPECIAL_TWIN_DAMAGE_MULT : 1) * (b.damageScale??1);
+    const dmg = b.blessingDamage ?? (b.powered ? BULLET_DMG_PWR : BULLET_DMG) * (1 + 0.25 * constellationBonus(state, 'bullets')) * (b.mirror ? SPECIAL_TWIN_DAMAGE_MULT : 1) * (b.damageScale??1);
     const btx = Math.floor(b.x), bty = Math.floor(b.y);
     if (!b.mirror && isMoonMirror(state, btx, bty) && (btx !== state.playerTileX || bty !== state.playerTileY)) {
       moonReflect(state, btx, bty, dmg); state.laserBullets.splice(i, 1); continue; // bounced back into you
@@ -4624,12 +4829,11 @@ export function tick(state: GameState) {
     let hit = false;
     for (let j = state.enemies.length - 1; j >= 0; j--) {
       const e = state.enemies[j];
-      if (!e || (e.twin?.downedTicks ?? 0) > 0) continue;
+      if (!e || e.id===b.avoidEnemyId || (e.twin?.downedTicks ?? 0) > 0) continue;
       if (isSeaChanterDiving(e)) continue;
       if (Math.abs(e.tileX + 0.5 - b.x) < 0.6 && Math.abs(e.tileY + 0.5 - b.y) < 0.6) {
-        damageEnemy(state, e, dmg);
-        buildBulletHit(state,e,dmg);
-        chainElectric(state, e);
+        damageEnemy(state, e, dmg,b.blessingDecoy?'summon':'player',!b.blessingDecoy&&!b.mirror&&!b.blessingCopy?.5:0);
+        if(!b.blessingDecoy){buildBulletHit(state,e,dmg);chainElectric(state,e);}
         hit = true;
         if (e.hp <= 0) killEnemy(state, j);
         break; // no piercing
@@ -4650,6 +4854,7 @@ export function tick(state: GameState) {
   state.bombBlasts = state.bombBlasts.filter(b => { b.ticks--; b.radius = b.maxRadius * (1 - b.ticks / 28); return b.ticks > 0; });
   state.lightningArcs = state.lightningArcs.filter(a => { a.ticks--; return a.ticks > 0; });
   state.slashEffects = state.slashEffects.filter(s => { s.ticks--; return s.ticks > 0; });
+  state.sapphireHitEffects = (state.sapphireHitEffects??[]).filter(effect => effect.untilTick > state.gameTick && state.enemies.some(enemy=>enemy.id===effect.enemyId&&enemy.hp>0&&!enemy.twin?.downedTicks));
   state.deathParticles = state.deathParticles.filter(p => {
     p.x += p.vx; p.y += p.vy;
     p.vx *= 0.9; p.vy *= 0.9;
@@ -4667,6 +4872,7 @@ export function tick(state: GameState) {
   if (state.moon) updateMoon(state);
   if (state.sun) updateSun(state);
   if (state.jupiter) updateJupiter(state);
+  if (state.saturn) updateSaturn(state);
 }
 
 // Challenge objectives (fish, water clones and balls, pods, blossoms, illusions): no score, energy or kill rewards.
@@ -4751,7 +4957,7 @@ function updateTutorial(state: GameState) {
   const toggled = state.playerCarryingRuby !== t.carried; t.carried = state.playerCarryingRuby;
 
   const step = TUTORIAL_STEPS[t.step];
-  if (!step || step.id === 'done') return;
+  if (!step || step.id === 'done') { if(step?.id==='done'&&!getProfile().tutorialCompleted)updateProfile(p=>{p.tutorialCompleted=true;delete p.resumes.tutorial;});return; }
   if (t.pauseTicks > 0) { if (--t.pauseTicks === 0) enterTutorialStep(state, t.step + 1); return; }
   const aliensLeft = state.enemies.some(enemy => !isBossType(enemy.type));
   switch (step.id) {
@@ -4781,7 +4987,7 @@ function updateTutorial(state: GameState) {
 export function godSetNoBossSpawns(state: GameState, enabled: boolean) {
   state.noBossSpawns=enabled;
   if(enabled){
-    clearSunEncounter(state); clearJupiterEncounter(state);
+    clearSunEncounter(state); clearJupiterEncounter(state); clearSaturnEncounter(state);
     state.encounterEffects = [];
     state.enemies=state.enemies.filter(e=>!isBossType(e.type)&&e.type!=='queen_echo'&&e.type!=='moon_illusion'&&e.type!=='aegis_construct');
     clearThornHazards(state);stopSeaSounds();state.seaSongWaves=[];state.seaSongBursts=[];
@@ -4806,10 +5012,19 @@ export function godSetNoMobs(state: GameState, enabled: boolean) {
 export function godAdvanceStage(state: GameState) {
   if (state.gamePhase !== 'playing' || state.constellationChoices.length) return;
   state.bossesKilled++;
+  recordStage(state);
   state.difficultyLevel = Math.max(state.difficultyLevel, Math.min(DIFFICULTY_TIERS.length - 1, 3 + state.bossesKilled));
   if (state.bossesKilled === SPECIAL_UNLOCK_KILLS) announceAscension(state);
   offerConstellation(state);
   offerCelestialBlessing(state);
+}
+
+export function godJumpStage20(state:GameState){
+  if((state.mode!=='endless'&&state.mode!=='ascension')||state.gamePhase!=='playing'||state.constellationChoices.length||state.bossesKilled>=20)return false;
+  const crossedAscension=state.bossesKilled<SPECIAL_UNLOCK_KILLS;
+  state.bossesKilled=20;recordStage(state);state.difficultyLevel=DIFFICULTY_TIERS.length-1;state.difficultyTimer=0;
+  if(crossedAscension)announceAscension(state);
+  offerCelestialBlessing(state);return true;
 }
 
 export function godEnterAscension(state: GameState) {
@@ -4860,7 +5075,7 @@ export function godSpawnBoss(state: GameState, bossType: BossType) {
     phaseTimer: bossType === 'splitter_queen' ? QUEEN_PHASE_INTERVAL : bossType === 'frost_warden' ? FROST_RELOCATE_INTERVAL : 0,
     icyShieldHP: 0,
   });
-  if (bossType === 'frost_warden') scatterFrostIceTiles(state, chamberOfTile(tx, ty));
+  if (bossType === 'frost_warden' && !state.saturn) scatterFrostIceTiles(state, chamberOfTile(tx, ty));
   if (bossType === 'blind_prayer') state.enemies[state.enemies.length - 1].prayer = createPrayerAbilities();
   if (bossType === 'fiery_king') state.enemies[state.enemies.length - 1].king = { untouchedTicks: 0, arenaWindupTicks: 0 };
   if (bossType === 'sea_chanter') state.enemies[state.enemies.length - 1].sea = createSeaChanterAbilities();
@@ -4874,7 +5089,7 @@ export function godSpawnBoss(state: GameState, bossType: BossType) {
 }
 
 export function useSpecialSkill(state: GameState): boolean {
-  if(state.gamePhase!=='playing')return false;
+  if(state.gamePhase!=='playing'||state.playerFrozenTicks>0)return false;
   if(!state.specialSkill){playCelestialSound('empty');return false;}
   if(state.specialLockTicks>0)return false; // a skill just earned from the previous cast's kill is kept, not fired by a repeat press
   const kind = state.specialSkill;
@@ -4882,11 +5097,12 @@ export function useSpecialSkill(state: GameState): boolean {
   if(kind === 'fiery_king') playCelestialSound('solar_swoosh');
   if(kind === 'storm_reaper') playCelestialSound('jupiter_shot');
   if(kind === 'storm_reaper') {
-    try {const sound=new Audio('/sounds/bossQueenAttack1.mp3');sound.volume=.55*ATTACK_SFX_VOLUME;sound.loop=false;sound.play().catch(()=>{});} catch {}
+    try {const sound=gameAudio('/sounds/bossQueenAttack1.mp3', 'attack');sound.volume=.55*ATTACK_SFX_VOLUME;sound.loop=false;sound.play().catch(()=>{});} catch {}
   }
   if(kind === 'sea_chanter') playCelestialSound('neptune_electric');
   if(kind === 'astral_twins') playCelestialSound('binary_reach');
   // Consume before resolving kills so a newly earned reward is never erased.
+  blessingAttack(state,'special');
   state.specialSkill = null;
   if (!state.trial) state.specialLockTicks = SPECIAL_RECAST_LOCK;
   state.playerCastTicks = 24; state.playerCastKind = kind;
@@ -4918,7 +5134,7 @@ export function useSpecialSkill(state: GameState): boolean {
   }
   if (kind === 'blind_prayer') {
     playSFX_powerUp();
-    state.starEnergy=0;state.stellarPowerBonusTicks=0;state.poweredTicks=Math.max(state.poweredTicks,SPECIAL_PRAYER_DURATION+60*constellationBonus(state,'power'));
+    state.starEnergy=0;state.stellarPowerBonusTicks=0;state.poweredTicks=Math.max(state.poweredTicks,SPECIAL_PRAYER_DURATION+60*constellationBonus(state,'power')+(hasBlessing(state,'blind_prayer')?60:0));
     state.laserCooldown=0;state.bulletCooldown=0;state.waveCooldown=0;
     state.bombCooldown=0;state.speedCooldown=0;
     grantInstantSpeedBoost(state, false);return true;
@@ -4936,8 +5152,8 @@ export function useSpecialSkill(state: GameState): boolean {
   }
   if (kind === 'frost_warden') {
     const shield = SPECIAL_WARDEN_SHIELD + SPECIAL_SUSTAIN_PER_STAGE * skillStage(state); // grows with the stage, up to the cap
-    state.playerShieldHP = Math.max(state.playerShieldHP, shield);
-    state.rubyShieldHP = Math.max(state.rubyShieldHP, shield);
+    if (state.saturn) { grantSaturnShield(state, 'player', shield); grantSaturnShield(state, 'ruby', shield); }
+    else { state.playerShieldHP = Math.max(state.playerShieldHP, shield); state.rubyShieldHP = Math.max(state.rubyShieldHP, shield); }
     state.playerSaturnShield=true;state.rubySaturnShield=true;
     showRewardEffect(state, 'player', 'shield'); showRewardEffect(state, 'ruby', 'shield');
     return true;
@@ -4954,7 +5170,7 @@ export function useSpecialSkill(state: GameState): boolean {
     if(kind==='storm_reaper')target.stormSlowUntilTick=state.gameTick+SPECIAL_REAPER_SLOW_TICKS;
     const damage = state.jupiter && kind === 'storm_reaper' && target.id === state.jupiter.bossId ? JUPITER.phaseHP * JUPITER.celestialShare : state.sun && kind === 'fiery_king' && target.id === state.sun.bossId ? SUN.phaseHP * SUN.solarShare : isBossType(target.type) ? target.maxHp * cfg.bossDamage : normalDamage;
     if (state.sun && kind === 'fiery_king' && target.type === 'cinder_wisp') target.hp = 0;
-    else damageEnemy(state, target, damage, 'special');
+    else damageEnemy(state, target, damage, 'special',4);
   }
   if (state.sun && kind === 'fiery_king') defuseSunFlare(state); // on the Sun, Solar Flare also stops a pending room flare
   if (kind === 'fiery_king') {
@@ -4979,9 +5195,11 @@ function fireBulletFrom(state: GameState, tileX: number, tileY: number, x: numbe
   const maxRange = powered ? LASER_RANGE_PWR : LASER_RANGE;
   let bestDist = maxRange + 3.5; // +3.5 because we added 3.5 to the actual range in the check
   let targetE = null;
+  const targets:Enemy[]=[];
   for (const e of state.enemies) {
-    if (isSeaChanterDiving(e) || e.twin?.downedTicks || e.type === 'fish_blue' || e.type === 'fish_red' || e.type === 'lifebloom') continue;
+    if (e.hp<=0 || isSeaChanterDiving(e) || e.twin?.downedTicks || e.type === 'fish_blue' || e.type === 'fish_red' || e.type === 'lifebloom') continue;
     const dist = tileEuclidDist(e.tileX, e.tileY, tileX, tileY);
+    if(dist<maxRange+3.5)targets.push(e);
     if (dist < bestDist) {
       bestDist = dist;
       targetE = e;
@@ -5006,19 +5224,31 @@ function fireBulletFrom(state: GameState, tileX: number, tileY: number, x: numbe
   }
 
   if(state.constellations.includes('twinShot')) {
-    const len=Math.hypot(dx,dy)||1,ox=-dy/len*.14,oy=dx/len*.14;
-    for(const side of [-1,1])state.laserBullets.push({x:x+ox*side,y:y+oy*side,dx,dy,powered,ticks:0,mirror,damageScale:.6});
+    targets.sort((a,b)=>tileEuclidDist(a.tileX,a.tileY,tileX,tileY)-tileEuclidDist(b.tileX,b.tileY,tileX,tileY));
+    for(let i=0;i<2;i++){
+      const target=targets[i]??targets[0],other=targets.length>1?targets[1-i]:undefined;
+      let shotX=dx,shotY=dy;
+      if(target){const rx=target.tileX-tileX,ry=target.tileY-tileY,len=Math.hypot(rx,ry)||1;shotX=rx/len*BULLET_SPEED;shotY=ry/len*BULLET_SPEED;}
+      const len=Math.hypot(shotX,shotY)||1,side=i?1:-1;
+      state.laserBullets.push({x:x-shotY/len*.14*side,y:y+shotX/len*.14*side,dx:shotX,dy:shotY,powered,ticks:0,mirror,damageScale:.6,avoidEnemyId:other?.id});
+    }
   } else state.laserBullets.push({ x, y, dx, dy, powered, ticks: 0, mirror });
 }
 
 export function useBullet(state: GameState) {
-  if (state.gamePhase !== 'playing') return;
+  if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
+  if (cancelSnowball(state)) return;
   if (state.bulletCooldown > 0) return;
+  const firstBullet=state.laserBullets.length;
+  blessingAttack(state,'bullet');
   const powered = checkAndConsumePower(state);
-  
+
   fireBulletFrom(state, state.playerTileX, state.playerTileY, state.playerX / TILE_SIZE, state.playerY / TILE_SIZE, powered, false);
   const twin = getMirrorTwinTile(state);
   if (twin) fireBulletFrom(state, twin.tileX, twin.tileY, twin.tileX + .5, twin.tileY + .5, powered, true);
+  const copy=rubyBlessingCopy(state);
+  if(copy){const first=state.laserBullets.length;fireBulletFrom(state,copy.tileX,copy.tileY,copy.tileX+.5,copy.tileY+.5,powered,false);for(const bullet of state.laserBullets.slice(first)){bullet.damageScale=(bullet.damageScale??1)*copy.mult;bullet.blessingCopy=true;}}
+  for(const bullet of state.laserBullets.slice(firstBullet))bullet.solar=solarBlessingReady(state);
   state.bulletCooldown = BULLET_COOLDOWN;
   playSFX_laserBullet();
 }

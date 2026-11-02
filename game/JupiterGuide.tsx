@@ -1,19 +1,20 @@
 'use client';
+import {bindingLabel} from './controls';
 import { useEffect, useRef } from 'react';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
-import { drawStormShard, drawChargedTile, drawReaperCharge, drawVoltFence, drawMiniStorm } from './jupiter-art';
+import { drawStormShard, drawPursuitFragment, drawChargedTile, drawReaperCharge, drawVoltFence, drawMiniStorm } from './jupiter-art';
 import { drawGuidePlayer, drawGuideRuby } from './guide-art';
 
 const cards = [
   ['THE HUNT', 'Survive two pursuits, then race him for Storm Shards.'],
   ['CHARGING', 'He takes less damage while charging. Leave his room before the countdown ends—it will explode.'],
   ['STORM PURSUIT', 'He takes less damage. The room where pursuit begins stays safe. Storms hurt you and Ruby elsewhere.'],
-  ['SPECIAL SKILL (PRESS MIDDLE CLICK OR C)', 'Place an electric fence and dash forward. An enemy crossing it takes damage and slows down, and you heal.'],
+  ['MAP SPECIAL SKILL', 'Place an electric fence and dash forward. An enemy crossing it takes damage and slows down, and you heal.'],
   ['TIME YOUR GUARD', 'Casting Volt Fence briefly protects you and Ruby. Time it before a heavy hit.'],
   ['DRAIN HIS ENERGY', 'His energy drains over time. Hit him to drain it faster. A violet bar marks the second pursuit.'],
   ['CHARGED FLOOR', 'Blue tiles slow you. During pursuit, they also restore his energy.'],
   ['SHARD RACE', 'He takes more damage. Collect Storm Shards to strike him with lightning. Shards he collects heal him. The race ends when no shards remain.'],
-  ['PHASE 2 · PURSUIT FRAGMENTS', 'Collect fragments before they charge up, or he gains extra speed. Collecting one strikes him with lightning and stops the boost.'],
+  ['PHASE 2 · STORM WISPS', 'His overdrive bar fills during pursuit. When full, he gains speed. Collect a Storm Wisp to strike him and reset it. Storm Wisps reappear in the same room.'],
   ['PHASE 3 · MINI STORMS', 'Roaming storms hurt and knock you back. During Shard Race, they chase you when you get close.'],
 ] as const;
 export default function JupiterGuide({drawBoss,drawCelestial}:{drawBoss:(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,exposed?:boolean,charge?:number)=>void;drawCelestial:CelestialGuidePainter}) {
@@ -22,7 +23,7 @@ export default function JupiterGuide({drawBoss,drawCelestial}:{drawBoss:(ctx:Can
     refs.current.forEach((canvas,i)=>{const ctx=canvas?.getContext('2d');if(!ctx)return;
       ctx.clearRect(0,0,200,120);ctx.fillStyle=i===2?'#0b2430':'#211b24';ctx.fillRect(0,0,200,120);
       if(i===9){drawMiniStorm(ctx,100+Math.sin(tick*.025)*45,60,tick);drawGuidePlayer(ctx,155,83);}
-      else if(i===8){drawStormShard(ctx,100,53,tick,0);for(let k=0;k<8;k++){ctx.fillStyle=k<8-Math.floor(tick%240/30)?'#c5a4ff':'#392d51';ctx.fillRect(62+k*10,95,7,4);}}
+      else if(i===8){drawPursuitFragment(ctx,100,53,tick);}
       else if(i===3){drawVoltFence(ctx,100,60,true,40,tick);drawGuidePlayer(ctx,143+Math.sin(tick*.025)*16,60);}
       else if(i===4){
         ctx.strokeStyle='#b8ffe8';ctx.lineWidth=3;
@@ -45,7 +46,7 @@ export default function JupiterGuide({drawBoss,drawCelestial}:{drawBoss:(ctx:Can
       <CelestialSkillGuideCard name="Jupiter Storm" description="Lightning damages and briefly slows nearby enemies." color="#ffad4d" draw={drawCelestial}/>
       {cards.map(([title,text],i)=><article className="rs-nep-card" key={title} style={{borderColor:'#8ce8ce55'}}>
         <canvas ref={el=>{refs.current[i]=el;}} width={200} height={120} aria-hidden="true"/>
-        <h5 style={{color:i===3?'#9affe4':'#edc490'}}>{title}</h5><p>{text}</p>
+        <h5 style={{color:i===3?'#9affe4':'#edc490'}}>{title==='MAP SPECIAL SKILL'?'MAP SPECIAL SKILL ('+bindingLabel('mapSkill')+')':title}</h5><p>{text}</p>
       </article>)}
     </div></div>;
 }

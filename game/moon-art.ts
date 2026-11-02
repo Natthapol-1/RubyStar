@@ -1,3 +1,4 @@
+import { drawEnemyHealthBar } from './enemy-health-art';
 import { TILE_SIZE, CHAMBER_BOUNDS, MAP_COLS, T_WALL, T_FLOOR, chamberOfTile } from './constants';
 import type { Enemy, GameState } from './engine';
 
@@ -75,10 +76,17 @@ export function drawMoonBackdrop(ctx: CanvasRenderingContext2D, viewW: number, v
       const base = up ? viewH + 12 - camY * par : -12 - camY * par;
       const pulse = .55 + .45 * Math.sin(tick * .02 + i * 1.3 + layer);
       ctx.globalAlpha = layer ? .95 : .6;
+      // Parallax moves the tip, but the crystal's stem must remain rooted beyond the viewport edge.
+      const rootWidth=Math.max(4,Math.round(w/2)*2),rootTop=up?base:-12,rootHeight=up?Math.max(0,viewH+12-base):Math.max(0,base+12);
+      if(rootHeight>0){
+        block(ctx,x-rootWidth/2,rootTop,rootWidth,rootHeight,layer?'#120a26':'#1b1238');
+        block(ctx,x-rootWidth/2,rootTop,Math.max(2,rootWidth*.3),rootHeight,layer?'#2a1c52':'#2b1f50');
+      }
       spire(ctx, x, base, w, h, up ? 1 : -1, layer ? '#120a26' : '#1b1238', layer ? '#2a1c52' : '#2b1f50', layer ? (i % 3 ? '#de9cff' : ICE) : '#8f7dff', layer ? pulse : .5);
       if (layer) { // a pale vein running up the middle
         ctx.globalAlpha = .18 * pulse; ctx.fillStyle = i % 3 ? '#b98cff' : ICE;
-        const vh = h * .7; ctx.fillRect(Math.round(x - 1), Math.round(up ? base - vh : base), 2, Math.round(vh));
+        const vh=h*.7,veinTop=up?base-vh:Math.min(base,-12),veinBottom=up?Math.max(base,viewH+12):base+vh;
+        ctx.fillRect(Math.round(x-1),Math.round(veinTop),2,Math.round(veinBottom-veinTop));
       }
     }
   }
@@ -350,8 +358,8 @@ export function drawMoonEffects(ctx: CanvasRenderingContext2D, state: Readonly<G
 // Moon aliens. Mirror mite: a small blocky crystal bug with a mirror-bright shell (pale rim, dark inset, a glint
 // sliding across its face), two pale eyes and three pairs of stepped legs that scuttle as it moves.
 export function drawMoonUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number): boolean {
-  if (e.type === 'moon_shade') { drawShade(ctx, e, sx, sy, tick); return true; }
-  if (e.type === 'moon_mimic') { drawMimic(ctx, e, sx, sy, tick); return true; }
+  if (e.type === 'moon_shade') { drawShade(ctx, e, sx, sy, tick); drawEnemyHealthBar(ctx,e,sx,sy); return true; }
+  if (e.type === 'moon_mimic') { drawMimic(ctx, e, sx, sy, tick); drawEnemyHealthBar(ctx,e,sx,sy); return true; }
   if (e.type !== 'mirror_mite') return false;
   const flash = e.flashTicks > 0, step = Math.floor(tick / 6 + e.id) % 2, attack = e.attackTimer > 0 && e.attackTimer <= 12;
   ctx.save(); ctx.translate(Math.round(sx), Math.round(sy)); ctx.shadowBlur = 0;
@@ -378,6 +386,7 @@ export function drawMoonUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, 
   ctx.fillStyle = flash ? '#ffffff' : '#e8e0ff'; tri(ctx, -3, -h, 3, -h, 0, -h - 7);
   ctx.fillStyle = flash ? '#ffffff' : '#a98cff'; tri(ctx, 0, -h, 3, -h, 0, -h - 7);
   ctx.restore();
+  drawEnemyHealthBar(ctx,e,sx,sy);
   return true;
 }
 

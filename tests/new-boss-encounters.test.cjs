@@ -50,7 +50,7 @@ test('Aegis reflects player-dealt damage at one hundred percent without a cap or
 test('reflection preserves fractional bullet damage, honors protection and stops when the core is exposed', () => {
   const s = fresh('aegis_sentinel'), boss = s.enemies[0]; s.godMode = false;
   hit(s, boss, c.BULLET_DMG); close(s.playerHP, 100 - c.BULLET_DMG);
-  s.constellations.push('playerGuard'); hit(s, boss, c.LASER_DMG); close(s.playerHP, 100 - c.BULLET_DMG - c.LASER_DMG * .9);
+  s.constellations.push('playerGuard'); hit(s, boss, c.LASER_DMG); close(s.playerHP, 100 - c.BULLET_DMG - c.LASER_DMG * .85);
   s.godMode = true; const before = s.playerHP; hit(s, boss, 10); close(s.playerHP, before);
   s.godMode = false; s.immortal = true; s.playerHP = 1; hit(s, boss, 10); assert.equal(s.playerHP, 1);
   s.immortal = false; s.playerHP = 100;

@@ -9,6 +9,7 @@ Ruby Star is a top-down space-station survival/defense game. `/` is the mode lob
 | Controls, combat, Ruby, energy, teleport, meteors, difficulty | [Gameplay](GAMEPLAY.md) |
 | Occasional black holes, shooting stars, eclipses and Supernovas | [Space events](EVENTS.md) |
 | Normal aliens, bosses, targeting, shields and defeat rewards | [Enemies and bosses](ENEMIES.md) |
+| Build comparison targets and activation tradeoffs | [Build balance](BALANCE.md) |
 | Constellation run upgrades, Ascension and celestial skills | [Skills and upgrades](SKILLS.md) |
 | Art direction, palettes, models, effects, battlefield and UI | [Visual style](VISUALS.md) |
 | Sound assets, layers, mix and loop lifecycle | [Audio](AUDIO.md) |
@@ -16,7 +17,9 @@ Ruby Star is a top-down space-station survival/defense game. `/` is the mode lob
 | Jupiter challenge: charge, storm pursuit, energy, Volt Fence and exposed escape | [Jupiter](JUPITER.md) |
 | Neptune challenge: phases, dives, fish, tides, Trident | [Neptune](NEPTUNE.md) |
 | Gaia challenge: overgrowth, Sunfire, Sunstones, plants and aliens | [Gaia](GAIA.md) |
+| Saturn challenge: stacking shields, blizzard, Snowball, frozen floor and aliens | [Saturn](SATURN.md) |
 | Moon challenge: illusions, reveal, shattering clones, mirror mites, Moon Mark, crystal cavern | [Moon](MOON.md) |
+| Windows builds, saves, offline support and testing | [Windows desktop](DESKTOP.md) |
 | Code map, implementation constraints, checks and preview tools | [Development](DEVELOPMENT.md) |
 
 ## Development direction
@@ -24,7 +27,7 @@ Ruby Star is a top-down space-station survival/defense game. `/` is the mode lob
 - Keep the defense loop centered on protecting both player and Ruby. Carrying, teleporting, healing, meteor timing and enemy priorities should remain meaningful choices.
 - Style is **blocky neon-vector** ([Visual style](VISUALS.md#style-blocky-neon-vector)): match the luminous square player and full-energy aura with crisp rectangular silhouettes, dark insets, pale cores and selective glow; moving parts rotate as whole solid shapes, never as pixel staircases. Keep each alien, boss and celestial effect distinct.
 - Target desktop only; do not implement or verify mobile unless explicitly asked.
-- Playable Celestial Challenges: [Sun](SUN.md), [Neptune](NEPTUNE.md), [Gaia](GAIA.md), [Moon](MOON.md) and [Jupiter](JUPITER.md). Jupiter adds pursuit fragments in phase 2 and roaming mini storms in phase 3. [Saturn](SATURN.md) and [Singularity](SINGULARITY.md) are available as map previews with existing guardians; other worlds are locked on the star map.
+- Playable Celestial Challenges: [Sun](SUN.md), [Neptune](NEPTUNE.md), [Gaia](GAIA.md), [Moon](MOON.md), [Jupiter](JUPITER.md) and [Saturn](SATURN.md). Jupiter adds Storm Wisps in phase 2 and roaming mini storms in phase 3. [Singularity](SINGULARITY.md) is available as a map preview with its existing guardian; other worlds are locked on the star map.
 - New modes get their own route and a lobby card. **Celestial Challenge** has its star map and routes; planned: one mode per celestial boss with a long multi-phase fight against that boss, plus its own non-boss aliens and a unique environment/map mechanic.
 - Keep player-facing rules short and clear; technical detail belongs in these references.
 - Read the relevant source before editing. Documentation describes intended current behavior; resolve discrepancies against executable code and meaningful tests, then correct the documentation.
