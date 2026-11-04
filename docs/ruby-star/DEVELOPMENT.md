@@ -13,6 +13,7 @@ Ruby Star is a real-time top-down survival/defense game in Arkade, a Next.js 15 
 | `game/events.ts` | Minor-event scheduling, gravity, star landing/pickup and Eclipse |
 | `game/encounter-art.ts` | Approved Sentinel/pylon/twin sprites, attack/revival effects and floor/chamber warnings |
 | `game/engine.ts` | Pure mutable game state, 60Hz tick, movement/pathfinding, attacks, damage, rewards, spawning, hazards, audio |
+| `game/aliens.ts` | Regular alien AI with its own behaviour (Sniper, Lancer, Healer, Charger, Ghost, Shielder), the shared `stepEnemy`/`walkPath` walking helpers and Lancer beam geometry; the engine calls `updateRegularAlien`. Ordinary melee chasers keep the shared chase in `engine.ts` |
 | `game/neptune.ts`, `game/gaia.ts`, `game/moon.ts`, `game/sun.ts`, `game/jupiter.ts` | Challenge logic and state types (`NeptuneState`, `GaiaState`, `MoonState`, `SunState`, `JupiterState`); the core engine calls in through `updateNeptune`/`updateGaia`/`updateJupiter` and exported helpers, and the modules import engine helpers back |
 | `game/neptune-art.ts` | Neptune challenge art: fish, stingers, jellyfish, sharks, water clones, water balls, tides, Trident (sky laser) |
 | `game/jupiter-art.ts`, `game/JupiterGuide.tsx`, `game/VoltFenceStatus.tsx` | Jupiter warm/storm palette, capacitor station, persistent electric fences, room hazards, charge/exposure art, rule sheet and C HUD |
@@ -38,15 +39,15 @@ Ruby Star is a real-time top-down survival/defense game in Arkade, a Next.js 15 
 | `scripts/preview-*.cjs` | Render actual game drawing functions to PNG; no replacement mockup artwork |
 | `scripts/check-ruby-*.cjs`, `scripts/check-charge-cycle.cjs` | Browser UI and repeated-charge checks |
 | `public/sounds/`, `public/sounds/celestial/` | Audio assets; preserve the existing layered mix |
-| `docs/visual-reference/` | Source-rendered visual references |
-| `docs/boss-remodels/` | Archived boss remodels (code, renders and notes), not used by the game |
+| `docs/ruby-star/visual-reference/` | Source-rendered visual references |
+| `docs/ruby-star/boss-remodels/` | Archived boss remodels (code, renders and notes), not used by the game |
 
 The simulation uses approximately 60 ticks/second, independent of monitor refresh rate. Positions have both tile coordinates and pixel interpolation. One tile = 48px; map = 51×51 tiles. Walls control pathfinding/collision. Prefer engine changes for gameplay and renderer changes for cosmetics.
 
 ## Implementation rules
 
 - Inspect relevant current source and local changes before editing; preserve unrelated work.
-- Keep gameplay in `engine.ts` and rendering/input in `RubyStarGame.tsx`. Each Celestial Challenge keeps its logic in its own module (`neptune.ts`, `gaia.ts`, `moon.ts`, `sun.ts`); give new challenges their own module too, leaving only short hooks in `engine.ts`. The modules and engine import each other, so they must not use each other's values at module load time, only inside functions. The shared room picker for full-charge room strikes (`chooseSkyLaser`, `cancelSkyLaser`) stays in `engine.ts`. Tests reach private engine helpers by appending an export to `engine.ts` when transpiling it, so moved code is imported from its own module. Cosmetic edits must not silently change damage, range, timing, collision, targeting or audio.
+- Keep gameplay in `engine.ts` and rendering/input in `RubyStarGame.tsx`. Each Celestial Challenge keeps its logic in its own module (`neptune.ts`, `gaia.ts`, `moon.ts`, `sun.ts`); give new challenges their own module too, leaving only short hooks in `engine.ts`. New regular aliens with their own behaviour go in `aliens.ts` and reuse `stepEnemy`/`walkPath` instead of copying movement code. The modules and engine import each other, so they must not use each other's values at module load time, only inside functions. The shared room picker for full-charge room strikes (`chooseSkyLaser`, `cancelSkyLaser`) stays in `engine.ts`. Tests reach private engine helpers by appending an export to `engine.ts` when transpiling it, so moved code is imported from its own module. Cosmetic edits must not silently change damage, range, timing, collision, targeting or audio.
 - Treat game state other than `playing` as paused for simulation and ability actions. Pause/stop persistent audio appropriately too. Both teleport and Constellation choices pause the game. Constellations are one-time choices; exclude owned entries, offer the final single entry, and stop when exhausted.
 - Before every visual change, inspect the closest existing implementation and source-rendered reference. Reuse established visual grammar and shared painters; a reference is a style guide, not permission to duplicate another unit's identity.
 - Keep tile/pixel interpolation synchronized after knockback, pull, teleport or interrupted charge. Share field bounds between collision and drawing.
@@ -62,7 +63,7 @@ Aegis constructs are stationary `Enemy` objects with `constructOwnerId`; they us
 
 ## God panel controls
 
-The panel sits at the upper left of the battlefield, opposite the minimap, with scrollable controls.
+The panel sits at the upper left of the battlefield, opposite the minimap, with scrollable controls. A −/+ button beside the GOD MODE title collapses it to a 180px title bar and expands it again; the choice is remembered in `localStorage` (`rubyStar.godCollapsed`).
 
 `Stage +1` calls `godAdvanceStage`: increment the defeated-boss count once, update difficulty immediately, offer any third-defeat Constellation reward, and announce Ascension when crossing ten defeats. It preserves the live boss, HP, resources and celestial inventory; it does not simulate a boss kill or grant kill rewards. Only available while playing. `RESET` uses the same restart handler as PLAY AGAIN: starts at Stage 0, clears run upgrades/skills/hazards and input, and retains Immortal, Invincible, No Mobs and No Boss debug toggles. Stage +1, STAGE 20 and RESET share one compact row. STAGE 20 preserves the current encounter and resources, jumps difficulty to the late-run tier and offers the stage-20 blessing once, without guardian kill credit or retroactive constellation picks; reached stages still update the development profile for Ascension testing. The panel sizes its text controls consistently, retains 40px icon buttons and scales to fit the available height without scrolling. There is no separate Ascension button; advance stages to reach its unlock. Immortal and Invincible share a protection row; Full HP and Full Energy share a refill row. Immortal, Invincible, No Mobs and No Boss use color for visible toggle state, with `aria-pressed` for accessibility and no ON/OFF suffix. Four individual event buttons in a two-column grid trigger warned events; see [Space events](EVENTS.md).
 
@@ -121,7 +122,7 @@ Saturn uses `saturn.ts` for encounter state, Snowball movement, barrier, global 
 
 `node --test tests/backdrop-parallax.test.cjs` raster-checks Gaia, Moon and Neptune across former vertical wrap boundaries, negative/zero camera offsets, and Neptune’s depth-lighting midpoint.
 
-Singularity scenery: `singularity-art.ts`, `SingularityGuide.tsx`, and `node scripts/preview-singularity.cjs docs/visual-reference`. It uses `trial.mapOnly` to keep automatic map hazards off while showing its existing guardian.
+Singularity scenery: `singularity-art.ts`, `SingularityGuide.tsx`, and `node scripts/preview-singularity.cjs docs/ruby-star/visual-reference`. It uses `trial.mapOnly` to keep automatic map hazards off while showing its existing guardian.
 
 The teleport meteor browser check also verifies rules hide both banners, selectors do not cover the rules sheet, and Gaia/Neptune Map Special Skill room selectors show next and active countdowns.
 

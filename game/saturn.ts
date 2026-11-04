@@ -1,4 +1,4 @@
-import { CHAMBER_SPAWN_TILES, ENEMY_CONFIGS, FROST_FREEZE_DURATION, FROST_RELOCATE_INTERVAL, MAP_COLS, MAP_ROWS, PLAYER_MAX_HP, RUBY_MAX_HP, TILE_SIZE, chamberOfTile } from './constants';
+import { CHAMBER_SPAWN_TILES, ENEMY_CONFIGS, MOVE_SPEED_MULT, FROST_FREEZE_DURATION, FROST_RELOCATE_INTERVAL, MAP_COLS, MAP_ROWS, PLAYER_MAX_HP, RUBY_MAX_HP, TILE_SIZE, chamberOfTile } from './constants';
 import { playUiSfx } from './ui-sfx';
 import { bfs, createEncounterEnemy, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, healCore, relocateFrostWarden, isFloorTile, killEnemy, shovePlayerFromEnemy, playAudioOneShot, playSFX_alienShoot, playSFX_placeBomb, playSFX_objectBreak, type Enemy, type GameState } from './engine';
 
@@ -332,7 +332,7 @@ export function updateRimeBrute(s:GameState,e:Enemy){
     return;
   }
   if(e.tileX!==e.targetTileX||e.tileY!==e.targetTileY){
-    e.stepProgress=Math.min(TILE_SIZE,e.stepProgress+ENEMY_CONFIGS.rime_brute.speed);
+    e.stepProgress=Math.min(TILE_SIZE,e.stepProgress+ENEMY_CONFIGS.rime_brute.speed*MOVE_SPEED_MULT);
     e.x=(e.tileX+.5)*TILE_SIZE+(e.targetTileX-e.tileX)*e.stepProgress;e.y=(e.tileY+.5)*TILE_SIZE+(e.targetTileY-e.tileY)*e.stepProgress;
     if(e.stepProgress>=TILE_SIZE){e.tileX=e.targetTileX;e.tileY=e.targetTileY;e.stepProgress=0;}
     return;
@@ -373,7 +373,7 @@ export function updateFrostRaider(s: GameState, e: Enemy) {
     return;
   }
   if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) {
-    e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + 1.5);
+    e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + 1.5 * MOVE_SPEED_MULT);
     e.x = (e.tileX + .5) * TILE_SIZE + (e.targetTileX - e.tileX) * e.stepProgress;
     e.y = (e.tileY + .5) * TILE_SIZE + (e.targetTileY - e.tileY) * e.stepProgress;
     if (e.stepProgress >= TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.stepProgress = 0; }

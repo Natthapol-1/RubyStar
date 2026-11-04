@@ -17,7 +17,7 @@ On Windows, a new profile can enter only First Orbit. Completing its final step 
 
 The Sun, Neptune, Gaia, Moon, Jupiter and Saturn challenges open a rule sheet on entry (their own; see [Sun](SUN.md), [Neptune](NEPTUNE.md), [Gaia](GAIA.md), [Moon](MOON.md), [Jupiter](JUPITER.md) and [Saturn](SATURN.md)); elsewhere the HUD RULES button opens it. Music starts on entry, or on the first key/click if the browser blocks autoplay, unless the HUD MUSIC button has turned it off (see [Audio](AUDIO.md#music-toggle)).
 
-**Desktop records and pause.** The separate top-right guidebook icon in the lobby groups aliens, bosses, constellations, gems, celestial skills, and worlds. Recorded entries show their illustration and a short description; undiscovered entries are dimmed. The star map labels cleared worlds, and a first supported-world clear announces its gemstone. Map previews do not count as clears. Pause/settings and resumable runs are described in [Windows desktop](DESKTOP.md).
+**Desktop records and pause.** The separate top-right guidebook icon in the lobby groups aliens, bosses, constellations, gems, celestial skills, and worlds. Recorded entries show their illustration and a short description; undiscovered entries are dimmed. Its Aliens list, like the Endless rule sheet, holds only Endless aliens (both read `aliens` in `guide-data.ts`); challenge-only aliens appear on their world's rule sheet. The star map labels cleared worlds, and a first supported-world clear announces its gemstone. Map previews do not count as clears. Pause/settings and resumable runs are described in [Windows desktop](DESKTOP.md).
 
 **Celestial Challenge star map.** Ten blocky celestial bodies on a dashed route (data in `game/trials.ts`): The Sun (Fiery King), Venus (Aegis Sentinel), Gaia (Thorn Weaver), The Moon (Shadow Queen), Jupiter (Storm Reaper), Saturn (Frost Warden), Neptune (Sea Chanter), Sirius (Blind Prayer), Binary Star (Astral Twins) and The Singularity (Soul Devourer). Only bodies marked `ready` in `trials.ts` are playable (currently Sun, Neptune, Gaia, the Moon, Jupiter and Saturn, plus the Singularity map preview); unfinished bodies are greyed out with a lock, and clicking one plays the denied sound and shows a brief "<BODY> · CHALLENGE NOT READY" toast. A first click on a different playable body or an arrow key selects it (pulsing corner frame); the panel shows CHALLENGE: <BODY>, guardian boss and celestial skill. Click the selected world again, or use BEGIN CHALLENGE / EXPLORE MAP below, to enter it. Pointer focus never changes selection before a click is processed, so the first click on a different world only shows its details. Keyboard activation works on world and action buttons. EXIT returns to the lobby. Planned: each trial is one long multi-phase fight against its guardian with its own non-boss aliens and a unique environment mechanic.
 
@@ -50,7 +50,7 @@ K/L mirror mouse hold/release behavior, including charge cooldowns and automatic
 
 Mobile uses joystick and separate ability buttons, including HEAL and TP. Healing and teleport use separate controls.
 
-Player base speed is 4.5px/tick. Carrying Ruby multiplies normal movement by **0.6**. An active speed burst bypasses that carry penalty. Placed Ruby can be attacked; carried Ruby cannot be directly damaged. Its model takes visual priority over a held celestial suit and speed colors, without consuming the held skill.
+Player base speed is 4.5px/tick. Every mode multiplies all walking movement, player (including carrying, boosts and knockback) and every alien and boss, by `MOVE_SPEED_MULT` (1.1); listed speeds are before it. Attack rolls (Snowball, Snowbowl), projectiles and hazards are unchanged. Carrying Ruby multiplies normal movement by **0.6**. An active speed burst bypasses that carry penalty. Placed Ruby can be attacked; carried Ruby cannot be directly damaged. Its model takes visual priority over a held celestial suit and speed colors, without consuming the held skill.
 
 Manual healing: +5 Ruby HP and +3 player HP, cooldown 18 ticks, within 3 tiles of a placed Ruby or while carrying. No enemy may be within 6 tiles of the player. Player healing modifiers still apply. Healing is disabled during teleport selection and after game over.
 
@@ -64,15 +64,15 @@ The following values are the base behavior before [Constellation upgrades](SKILL
 
 | Ability | Normal | Powered | Cooldown |
 | --- | --- | --- | --- |
-| Laser | 2.1 damage, 8-tile range | 6.3 damage, 14 tiles | 40 ticks |
+| Laser | 2.268 damage, 8-tile range | 6.804 damage, 14 tiles | 40 ticks |
 | Bullet | 0.35 damage | 1.05 damage | 11 ticks |
 | Charged wave | 8 damage, 6-tile radius, 3-tile push | 14 damage, 10-tile radius, 6-tile push | 120 ticks |
 | Speed burst | 2.2× speed for 120 ticks | 240 ticks | 270 ticks |
 | Bomb | 45 damage, 4-tile radius | 90 damage, 5-tile radius | 300 ticks after detonation |
 
-Bullet aiming/range uses the engine's nearest eligible target and travel allowance; diving Chanter is excluded from bullet targeting/collisions. Laser/wave/bomb and area attacks can still hit her. A bomb damages its user for 35% of its damage if they remain in range; it never damages Ruby. A placed bomb remains placed when cooldowns are refreshed.
+Bullet aiming/range uses the engine's nearest eligible target and travel allowance; diving Chanter is excluded from bullet targeting/collisions. Laser/wave/bomb and area attacks can still hit her. Every 20th bullet shot (`BULLET_HEAVY_EVERY`, counted per run) is heavy: on hit it deals ×1.2 damage and pushes a regular alien one tile along the shot; bosses take the bonus but are not pushed. Twin and Ruby copies of that shot are ordinary. A bomb damages its user for 35% of its damage if they remain in range; it never damages Ruby. A placed bomb remains placed when cooldowns are refreshed.
 
-Star gauge maximum is 100. Ordinary non-meteor kills give +5 energy and +5 player HP (Solar Flare kills give no energy, including their bomber cascades); Runner adds 8 more energy. Filling the gauge does **not** immediately spend it: the next supported ordinary ability consumes it and starts a 120-tick powered window plus a speed burst. All abilities used during that window are powered. Shooting Star adds two seconds to its next full-gauge activation; Sirius starts its own longer window.
+Star gauge maximum is 100. Ordinary non-meteor kills give +5 energy and +5 player HP (Solar Flare kills give no energy, including their bomber cascades); Charger adds 8 more energy. Filling the gauge does **not** immediately spend it: the next supported ordinary ability consumes it and starts a 120-tick powered window plus a speed burst. All abilities used during that window are powered. Shooting Star adds two seconds to its next full-gauge activation; Sirius starts its own longer window.
 
 Resources spawn about every 9.1 seconds, with up to five on the map. Heal shard: +33 player HP. Blue energy shard: +42 energy plus a free speed burst. Amounts clamp to maximums. Collecting resources and return effects must retain their existing crisp symbols.
 
@@ -89,7 +89,7 @@ Opening tiers follow elapsed unpaused gameplay time. Later tiers follow defeated
 | 2 | 25 seconds | 1 / 120 ticks (2s) | 11 | 1.0 | Armored, Healer |
 | 3 | 45 seconds | 1 / 100 ticks (1.67s) | 16 | 1.2 | Runner, Charger |
 | 4 | Stage 1: 1 boss defeated | 2 / 80 ticks (1.33s) | 18 | 1.3 | Sniper, Ghost, Shielder, Energy Leech |
-| 5 | Stage 2: 2 defeated | 2 / 65 ticks (1.08s) | 21 | 1.5 | Bomber, Splitter |
+| 5 | Stage 2: 2 defeated | 2 / 65 ticks (1.08s) | 21 | 1.5 | Bomber, Splitter, Lancer |
 | 6 | Stage 3: 3 defeated | 2 / 50 ticks (0.83s) | 25 | 1.7 | Same pool |
 | 7 | Stage 4+: 4 defeated | 3 / 38 ticks (0.63s) | 31 | 2.0 | Same pool; hardest regular tier |
 
@@ -100,6 +100,10 @@ Natural normal-enemy HP = `ceil(config.maxHp * tier.hpMult) * 1.1 * constellatio
 Meteors move clockwise: ALPHA → BETA → GAMMA → DELTA. In player-facing quick rules, simply say **“Meteors move clockwise.”** A chamber warns for 5 seconds. Between warnings, the timer is roughly 30s with ±2.5s jitter; warning time is additional.
 
 Impact deals 75 to player and placed Ruby in that chamber, clears unprotected regular aliens, and deals 75% max HP to bosses before Ascension or 45% afterward. Every Devourer body, copies included, takes 75% (45% after Ascension) of the original Devourer's spawn max HP, so a meteor usually wipes copies; a killed body still splits into its copies. A Frost-granted icy shield blocks meteor damage completely. Diving Chanter takes her usual 1.6× vulnerability. Regular meteor kills skip normal score/heal/energy/type rewards, except Leech's stored-energy refund. Boss full restoration/skill rewards still apply. Landing also starts a purely cosmetic one-second chamber explosion that pauses with gameplay.
+
+## Comets
+
+Endless Space and Ascension only (not the tutorial or challenges). Every 20–70 seconds of play (random, `COMET` in `constants.ts`), a 3×3 tile area inside the player's current room is marked; from a hallway the nearest room is used. One comet in five (`playerAimChance`) is instead centred exactly on the player's tile, even in a hallway. After a 2-second warning the comet lands and hits everything inside the area once: 25 to the player, 20 to a placed Ruby, 15 × the alien skill scale to regular aliens, and 8% of max HP to bosses and Aegis pylons (5% after Ascension). Shields and protections apply. Comet kills use meteor-style rewards. The next countdown starts at impact. Comets run independently of meteors and space events, and the God panel's COMET button starts one at once. Rule sheet: "Comets hit a small marked area in your room. Step out before they land."
 
 ## Occasional space events
 

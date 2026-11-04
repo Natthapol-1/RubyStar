@@ -10,14 +10,14 @@ Click, tap, keys 1/2/3, or focused-button Enter/Space selects. Keyboard focus st
 
 | Constellation / internal key | Effect |
 | --- | --- |
-| Dorado / `chargeField` | During an active Wave charge (after 200 ms), refresh a field beneath the player; it lingers 1.5s after charging stops |
-| Serpens / `deathField` | Alien defeats leave the same field for 4s; objectives, downed twins and unfinished Devourer families do not count |
+| Dorado / `chargeField` | During an active Wave charge (after 200 ms), refresh a field beneath the player; it lingers 3s after charging stops |
+| Serpens / `deathField` | Alien defeats leave the same field for 5.5s; objectives, downed twins and unfinished Devourer families do not count |
 | Vulpecula / `bombStun` | A bomb that damages HP stuns surviving regular aliens for 1.2s, bosses for 1s; shield-only hits do not stun |
 | Circinus / `bulletShield` | Eight direct bullet hits grant 4 player shield, capped at 12, with a 3s grant cooldown; preserves larger existing shields and does not shield Ruby |
 | Ophiuchus / `healing` | Manual healing recharges 50% faster: 12-tick cooldown rather than 18 |
 | Lyra / `laser` | Normal/powered laser damage ×1.2 |
 | Pegasus / `speed` | Movement ×1.08, including carrying and speed burst; forced knockback unchanged |
-| Aquarius / `energy` | Ordinary kill and blue-shard energy ×1.2, including Runner bonus; Leech stored-energy refunds are not multiplied |
+| Aquarius / `energy` | Ordinary kill and blue-shard energy ×1.2, including the Charger bonus; Leech stored-energy refunds are not multiplied |
 | Perseus / `bomb` | Normal/powered bomb radius +1 tile, including visible range and self-damage reach |
 | Orion / `bullets` | Normal/powered bullet damage ×1.25 |
 | Draco / `wave` | Normal/powered wave damage ×1.25 |
@@ -37,14 +37,14 @@ Click, tap, keys 1/2/3, or focused-button Enter/Space selects. Keyboard focus st
 
 | Sculptor / `wallSlam` | A direct Wave's knockback deals one extra 50% of that Wave's damage if a normal alien hits cover. No bonus on bosses or echoes; cover stays intact |
 | Columba / `rubyDefense` | Successfully restoring Ruby HP through manual healing stores one defensive Wave. When an enemy comes within 3 tiles of placed Ruby, it fires at 60% normal Wave radius and 50% normal Wave damage, with one tile of normal-alien push. Draco scales its damage; no echoes or on-cast procs. Stored charge travels with Ruby but cannot trigger while carried |
-| Reticulum / `laserWire` | Each Laser segment leaves a 5-second tripwire, armed after its 18-tick beam fades. Its first crossing enemy takes 75% of that segment’s damage and stops for 30 ticks (15 for bosses). Existing occupants must leave before retriggering. Wires from the two most recent accepted Laser casts can coexist; a third cast removes the oldest set without refreshing surviving lifetimes. Reflections and companion segments share their original cast slot; companion and reflected wires retain their reduced damage |
+| Reticulum / `laserWire` | A Laser hit (including reflections and twin/Ruby copies) stuns an ordinary alien for 24 ticks (0.4s) using the Vulpecula stop timer; that alien then cannot be stunned by Reticulum again for 120 ticks (2s). Bosses are immune. Stacks with the Lancer laser-stun reward by taking the longer stop (`RETICULUM`) |
 | Pyxis / `teleportDecoy` | Completed teleports leave one fragile decoy at the origin for up to 6 seconds. It draws ordinary aliens within 10 tiles and breaks on one connected hit. Bosses retain their usual targeting. The independent Lunar Echo remains intact; another teleport replaces the fragile decoy |
 | Caelum / `wallStep` | Each manual Speed Boost allows one immediate crossing of a single interior cover cell with open floor beyond, ending the boost. Cannot cross chamber boundaries, sealed hallways or thick walls. Cover remains intact and landing hazards still apply |
 | Ara / `bulletBurst` | A connected bullet hit, including a lethal hit, triggers a 1.5-tile explosion dealing 100% of that bullet’s damage to nearby enemies. Shared 1.5-second cooldown across all bullets/copies; no recursive on-hit effects |
 | Andromeda / `waveLaser` | A fully charged Wave empowers the next successful Laser cast. Beams widen to 72px (96 powered), with matching body-overlap hit detection, and each ray can cross one interior wall tile. Damage and range remain unchanged; walls remain intact. This stores one charge; partial charges, delayed echoes and Ruby echoes do not arm it. Companion laser copies inherit the empowered cast. |
 | Lepus / `twinShot` | Two auto-aimed bullets, each 60% damage. They pick distinct nearest eligible enemies when at least two are in range; otherwise both target the single enemy. Each shot skips the other assigned target so aligned enemies still split the volley. Maximum combined damage remains 120% of one ordinary bullet. Orion and Twin copies scale normally |
 | Sagitta / `ricochet` | Each laser ray reflects once from floor-adjacent cover, returning at a small random angle (up to 7.5 degrees) with 50% damage and its remaining range plus two bonus tiles. Moon mirrors keep their hostile reflection rule |
-| Eridanus / `waveEcho` | One second wave at the original cast position after 24 ticks, 40% original wave damage and the same radius; no push or recursive echoes |
+| Eridanus / `waveEcho` | One second wave centred on the player's current position 120 ticks (2s) after the cast, 40% original wave damage and the same radius; no push or recursive echoes |
 | Fornax / `bombPull` | Detonation waits 24 ticks and pulls normal aliens one floor tile toward the bomb every 6 ticks within explosion radius +2 tiles. No boss pull, cover crossing or repeated detonation input |
 | Lacerta / `boostTrail` | While Speed Boost is active, mark each floor cell crossed. Revisiting refreshes its 90-tick lifetime. Enemies occupying a marked cell slow to 65%; the trail deals no damage |
 | Corona / `rubyWave` | Placed Ruby emits a wave at 60% radius and 35% damage when you cast. No push, extra power consumption or recursive echoes |
@@ -83,7 +83,7 @@ The **tenth boss defeat** unlocks Ascension and grants that defeated boss's skil
 
 | Boss reward | Skill | Effect |
 | --- | --- | --- |
-| King | Solar Flare | Entire arena: 10% boss max HP. Regular aliens take 25 × the alien skill scale (current tier HP multiplier × late-run alien HP factor up to Stage 18, `skillAlienScale`) so it has the same effect from the start to Stage 18 (it always just kills an unshielded Armored): 25 at the start, 57.5 at Stage 10, 65 from Stage 18. Regular Solar kills grant no energy, including Runner bonuses and Leech refunds; ordinary non-energy rewards remain. Boss kills still restore player/Ruby HP and energy fully |
+| King | Solar Flare | Entire arena: 10% boss max HP. Regular aliens take 25 × the alien skill scale (current tier HP multiplier × late-run alien HP factor up to Stage 18, `skillAlienScale`) so it has the same effect from the start to Stage 18 (it always just kills an unshielded Armored): 25 at the start, 57.5 at Stage 10, 65 from Stage 18. Regular Solar kills grant no energy, including the Charger bonus and Leech refunds; ordinary non-energy rewards remain. Boss kills still restore player/Ruby HP and energy fully |
 | Queen | Lunar Echo | Stationary decoy with 12 connected hits; 21-tick invulnerability after each hit; no time limit |
 | Reaper | Jupiter Storm | Within 6 tiles: 25% boss max HP; regular aliens take 60 × the alien skill scale (60 at the start, 156 from Stage 18). Enemies hit move at 50% speed for 60 ticks (1 second); recasts refresh the duration |
 | Devourer | Singularity | One fixed version: 5-tile-radius field for 18s. Normal pull one tile/15 ticks; boss pull one tile/30 ticks, walls respected. Enemies inside cannot teleport; overdue Queen/Warden relocation waits until they leave or the field expires, without spawning echoes or granting jump healing while blocked. Damage once per second: 6 × the alien skill scale to regular aliens (grows with the stage like their HP, up to Stage 18), 1.5% max HP to bosses |

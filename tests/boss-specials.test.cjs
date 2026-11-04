@@ -146,7 +146,7 @@ test('Gaia field spawns under player in a hallway, damages and slows enemies wit
  const s=fresh(),king=boss(s,'fiery_king',25,10);king.hp=king.maxHp=1000;player(s,25,10);
  assert.notEqual(c.hallwayOfTile(25,10),-1);s.specialSkill='thorn_weaver';engine.useSpecialSkill(s);assert.equal(s.celestialField.x,Math.floor(s.playerX/c.TILE_SIZE)*c.TILE_SIZE);assert.equal(s.celestialField.y,Math.floor(s.playerY/c.TILE_SIZE)*c.TILE_SIZE);
  const enemy=grunt(s,king,25,11);enemy.targetTileX=26;enemy.targetTileY=11;
- engine.tick(s);close(enemy.stepProgress,c.ENEMY_CONFIGS.normal.speed*.6);
+ engine.tick(s);close(enemy.stepProgress,c.ENEMY_CONFIGS.normal.speed*.6*c.MOVE_SPEED_MULT);
  enemy.targetTileX=enemy.tileX;enemy.targetTileY=enemy.tileY;enemy.stepProgress=0;
  for(let i=1;i<60;i++)engine.tick(s);close(king.hp,990);assert.equal(enemy.hp,96);assert.equal(s.playerHP,100);assert.equal(s.rubyHP,100);
  const ticks=s.celestialField.ticks;s.gamePhase='teleporting';engine.tick(s);assert.equal(s.celestialField.ticks,ticks);

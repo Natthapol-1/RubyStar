@@ -117,7 +117,7 @@ Jupiter Storm Shard pickups reuse the supplied fence-hit recording at .7 for the
 
 The shared bomb-ready cue uses a 392 Hz square click at .09 voice gain and a 784 Hz triangle at .12, before the UI master gain. This mix applies to every map.
 
-Reticulum tripwires play `jupiter-fence-cast.wav` at .85 once when an enemy crosses and consumes a wire. Arming, expiry and replacing wires are silent.
+Reticulum stuns are silent; the Laser hit sound covers them.
 
 Desktop audio settings independently scale BGM, attack recordings and other game/UI effects without changing their original relative mix. Preferences persist in the versioned local profile; paused loop lifecycles remain unchanged. The MUSIC button provides a quick BGM toggle. All clips and fonts are local for offline play; see [Windows desktop](DESKTOP.md).
 
@@ -130,3 +130,9 @@ Celestial blessing selection plays the supplied `/sounds/gem_passive_trigger.wav
 Amethyst decoy placement uses the normal gem passive cue. Decoy firing uses the same `/sounds/gem_passive_2.wav` at 1.4× playback rate with pitch preservation disabled and .6 base gain. All decoys share a 30-tick firing-cue gate and a shot on the placement tick adds no second cue. This follows Other Game SFX volume; the player’s bullet sound is unchanged.
 
 Gem mechanics use the supplied `/sounds/gem_passive_2.wav` at .85 base gain: Ruby on entering its active buff, Emerald only on crossing into ten live stacks, Amethyst on actual decoy placement, Diamond on actual shield gain, Amber on actual energy gains and full-energy refresh, Pearl on reflection, Opal on a coordinated copy, Obsidian on creating a well, and Stardust on an actual shield grant. Sapphire plays the cue only when its leech actually restores player HP, with a 60-tick (one-second) sound cooldown. Other repeated events are limited to once per gem per 30 gameplay ticks; simultaneous gem procs share one cue. Peridot creates and refreshes walking fields silently. Peridot and Obsidian play `/sounds/gem_field_hit.wav` at .35 on damaging pulses, shared across overlapping fields and enemies with a 30-tick gate. All three recordings follow Other Game SFX volume; only the Amethyst firing variant is pitched up.
+
+Comets play the meteor warning pulse once when an area is marked, `falling-thing.wav` (0.75s) at .6 × attack mix as the comet starts its final 45-tick fall, and the bomb explosion at impact. A Lancer starting its charge plays `charging.wav` pitched to 0.6× (about 1s, the windup length) at .5 × attack mix, only within 16 tiles of the player; its beam reuses the laser sound at 0.6 pitch. A Charger within 16 tiles copies the Snowbowl's sounds: the bomb-placement cue when it locks its lane and the pitched alien shot (gain 3, rate 1.3) when the rush starts. The Eridanus echo wave plays the same Wave sound at the same volume as the player's Wave when it lands.
+
+Soul Devourer bites layer `soundWaveAttack.mp3` at .49 and `slash.mp3` at .35 × attack mix; its eating sound is unchanged.
+
+A heavy bullet shot (every 20th) layers `laserBullet.mp3` at .9 × attack mix and 0.7 rate with `bomb-ready.wav` at .35 and 1.3 rate over the normal shot sound; its hit adds `hitHurt.wav` at .45 and 0.8 rate.

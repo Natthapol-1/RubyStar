@@ -56,6 +56,7 @@ export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{s
         </section>
         <section className="rs-guide-section"><h4>METEORS</h4>
           <p>Meteors move clockwise and hit everything in the chamber. Get Ruby out of the flashing one.</p>
+          <p>Comets hit a small marked area in your room. Step out before they land.</p>
         </section>
         <section className="rs-guide-section"><h4>TELEPORT</h4>
           <p>Use {bindingLabel('teleport')} at a pad to pick a chamber. Carried Ruby comes along.</p>
@@ -77,7 +78,7 @@ export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{s
       <section className="rs-guide-section"><h4>ASCENSION</h4>
         <p>From stage 10, boss kills give a one-use celestial skill ({bindingLabel('celestial')}). Hold one at a time.</p>
       </section>
-      <section className="rs-guide-section"><h4>ENDLESS · STAGE 20+</h4><p>Bosses overlap after two minutes. Up to two can be active.</p><p>Choose a celestial blessing at stage 20 and every 10 stages after.</p></section>
+      <section className="rs-guide-section"><h4>ENDLESS · STAGE 20+</h4><p>A new boss can join 90 seconds after the last one arrived. Up to two can be active.</p><p>Choose a celestial blessing at stage 20 and every 10 stages after.</p></section>
       <section className="rs-guide-hints"><h4>HINTS</h4>
         <ul>
           <li>Teleport out with Ruby and leave aliens in the meteor blast.</li>

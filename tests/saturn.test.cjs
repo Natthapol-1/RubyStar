@@ -88,7 +88,7 @@ test('Frosticle marks the cast location; impact is dodgeable and leaves temporar
 test('Ice Cub strikes immediately in range, respects cooldown and moves at its faster configured speed',()=>{
  const{s}=fresh(),mob=e.createEncounterEnemy(s,'rime_brute',9,10,30);mob.attackTimer=0;a.updateRimeBrute(s,mob);assert.equal(mob.windupTicks,0);assert.equal(s.playerKnockback.tilesLeft,2);assert.equal(s.playerShieldHP,8);
  a.updateRimeBrute(s,mob);assert.equal(s.playerShieldHP,8);assert.equal(mob.attackTimer,179);
- near(mob,15,10);mob.targetTileX=14;mob.attackTimer=100;a.updateRimeBrute(s,mob);assert.equal(mob.stepProgress,3.2);
+ near(mob,15,10);mob.targetTileX=14;mob.attackTimer=100;a.updateRimeBrute(s,mob);assert.ok(Math.abs(mob.stepProgress-3.2*c.MOVE_SPEED_MULT)<1e-9);
 });
 test('shield kill rewards add in Saturn, but refill outside it',()=>{
  for(const mode of ['saturn','endless']){const s=mode==='saturn'?fresh().s:e.createInitialState();s.playerShieldHP=30;const mob=e.createEncounterEnemy(s,'armored',10,10,1);s.enemies.push(mob);e.killEnemy(s,s.enemies.indexOf(mob));assert.equal(s.playerShieldHP,mode==='saturn'?50:30);}
@@ -359,7 +359,7 @@ test('shielded players are mildly slowed only inside the Warden chamber during b
  for(const mode of ['inside','outside','weak']){
   const {s,boss,t}=fresh();if(mode!=='outside')near(boss,12,10);if(mode==='weak')t.weakTicks=100;
   assert.equal(e.isPlayerChilled(s),mode==='inside');s.playerQueuedDirX=1;e.saturnTest.updatePlayer(s);e.saturnTest.updatePlayer(s);
-  assert.ok(Math.abs(s.playerStepProgress-c.PLAYER_BASE_SPEED*(mode==='inside'?.85:1))<1e-9);
+  assert.ok(Math.abs(s.playerStepProgress-c.PLAYER_BASE_SPEED*(mode==='inside'?.85:1)*c.MOVE_SPEED_MULT)<1e-9);
   s.laserCooldown=100;for(let i=0;i<10;i++)e.tick(s);assert.ok(Math.abs(s.laserCooldown-(mode==='inside'?91.5:90))<1e-9);
  }
 });

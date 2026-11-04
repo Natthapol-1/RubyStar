@@ -1,4 +1,4 @@
-import { CHAMBER_BOUNDS, ENEMY_CONFIGS, JUPITER, PLAYER_BASE_SPEED, SPECIAL_REAPER_SLOW, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, chamberOfTile } from './constants';
+import { CHAMBER_BOUNDS, ENEMY_CONFIGS, MOVE_SPEED_MULT, JUPITER, PLAYER_BASE_SPEED, SPECIAL_REAPER_SLOW, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, chamberOfTile } from './constants';
 import { ATTACK_SFX_VOLUME, bfs, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, stormSlowMultiplier, playSFX_pickup, isFloorTile, killEnemy, playSFX_reaperStrike, playAudioOneShot, tryReaperHallwaySeal, type Enemy, type GameState } from './engine';
 import { playUiSfx } from './ui-sfx';
 import { playJupiterAmbientSound, stopJupiterAmbientSound, playJupiterChargeSound, stopJupiterChargeSound } from './event-audio';
@@ -350,7 +350,7 @@ export function updateJupiterReaper(state: GameState, boss: Enemy) {
     else if(j.bossBoost>0){j.bossBoost=0;boss.pathTimer=0;}
   } else {
     const speed = jupiterReaperSpeed(state,boss);
-    boss.stepProgress = Math.min(TILE_SIZE, boss.stepProgress + speed);
+    boss.stepProgress = Math.min(TILE_SIZE, boss.stepProgress + speed * MOVE_SPEED_MULT);
     boss.x = (boss.tileX + .5) * TILE_SIZE + (boss.targetTileX-boss.tileX) * boss.stepProgress;
     boss.y = (boss.tileY + .5) * TILE_SIZE + (boss.targetTileY-boss.tileY) * boss.stepProgress;
     if (boss.stepProgress >= TILE_SIZE) { boss.tileX = boss.targetTileX; boss.tileY = boss.targetTileY; boss.stepProgress = 0; }

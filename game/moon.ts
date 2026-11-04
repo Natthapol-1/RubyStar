@@ -3,6 +3,7 @@ import {
   CHAMBER_BOUNDS, CHAMBER_SPAWN_TILES, MAP_COLS, TELEPORT_PADS, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile, type EnemyType,
   MOON_PHASE_HP, MOON_FIRST_CLONES, MOON_CLONES_PER_JUMP, MOON_CLONE_CAPS, MOON_MIRROR_STRIPS, MOON_MIRROR_LENGTH, MOON_MIRROR_SHIFT, MOON_MIRROR_FADE, MOON_REVEAL_TICKS, MOON_REVEAL_DAMAGE_MULT,
   MOON_MARK_TICKS, MOON_MARK_COOLDOWN, MOON_MITE_HINT_TICKS, MOON_MIMIC_TRUE_TICKS, MOON_MIMIC_GAP, MOON_MIMIC_CAP, MOON_DARK_SHIFT, MOON_DARK_FADE, MOON_SEEN_TICKS, MOON_SHARD_COUNT, MOON_SHARD_SPEED, MOON_SHARD_TICKS, MOON_SHARD_DAMAGE, MOON_SHARD_RUBY_DAMAGE, MOON_SHARD_HIT_RADIUS, ENEMY_CONFIGS,
+  MOVE_SPEED_MULT,
 } from './constants';
 import {
   stormSlowMultiplier, ATTACK_SFX_VOLUME, bfs, createEncounterEnemy, damagePlayer, playAudioOneShot, godSpawnBoss, healCore, healPlayer, playCelestialSound, playSFX_queenTeleport, damageRuby, playSFX_objectBreak, spawnDeathParticles, tileEuclidDist, type Enemy, type GameState,
@@ -123,7 +124,7 @@ function walkToward(state: GameState, e: Enemy, gx: number, gy: number) {
     if (next) { [e.targetTileX, e.targetTileY] = next; e.stepProgress = 0; }
     return;
   }
-  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS.moon_mimic.speed * stormSlowMultiplier(state,e));
+  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS.moon_mimic.speed * MOVE_SPEED_MULT * stormSlowMultiplier(state,e));
   e.x = (e.tileX + .5) * TILE_SIZE + (e.targetTileX - e.tileX) * e.stepProgress;
   e.y = (e.tileY + .5) * TILE_SIZE + (e.targetTileY - e.tileY) * e.stepProgress;
   if (e.stepProgress >= TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.stepProgress = 0; }

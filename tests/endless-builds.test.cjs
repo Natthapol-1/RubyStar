@@ -49,7 +49,7 @@ test('Sagitta reflects once at a real wall, adds two return tiles, and reduces r
 test('delayed and Ruby waves are weaker, emit once, and never recursively create echoes',()=>{
  const s=fresh(['waveEcho','rubyWave']);s.rubyTileX=20;s.rubyTileY=20;const a=mob(s),rubyTarget=mob(s,21,20);e.activateWave(s);near(1000-a.hp,c.WAVE_DMG);near(1000-rubyTarget.hp,c.WAVE_DMG*.35);assert.equal(s.build.echoes.length,1);
  // Keep target still rather than allowing ordinary wave knockback to move it out of range.
- a.pushTiles=0;ticks(s,24);near(1000-a.hp,c.WAVE_DMG*1.4);assert.equal(s.build.echoes.length,0);ticks(s,30);near(1000-a.hp,c.WAVE_DMG*1.4);
+ a.pushTiles=0;ticks(s,120);near(1000-a.hp,c.WAVE_DMG*1.4);assert.equal(s.build.echoes.length,0);ticks(s,30);near(1000-a.hp,c.WAVE_DMG*1.4);
 });
 test('Fornax pulls normal aliens on floor, never bosses or through walls, then detonates once',()=>{
  const s=fresh(['bombPull']);s.bomb={tileX:10,tileY:10,powered:false};const a=mob(s,13),boss=mob(s,13,11,'fiery_king');s.map[11][12]=c.T_WALL;const blocked=mob(s,13,11);e.useBomb(s);e.useBomb(s);assert.equal(s.bomb.detonateTicks,24);
@@ -125,13 +125,6 @@ test('Columba stored wave travels with carried Ruby but only triggers after plac
  const s=fresh(['rubyDefense']);s.build.rubyWaveStored=true;s.rubyTileX=-1;s.playerCarryingRuby=true;const a=mob(s,11,10);b.updateRunBuilds(s);assert.equal(s.build.rubyWaveStored,true);near(a.hp,1000);
  s.playerCarryingRuby=false;s.rubyTileX=s.rubyTileY=10;b.updateRunBuilds(s);assert.equal(s.build.rubyWaveStored,false);near(a.hp,1000-c.WAVE_DMG*.5);
 });
-test('Reticulum arms after the Laser fades, stops its first crossing enemy and never retriggers',()=>{
- const s=fresh(['laserWire']);e.useLaser(s);assert.equal(s.build.tripwires.length,4);assert.ok(s.build.tripwires.every(w=>w.ticks===300));const a=mob(s,13,11);ticks(s,18);a.y=10.5*c.TILE_SIZE;e.tick(s);near(a.hp,1000-c.LASER_DMG*.75);assert.ok(a.buildStopUntil>s.gameTick);assert.equal(s.build.tripwires.length,3);const pos=[a.x,a.y];ticks(s,20);assert.deepEqual([a.x,a.y],pos);near(a.hp,1000-c.LASER_DMG*.75);ticks(s,180);assert.equal(s.build.tripwires.length,3);ticks(s,81);assert.equal(s.build.tripwires.length,0);
-});
-test('Reticulum ignores existing occupants until they leave, retains the previous cast, and scales companion wires',()=>{
- const s=fresh(['laserWire','rubyLaser']);s.rubyTileX=12;s.rubyTileY=10;const a=mob(s,13,10);e.useLaser(s);const hp=a.hp;ticks(s,20);near(a.hp,hp);a.y=11.5*c.TILE_SIZE;b.updateRunBuilds(s);a.y=10.5*c.TILE_SIZE;b.updateRunBuilds(s);assert.ok(a.hp<hp);
- const previous=[...s.build.tripwires];s.laserCooldown=0;e.useLaser(s);assert.equal(s.build.tripwires.filter(w=>w.castId===s.build.tripwireCastSerial).length,8);assert.ok(previous.every(w=>s.build.tripwires.includes(w)));assert.ok(s.build.tripwires.some(w=>Math.abs(w.damage-c.LASER_DMG*.35*.75)<1e-7));
-});
 test('Pyxis leaves a one-hit decoy at teleport origin and restores the real player and Lunar Echo',()=>{
  const s=fresh(['teleportDecoy']);s.specialSkill='splitter_queen';e.useSpecialSkill(s);const lunar=s.lunarDecoy;s.gamePhase='teleporting';s.teleportDestOptions=[1];e.doTeleport(s,1);assert.equal(s.build.decoy.tileX,10);assert.equal(s.build.decoy.ticks,360);
  const a=mob(s,11,10);a.attackTimer=0;s.godMode=false;const hp=s.playerHP,rhp=s.rubyHP;const pos=[s.playerX,s.playerY,s.playerTileX,s.playerTileY];e.tick(s);assert.equal(s.build.decoy,null);assert.equal(s.lunarDecoy,lunar);assert.equal(lunar.hitsLeft,lunar.maxHits);assert.equal(s.playerHP,hp);assert.equal(s.rubyHP,rhp);assert.deepEqual([s.playerX,s.playerY,s.playerTileX,s.playerTileY],pos);assert.equal(s.enemyDecoyActive,false);assert.equal(s.build.decoyTargetActive,false);
@@ -168,12 +161,17 @@ test('Sagitta return reaches two tiles beyond its remaining range without extend
  near(1000-extra.hp,c.LASER_DMG*1.5);near(1000-beyond.hp,c.LASER_DMG);
  const reflected=s.laserBeams.find(beam=>beam.fromX===12.5*c.TILE_SIZE&&beam.dirX===-1);assert.ok(reflected);near(Math.abs(reflected.endX-reflected.fromX)/c.TILE_SIZE,8);
 });
-
-test('Reticulum keeps only two cast generations without refreshing old timers or counting rejected shots',()=>{
- const s=fresh(['laserWire']);e.useLaser(s);const first=[...s.build.tripwires];ticks(s,20);const remaining=first[0].ticks,armed=first[0].armTicks;
- s.laserCooldown=0;e.useLaser(s);const second=s.build.tripwires.filter(w=>!first.includes(w));assert.equal(s.build.tripwires.length,8);assert.equal(first[0].ticks,remaining);assert.equal(first[0].armTicks,armed);
- const serial=s.build.tripwireCastSerial;e.useLaser(s);assert.equal(s.build.tripwireCastSerial,serial);assert.equal(s.build.tripwires.length,8);
- s.laserCooldown=0;e.useLaser(s);assert.equal(s.build.tripwires.length,8);assert.ok(first.every(w=>!s.build.tripwires.includes(w)));assert.ok(second.every(w=>s.build.tripwires.includes(w)));
- ticks(s,300);assert.equal(s.build.tripwires.length,0);
- const legacy=fresh(['laserWire']);e.useLaser(legacy);const newestLegacy=[...legacy.build.tripwires],expiredLegacy=newestLegacy.map(w=>({...w,ticks:60,armTicks:0}));legacy.build.tripwires.push(...expiredLegacy);delete legacy.build.tripwireCastSerial;legacy.build.tripwires.forEach(w=>delete w.castId);legacy.laserCooldown=0;e.useLaser(legacy);assert.equal(legacy.build.tripwires.length,8);assert.ok(newestLegacy.every(w=>legacy.build.tripwires.includes(w)));assert.ok(expiredLegacy.every(w=>!legacy.build.tripwires.includes(w)));legacy.laserCooldown=0;e.useLaser(legacy);assert.equal(legacy.build.tripwires.length,8);
+test('Reticulum Laser hits stun ordinary aliens briefly, once per two seconds each; bosses are immune',()=>{
+ const s=fresh(['laserWire']),a=mob(s,12,10),boss=mob(s,10,7,'fiery_king',1e6);e.useLaser(s);
+ assert.ok(a.hp<1000);assert.equal(a.buildStopUntil,s.gameTick+c.RETICULUM.stunTicks);assert.equal(a.reticulumReadyAt,s.gameTick+c.RETICULUM.recoverTicks);
+ assert.ok(boss.hp<1e6);assert.equal(boss.buildStopUntil,undefined);
+ ticks(s,60);a.buildStopUntil=0;s.laserCooldown=0;e.useLaser(s);assert.equal(a.buildStopUntil,0,'still recovering');
+ ticks(s,c.RETICULUM.recoverTicks);s.laserCooldown=0;e.useLaser(s);assert.equal(a.buildStopUntil,s.gameTick+c.RETICULUM.stunTicks);
+ const plain=fresh(),other=mob(plain,12,10);e.useLaser(plain);assert.equal(other.buildStopUntil,undefined);
+});
+test('Eridanus echo wave lands two seconds after the original Wave, centred on where the player is then',()=>{
+ const s=fresh(['waveEcho']),a=mob(s);e.activateWave(s);const after=a.hp;
+ ticks(s,119);near(a.hp,after);ticks(s,1);near(after-a.hp,c.WAVE_DMG*.4);assert.equal(s.build.echoes.length,0);
+ const moved=fresh(['waveEcho']),left=mob(moved,30,10);e.activateWave(moved);near(left.hp,1000);
+ moved.playerTileX=moved.playerTargetX=29;moved.playerX=29.5*c.TILE_SIZE;ticks(moved,120);near(1000-left.hp,c.WAVE_DMG*.4);
 });

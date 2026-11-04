@@ -7,9 +7,9 @@ function fresh(){const s=e.createInitialState();s.noMobs=s.noBossSpawns=s.godMod
 function boss(s,type){e.godSpawnBoss(s,type);s.noBossSpawns=true;const a=s.enemies.find(a=>a.type===type);position(a,11,10);a.windupTicks=100000;return a;}
 function ticks(s,n){for(let i=0;i<n;i++)e.tick(s);}
 
-test('Solar kills give no energy, including Runner bonus and Leech refunds; other specials still do',()=>{
+test('Solar kills give no energy, including the Charger bonus and Leech refunds; other specials still do',()=>{
  const s=fresh(),template=boss(s,'frost_warden');s.enemies=[];
- for(let i=0;i<24;i++)s.enemies.push({...template,id:i+100,type:i===0?'fast':i===1?'energy_leech':'normal',hp:1,maxHp:10,stolenEnergy:60});
+ for(let i=0;i<24;i++)s.enemies.push({...template,id:i+100,type:i===0?'charger':i===1?'energy_leech':'normal',hp:1,maxHp:10,stolenEnergy:60});
  s.starEnergy=17;s.playerHP=20;s.specialSkill='fiery_king';e.useSpecialSkill(s);
  assert.equal(s.enemies.length,0);assert.equal(s.starEnergy,17);assert.equal(s.killScore>0,true);assert.equal(s.playerHP,100);
  const a={...template,type:'normal',hp:1,maxHp:10};s.enemies=[a];s.specialSkill='storm_reaper';s.specialLockTicks=0;e.useSpecialSkill(s);assert.equal(s.starEnergy,17+c.STAR_ENERGY_PER_KILL);
@@ -100,7 +100,7 @@ test('Jupiter Storm halves movement for exactly 60 gameplay ticks, only on enemi
  s.enemies=[a,outside];a.targetTileX=15;a.pathTimer=100000;s.specialSkill='storm_reaper';
  assert.equal(e.useSpecialSkill(s),true);const end=a.stormSlowUntilTick;
  assert.equal(end,s.gameTick+60);assert.equal(outside.stormSlowUntilTick,undefined);
- const before=a.stepProgress;e.tick(s);assert.ok(Math.abs(a.stepProgress-before-c.ENEMY_CONFIGS.normal.speed*.5)<1e-9);
+ const before=a.stepProgress;e.tick(s);assert.ok(Math.abs(a.stepProgress-before-c.ENEMY_CONFIGS.normal.speed*.5*c.MOVE_SPEED_MULT)<1e-9);
  for(let t=1;t<=60;t++){s.gameTick=t;assert.equal(e.stormSlowMultiplier(s,a),.5);}
  s.gameTick=61;assert.equal(e.stormSlowMultiplier(s,a),1);
 });

@@ -21,17 +21,6 @@ function pullMarks(ctx:CanvasRenderingContext2D,x:number,y:number,radius:number,
 export function drawRunBuildEffects(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number) {
   ctx.save();
   ctx.lineCap='butt';ctx.lineJoin='miter';ctx.shadowBlur=0;
-  for(const wire of state.build.tripwires){
-    ctx.save();ctx.globalAlpha=Math.min(1,wire.ticks/30)*(wire.armTicks>0?.18:.48);
-    ctx.beginPath();
-    // Empowered rays may pierce cover; their floor tethers remain clipped to floor cells.
-    for(let ty=Math.max(0,Math.floor(Math.min(wire.y1,wire.y2)/TILE_SIZE)-1);ty<=Math.min(state.map.length-1,Math.floor(Math.max(wire.y1,wire.y2)/TILE_SIZE)+1);ty++)
-      for(let tx=Math.max(0,Math.floor(Math.min(wire.x1,wire.x2)/TILE_SIZE)-1);tx<=Math.min(state.map[ty].length-1,Math.floor(Math.max(wire.x1,wire.x2)/TILE_SIZE)+1);tx++)
-        if(state.map[ty][tx]!==0)ctx.rect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
-    ctx.clip();ctx.strokeStyle='#6bbdd9';ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(wire.x1-camX,wire.y1-camY);ctx.lineTo(wire.x2-camX,wire.y2-camY);ctx.stroke();
-    ctx.strokeStyle='#d0f3ff';ctx.lineWidth=2;ctx.stroke();
-    ctx.restore();
-  }
   if(state.build.rubyWaveStored&&state.rubyTileX>=0&&!state.playerCarryingRuby){
     const x=Math.round((state.rubyTileX+.5)*TILE_SIZE-camX),y=Math.round((state.rubyTileY+.5)*TILE_SIZE-camY);
     ctx.globalAlpha=.65+.15*Math.sin(state.gameTick*.08);ctx.fillStyle='#ffc1dc';
@@ -72,7 +61,6 @@ export function drawRunBuildEffects(ctx:CanvasRenderingContext2D,state:GameState
       for(let dy=-Math.ceil(zone.radius);dy<=Math.ceil(zone.radius);dy++)for(let dx=-Math.ceil(zone.radius);dx<=Math.ceil(zone.radius);dx++)if(nebulaContainsTile(zone,tx+dx,ty+dy)&&isFloorTile(state.map,tx+dx,ty+dy)){
         const px=(tx+dx)*TILE_SIZE-camX,py=(ty+dy)*TILE_SIZE-camY;
         ctx.fillRect(px+2,py+2,TILE_SIZE-4,TILE_SIZE-4);
-        ctx.globalAlpha=.35*fade;ctx.fillRect(px+8,py+8,7,2);ctx.fillRect(px+8,py+8,2,7);ctx.globalAlpha=.11*fade;
       }
       ctx.restore();continue;
     }

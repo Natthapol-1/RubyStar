@@ -2,7 +2,7 @@ import {playBlessingPassive,playGemFieldHit,blessingEnemySlow,updateBlessingEffe
 import {playUiSfx} from './ui-sfx';
 import {getProfile,isDesktop} from './profile';
 import { TILE_SIZE, CHAMBER_BOUNDS, WAVE_RADIUS, WAVE_DMG, isBossType } from './constants';
-import { damageEnemy, healPlayer, healCore, isFloorTile, playAudioOneShot, type Enemy, type GameState } from './engine';
+import { playSFX_wave, damageEnemy, healPlayer, healCore, isFloorTile, playAudioOneShot, type Enemy, type GameState } from './engine';
 
 export const BLESSING_REVEAL_TICKS = 72;
 export const CELESTIAL_BLESSINGS = {
@@ -32,8 +32,6 @@ export interface RunBuildState {
   echoes: { x:number; y:number; radius:number; damage:number; ticks:number }[];
   rubyWaveStored: boolean; wallStepReady: boolean; bulletBurstReadyAt: number;
   decoy: {x:number;y:number;tileX:number;tileY:number;ticks:number}|null; decoyTargetActive: boolean;
-  tripwireCastSerial?:number;
-  tripwires: {x1:number;y1:number;x2:number;y2:number;damage:number;ticks:number;armTicks:number;blockedIds:number[];castId?:number}[];
   impacts: {x:number;y:number;kind:'slam'|'wire'|'phase';ticks:number}[];
   waveLaserReady: boolean; godBlessingMode: boolean;
   quickWave: boolean; lastCast: 'laser'|'wave'|null; castCount:number; bulletHits:number;
@@ -41,7 +39,7 @@ export interface RunBuildState {
   tideReadyAt:number; shieldReadyAt:number; trailTick:number;
 }
 export function createRunBuildState():RunBuildState {
-  return { rubyWaveStored:false,wallStepReady:false,bulletBurstReadyAt:0,decoy:null,decoyTargetActive:false,tripwires:[],impacts:[],blessings:[],blessingChoices:[],pendingBlessings:0,zones:[],echoes:[],waveLaserReady:false,godBlessingMode:false,quickWave:false,lastCast:null,castCount:0,bulletHits:0,tideReadyAt:0,shieldReadyAt:900,trailTick:0 };
+  return { rubyWaveStored:false,wallStepReady:false,bulletBurstReadyAt:0,decoy:null,decoyTargetActive:false,impacts:[],blessings:[],blessingChoices:[],pendingBlessings:0,zones:[],echoes:[],waveLaserReady:false,godBlessingMode:false,quickWave:false,lastCast:null,castCount:0,bulletHits:0,tideReadyAt:0,shieldReadyAt:900,trailTick:0 };
 }
 export function hasBlessing(state:GameState,kind:CelestialBlessing) { return state.build.blessings.includes(kind); }
 export function offerCelestialBlessing(state:GameState) {
@@ -115,29 +113,6 @@ export function pullBuildEnemies(state:GameState,x:number,y:number,radius:number
     if(isFloorTile(state.map,tx,ty)){e.tileX=e.targetTileX=tx;e.tileY=e.targetTileY=ty;e.x=(tx+.5)*TILE_SIZE;e.y=(ty+.5)*TILE_SIZE;e.stepProgress=0;e.path=[];e.pathTimer=0;}
   }
 }
-export function distanceToBuildWire(x:number,y:number,wire:{x1:number;y1:number;x2:number;y2:number}) {
-  const dx=wire.x2-wire.x1,dy=wire.y2-wire.y1,length=dx*dx+dy*dy;
-  const t=length?Math.max(0,Math.min(1,((x-wire.x1)*dx+(y-wire.y1)*dy)/length)):0;
-  return Math.hypot(x-wire.x1-t*dx,y-wire.y1-t*dy);
-}
-export function storeLaserTripwires(state:GameState,firstBeam:number,damage:number) {
-  if(!state.constellations.includes('laserWire'))return;
-  const b=state.build,existing=b.tripwires.filter(wire=>wire.ticks>0),castId=Math.max(b.tripwireCastSerial??0,...existing.map(wire=>wire.castId??0))+1;
-  b.tripwireCastSerial=castId;
-  const hasPreviousCast=existing.some(wire=>wire.castId===castId-1);
-  const untracked=existing.filter(wire=>wire.castId===undefined);
-  if(!hasPreviousCast&&untracked.length){
-    const newestTicks=Math.max(...untracked.map(wire=>wire.ticks));
-    for(const wire of untracked)if(wire.ticks===newestTicks)wire.castId=castId-1;else wire.ticks=0;
-  }
-  const previous=existing.filter(wire=>wire.ticks>0&&wire.castId===castId-1);
-  const current=state.laserBeams.slice(firstBeam).filter(beam=>Math.hypot(beam.endX-beam.fromX,beam.endY-beam.fromY)>8).map(beam=>{
-    const wire={x1:beam.fromX,y1:beam.fromY,x2:beam.endX,y2:beam.endY,damage:(beam.buildDamage??damage)*.75,ticks:300,armTicks:18,blockedIds:[] as number[],castId};
-    wire.blockedIds=state.enemies.filter(enemy=>distanceToBuildWire(enemy.x,enemy.y,wire)<=18).map(enemy=>enemy.id);
-    return wire;
-  });
-  b.tripwires=[...previous,...current];
-}
 export function updateRunBuilds(state:GameState) {
   const b=state.build;
   if(b.blessingReveal&&--b.blessingReveal.ticks<=0)b.blessingReveal=undefined;
@@ -146,7 +121,6 @@ export function updateRunBuilds(state:GameState) {
   if(!state.constellations.includes('rubyDefense'))b.rubyWaveStored=false;
   if(!state.constellations.includes('wallStep'))b.wallStepReady=false;
   if(state.speedActiveTicks<=0)b.wallStepReady=false;
-  if(!state.constellations.includes('laserWire'))b.tripwires=[];
   if(b.rubyWaveStored&&state.rubyTileX>=0&&!state.playerCarryingRuby){
     const x=(state.rubyTileX+.5)*TILE_SIZE,y=(state.rubyTileY+.5)*TILE_SIZE;
     if(state.enemies.some(enemy=>enemy.hp>0&&!enemy.twin?.downedTicks&&Math.hypot(enemy.x-x,enemy.y-y)<=3*TILE_SIZE)){
@@ -158,19 +132,10 @@ export function updateRunBuilds(state:GameState) {
       }
     }
   }
-  for(const wire of b.tripwires){
-    wire.ticks--;if(wire.armTicks>0){wire.armTicks--;continue;}
-    wire.blockedIds=wire.blockedIds.filter(id=>state.enemies.some(enemy=>enemy.id===id&&distanceToBuildWire(enemy.x,enemy.y,wire)<=18));
-    const enemy=state.enemies.find(enemy=>enemy.hp>0&&!enemy.twin?.downedTicks&&!wire.blockedIds.includes(enemy.id)&&distanceToBuildWire(enemy.x,enemy.y,wire)<=18&&isFloorTile(state.map,Math.floor(enemy.x/TILE_SIZE),Math.floor(enemy.y/TILE_SIZE)));
-    if(enemy){
-      wire.ticks=0;extraHit(state,enemy,wire.damage);
-      playAudioOneShot('/sounds/jupiter-fence-cast.wav',.85);
-      enemy.buildStopUntil=Math.max(enemy.buildStopUntil??0,state.gameTick+(isBossType(enemy.type)?15:30));
-      b.impacts.push({x:enemy.x,y:enemy.y,kind:'wire',ticks:18});
-    }
+  for(const echo of b.echoes)if(--echo.ticks===0){ // Eridanus: centred on the player when it lands, with the ordinary Wave sound
+    emitBuildWave(state,state.playerX,state.playerY,echo.radius,echo.damage);
+    playSFX_wave();
   }
-  b.tripwires=b.tripwires.filter(wire=>wire.ticks>0);
-  for(const echo of b.echoes)if(--echo.ticks===0)emitBuildWave(state,echo.x,echo.y,echo.radius,echo.damage);
   b.echoes=b.echoes.filter(e=>e.ticks>0);
   if(state.constellations.includes('boostTrail')&&state.speedActiveTicks>0) {
     const tx=Math.floor(state.playerX/TILE_SIZE),ty=Math.floor(state.playerY/TILE_SIZE),x=(tx+.5)*TILE_SIZE,y=(ty+.5)*TILE_SIZE;
@@ -228,10 +193,10 @@ export function addNebulaField(state:GameState,tileX:number,tileY:number,ticks:n
   state.build.zones.push({x,y,radius,ticks,damage:2,kind:'nebula'});
 }
 export function buildChargeField(state:GameState){
-  if(state.gamePhase==='playing'&&state.waveCooldown<=0&&state.constellations.includes('chargeField'))addNebulaField(state,state.playerTileX,state.playerTileY,90,2.25);
+  if(state.gamePhase==='playing'&&state.waveCooldown<=0&&state.constellations.includes('chargeField'))addNebulaField(state,state.playerTileX,state.playerTileY,180,2.25); // lingers 3s after charging stops
 }
 export function buildDeathField(state:GameState,enemy:Enemy){
-  if(state.constellations.includes('deathField'))addNebulaField(state,enemy.tileX,enemy.tileY,240);
+  if(state.constellations.includes('deathField'))addNebulaField(state,enemy.tileX,enemy.tileY,330); // 5.5s
 }
 export function buildBombStun(state:GameState,enemy:Enemy){
   if(enemy.hp>0&&state.constellations.includes('bombStun'))enemy.buildStopUntil=Math.max(enemy.buildStopUntil??0,state.gameTick+(isBossType(enemy.type)?60:72));

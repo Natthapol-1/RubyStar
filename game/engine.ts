@@ -1,7 +1,9 @@
+import { updateRegularAlien } from './aliens';
+export { lancerBeamEnd } from './aliens';
 import {obsidianBossHit,blessingDeath,rubyBlessingCopy,addStarEnergy,blessingAttack,blessingLandedAttack,blessingDamageMultiplier,blessingSpeedMultiplier,blessingHit,blessingHealed,blessingIncoming,blessingReflectIncoming,blessingAfterHit,leaveQueenBlessingDecoy,solarBlessingReady} from './blessing-effects';
 import { gameAudio, channelVolume } from './audio-settings';
 import { recordBoss, recordStage, updateProfile, getProfile } from './profile';
-import { createRunBuildState, updateRunBuilds, buildBulletHit, buildWaveHit, emitBuildWave, buildSlowMultiplier, hasBlessing, pullBuildEnemies, storeLaserTripwires, offerCelestialBlessing, prepareBlessingChoice, buildDeathField, buildBombStun, type RunBuildState } from './endless-builds';
+import { createRunBuildState, updateRunBuilds, buildBulletHit, buildWaveHit, emitBuildWave, buildSlowMultiplier, hasBlessing, pullBuildEnemies, offerCelestialBlessing, prepareBlessingChoice, buildDeathField, buildBombStun, type RunBuildState } from './endless-builds';
 import { SATURN, createSaturnState, initializeSaturnBoss, clearSaturnEncounter, updateSaturn, updateFrostRaider, updateIceCaller, updateRimeBrute, saturnIceAt, saturnBlizzard, saturnShieldChilled, moveSaturnPlayer, cancelSnowball, freezeSaturnPlayer, grantSaturnShield, type SaturnState } from './saturn';
 import { createJupiterState, initializeJupiterBoss, clearJupiterEncounter, drainJupiterEnergy, jupiterDamageTaken, jupiterBoss, jupiterPlayerSpeed, updateJupiterReaper, updateJupiter, type JupiterState } from './jupiter';
 import { JUPITER, SUN } from './constants';
@@ -42,7 +44,7 @@ import {
   WAVE_PUSH_TILES, WAVE_PUSH_TILES_PWR, WAVE_COOLDOWN,
   SPEED_DURATION, SPEED_DURATION_PWR, SPEED_MULT, SPEED_COOLDOWN,
   BOMB_RADIUS, BOMB_RADIUS_PWR, BOMB_DMG, BOMB_DMG_PWR,
-  BULLET_COOLDOWN, BULLET_DMG, BULLET_DMG_PWR, BULLET_SPEED,
+  BULLET_COOLDOWN, BULLET_DMG, BULLET_DMG_PWR, BULLET_SPEED, BULLET_HEAVY_EVERY, BULLET_HEAVY_MULT, BULLET_HEAVY_PUSH,
   STAR_ENERGY_MAX, STAR_ENERGY_PER_KILL, ENERGY_LEECH_DRAIN,
   RESOURCE_SPAWN_INTERVAL, RESOURCE_MAX_ON_MAP, HEAL_AMOUNT, ENERGY_AMOUNT,
   RUBY_HEAL_AMOUNT, RUBY_HEAL_COOLDOWN, RUBY_HEAL_RANGE, RUBY_HEAL_CLEAR_RANGE,
@@ -75,7 +77,7 @@ import {
   FROST_CHILL_SPEED_MULT, FROST_CHILL_TICK_RATE, FROST_ICE_TILE_COUNT,
   FROST_FREEZE_DURATION, FROST_RELOCATE_INTERVAL, FROST_SHIELD_HP, FROST_SHIELD_HP_PER_DEFEAT, FROST_SHIELD_HP_MAX, FROST_SHIELD_CAST_DELAY,
   DIFFICULTY_OPENING_THRESHOLDS, DIFFICULTY_TIERS,
-  ENEMY_CONFIGS, EnemyType, BOSS_TYPES,
+  ENEMY_CONFIGS, ALIEN_KNOCKBACK, COMET, RETICULUM, MOVE_SPEED_MULT, KNOCKBACK_SHAKE_TICKS, KNOCKBACK_SHAKE_AMOUNT, LANCER, EnemyType, BOSS_TYPES,
   generateMap,
 } from './constants';
 import {
@@ -105,7 +107,7 @@ export const CONSTELLATIONS = {
   bulletShield:{name:'Circinus',description:'Eight bullet hits restore a small player shield.',color:'#a5dfcf'},
   wallSlam: {name:'Sculptor',description:'Waves slam aliens into walls for bonus damage.',color:'#e5b48b'},
   rubyDefense: {name:'Columba',description:'Healing Ruby stores a weaker Wave that fires when enemies approach.',color:'#f4a6c6'},
-  laserWire: {name:'Reticulum',description:'Your last two Laser casts leave tripwires that hurt and briefly stop crossing enemies.',color:'#9edfff'},
+  laserWire: {name:'Reticulum',description:'Laser hits briefly stun ordinary aliens, at most once every 2s each. Bosses are immune.',color:'#9edfff'},
   teleportDecoy: {name:'Pyxis',description:'Teleporting leaves a fragile decoy that draws nearby aliens.',color:'#c6b8ff'},
   wallStep: {name:'Caelum',description:'Speed Boost can cross one piece of cover, ending the boost.',color:'#a2e9ce'},
   bulletBurst: {name:'Ara',description:'Bullet hits trigger a small explosion, with a short cooldown.',color:'#ffbc89'},
@@ -194,7 +196,6 @@ export function chooseConstellation(state: GameState, kind: Constellation): bool
     if(index>=0){
       if(kind==='rubyDefense')state.build.rubyWaveStored=false;
       if(kind==='wallStep')state.build.wallStepReady=false;
-      if(kind==='laserWire')state.build.tripwires=[];
       if(kind==='teleportDecoy'){state.build.decoy=null;state.enemies.forEach(enemy=>enemy.pathTimer=0);}
       if(kind==='wallSlam')state.enemies.forEach(enemy=>enemy.buildWallDamage=undefined);
     }
@@ -319,7 +320,7 @@ export interface Enemy {
   attackTimer: number; // ticks until next attack
   targeting: 'player' | 'ruby';
   // push state (from charge wave)
-  buildWallDamage?: number; buildStopUntil?: number;
+  buildWallDamage?: number; buildStopUntil?: number; reticulumReadyAt?: number;
   pushDirX: number;
   pushDirY: number;
   pushTiles: number; // remaining push tiles
@@ -333,6 +334,7 @@ export interface Enemy {
   windupTicks: number; // >0 = telegraphing before firing (charger: stun ticks)
   // charger specific
   chargeDirX: number; // locked charge direction; 0 = not charging
+  lanceDirX?: number; lanceDirY?: number; // Lancer: locked aim (unit vector in tiles) while charging
   chargeDirY: number;
   chargeWindupTicks?: number; // locked warning before a Charger rush; windupTicks remains its recovery
   chargeTilesLeft?: number;
@@ -408,6 +410,7 @@ export interface BombBlast {
 export interface LaserBullet {
   solar?:boolean; blessingCopy?:boolean; blessingDecoy?:boolean; blessingDamage?:number;
   avoidEnemyId?: number; // Lepus splits a volley between distinct targets when possible.
+  heavy?: boolean; // every 20th player shot: +20% damage and a push on hit
   damageScale?: number;
   x: number;
   y: number;
@@ -452,7 +455,7 @@ export type GamePhase = 'playing' | 'teleporting' | 'laserTarget' | 'constellati
 
 export interface RewardEffect {
   target: 'player' | 'ruby';
-  kind: 'heal' | 'energy' | 'shield' | 'speed' | 'electric' | 'restore';
+  kind: 'heal' | 'energy' | 'shield' | 'speed' | 'electric' | 'stun' | 'restore';
   ticks: number;
 }
 
@@ -491,11 +494,11 @@ export interface GameState {
   playerQueuedDirX: number;
   playerQueuedDirY: number;
   playerStepProgress: number;
-  playerKnockback: { dirX: number; dirY: number; started: boolean; tilesLeft?: number } | null; // one tile unless tilesLeft says more
+  playerKnockback: { dirX: number; dirY: number; started: boolean; tilesLeft?: number; shaken?: boolean } | null; // one tile unless tilesLeft says more
   playerHP: number;
   playerShieldHP: number; // Armored kill reward — absorbs damage before player HP
   playerSaturnShield: boolean;
-  runnerEnergyFlashTicks: number; // orange energy reward burst after a Runner kill
+  runnerEnergyFlashTicks: number; // orange energy reward burst after a Charger kill (field name predates the swap)
   playerCarryingRuby: boolean;
   playerFrozenTicks: number; // Frost Warden ice-tile freeze — fully immobilized while > 0
   playerChilledPrev: boolean; // whether player was in a Frost Warden's chamber last tick — edge-triggers the enter-field SFX
@@ -540,6 +543,8 @@ export interface GameState {
 
   // Meteorite
   meteoriteImpact: { chamber: number; ticks: number } | null;
+  /** Endless comet: countdown to the next one, its marked 3x3 target (centre tile) and the brief impact effect. */
+  comet?: { timer: number; target: { x: number; y: number; ticks: number } | null; impact: { x: number; y: number; ticks: number } | null };
   meteoriteTimer: number;   // countdown to next strike
   meteoriteWarning: number; // -1 = no warning; 0-3 = chamber index
   meteoriteStrikeIn: number; // ticks remaining in warning phase
@@ -605,6 +610,8 @@ export interface GameState {
 
   // Sniper kill buff — electric chain on player attacks
   electricBuffTicks: number;
+  laserStunTicks?: number; // Lancer reward: laser hits briefly stun enemies while > 0
+  bulletShotCount?: number; // player bullet shots this run; every BULLET_HEAVY_EVERY-th is heavy
 
   // Boss spawn system
   bossTimer: number;        // countdown to next boss spawn
@@ -843,7 +850,7 @@ export function playSFX_hit() {
   } catch { }
 }
 
-function playSFX_chargerImpact() {
+export function playSFX_chargerImpact() {
   try {
     const sound = gameAudio('/sounds/hitHurt.wav');
     sound.volume = .55; sound.playbackRate = .7; sound.preservesPitch = false;
@@ -915,7 +922,7 @@ export function playSFX_charge() {
   } catch { }
 }
 
-function playSFX_enemyAttack(enemy?: Enemy) {
+export function playSFX_enemyAttack(enemy?: Enemy) {
   const file = enemy?.type === 'aegis_sentinel' ? 'aegis-attack.mp3'
     : enemy?.type === 'astral_twins' ? enemy.twin?.index === 1 ? 'dusk-attack.mp3' : 'celestial/jupiter-storm.wav' : null;
   if (!file) { playSFX_alienShoot(); return; }
@@ -990,8 +997,8 @@ export function playSFX_reaperStrike() {
 
 function playSFX_devourerBite() {
   try {
-    const a = gameAudio('/sounds/soundWaveAttack.mp3', 'attack'); a.volume = 0.7 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const b = gameAudio('/sounds/slash.mp3', 'attack'); b.volume = 0.5 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/soundWaveAttack.mp3', 'attack'); a.volume = 0.49 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const b = gameAudio('/sounds/slash.mp3', 'attack'); b.volume = 0.35 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
   } catch { }
 }
 
@@ -1209,6 +1216,7 @@ export function createInitialState(): GameState {
     resourceTimer: 0,
 
     meteoriteImpact: null,
+    comet: { timer: cometGap(), target: null, impact: null },
     meteoriteTimer: METEORITE_CYCLE,
     meteoriteWarning: -1,
     meteoriteStrikeIn: 0,
@@ -1250,6 +1258,7 @@ export function createInitialState(): GameState {
     noMobs: false, noBossSpawns: false,
 
     electricBuffTicks: 0,
+    laserStunTicks: 0,
 
     bossTimer: BOSS_FIRST_SPAWN_TIMER,
     bossWarningTicks: 0,
@@ -1270,7 +1279,7 @@ export function createInitialState(): GameState {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function tileDist(ax: number, ay: number, bx: number, by: number) {
+export function tileDist(ax: number, ay: number, bx: number, by: number) {
   return Math.abs(ax - bx) + Math.abs(ay - by);
 }
 
@@ -1485,6 +1494,18 @@ export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 
 
 // Called after a player attack hits `hitEnemy` — if electric buff is active,
 // chain lightning to up to 2 nearby enemies.
+/** Laser-hit stuns (shared Vulpecula stop timer and art): the Lancer reward while active, and the Reticulum constellation. */
+function laserStun(state: GameState, enemy: Enemy) {
+  if (enemy.hp <= 0) return;
+  const boss = isBossType(enemy.type);
+  if ((state.laserStunTicks ?? 0) > 0) enemy.buildStopUntil = Math.max(enemy.buildStopUntil ?? 0, state.gameTick + (boss ? LANCER.bossStunTicks : LANCER.stunTicks));
+  if (!boss && state.constellations.includes('laserWire') && state.gameTick >= (enemy.reticulumReadyAt ?? 0)) {
+    enemy.buildStopUntil = Math.max(enemy.buildStopUntil ?? 0, state.gameTick + RETICULUM.stunTicks);
+    enemy.reticulumReadyAt = state.gameTick + RETICULUM.recoverTicks;
+    state.build.impacts.push({ x: enemy.x, y: enemy.y, kind: 'wire', ticks: 18 });
+  }
+}
+
 function chainElectric(state: GameState, hitEnemy: Enemy, bombProtected?: Set<number>) {
   if (state.electricBuffTicks <= 0) return;
   const targets = state.enemies
@@ -1596,7 +1617,7 @@ function spawnResource(state: GameState) {
 
 // ─── Line of sight (Bresenham) ───────────────────────────────────────────────
 
-function hasLineOfSight(map: number[][], x1: number, y1: number, x2: number, y2: number): boolean {
+export function hasLineOfSight(map: number[][], x1: number, y1: number, x2: number, y2: number): boolean {
   let dx = Math.abs(x2 - x1), dy = Math.abs(y2 - y1);
   const sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1;
   let err = dx - dy, cx = x1, cy = y1;
@@ -1613,20 +1634,6 @@ function hasLineOfSight(map: number[][], x1: number, y1: number, x2: number, y2:
       if (map[prevCy]?.[cx] === T_WALL || map[cy]?.[prevCx] === T_WALL) return false;
     }
   }
-}
-
-function fireSniperLaser(state: GameState, e: Enemy) {
-  const tgtX = e.targeting === 'player' ? state.playerX : state.rubyTileX * TILE_SIZE + TILE_SIZE / 2;
-  const tgtY = e.targeting === 'player' ? state.playerY : state.rubyTileY * TILE_SIZE + TILE_SIZE / 2;
-  state.laserBeams.push({ fromX: e.x, fromY: e.y, dirX: 0, dirY: 0, endX: tgtX, endY: tgtY, ticks: 22, color: '#ff3300' });
-  if (e.targeting === 'player') {
-    damagePlayer(state, ENEMY_CONFIGS.sniper.damageToPlayer, e);
-  } else if (state.rubyTileX !== -1) {
-    damageRuby(state, ENEMY_CONFIGS.sniper.damageToRuby, e);
-  }
-  e.shootTicks = 22;
-  e.attackTimer = ENEMY_CONFIGS.sniper.attackCooldown;
-  playSFX_laser(0.85);
 }
 
 function fireQueenBolt(state: GameState, e: Enemy, tgtX: number, tgtY: number, targetIsPlayer: boolean) {
@@ -2687,7 +2694,7 @@ export function stormSlowMultiplier(state:GameState,e:Enemy,slowStrength=1):numb
   const skillSlow=e.stormSlowUntilTick!==undefined&&state.gameTick<=e.stormSlowUntilTick?1-(1-SPECIAL_REAPER_SLOW)*slowStrength:1;
   return Math.min(skillSlow,buildSlowMultiplier(state,e));
 }
-function celestialMoveMultiplier(state: GameState, e: Enemy): number { return (inCelestialField(state,e)?SPECIAL_WEAVER_SLOW:1) * Math.min((e.voltSlowTicks ?? 0)>0 ? JUPITER.wallSlow : 1,stormSlowMultiplier(state,e),buildSlowMultiplier(state,e)); }
+export function celestialMoveMultiplier(state: GameState, e: Enemy): number { return MOVE_SPEED_MULT * (inCelestialField(state,e)?SPECIAL_WEAVER_SLOW:1) * Math.min((e.voltSlowTicks ?? 0)>0 ? JUPITER.wallSlow : 1,stormSlowMultiplier(state,e),buildSlowMultiplier(state,e)); }
 let gaiaFieldVoice: HTMLAudioElement | null = null;
 export function stopGaiaFieldSound() {
   if (!gaiaFieldVoice) return;
@@ -2844,6 +2851,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
       e.targetTileX = e.tileX; e.targetTileY = e.tileY; e.stepProgress = 0;
       if(state.saturn&&(e.type==='frost_raider'||e.type==='rime_brute')){e.windupTicks=0;e.frostRollLeft=0;e.attackTimer=120;}
       if (e.type === 'charger') { e.chargeDirX = 0; e.chargeDirY = 0; e.chargeWindupTicks=0; e.chargeTilesLeft=0; }
+      if (e.type === 'lancer') { e.windupTicks = 0; e.lanceDirX = e.lanceDirY = undefined; }
       e.pushTiles = Math.max(0, e.pushTiles - 1);
       if(e.pushTiles===0)e.buildWallDamage=undefined;
       continue;
@@ -3207,325 +3215,8 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
       continue;
     }
 
-    // ── Sniper special logic ─────────────────────────────────────────────
-    if (e.type === 'sniper') {
-      const hasPlacedRubyS = state.rubyTileX !== -1;
-      if (playerCarrying || !hasPlacedRubyS) {
-        e.targeting = 'player';
-      } else {
-        const dP = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY);
-        const dR = tileEuclidDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY);
-        e.targeting = dP <= dR + 2 ? 'player' : 'ruby';
-      }
-      const sTgtTX = e.targeting === 'player' ? state.playerTileX : state.rubyTileX;
-      const sTgtTY = e.targeting === 'player' ? state.playerTileY : state.rubyTileY;
-      const sDist  = tileEuclidDist(e.tileX, e.tileY, sTgtTX, sTgtTY);
-      const sLos   = hasLineOfSight(state.map, e.tileX, e.tileY, sTgtTX, sTgtTY);
-
-      if (e.windupTicks > 0) {
-        // Cancel windup if LoS lost
-        if (!sLos || sDist > SNIPER_ATTACK_RANGE) { e.windupTicks = 0; }
-        else {
-          e.windupTicks--;
-          if (e.windupTicks === 0) fireSniperLaser(state, e);
-        }
-        continue;
-      }
-
-      if (e.attackTimer > 0) { e.attackTimer--; }
-
-      if (e.attackTimer === 0 && sDist <= SNIPER_ATTACK_RANGE && sLos) {
-        e.windupTicks = SNIPER_WINDUP_TICKS;
-        continue;
-      }
-
-      // Move toward target only when out of attack range
-      if (sDist > SNIPER_ATTACK_RANGE) {
-        e.pathTimer--;
-        if (e.pathTimer <= 0) {
-          e.path = bfs(state.map, e.targetTileX, e.targetTileY, sTgtTX, sTgtTY);
-          e.pathTimer = 25 + Math.floor(Math.random() * 15);
-        }
-        const sCfg = ENEMY_CONFIGS.sniper;
-        if (e.tileX === e.targetTileX && e.tileY === e.targetTileY && e.path.length > 0) {
-          const [ntx, nty] = e.path.shift()!;
-          if (isFloorTile(state.map, ntx, nty)) { e.targetTileX = ntx; e.targetTileY = nty; e.stepProgress = 0; }
-        } else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) {
-          e.stepProgress += sCfg.speed * celestialMoveMultiplier(state, e);
-          const sdx = e.targetTileX - e.tileX, sdy = e.targetTileY - e.tileY;
-          e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + sdx * Math.min(e.stepProgress, TILE_SIZE);
-          e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + sdy * Math.min(e.stepProgress, TILE_SIZE);
-          if (e.stepProgress >= TILE_SIZE) {
-            e.tileX = e.targetTileX; e.tileY = e.targetTileY;
-            e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2;
-            e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2;
-            e.stepProgress = 0;
-          }
-        }
-      }
-      continue;
-    }
-
-    // ── Healer special logic ─────────────────────────────────────────────
-    if (e.type === 'healer') {
-      // Tick heal cooldown
-      if (e.attackTimer > 0) e.attackTimer--;
-
-      // Heal pulse: restore HP for all allies within radius (including from range)
-      if (e.attackTimer === 0) {
-        let healedAnyone = false;
-        for (const ally of state.enemies) {
-          if (ally === e || ally.type === 'aegis_construct' || (ally.twin?.downedTicks ?? 0) > 0) continue;
-          const dist = tileEuclidDist(e.tileX, e.tileY, ally.tileX, ally.tileY);
-          if (dist <= HEALER_HEAL_RADIUS && ally.hp < ally.maxHp) {
-            ally.hp = Math.min(ally.maxHp, ally.hp + HEALER_HEAL_AMOUNT);
-            ally.healFlashTicks = 20; // pink heal aura
-            healedAnyone = true;
-          }
-        }
-        if (healedAnyone) {
-          const a = gameAudio('/sounds/swap.mp3'); a.volume = 0.15; a.play().catch(() => {});
-        }
-        e.attackTimer = HEALER_HEAL_INTERVAL;
-      }
-
-      // Find most injured ally (lowest HP ratio) to move toward
-      let healTargetTX = state.playerTileX; // fallback: drift toward player
-      let healTargetTY = state.playerTileY;
-      let lowestRatio = 1.0;
-      for (const ally of state.enemies) {
-        if (ally === e || ally.type === 'aegis_construct' || (ally.twin?.downedTicks ?? 0) > 0) continue;
-        const ratio = ally.hp / ally.maxHp;
-        if (ratio < lowestRatio) {
-          lowestRatio = ratio;
-          healTargetTX = ally.tileX;
-          healTargetTY = ally.tileY;
-        }
-      }
-
-      // Only move if not already within heal radius of target
-      const distToHealTarget = tileEuclidDist(e.tileX, e.tileY, healTargetTX, healTargetTY);
-      if (distToHealTarget > HEALER_HEAL_RADIUS) {
-        e.pathTimer--;
-        if (e.pathTimer <= 0) {
-          e.path = bfs(state.map, e.targetTileX, e.targetTileY, healTargetTX, healTargetTY);
-          e.pathTimer = 25 + Math.floor(Math.random() * 15);
-        }
-        const hCfg = ENEMY_CONFIGS.healer;
-        if (e.tileX === e.targetTileX && e.tileY === e.targetTileY && e.path.length > 0) {
-          const [ntx, nty] = e.path.shift()!;
-          if (isFloorTile(state.map, ntx, nty)) { e.targetTileX = ntx; e.targetTileY = nty; e.stepProgress = 0; }
-        } else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) {
-          e.stepProgress += hCfg.speed * celestialMoveMultiplier(state, e);
-          const hdx = e.targetTileX - e.tileX, hdy = e.targetTileY - e.tileY;
-          e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + hdx * Math.min(e.stepProgress, TILE_SIZE);
-          e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + hdy * Math.min(e.stepProgress, TILE_SIZE);
-          if (e.stepProgress >= TILE_SIZE) {
-            e.tileX = e.targetTileX; e.tileY = e.targetTileY;
-            e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2;
-            e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2;
-            e.stepProgress = 0;
-          }
-        }
-      }
-      continue;
-    }
-
-    // ── Charger special logic ─────────────────────────────────────────────
-    if (e.type === 'charger') {
-      const cCfg = ENEMY_CONFIGS.charger;
-      if (e.attackTimer > 0) e.attackTimer--;
-      // Stunned after hitting wall or player
-      if (e.windupTicks > 0) { e.windupTicks--; continue; }
-      if ((e.chargeWindupTicks ?? 0) > 0) { e.chargeWindupTicks!--; continue; }
-      const recover=(wall:boolean)=>{
-        e.chargeDirX=0;e.chargeDirY=0;e.chargeTilesLeft=0;
-        e.windupTicks=wall?CHARGER_STUN_TICKS:Math.floor(CHARGER_STUN_TICKS/2);
-        e.attackTimer=cCfg.attackCooldown;e.path=[];e.pathTimer=0;
-      };
-
-      // Currently charging
-      if (e.chargeDirX !== 0 || e.chargeDirY !== 0) {
-        if (e.tileX === e.targetTileX && e.tileY === e.targetTileY) {
-          const nx = e.tileX + e.chargeDirX;
-          const ny = e.tileY + e.chargeDirY;
-          if (!isFloorTile(state.map, nx, ny)) recover(true);
-          else if ((e.chargeTilesLeft ?? CHARGER_CHARGE_TILES) <= 0) recover(false);
-          else {
-            e.targetTileX = nx; e.targetTileY = ny; e.stepProgress = 0;
-          }
-        } else {
-          e.stepProgress += CHARGER_CHARGE_SPEED * celestialMoveMultiplier(state, e);
-          const cdx = e.targetTileX - e.tileX, cdy = e.targetTileY - e.tileY;
-          e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + cdx * Math.min(e.stepProgress, TILE_SIZE);
-          e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + cdy * Math.min(e.stepProgress, TILE_SIZE);
-          if (e.stepProgress >= TILE_SIZE) {
-            e.tileX = e.targetTileX; e.tileY = e.targetTileY;
-            e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2;
-            e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2;
-            e.stepProgress = 0;
-            e.chargeTilesLeft=(e.chargeTilesLeft ?? CHARGER_CHARGE_TILES)-1;
-            // Contact damage happens on arrival, rather than a tile before impact.
-            const hitPlayer=e.tileX===state.playerTileX&&e.tileY===state.playerTileY;
-            const hitRuby=!state.enemyDecoyActive&&state.rubyTileX!==-1&&e.tileX===state.rubyTileX&&e.tileY===state.rubyTileY;
-            if(hitPlayer||hitRuby){
-              playSFX_chargerImpact();
-              if (hitPlayer) {
-                damagePlayer(state,cCfg.damageToPlayer,e);
-                if (state.gamePhase !== 'lost' && !state.enemyDecoyActive && !state.playerKnockback && !state.saturn?.roll) {
-                  state.playerKnockback = { dirX: e.chargeDirX, dirY: e.chargeDirY, started: false };
-                }
-              } else damageRuby(state,cCfg.damageToRuby,e);
-              e.shootTicks=14;recover(false);
-            }
-          }
-        }
-        continue;
-      }
-
-      // Idle — watch for player LoS and charge
-      const cDist = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY);
-      const cLoS  = hasLineOfSight(state.map, e.tileX, e.tileY, state.playerTileX, state.playerTileY);
-      if (e.attackTimer === 0 && e.tileX===e.targetTileX && e.tileY===e.targetTileY && cDist <= CHARGER_SIGHT_RANGE && cLoS) {
-        const ddx = state.playerTileX - e.tileX, ddy = state.playerTileY - e.tileY;
-        if (Math.abs(ddx) >= Math.abs(ddy)) { e.chargeDirX = ddx > 0 ? 1 : -1; e.chargeDirY = 0; }
-        else { e.chargeDirX = 0; e.chargeDirY = ddy > 0 ? 1 : -1; }
-        e.chargeWindupTicks=CHARGER_WINDUP_TICKS;e.chargeTilesLeft=CHARGER_CHARGE_TILES;e.path=[];
-      } else {
-        e.pathTimer--;
-        if (e.pathTimer <= 0) { e.path = bfs(state.map, e.targetTileX, e.targetTileY, state.playerTileX, state.playerTileY); e.pathTimer = 35 + Math.floor(Math.random() * 20); }
-        if (e.tileX === e.targetTileX && e.tileY === e.targetTileY && e.path.length > 0) {
-          const [ntx, nty] = e.path.shift()!;
-          if (isFloorTile(state.map, ntx, nty)) { e.targetTileX = ntx; e.targetTileY = nty; e.stepProgress = 0; }
-        } else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) {
-          e.stepProgress += cCfg.speed * celestialMoveMultiplier(state, e);
-          const cdx = e.targetTileX - e.tileX, cdy = e.targetTileY - e.tileY;
-          e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + cdx * Math.min(e.stepProgress, TILE_SIZE);
-          e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + cdy * Math.min(e.stepProgress, TILE_SIZE);
-          if (e.stepProgress >= TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2; e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2; e.stepProgress = 0; }
-        }
-      }
-      continue;
-    }
-
-    // ── Ghost special logic ───────────────────────────────────────────────
-    if (e.type === 'ghost') {
-      const gCfg = ENEMY_CONFIGS.ghost;
-      const gHasRuby = state.rubyTileX !== -1;
-      const dGP = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY);
-      const dGR = gHasRuby ? tileEuclidDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) : Infinity;
-      const gTargetRuby = !playerCarrying && gHasRuby && dGR < dGP - 2;
-      const gTX = gTargetRuby ? state.rubyTileX : state.playerTileX;
-      const gTY = gTargetRuby ? state.rubyTileY : state.playerTileY;
-      e.targeting = gTargetRuby ? 'ruby' : 'player';
-
-      if (e.tileX === e.targetTileX && e.tileY === e.targetTileY) {
-        const adjPlayer = tileDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= gCfg.attackRange;
-        const adjRuby   = gHasRuby && tileDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) <= gCfg.attackRange;
-        if (e.attackTimer > 0) {
-          e.attackTimer--;
-        } else if (adjPlayer && !gTargetRuby) {
-          playSFX_enemyAttack(); damagePlayer(state, gCfg.damageToPlayer, e);
-          e.attackTimer = gCfg.attackCooldown; e.shootTicks = 14;
-        } else if (adjRuby && gTargetRuby) {
-          playSFX_enemyAttack(); damageRuby(state, gCfg.damageToRuby, e);
-          e.attackTimer = gCfg.attackCooldown; e.shootTicks = 14;
-        } else if (e.tileX !== gTX || e.tileY !== gTY) {
-          // Ghost moves through walls — greedy direction
-          const ddx = gTX - e.tileX, ddy = gTY - e.tileY;
-          let nx = e.tileX, ny = e.tileY;
-          if (Math.abs(ddx) >= Math.abs(ddy)) nx = e.tileX + (ddx > 0 ? 1 : -1);
-          else ny = e.tileY + (ddy > 0 ? 1 : -1);
-          nx = Math.max(0, Math.min(MAP_COLS - 1, nx));
-          ny = Math.max(0, Math.min(MAP_ROWS - 1, ny));
-          e.targetTileX = nx; e.targetTileY = ny; e.stepProgress = 0;
-        }
-      } else {
-        e.stepProgress += gCfg.speed * celestialMoveMultiplier(state, e);
-        const gdx = e.targetTileX - e.tileX, gdy = e.targetTileY - e.tileY;
-        e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + gdx * Math.min(e.stepProgress, TILE_SIZE);
-        e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + gdy * Math.min(e.stepProgress, TILE_SIZE);
-        if (e.stepProgress >= TILE_SIZE) {
-          e.tileX = e.targetTileX; e.tileY = e.targetTileY;
-          e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2;
-          e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2;
-          e.stepProgress = 0;
-        }
-      }
-      continue;
-    }
-
-    // ── Shielder special logic ────────────────────────────────────────────
-    if (e.type === 'shielder') {
-      const sCfg = ENEMY_CONFIGS.shielder;
-      if (e.attackTimer > 0) e.attackTimer--;
-
-      // Find most injured non-shielder ally that isn't already shielded by someone else
-      let shieldTarget: Enemy | null = null;
-      let lowestRatio = 1.0;
-      const validAllies: Enemy[] = [];
-      
-      const alreadyShielded = new Set(
-        state.enemies
-          .filter(other => other.type === 'shielder' && other !== e && other.shieldTargetId !== -1)
-          .map(other => other.shieldTargetId)
-      );
-
-      for (const ally of state.enemies) {
-        if (ally === e || ally.type === 'shielder' || ally.type === 'aegis_construct' || (ally.twin?.downedTicks ?? 0) > 0) continue;
-        if (alreadyShielded.has(ally.id)) continue; // 1 shield per shielder (unique targets)
-        
-        // Only grant shield to aliens within range
-        if (tileEuclidDist(e.tileX, e.tileY, ally.tileX, ally.tileY) > SHIELDER_SHIELD_RANGE) continue;
-
-        validAllies.push(ally);
-        const ratio = ally.hp / ally.maxHp;
-        if (ratio < lowestRatio) { lowestRatio = ratio; shieldTarget = ally; }
-      }
-
-      if (!shieldTarget && validAllies.length > 0) {
-        // No one is injured. Stick to current healthy target if still valid, otherwise pick random.
-        shieldTarget = validAllies.find(a => a.id === e.shieldTargetId) || null;
-        if (!shieldTarget) {
-          shieldTarget = validAllies[Math.floor(Math.random() * validAllies.length)];
-        }
-      }
-
-      if (shieldTarget) {
-        e.shieldTargetId = shieldTarget.id;
-        
-        e.pathTimer--;
-        if (e.pathTimer <= 0) { e.path = bfs(state.map, e.targetTileX, e.targetTileY, shieldTarget.tileX, shieldTarget.tileY); e.pathTimer = 20 + Math.floor(Math.random() * 15); }
-        if (e.tileX === e.targetTileX && e.tileY === e.targetTileY && e.path.length > 0) {
-          const [ntx, nty] = e.path.shift()!;
-          if (isFloorTile(state.map, ntx, nty)) { e.targetTileX = ntx; e.targetTileY = nty; e.stepProgress = 0; }
-        } else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) {
-          e.stepProgress += sCfg.speed * celestialMoveMultiplier(state, e);
-          const sdx = e.targetTileX - e.tileX, sdy = e.targetTileY - e.tileY;
-          e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + sdx * Math.min(e.stepProgress, TILE_SIZE);
-          e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + sdy * Math.min(e.stepProgress, TILE_SIZE);
-          if (e.stepProgress >= TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2; e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2; e.stepProgress = 0; }
-        }
-        
-        // Shielder never attacks
-      } else {
-        // No injured ally — drift toward player
-        e.shieldTargetId = -1;
-        e.pathTimer--;
-        if (e.pathTimer <= 0) { e.path = bfs(state.map, e.targetTileX, e.targetTileY, state.playerTileX, state.playerTileY); e.pathTimer = 30 + Math.floor(Math.random() * 20); }
-        if (e.tileX === e.targetTileX && e.tileY === e.targetTileY && e.path.length > 0) {
-          const [ntx, nty] = e.path.shift()!;
-          if (isFloorTile(state.map, ntx, nty)) { e.targetTileX = ntx; e.targetTileY = nty; e.stepProgress = 0; }
-        } else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) {
-          e.stepProgress += sCfg.speed * celestialMoveMultiplier(state, e);
-          const sdx = e.targetTileX - e.tileX, sdy = e.targetTileY - e.tileY;
-          e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + sdx * Math.min(e.stepProgress, TILE_SIZE);
-          e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + sdy * Math.min(e.stepProgress, TILE_SIZE);
-          if (e.stepProgress >= TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2; e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2; e.stepProgress = 0; }
-        }
-      }
-      continue;
-    }
+    // Sniper, Lancer, Healer, Charger, Ghost and Shielder have their own AI (aliens.ts)
+    if (updateRegularAlien(state, e, playerCarrying)) continue;
 
     // Determine target
     const hasPlacedRuby = state.rubyTileX !== -1;
@@ -3579,6 +3270,8 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
           playSFX_enemyAttack(e);
           damagePlayer(state, cfg.damageToPlayer, e);
           if (e.type === 'stinger' && state.neptune) { state.neptune.poisonTicks = NEPTUNE_POISON_TICKS; state.neptune.poisonTimer ||= 60; }
+          const knockback = ALIEN_KNOCKBACK[e.type];
+          if (knockback) shovePlayerFromEnemy(state, e, knockback);
           if (e.type === 'angry_mushroom') shovePlayerFromEnemy(state,e,GAIA_MUSHROOM_KNOCKBACK);
           if (e.type === 'emberling' && !e.extinguished) shovePlayerFromEnemy(state,e,SUN.emberlingKnockback);
           if (e.aegis) encounterEffect(state, 'sentinel-hit', e, state.playerX, state.playerY, 18, '#78dedf');
@@ -3636,6 +3329,7 @@ function triggerBomberExplosion(state: GameState, e: Enemy) {
   // Damage player if in range
   if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= RANGE) {
     damagePlayer(state, 25);
+    shovePlayerFromEnemy(state, e, ALIEN_KNOCKBACK.bomber!);
   }
   // Damage ruby if in range
   if (state.rubyTileX !== -1 && tileEuclidDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) <= RANGE) {
@@ -3817,7 +3511,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
   const skipRewards = fromMeteor;
   const recoveredEnergy = e.type === 'energy_leech' ? (e.stolenEnergy ?? 0) : 0;
   const wasMax = state.starEnergy >= STAR_ENERGY_MAX;
-  const energyGain = suppressEnergy ? 0 : (skipRewards ? 0 : (STAR_ENERGY_PER_KILL + (e.type === 'fast' ? 8 : 0)) * (1 + 0.2 * constellationBonus(state, 'energy'))) + recoveredEnergy;
+  const energyGain = suppressEnergy ? 0 : (skipRewards ? 0 : (STAR_ENERGY_PER_KILL + (e.type === 'charger' ? 8 : 0)) * (1 + 0.2 * constellationBonus(state, 'energy'))) + recoveredEnergy;
   addStarEnergy(state,Math.max(0,energyGain-(suppressEnergy?0:recoveredEnergy)));
   if(!suppressEnergy)addStarEnergy(state,recoveredEnergy,false);
   if (!wasMax && state.starEnergy >= STAR_ENERGY_MAX && !isBossType(e.type)) playSFX_powerUp();
@@ -3852,7 +3546,10 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       healPlayer(state, MOON_MITE_KILL_HEAL, false); showRewardEffect(state, 'player', 'heal');
       moonMiteHint(state);
     } else if (e.type === 'fast') {
-      if (!suppressEnergy) state.runnerEnergyFlashTicks = 60;
+      state.speedActiveTicks = Math.max(state.speedActiveTicks, 120);
+      state.speedFlashTicks = 15;
+      showRewardEffect(state, 'player', 'speed');
+      playSFX_speed();
     } else if (e.type === 'armored') {
       if (state.saturn) {grantSaturnShield(state, 'player', KILL_SHIELD_HP);if(e.saturnSnowballKill)grantSaturnShield(state,'ruby',KILL_SHIELD_HP);}
       else state.playerShieldHP = Math.max(state.playerShieldHP, KILL_SHIELD_HP);
@@ -3863,10 +3560,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       showRewardEffect(state, 'player', 'heal');
       try { const a = gameAudio('/sounds/grow.wav'); a.volume = 0.38; a.play().catch(() => {}); } catch {}
     } else if (e.type === 'charger') {
-      state.speedActiveTicks = Math.max(state.speedActiveTicks, 120);
-      state.speedFlashTicks = 15;
-      showRewardEffect(state, 'player', 'speed');
-      playSFX_speed();
+      if (!suppressEnergy) state.runnerEnergyFlashTicks = 60;
     } else if (e.type === 'ghost') {
       if (state.rubyTileX !== -1) {
         healCore(state, 15);
@@ -3878,6 +3572,10 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       else state.rubyShieldHP = Math.max(state.rubyShieldHP, KILL_SHIELD_HP);
       showRewardEffect(state, 'ruby', 'shield');
       playSFX_rubyToggle();
+    } else if (e.type === 'lancer') {
+      state.laserStunTicks = Math.max(state.laserStunTicks ?? 0, LANCER.rewardTicks);
+      showRewardEffect(state, 'player', 'stun');
+      playSFX_laser(0.6);
     } else if (e.type === 'sniper') {
       // Grant player electric chain buff for ~5s (300 ticks)
       state.electricBuffTicks = Math.max(state.electricBuffTicks, 300);
@@ -3992,6 +3690,11 @@ function updatePlayer(state: GameState) {
         state.playerTargetX = nx; state.playerTargetY = ny;
         state.playerStepProgress = 0;
         knockback.started = true;
+        if (!knockback.shaken) { // a small shake once per push, whatever caused it
+          knockback.shaken = true;
+          state.screenShakeTicks = Math.max(state.screenShakeTicks, KNOCKBACK_SHAKE_TICKS);
+          state.screenShakeAmt = Math.max(state.screenShakeAmt, KNOCKBACK_SHAKE_AMOUNT);
+        }
       } else state.playerKnockback = null;
     } else {
       // Try to apply queued direction
@@ -4022,7 +3725,7 @@ function updatePlayer(state: GameState) {
       }
     }
   } else {
-    state.playerStepProgress += baseSpeed;
+    state.playerStepProgress += baseSpeed * MOVE_SPEED_MULT;
     const dx = state.playerTargetX - state.playerTileX;
     const dy = state.playerTargetY - state.playerTileY;
     state.playerX = state.playerTileX * TILE_SIZE + TILE_SIZE / 2 + dx * Math.min(state.playerStepProgress, TILE_SIZE);
@@ -4083,6 +3786,68 @@ function updatePlayer(state: GameState) {
 }
 
 // ─── Meteorite ───────────────────────────────────────────────────────────────
+
+function cometGap() { return COMET.minGap + Math.floor(Math.random() * (COMET.maxGap - COMET.minGap + 1)); }
+
+/** Marks a random 3x3 area of floor in the player's room (the nearest room from a hallway) and starts the warning. */
+function startComet(state: GameState) {
+  const comet = state.comet ??= { timer: cometGap(), target: null, impact: null };
+  let room = chamberOfTile(state.playerTileX, state.playerTileY);
+  if (room < 0) {
+    let best = Infinity;
+    CHAMBER_BOUNDS.forEach(([r1, c1, r2, c2], i) => {
+      const d = Math.hypot((c1 + c2) / 2 - state.playerTileX, (r1 + r2) / 2 - state.playerTileY);
+      if (d < best) { best = d; room = i; }
+    });
+  }
+  const [r1, c1, r2, c2] = CHAMBER_BOUNDS[room], edge = Math.floor(COMET.size / 2) + 1;
+  let x = Math.min(c2 - edge, Math.max(c1 + edge, state.playerTileX)), y = Math.min(r2 - edge, Math.max(r1 + edge, state.playerTileY));
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const tx = c1 + edge + Math.floor(Math.random() * (c2 - c1 - edge * 2 + 1)), ty = r1 + edge + Math.floor(Math.random() * (r2 - r1 - edge * 2 + 1));
+    if (isFloorTile(state.map, tx, ty)) { x = tx; y = ty; break; }
+  }
+  // Sometimes it aims straight at the player instead (even in a hallway).
+  if (Math.random() < COMET.playerAimChance) { x = state.playerTileX; y = state.playerTileY; }
+  comet.target = { x, y, ticks: COMET.warningTicks };
+  playSFX_meteorWarning(false);
+}
+
+export function godTriggerComet(state: GameState) {
+  if (state.gamePhase !== 'playing' || state.comet?.target) return false;
+  startComet(state);
+  return true;
+}
+
+function strikeComet(state: GameState, cx: number, cy: number) {
+  const half = Math.floor(COMET.size / 2), inside = (tx: number, ty: number) => Math.abs(tx - cx) <= half && Math.abs(ty - cy) <= half;
+  const bossShare = state.bossesKilled >= SPECIAL_UNLOCK_KILLS ? COMET.lateBossShare : COMET.bossShare;
+  for (const e of [...state.enemies].reverse()) {
+    if (!state.enemies.includes(e) || e.hp <= 0 || (e.twin?.downedTicks ?? 0) > 0 || !inside(e.tileX, e.tileY)) continue;
+    const big = isBossType(e.type) || e.type === 'aegis_construct';
+    damageEnemy(state, e, big ? e.maxHp * bossShare : COMET.alienDamage * skillAlienScale(state), 'meteor');
+    if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
+  }
+  if (inside(state.playerTileX, state.playerTileY)) damagePlayer(state, COMET.playerDamage);
+  if (state.rubyTileX !== -1 && !state.playerCarryingRuby && inside(state.rubyTileX, state.rubyTileY)) damageRuby(state, COMET.rubyDamage);
+  state.screenShakeTicks = Math.max(state.screenShakeTicks, 14); state.screenShakeAmt = Math.max(state.screenShakeAmt, 6);
+  playSFX_bomb();
+}
+
+function updateComet(state: GameState) {
+  const comet = state.comet ??= { timer: cometGap(), target: null, impact: null };
+  if (comet.impact && --comet.impact.ticks <= 0) comet.impact = null;
+  if (comet.target) {
+    if (--comet.target.ticks === COMET.fallTicks) playAudioOneShot('/sounds/falling-thing.wav', .6 * ATTACK_SFX_VOLUME); // 0.75s, the length of the fall
+    if (comet.target.ticks > 0) return;
+    const { x, y } = comet.target;
+    comet.target = null;
+    comet.impact = { x, y, ticks: COMET.impactTicks };
+    comet.timer = cometGap();
+    strikeComet(state, x, y);
+    return;
+  }
+  if (--comet.timer <= 0) startComet(state);
+}
 
 function updateMeteorite(state: GameState) {
   if (state.meteoriteWarning >= 0) {
@@ -4239,7 +4004,7 @@ export function useLaser(state: GameState) {
           if(!state.enemies.includes(enemy)||enemy.hp<=0||enemy.twin?.downedTicks||touched.has(enemy.id)||(wide&&hitIds.has(enemy.id)))continue;
           const ex=enemy.x/TILE_SIZE-startX,ey=enemy.y/TILE_SIZE-startY,along=ex*rx+ey*ry,across=Math.abs(ex*ry-ey*rx)*TILE_SIZE;
           if(along<0||along>distance+.02||across>thickness/2+TILE_SIZE*ENEMY_CONFIGS[enemy.type].bodyFraction/2)continue;
-          touched.add(enemy.id);hitIds.add(enemy.id);damageEnemy(state,enemy,damage,'player',mirror?0:1.5);chainElectric(state,enemy);hit=true;
+          touched.add(enemy.id);hitIds.add(enemy.id);damageEnemy(state,enemy,damage,'player',mirror?0:1.5);chainElectric(state,enemy);laserStun(state,enemy);hit=true;
           if(enemy.hp<=0)killEnemy(state,state.enemies.indexOf(enemy));
         }
       }
@@ -4265,7 +4030,7 @@ export function useLaser(state: GameState) {
           const inBeam=wide?(dx!==0?enemy.tileX===tx&&Math.abs(enemy.y-(ty+.5)*TILE_SIZE)<=beamWidth!/2+bodyRadius:enemy.tileY===ty&&Math.abs(enemy.x-(tx+.5)*TILE_SIZE)<=beamWidth!/2+bodyRadius):enemy.tileX===tx&&enemy.tileY===ty;
           if(!inBeam||(wide&&hitIds.has(enemy.id)))continue;
           hitIds.add(enemy.id);
-          damageEnemy(state,enemy,dmg,'player',mirror?0:1.5);chainElectric(state,enemy);hit=true;
+          damageEnemy(state,enemy,dmg,'player',mirror?0:1.5);chainElectric(state,enemy);laserStun(state,enemy);hit=true;
           if(enemy.hp<=0)killEnemy(state,state.enemies.indexOf(enemy));
         }
       }
@@ -4277,7 +4042,6 @@ export function useLaser(state: GameState) {
   if(state.constellations.includes('rubyLaser')&&state.rubyTileX>=0&&Math.hypot(state.playerX-(state.rubyTileX+.5)*TILE_SIZE,state.playerY-(state.rubyTileY+.5)*TILE_SIZE)<=3*TILE_SIZE) {
     laserHit=emit(state.rubyTileX,state.rubyTileY,.35,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,true)||laserHit;
   }
-  storeLaserTripwires(state,firstBeam,baseDmg);
   for(const beam of state.laserBeams.slice(firstBeam))beam.solar=solarBlessingReady(state);
   state.laserCooldown = (state.build.siriusRefreshSerial??0)!==refreshBefore?0:LASER_COOLDOWN * (state.constellations.includes('laserRate') ? 0.85 : 1);
   playSFX_laser();
@@ -4339,7 +4103,7 @@ function fireWave(state: GameState) {
     }
     return hit;
   });
-  if(state.constellations.includes('waveEcho'))state.build.echoes.push({x:state.playerX,y:state.playerY,radius,damage:dmg*.4,ticks:24});
+  if(state.constellations.includes('waveEcho'))state.build.echoes.push({x:state.playerX,y:state.playerY,radius,damage:dmg*.4,ticks:120}); // Eridanus: echo 2s later
   if(state.constellations.includes('rubyWave')&&state.rubyTileX>=0)emitBuildWave(state,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,Math.max(1,radius*.6),dmg*.35);
   if(state.constellations.includes('waveLaser'))state.build.waveLaserReady=true;
   state.chargeCount = 0;
@@ -4685,6 +4449,7 @@ export function tick(state: GameState) {
   if (state.screenShakeTicks > 0) state.screenShakeTicks--;
   if (state.rubyHealCooldown > 0) state.rubyHealCooldown--;
   if (state.electricBuffTicks > 0) state.electricBuffTicks--;
+  if ((state.laserStunTicks ?? 0) > 0) state.laserStunTicks!--;
   if (state.healJiggleTicks > 0) state.healJiggleTicks--;
   if (state.hallwaySealCooldown > 0) state.hallwaySealCooldown--;
 
@@ -4802,6 +4567,7 @@ export function tick(state: GameState) {
 
   // Meteorite
   if (!state.trial?.mapOnly) updateMeteorite(state);
+  if (state.mode === 'endless' || state.mode === 'ascension') updateComet(state);
 
   // Resource spawn
   state.resourceTimer++;
@@ -4832,8 +4598,17 @@ export function tick(state: GameState) {
       if (!e || e.id===b.avoidEnemyId || (e.twin?.downedTicks ?? 0) > 0) continue;
       if (isSeaChanterDiving(e)) continue;
       if (Math.abs(e.tileX + 0.5 - b.x) < 0.6 && Math.abs(e.tileY + 0.5 - b.y) < 0.6) {
-        damageEnemy(state, e, dmg,b.blessingDecoy?'summon':'player',!b.blessingDecoy&&!b.mirror&&!b.blessingCopy?.5:0);
-        if(!b.blessingDecoy){buildBulletHit(state,e,dmg);chainElectric(state,e);}
+        // Heavy bullets (every 20th shot): +20% damage and a one-tile push for regular aliens.
+        const heavy = !!b.heavy && !b.blessingDecoy;
+        const hitDmg = heavy ? dmg * BULLET_HEAVY_MULT : dmg;
+        damageEnemy(state, e, hitDmg,b.blessingDecoy?'summon':'player',!b.blessingDecoy&&!b.mirror&&!b.blessingCopy?.5:0);
+        if(!b.blessingDecoy){buildBulletHit(state,e,hitDmg);chainElectric(state,e);}
+        if (heavy && e.hp > 0 && !isBossType(e.type)) {
+          const horizontal = Math.abs(b.dx) >= Math.abs(b.dy);
+          e.pushDirX = horizontal ? Math.sign(b.dx) || 1 : 0; e.pushDirY = horizontal ? 0 : Math.sign(b.dy) || 1;
+          e.pushTiles = Math.max(e.pushTiles, BULLET_HEAVY_PUSH);
+        }
+        if (heavy) { state.build.impacts.push({ x: e.x, y: e.y, kind: 'slam', ticks: 18 }); playAudioOneShot('/sounds/hitHurt.wav', .45 * ATTACK_SFX_VOLUME, .8); }
         hit = true;
         if (e.hp <= 0) killEnemy(state, j);
         break; // no piercing
@@ -5244,6 +5019,12 @@ export function useBullet(state: GameState) {
   const powered = checkAndConsumePower(state);
 
   fireBulletFrom(state, state.playerTileX, state.playerTileY, state.playerX / TILE_SIZE, state.playerY / TILE_SIZE, powered, false);
+  const heavy = (state.bulletShotCount = (state.bulletShotCount ?? 0) + 1) % BULLET_HEAVY_EVERY === 0;
+  if (heavy) {
+    for (const bullet of state.laserBullets.slice(firstBullet)) bullet.heavy = true; // the player's own shot, not twin or Ruby copies
+    playAudioOneShot('/sounds/laserBullet.mp3', .9 * ATTACK_SFX_VOLUME, .7);
+    playAudioOneShot('/sounds/bomb-ready.wav', .35 * ATTACK_SFX_VOLUME, 1.3);
+  }
   const twin = getMirrorTwinTile(state);
   if (twin) fireBulletFrom(state, twin.tileX, twin.tileY, twin.tileX + .5, twin.tileY + .5, powered, true);
   const copy=rubyBlessingCopy(state);

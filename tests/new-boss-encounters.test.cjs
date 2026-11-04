@@ -151,7 +151,7 @@ test('Dusk moves at 3.8 and Dawn at 2.9', () => {
   s.map = s.map.map(row => row.map(() => c.T_FLOOR));
   position(a, 5, 10); position(b, 12, 10); movePlayer(s, 19, 10);
   a.path = [[6, 10]]; b.path = [[13, 10]]; a.attackTimer = b.attackTimer = 100;
-  e.tick(s); e.tick(s); close(a.stepProgress, 2.9); close(b.stepProgress, 3.8);
+  e.tick(s); e.tick(s); close(a.stepProgress, 2.9 * c.MOVE_SPEED_MULT); close(b.stepProgress, 3.8 * c.MOVE_SPEED_MULT);
 });
 
 test('Dusk tracking honors Lunar Echo and restores the real player position', () => {
@@ -182,7 +182,7 @@ test('Aegis runs fast while shielded and slows while its core is exposed', () =>
     const s = fresh('aegis_sentinel'), boss = s.enemies[0]; movePlayer(s, 18, 10); s.playerCarryingRuby = true; s.rubyTileX = s.rubyTileY = -1;
     if (exposed) for (const construct of s.enemies.slice(1)) hit(s, construct, 100);
     position(boss, 10, 10); boss.attackTimer = 0; boss.path = [[11, 10]];
-    e.tick(s); e.tick(s); close(boss.stepProgress, exposed ? c.AEGIS_EXPOSED_SPEED : 4);
+    e.tick(s); e.tick(s); close(boss.stepProgress, (exposed ? c.AEGIS_EXPOSED_SPEED : 4) * c.MOVE_SPEED_MULT);
   }
 });
 
@@ -387,7 +387,7 @@ test('survivor goes berserk while its partner is down: faster, quicker attacks, 
   hit(s, b, 1000); assert.ok(b.twin.downedTicks > 0); assert.ok(a.twin.partnerDownTicks > 0);
   const before = a.hp; hit(s, a, 10); close(a.hp, before - 10 * c.TWIN_BERSERK_DAMAGE_TAKEN);
   Object.assign(a, { targetTileX: a.tileX + 1, stepProgress: 0, pathTimer: 100000 }); e.tick(s);
-  close(a.stepProgress, c.ENEMY_CONFIGS.astral_twins.speed * c.TWIN_BERSERK_SPEED_MULT);
+  close(a.stepProgress, c.ENEMY_CONFIGS.astral_twins.speed * c.TWIN_BERSERK_SPEED_MULT * c.MOVE_SPEED_MULT);
   position(a, a.tileX, a.tileY); movePlayer(s, a.tileX + 1, a.tileY); a.attackTimer = 0; e.tick(s);
   assert.equal(a.attackTimer, Math.round(c.ENEMY_CONFIGS.astral_twins.attackCooldown * c.TWIN_BERSERK_COOLDOWN_MULT));
   ticks(s, b.twin.downedTicks); assert.equal(a.twin.partnerDownTicks, 0);

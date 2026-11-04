@@ -76,7 +76,7 @@ export function restoreRun(mode:string,trialId?:string):GameState|null{
   if(trialId==='saturn'&&!s?.saturn)return null;
   if(!s||!Array.isArray(s.map)||s.map.length!==51||!s.map.every(row=>Array.isArray(row)&&row.length===51)||!Array.isArray(s.enemies)||!s.build||!s.ambientEvents||!Number.isFinite(s.playerHP)||!Number.isFinite(s.gameTick)||!['playing','teleporting','laserTarget','constellation','blessing','skillChoice'].includes(s.gamePhase))return null;
   const arrays=['resources','frostIceTiles','laserBeams','laserBullets','waveEffects','bombBlasts','lightningArcs','slashEffects','deathParticles','rewardEffects','prayerWaves','thornPatches','encounterEffects','seaSongWaves','seaSongBursts','specialEffects','venusReflects','teleportDestOptions','constellations','constellationChoices','bossPool'];
-  const buildArrays=['blessings','blessingChoices','zones','echoes','tripwires','impacts'];
+  const buildArrays=['blessings','blessingChoices','zones','echoes','impacts'];
   if(arrays.some(key=>!Array.isArray((s as unknown as Record<string,unknown>)[key]))||buildArrays.some(key=>!Array.isArray((s.build as unknown as Record<string,unknown>)[key])))return null;
   if(s.enemies.some(enemy=>!enemy||!Array.isArray(enemy.path)||!Number.isFinite(enemy.hp)||!Number.isFinite(enemy.x)||!Number.isFinite(enemy.y)||typeof enemy.type!=='string'))return null;
   if(!['endless','ascension','tutorial','trial'].includes(entry.mode)||s.mode!==entry.mode)return null;

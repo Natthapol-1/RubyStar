@@ -16,7 +16,7 @@ Celestial blessings target roughly two constellation choices in overall value. H
 | Lepus | +20% total volley damage; distributes fire to two targets, with a smaller hit on each |
 | Draco | +25% Wave damage, automatic |
 | Centaurus | Shorter Wave cooldown; benefits damage, push and readiness, but the one-second charge still costs time |
-| Eridanus | +40% Wave damage only if targets remain in its delayed area; no extra push |
+| Eridanus | +40% Wave damage on whatever is around you 2s after the cast; no extra push |
 | Scorpius | +20% bomb damage; also raises self-blast damage |
 | Cepheus | 20% shorter bomb cooldown =25% more potential detonations; requires more placements and escapes |
 | Perseus | +1 bomb-radius tile; more coverage with a larger self-danger area |
@@ -34,7 +34,7 @@ Celestial blessings target roughly two constellation choices in overall value. H
 | Cassiopeia | The same effective-capacity gain for Ruby instead of the player |
 | Sculptor | +50% Wave damage when an ordinary alien is actually pushed into cover; bosses and failed contacts give none |
 | Sagitta | A 50%-damage Laser return; gains two extra return tiles but needs cover geometry and a connecting reflected ray |
-| Reticulum | A 50%-damage tripwire and brief stop; requires a later crossing after arming, the two latest Laser casts can coexist without refreshing old lifetimes |
+| Reticulum | Crowd control only, no damage: a 0.4s stop per alien at most every 2s (about 20% downtime on a target you keep lasering); bosses immune |
 | Andromeda | Wider, wall-piercing Laser after a completed Wave; rewards a two-action setup, without direct damage inflation |
 | Ara | A one-bullet-damage splash at most every 1.5s; weaker against one target than Orion, stronger against a packed group |
 | Lupus | A 50%-Wave splash after three bullet hits; requires setup on a surviving target and then a connecting Wave |
@@ -46,8 +46,8 @@ Celestial blessings target roughly two constellation choices in overall value. H
 | Fornax | Groups ordinary aliens before a bomb, improving hit count at the cost of a short detonation delay |
 | Lacerta | A narrow, short-lived slow trail; rewards escape routes and enemy pursuit rather than standing still |
 | Puppis | Faster Wave setup after manual boost; rewards alternating mobility and charging |
-| Dorado | A larger 2-DPS slow field during charging and for 1.5s afterward; stationary, close-range activation is the cost |
-| Serpens | The same damage/slow in smaller four-second death fields; needs kills and enemies near those positions |
+| Dorado | A larger 2-DPS slow field during charging and for 3s afterward; stationary, close-range activation is the cost |
+| Serpens | The same damage/slow in smaller 5.5-second death fields; needs kills and enemies near those positions |
 | Vulpecula | Bomb survivors stop for 1.2s (1s bosses); no duration stacking, and no stun through shield-only damage |
 | Circinus | Eight direct bullet hits give 4 player shield, at most once per 3s and capped at 12; useful against bosses without kills |
 

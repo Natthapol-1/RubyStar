@@ -35,7 +35,7 @@ test('Devourer is swift; each stack adds half a point of damage but no reach',()
 test('stacks do not slow her down',()=>{
  for(const stacks of [0,3]){
   const s=fresh(),e=s.enemies[0];s.godMode=true;place(e,20,20);e.chargeDirX=stacks;e.windupTicks=1000;e.attackTimer=1000;
-  e.targetTileX=21;engine.tick(s);assert.equal(e.stepProgress,3.4);
+  e.targetTileX=21;engine.tick(s);assert.ok(Math.abs(e.stepProgress-3.4*c.MOVE_SPEED_MULT)<1e-9);
  }
 });
 
@@ -114,7 +114,7 @@ test('newborn speed boost is 1.5x and ends with the newborn window',()=>{
  for(const [ticks,mult] of [[c.DEVOURER_NEWBORN_TICKS,c.DEVOURER_NEWBORN_SPEED_MULT],[0,1]]){
   const s=fresh(),e=s.enemies[0];s.godMode=true;place(e,20,20);e.devourer={generation:1,newbornTicks:ticks};
   e.windupTicks=1000;e.attackTimer=1000;e.targetTileX=21;e.pathTimer=1000;engine.tick(s);
-  assert.ok(Math.abs(e.stepProgress-3.4*c.DEVOURER_GEN_SPEED_MULT*mult)<1e-9,`${e.stepProgress}`);
+  assert.ok(Math.abs(e.stepProgress-3.4*c.DEVOURER_GEN_SPEED_MULT*mult*c.MOVE_SPEED_MULT)<1e-9,`${e.stepProgress}`);
  }
 });
 
@@ -139,7 +139,7 @@ test('each copy generation moves 10% slower than the one before',()=>{
  for(const generation of [0,1,3]){
   const s=fresh(),e=s.enemies[0];s.godMode=true;place(e,20,20);e.chargeDirX=3;e.windupTicks=1000;e.attackTimer=1000;
   if(generation)e.devourer={generation,newbornTicks:0};e.targetTileX=21;engine.tick(s);
-  assert.ok(Math.abs(e.stepProgress-3.4*.9**generation)<1e-9,'generation '+generation+': '+e.stepProgress);
+  assert.ok(Math.abs(e.stepProgress-3.4*.9**generation*c.MOVE_SPEED_MULT)<1e-9,'generation '+generation+': '+e.stepProgress);
  }
 });
 

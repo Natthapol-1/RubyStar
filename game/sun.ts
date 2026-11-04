@@ -1,4 +1,4 @@
-import { ENEMY_CONFIGS, SUN, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, CHAMBER_LABELS, chamberOfTile } from './constants';
+import { ENEMY_CONFIGS, MOVE_SPEED_MULT, SUN, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, CHAMBER_LABELS, chamberOfTile } from './constants';
 import { stormSlowMultiplier, bfs, createEncounterEnemy, grantInstantSpeedBoost, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healCore, healPlayer, killEnemy, playAudioOneShot, playCelestialSound, type Enemy, type GameState } from './engine';
 import { playUiSfx } from './ui-sfx';
 
@@ -297,7 +297,7 @@ export function updateScorchSapper(state: GameState, e: Enemy) {
     const next = e.path.shift(); if (next) { [e.targetTileX, e.targetTileY] = next; e.stepProgress = 0; }
     return;
   }
-  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS.scorch_sapper.speed * stormSlowMultiplier(state,e));
+  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS.scorch_sapper.speed * MOVE_SPEED_MULT * stormSlowMultiplier(state,e));
   e.x = (e.tileX + .5) * TILE_SIZE + (e.targetTileX - e.tileX) * e.stepProgress;
   e.y = (e.tileY + .5) * TILE_SIZE + (e.targetTileY - e.tileY) * e.stepProgress;
   if (e.stepProgress >= TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.stepProgress = 0; }

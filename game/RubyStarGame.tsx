@@ -75,8 +75,8 @@ import {
   PLAYER_MAX_HP, RUBY_MAX_HP,
   LASER_COOLDOWN,
   STAR_ENERGY_MAX,
-  METEORITE_WARNING, METEORITE_CYCLE, BULLET_COOLDOWN, BULLET_SPEED,
-  HEALER_HEAL_INTERVAL, QUEEN_WINDUP_TICKS, QUEEN_PHASE_TELEGRAPH, CHARGER_WINDUP_TICKS, CHARGER_CHARGE_TILES,
+  METEORITE_WARNING, METEORITE_CYCLE, BULLET_COOLDOWN, BULLET_SPEED, COMET,
+  HEALER_HEAL_INTERVAL, QUEEN_WINDUP_TICKS, QUEEN_PHASE_TELEGRAPH, CHARGER_WINDUP_TICKS, CHARGER_CHARGE_TILES, LANCER,
   PRAYER_RUBY_WINDUP, PRAYER_ESCAPE_WINDUP, SEA_SONG_WINDUP, SEA_SONG_BLAST_RADIUS, SEA_SONG_BLAST_TICKS, SEA_ALLY_HEAL_RADIUS,
   KING_ARENA_WINDUP, KING_ARENA_FX_TICKS,
   THORN_WINDUP, THORN_RADIUS, THORN_LIFETIME, getThornFieldBounds,
@@ -84,7 +84,7 @@ import {
 import {
   GameState, RubyStarMode, createModeState, tick, CONSTELLATIONS, chooseConstellation, openGodConstellations, closeGodConstellations, getBombRadius,
   AMBIENT_EVENTS, STAR_FALL_TICKS, SUPERNOVA_CHARGE_TICKS, SUPERNOVA_BLAST_TICKS, triggerAmbientEvent, AmbientEventKind,
-  useLaser, useBullet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
+  useLaser, useBullet, lancerBeamEnd, godTriggerComet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
   chooseStartingSkill, chooseSkyLaser, cancelSkyLaser, toggleCarryRuby, tryActivateTeleport, isNearTeleportPad, doTeleport, cancelTeleport,
   healRuby, isPlayerChilled, isMovementReversed, isSeaChanterDiving, isEnemyVisibleOnMinimap, startChargeSound, stopChargeSound, stopPoisonSound, stopSingularitySound, stopGaiaFieldSound,
   METEOR_CLOCKWISE_ORDER, getMirrorTwinTile, devourerBodyScale,
@@ -2135,14 +2135,16 @@ function drawPlayerCharge(ctx: CanvasRenderingContext2D, x: number, y: number, h
   ctx.restore();
 }
 
-function drawPlayerBullet(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number, powered: boolean, ticks: number,tint?:'solar'|'lunar'|'emerald'|'opal'|'amber') {
+function drawPlayerBullet(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number, powered: boolean, ticks: number,tint?:'solar'|'lunar'|'emerald'|'opal'|'amber',heavy=false) {
   ctx.save();ctx.lineCap='square';const len=Math.hypot(dx,dy)||1,nx=dx/len,ny=dy/len;
-  const tail=Math.min(TILE_SIZE*1.5,Math.max(0,ticks)*BULLET_SPEED*TILE_SIZE),width=powered?30:18;
+  const tail=Math.min(TILE_SIZE*1.5,Math.max(0,ticks)*BULLET_SPEED*TILE_SIZE),width=(powered?30:18)*(heavy?1.35:1);
   const base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#33e89b':tint==='lunar'?'#c18bfa':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='lunar'?'#f2dfff':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff';
   for(const [w,color,alpha,glow]of [[width*1.8,base,.3,22],[width,base,.8,10],[Math.max(4,width*.4),light,1,0]] as const){
     ctx.globalAlpha=alpha;ctx.shadowColor=base;ctx.shadowBlur=glow;ctx.strokeStyle=color;ctx.lineWidth=w;
     ctx.beginPath();ctx.moveTo(x-nx*tail,y-ny*tail);ctx.lineTo(x+nx*TILE_SIZE*.4,y+ny*TILE_SIZE*.4);ctx.stroke();
   }
+  // Heavy shot: a white square head at the tip.
+  if(heavy){const hx=Math.round(x+nx*TILE_SIZE*.4),hy=Math.round(y+ny*TILE_SIZE*.4),h=Math.round(width*.35);ctx.globalAlpha=1;ctx.shadowColor='#ffffff';ctx.shadowBlur=8;ctx.fillStyle='#ffffff';ctx.fillRect(hx-h,hy-h,h*2,h*2);}
   ctx.restore();
 }
 
@@ -2292,7 +2294,7 @@ function drawRewardPulses(ctx: CanvasRenderingContext2D, state: GameState, camX:
     const x=Math.round((onPlayer?state.playerX:(state.rubyTileX+.5)*TILE_SIZE)-camX);
     const y=Math.round((onPlayer?state.playerY:(state.rubyTileY+.5)*TILE_SIZE)-camY);
     const progress=1-fx.ticks/36,fade=Math.min(1,fx.ticks/18),radius=18+Math.floor(progress*9)*3;
-    const color=fx.kind==='heal'?(fx.target==='ruby'?'#ff88aa':'#66cc88'):fx.kind==='shield'?(fx.target==='ruby'?'#49bfb1':'#6c9ce0'):fx.kind==='speed'?'#60d8c7':fx.kind==='electric'?'#e6cf65':fx.kind==='restore'?'#edc75b':'#82b7ef';
+    const color=fx.kind==='heal'?(fx.target==='ruby'?'#ff88aa':'#66cc88'):fx.kind==='shield'?(fx.target==='ruby'?'#49bfb1':'#6c9ce0'):fx.kind==='speed'?'#60d8c7':fx.kind==='electric'?'#e6cf65':fx.kind==='stun'?'#ff8aa6':fx.kind==='restore'?'#edc75b':'#82b7ef';
     ctx.save();ctx.shadowBlur=0;
     if(fx.kind==='heal'){
       for(let i=0;i<3;i++){
@@ -2462,7 +2464,7 @@ function drawMobBrackets(ctx: CanvasRenderingContext2D, x: number, y: number, ra
 
 
 function drawMobAttack(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, targetX: number, targetY: number, ticks: number, color: string) {
-  if(type==='ice_caller'||type==='rime_brute'||type==='sniper'||type==='healer'||type==='shielder'||type==='bomber')return;
+  if(type==='ice_caller'||type==='rime_brute'||type==='sniper'||type==='lancer'||type==='healer'||type==='shielder'||type==='bomber')return;
   ctx.save();ctx.shadowColor=color;ctx.shadowBlur=3;
   const fade=Math.min(1,ticks/14),progress=1-fade,dx=targetX-x,dy=targetY-y,len=Math.hypot(dx,dy)||1;
   if(type==='energy_leech'){
@@ -3829,6 +3831,20 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     ctx.fillRect(sx - sgap - 1, sy - half - antH - dotSz, dotSz, dotSz);
     ctx.fillRect(sx + sgap, sy - half - antH - dotSz, dotSz, dotSz);
     ctx.shadowBlur = 0;
+  } else if (e.type === 'lancer') {
+    // Open railgun fork: two prongs rising from a base bar, a core between them that brightens while charging
+    const charge = e.windupTicks > 0 ? 1 - e.windupTicks / LANCER.windupTicks : 0;
+    const pgap = Math.floor(size * 0.18), pw = 3, prongH = antH + 5, base = sy - half - 3, top = base - prongH + 3;
+    ctx.shadowBlur = 4;
+    ctx.fillRect(sx - pgap - pw, base, pgap * 2 + pw * 2, 3);
+    ctx.fillRect(sx - pgap - pw, top, pw, prongH);
+    ctx.fillRect(sx + pgap, top, pw, prongH);
+    ctx.fillStyle = '#ffb3c6'; ctx.fillRect(sx - pgap - pw, top - 2, pw, 2); ctx.fillRect(sx + pgap, top - 2, pw, 2);
+    ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 4 + charge * 10;
+    ctx.fillStyle = charge > 0 ? '#fff0f4' : '#ffb3c6';
+    const core = 4 + Math.round(charge * 2);
+    ctx.fillRect(sx - Math.floor(core / 2), top + 2, core, core);
+    ctx.shadowBlur = 0;
   } else {
     // normal / armored: single centered antenna
     const aw = e.type === 'armored' ? 3 : 2;
@@ -3854,6 +3870,13 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
         ctx.fillStyle = i < cells ? '#ffe58b' : '#82549e';
         ctx.fillRect(Math.round(sx) - 6 + i * 5, mouthY + 5, 3, 2);
       }
+      ctx.shadowBlur = 0;
+    } else if (e.type === 'lancer') {
+      // Wide visor slit; it whitens while the shot charges
+      const width = Math.floor(size * 0.62), left = Math.round(sx - width / 2), charging = e.windupTicks > 0;
+      ctx.fillStyle = '#3a0a18'; ctx.fillRect(left - 1, eyeY - 1, width + 2, 6);
+      ctx.shadowColor = charging ? '#ffffff' : '#ff3d6e'; ctx.shadowBlur = charging ? 8 : 4;
+      ctx.fillStyle = charging ? '#fff0f4' : '#ff8aa6'; ctx.fillRect(left, eyeY, width, 4);
       ctx.shadowBlur = 0;
     } else if (e.type === 'sniper') {
       // 1 large central cycloptic eye
@@ -4115,6 +4138,11 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
   if(e.type==='healer'){
     const ready=Math.max(0,Math.min(1,1-e.attackTimer/HEALER_HEAL_INTERVAL)),pulse=.4+.6*Math.abs(Math.sin(tickN*.1));
     drawMobBrackets(ctx,sx,sy,half+4+Math.floor(ready*10),'#ff55cc',(.2+.6*ready)*pulse,2);
+  }
+
+  if(e.type==='lancer'&&e.windupTicks>0){
+    const progress=Math.max(0,Math.min(1,1-e.windupTicks/LANCER.windupTicks));
+    drawMobBrackets(ctx,sx,sy,half+14-Math.floor(progress*8),'#ff3d6e',.5+progress*.4,3);
   }
 
   if(e.type==='sniper'&&e.windupTicks>0){
@@ -4434,6 +4462,85 @@ function drawReaperHallwaySeal(ctx: CanvasRenderingContext2D, state: GameState, 
   ctx.restore();
 }
 
+// Lancer aim: the beam's hit band and a dotted line to where a wall (or range) stops it; whitens just before firing.
+function drawLancerWarnings(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
+  ctx.save();
+  for(const enemy of state.enemies){
+    if(enemy.type!=='lancer'||enemy.hp<=0||enemy.windupTicks<=0||enemy.lanceDirX===undefined)continue;
+    const progress=1-enemy.windupTicks/LANCER.windupTicks,end=lancerBeamEnd(state,enemy),late=enemy.windupTicks<=12;
+    const x0=enemy.x-camX,y0=enemy.y-camY,x1=end.x*TILE_SIZE-camX,y1=end.y*TILE_SIZE-camY,len=Math.hypot(x1-x0,y1-y0);
+    const band=LANCER.hitRadius*TILE_SIZE*2,color=late&&tickN%6<3?'#ffffff':'#ff3d6e';
+    ctx.save();ctx.translate(x0,y0);ctx.rotate(Math.atan2(y1-y0,x1-x0));
+    ctx.globalAlpha=.06+progress*.1;ctx.fillStyle='#ff3d6e';ctx.fillRect(0,-band/2,len,band);
+    ctx.globalAlpha=.35+progress*.5;ctx.fillStyle=color;
+    for(let d=16;d<len-4;d+=18)ctx.fillRect(Math.round(d),-4,Math.min(12,len-4-d),8);
+    ctx.restore();
+    ctx.globalAlpha=.55+progress*.4;ctx.strokeStyle=color;ctx.lineWidth=2;
+    ctx.strokeRect(Math.round(x1)-6,Math.round(y1)-6,12,12);
+  }
+  ctx.restore();
+}
+
+// Comet warning: the 3x3 strike area in icy blue-white, filling in and blinking faster as impact nears.
+function drawCometWarning(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
+  const target = state.comet?.target;
+  if (!target) return;
+  const progress = 1 - target.ticks / COMET.warningTicks, half = Math.floor(COMET.size / 2);
+  const left = Math.round((target.x - half) * TILE_SIZE - camX), top = Math.round((target.y - half) * TILE_SIZE - camY), size = COMET.size * TILE_SIZE;
+  const blink = target.ticks <= 40 ? (tickN % 8 < 4 ? 1 : .55) : 1;
+  ctx.save();
+  for (let dy = -half; dy <= half; dy++) for (let dx = -half; dx <= half; dx++) {
+    const x = left + (dx + half) * TILE_SIZE, y = top + (dy + half) * TILE_SIZE;
+    ctx.globalAlpha = (.08 + progress * .2) * blink; ctx.fillStyle = '#8fd8ff'; ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+  }
+  ctx.globalAlpha = (.55 + progress * .4) * blink; ctx.strokeStyle = '#d6f6ff'; ctx.lineWidth = 3;
+  ctx.shadowColor = '#8fd8ff'; ctx.shadowBlur = 6; ctx.strokeRect(left + 2, top + 2, size - 4, size - 4); ctx.shadowBlur = 0;
+  const arm = 16, inset = Math.round((1 - progress) * 18);
+  ctx.fillStyle = '#ffffff';
+  for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const x = sx ? left + size - inset : left + inset, y = sy ? top + size - inset : top + inset, ox = sx ? -arm : 0, oy = sy ? -arm : 0;
+    ctx.fillRect(x + ox, sy ? y - 4 : y, arm, 4); ctx.fillRect(sx ? x - 4 : x, y + oy, 4, arm);
+  }
+  ctx.restore();
+}
+
+// Comet in flight (last fallTicks of the warning) and its brief square impact burst.
+function drawComet(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
+  const comet = state.comet;
+  if (!comet) return;
+  ctx.save();
+  if (comet.target && comet.target.ticks <= COMET.fallTicks) {
+    const t = 1 - comet.target.ticks / COMET.fallTicks;
+    const tx = (comet.target.x + .5) * TILE_SIZE - camX, ty = (comet.target.y + .5) * TILE_SIZE - camY;
+    const hx = tx + (1 - t) * TILE_SIZE * 6, hy = ty - (1 - t) * TILE_SIZE * 9;
+    const dx = tx - hx, dy = ty - hy, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    for (let i = 7; i >= 1; i--) {
+      const s = Math.max(4, 22 - i * 2.5), px = Math.round(hx - ux * i * 14 - s / 2), py = Math.round(hy - uy * i * 14 - s / 2);
+      ctx.globalAlpha = .75 - i * .08; ctx.fillStyle = i % 2 ? '#8fd8ff' : '#d6f6ff'; ctx.fillRect(px, py, s, s);
+    }
+    ctx.globalAlpha = 1; ctx.shadowColor = '#bdf0ff'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#8fd8ff'; ctx.fillRect(Math.round(hx) - 14, Math.round(hy) - 14, 28, 28);
+    ctx.shadowBlur = 0; ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(hx) - 7, Math.round(hy) - 7, 14, 14);
+  }
+  const impact = comet.impact;
+  if (impact) {
+    const age = COMET.impactTicks - impact.ticks, fade = impact.ticks / COMET.impactTicks;
+    const x = Math.round((impact.x + .5) * TILE_SIZE - camX), y = Math.round((impact.y + .5) * TILE_SIZE - camY), area = COMET.size * TILE_SIZE;
+    if (age < 10) { ctx.globalAlpha = (1 - age / 10) * .6; ctx.fillStyle = '#e6f9ff'; ctx.fillRect(x - area / 2, y - area / 2, area, area); }
+    for (let i = 0; i < 2; i++) {
+      const r = Math.floor((20 + age * (4 + i * 2)) / 6) * 6;
+      ctx.globalAlpha = fade * (i ? .5 : .85); ctx.strokeStyle = i ? '#8fd8ff' : '#ffffff'; ctx.lineWidth = i ? 4 : 6;
+      ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+    }
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8, d = 12 + age * 3.2, s = i % 2 ? 4 : 6;
+      ctx.globalAlpha = fade * .8; ctx.fillStyle = i % 3 ? '#bdf0ff' : '#ffffff';
+      ctx.fillRect(Math.round((x + Math.cos(a) * d) / 2) * 2 - s / 2, Math.round((y + Math.sin(a) * d - age * .6) / 2) * 2 - s / 2, s, s);
+    }
+  }
+  ctx.restore();
+}
+
 function drawChargerWarnings(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number) {
   ctx.save();
   for(const enemy of state.enemies){
@@ -4536,6 +4643,8 @@ function drawGame(
   drawAmbientEvents(ctx,state,camX,camY,viewW,viewH);
   drawReaperHallwaySeal(ctx,state,camX,camY,tickN);
   drawChargerWarnings(ctx,state,camX,camY);
+  drawLancerWarnings(ctx,state,camX,camY,tickN);
+  drawCometWarning(ctx,state,camX,camY,tickN);
 
   // Frost Warden chill field — persistent icy wash + frosty border over whichever chamber
   // she currently occupies, so the chill debuff is visible, not just felt
@@ -4826,7 +4935,7 @@ function drawGame(
 
   // Player bullets use the same crisp pixel vocabulary as celestial effects.
   for(const bullet of state.laserBullets || []){
-    drawPlayerBullet(ctx,bullet.x*TILE_SIZE-camX,bullet.y*TILE_SIZE-camY,bullet.dx,bullet.dy,bullet.powered,bullet.ticks,bullet.blessingDecoy?'lunar':playerAttackTint(state,!!bullet.blessingCopy,bullet.powered));
+    drawPlayerBullet(ctx,bullet.x*TILE_SIZE-camX,bullet.y*TILE_SIZE-camY,bullet.dx,bullet.dy,bullet.powered,bullet.ticks,bullet.blessingDecoy?'lunar':playerAttackTint(state,!!bullet.blessingCopy,bullet.powered),!!bullet.heavy);
   }
 
   // Player electric buff chains have stable pixel steps and pale cores.
@@ -4847,6 +4956,9 @@ function drawGame(
     if(!beam.color){
       drawPlayerLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,!!beam.powered,beam.ticks,beam.width,playerAttackTint(state,!!beam.opal,!!beam.powered));
       continue;
+    }
+    if(beam.color===ENEMY_CONFIGS.lancer.color){
+      drawEnemyLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,Math.min(1,beam.ticks/LANCER.beamTicks),['#ff3d6e','#ff8aa6','#fff0f4'],[22,9,3]);continue;
     }
     if(beam.color==='#ffdd22'){
       drawEnemyLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,Math.min(1,beam.ticks/18),['#ffcc22','#ffe680','#fffbe6'],[16,6,2]);continue;
@@ -4882,6 +4994,7 @@ function drawGame(
   if(state.jupiter)drawJupiterGuard(ctx,state,camX,camY,state.gameTick);
   drawGaiaOverlay(ctx, state, camX, camY, tickN);
   drawMeteorImpact(ctx, state, camX, camY);
+  drawComet(ctx, state, camX, camY, tickN);
   drawSkyLaserImpact(ctx, state, camX, camY);
   for(const effect of state.sapphireHitEffects??[]){
     if(effect.untilTick<=state.gameTick)continue;
@@ -5258,6 +5371,9 @@ export function SkillPortrait({kind}:{kind:SpecialSkill}){
 export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; trialId?: TrialBody }) {
   const godPanelRef=useRef<HTMLDivElement>(null);
   const [godPanelScale,setGodPanelScale]=useState(1);
+  const [godCollapsed,setGodCollapsed]=useState(false);
+  useEffect(()=>{try{setGodCollapsed(localStorage.getItem('rubyStar.godCollapsed')==='1');}catch{}},[]);
+  const toggleGodCollapsed=()=>setGodCollapsed(collapsed=>{try{localStorage.setItem('rubyStar.godCollapsed',collapsed?'0':'1');}catch{}return !collapsed;});
   const [showPause,setShowPause]=useState(false);
   const [showControlSettings,setShowControlSettings]=useState(false);
   const [resumePrompt,setResumePrompt]=useState(false);
@@ -5813,7 +5929,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const powered = (state?.poweredTicks ?? 0) > 0 || (state?.starEnergy ?? 0) >= STAR_ENERGY_MAX;
   const carrying = state?.playerCarryingRuby ?? true;
   const godPanelTop = 8;
-  const godPanelWidth = 320;
+  const godPanelWidth = godCollapsed ? 180 : 320;
   const prayerSpawnWarning = phase === 'playing' && (state?.bossSpawnTicks ?? 0) > 0 && !!state && isMovementReversed(state);
   const playerStatuses: { key: string; label: string; color: string; seconds?: number; progress?: number }[] = [];
   if(state){
@@ -5821,6 +5937,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     else if(isPlayerChilled(state))playerStatuses.push({key:'chilled',label:'CHILLED · MOVE & ATTACK SLOW',color:'#8ecfe9'});
     if((state.jupiter?.slowTicks??0)>0)playerStatuses.push({key:'static',label:'STATIC · SLOWED',color:'#9fd8ff',seconds:state.jupiter!.slowTicks/60,progress:state.jupiter!.slowTicks/JUPITER.shockSlowTicks});
     if(isMovementReversed(state))playerStatuses.push({key:'reversed',label:'CONTROLS REVERSED',color:'#ffe477'});
+    if((state.laserStunTicks??0)>0)playerStatuses.push({key:'laser-stun',label:'LASER STUN',color:'#ff8aa6',seconds:state.laserStunTicks!/60,progress:state.laserStunTicks!/LANCER.rewardTicks});
     if(state.build.decoy)playerStatuses.push({key:'pyxis-decoy',label:'DECOY · '+CHAMBER_LABELS[chamberOfTile(state.build.decoy.tileX,state.build.decoy.tileY)],color:'#c6b8ff',progress:state.build.decoy.ticks/360});
     if(state.rubyPlacedFlashTicks>0)playerStatuses.push({key:'ruby-placed',label:'RUBY PLACED',color:'#ffa5c3',progress:state.rubyPlacedFlashTicks/120});
   }
@@ -6274,7 +6391,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           padding: '6px', width:godPanelWidth, boxSizing:'border-box', transform:`scale(${godPanelScale})`,transformOrigin:'top left',overflow:'visible', touchAction:'pan-y', borderRadius: '2px', zIndex: 20,
           display: 'flex', flexDirection: 'column', gap: '4px'
         }}>
-          <div style={{ color: '#ffcc00', fontWeight: 'bold', fontSize: '0.8rem', textAlign: 'center' }}>{trialInfo ? 'GOD MODE · CHALLENGE' : 'GOD MODE'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <span style={{ color: '#ffcc00', fontWeight: 'bold', fontSize: '0.8rem', flex: 1, textAlign: godCollapsed ? 'left' : 'center' }}>{trialInfo ? 'GOD MODE · CHALLENGE' : 'GOD MODE'}</span>
+            <button type="button" aria-expanded={!godCollapsed} aria-label={godCollapsed ? 'Expand God panel' : 'Collapse God panel'} title={godCollapsed ? 'Expand' : 'Collapse'}
+              style={{ width: 22, height: 22, padding: 0, background: '#34303a', color: '#ffcc00', border: '2px solid #bfa544', cursor: 'pointer', fontWeight: 'bold', lineHeight: 1, flex: 'none' }}
+              onClick={toggleGodCollapsed}>{godCollapsed ? '+' : '−'}</button>
+          </div>
+          {!godCollapsed && <>
           <div className="rs-god-actions" role="group" aria-label="Protection modes">
             <button type="button" aria-pressed={state?.immortal ?? false} title="Take damage, but player and Ruby HP cannot fall below 1"
               style={{background:state?.immortal?'#ffcc00':'#34303a',color:state?.immortal?'#111':'#f4dda0',border:'2px solid #bfa544',cursor:'pointer'}}
@@ -6411,6 +6534,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               onClick={() => { if (stateRef.current) triggerAmbientEvent(stateRef.current, kind); rerender(); }}>
               {AMBIENT_EVENTS[kind].name}
             </button>)}
+            {mode !== 'tutorial' && <button type="button" aria-label="Create Comet" style={{ color: '#8fd8ff', borderColor: '#8fd8ff' }}
+              disabled={phase !== 'playing' || !!state?.comet?.target}
+              onClick={() => { if (stateRef.current) godTriggerComet(stateRef.current); rerender(); }}>COMET</button>}
           </div>}
 
           {!trialInfo && <>
@@ -6428,6 +6554,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
                 const current=stateRef.current;if(current)current.specialSkill=kind;rerender();
               }} />)}
           </div>
+          </>}
           </>}
         </div>
       )}

@@ -4,23 +4,26 @@
 
 ## Normal aliens and rewards
 
-HP below is the configuration base, before [difficulty scaling](GAMEPLAY.md#difficulty-progression). Movement is px/tick. Standard direct damage is shown player / placed Ruby; special mechanics can use their own damage values.
+HP below is the configuration base, before [difficulty scaling](GAMEPLAY.md#difficulty-progression). Movement is px/tick before the global ×1.1 [movement multiplier](GAMEPLAY.md#core-loop-map-and-controls). Standard direct damage is shown player / placed Ruby; special mechanics can use their own damage values.
 
 | Alien / internal type | Base HP | Speed | Damage | Behavior and additional defeat reward |
 | --- | ---: | ---: | --- | --- |
-| Normal / `normal` | 5 | 0.68 | 10 / 6 | Chases player or Ruby; basic melee threat |
-| Armored / `armored` | 22 | 0.47 | 15 / 10 | Toughest regular base HP; no inherent damage reduction. Grants player absorb shield of at least 10 |
-| Runner / `fast` | 4 | 5.5 | 6 / 3 | Very fast and fragile; +8 additional energy |
-| Bomber / `bomber` | 6 | 0.53 | Explosion | Winds up close to its target; explodes on ordinary defeat too. Explosion can damage player, placed Ruby and other aliens |
-| Sniper / `sniper` | 5 | 0.34 | 13 / 13 | 10-tile ranged shot, 50-tick warning. Grants 5 seconds of chain lightning; chain range 4 tiles, damage 8 |
-| Healer / `healer` | 11 | 0.42 | None | Restores nearby allies 2 HP each second within 3 tiles. Grants +24 player HP in addition to the usual +5 |
-| Charger / `charger` | 17 | 0.75 idle | 20 / 14 | Locks a cardinal lane, warns 30 ticks, rushes at 7.5px/tick for up to 8 tiles. Player impact pushes one tile along the rush direction, including shielded hits. Push respects walls, finishes an in-flight step first and preserves held input; no push on Lunar Echo/Ruby or after a fatal hit. Wall stun 55 ticks, shorter hit/miss recovery; player wave push interrupts the Charger. Grants 2-second speed burst |
-| Ghost / `ghost` | 4 | 0.89 | 12 / 9 | Passes through walls. Grants +15 HP to a placed Ruby |
-| Splitter / `splitter` | 17 | 0.82 | 11 / 8 | Defeat creates two Mini Splitters |
-| Mini Splitter / `mini_splitter` | 4 | 0.95 | 6 / 4 | Small attacker produced by a Splitter |
-| Shielder / `shielder` | 10 | 0.44 | None | Follows/protects an ally within 8 tiles; halves damage exactly, including fractions. Grants Ruby absorb shield of at least 10 |
+| Normal / `normal` | 5 | 0.884 | 10 / 6 | Chases player or Ruby; basic melee threat |
+| Armored / `armored` | 22 | 0.611 | 15 / 10 | Toughest regular base HP; no inherent damage reduction. Grants player absorb shield of at least 10. Hits push the player 2 tiles. |
+| Runner / `fast` | 4 | 5.5 | 6 / 3 | Very fast and fragile. Grants 2-second speed burst. Hits push the player 1 tile. |
+| Bomber / `bomber` | 6 | 0.689 | Explosion | Winds up close to its target; explodes on ordinary defeat too. Explosion can damage player, placed Ruby and other aliens. The explosion pushes a player in range 2 tiles away from it. |
+| Sniper / `sniper` | 5 | 0.442 | 13 / 13 | 10-tile ranged shot, 50-tick warning. Grants 5 seconds of chain lightning; chain range 4 tiles, damage 8 |
+| Healer / `healer` | 11 | 0.546 | None | Restores nearby allies 2 HP each second within 3 tiles. Grants +24 player HP in addition to the usual +5 |
+| Charger / `charger` | 17 | 0.975 idle | 20 / 14 | Locks a cardinal lane, warns 30 ticks, rushes at 7.5px/tick for up to 8 tiles. Player impact pushes one tile along the rush direction, including shielded hits. Push respects walls, finishes an in-flight step first and preserves held input; no push on Lunar Echo/Ruby or after a fatal hit. Wall stun 55 ticks, shorter hit/miss recovery; player wave push interrupts the Charger. Grants +8 additional energy |
+| Ghost / `ghost` | 4 | 1.157 | 12 / 9 | Passes through walls. Grants +15 HP to a placed Ruby. Hits push the player 1 tile. |
+| Splitter / `splitter` | 17 | 1.066 | 11 / 8 | Defeat creates two Mini Splitters |
+| Mini Splitter / `mini_splitter` | 4 | 1.235 | 6 / 4 | Small attacker produced by a Splitter |
+| Shielder / `shielder` | 10 | 0.572 | None | Follows/protects an ally within 8 tiles; halves damage exactly, including fractions. Grants Ruby absorb shield of at least 10 |
+| Lancer / `lancer` | 12 | 0.6 | 28 / 18 | Walks until the player or Ruby is within 8 tiles with line of sight, then stands and locks its aim at their current position for 60 ticks (1s), showing the line. Then fires a beam along that locked line that stops at the first wall and passes through units: hits the player for 28 and pushes them 2 tiles, and a placed Ruby on the line for 18. Stepping out of the line or behind cover dodges it. 180-tick cooldown; a push (e.g. a Wave) cancels the charge. Grants 5 seconds of laser stun: each laser hit (including twin and Ruby copies) stops that alien for 0.5s, a boss for 0.2s, using the Vulpecula stop timer; the HUD shows a LASER STUN tag. Tuning in `LANCER` |
 | Energy Leech / `energy_leech` | 8 | 1.8 | Energy theft only | Always hunts player. At one-tile range steals up to 20 available energy about every 75 ticks; stores the actual amount. Defeat returns it, capped at gauge maximum, plus ordinary rewards |
 | Queen Echo / `queen_echo` | 1 | Stationary | 5 / 4 | Permanent shooting copy left by Queen; defeat it or kill Queen to clear it. Not a natural spawn-pool alien |
+
+Knockback from Armored, Runner, Ghost, Bomber and Lancer (`ALIEN_KNOCKBACK`) uses `shovePlayerFromEnemy`: a cardinal push away from the alien (the Bomber's blast centre), one tile at a time, stopping at walls. It is skipped while Lunar Echo takes the hit, during another push or Snowball roll, or after a fatal hit; Ruby is never pushed. Any player knockback, from any source, gives one small screen shake when it starts moving the player (`KNOCKBACK_SHAKE_TICKS`/`KNOCKBACK_SHAKE_AMOUNT`, peak about 3px).
 
 Most ordinary attackers choose player versus placed Ruby by proximity; carrying directs them toward the player. Healer/Shielder retain support AI; Leech explicitly ignores Ruby as a target. Charger damage occurs on actual tile arrival, not before contact. Its committed lane can be dodged sideways.
 
@@ -32,7 +35,7 @@ Non-boss unit HP bars share `enemy-health-art.ts` across Endless and all celesti
 
 ## Boss encounters
 
-Ten boss encounter types. Astral Twins uses two linked bodies; the pair counts as one encounter, and a Devourer's descendants share one family encounter. First natural boss appears around 60 seconds. After the last encounter is defeated, the next arrives after about 42 seconds (38.5s countdown + 3.5s warning). Before stage 20, this timer freezes while a boss is alive. From stage 20 in Endless (including Ascension), another encounter can arrive 90 seconds after the last natural spawn, up to two active encounters. A due spawn waits for a free slot. Natural draws avoid any still-active boss type. Each shuffled pool uses all ten types before refilling and normally follows ten-stage blocks; active types are deferred if a block changes while an older encounter survives. Explicit God spawns do not consume that pool.
+Ten boss encounter types. Astral Twins uses two linked bodies; the pair counts as one encounter, and a Devourer's descendants share one family encounter. First natural boss arrives after 50 seconds (46.5s countdown + 3.5s warning). After the last encounter is defeated, the next arrives after 35 seconds (31.5s countdown + 3.5s warning). Before stage 20, this timer freezes while a boss is alive. From stage 20 in Endless (including Ascension), another encounter can arrive 90 seconds after the last natural spawn, up to two active encounters. A due spawn waits for a free slot. Natural draws avoid any still-active boss type. Each shuffled pool uses all ten types before refilling and normally follows ten-stage blocks; active types are deferred if a block changes while an older encounter survives. Explicit God spawns do not consume that pool.
 
 Spawn HP = `base HP + 15 * prior bosses defeated`; Twins split that stage bonus equally between their two bodies. Boss defeat restores player and Ruby HP fully, fills star energy and grants the appropriate celestial skill starting at the tenth defeat. Boss defeat rewards also apply to meteor kills. Removal must clean up that boss's curse/hazards; Queen death clears her echoes.
 

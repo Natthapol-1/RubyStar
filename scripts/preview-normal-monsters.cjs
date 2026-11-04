@@ -9,11 +9,11 @@ const renderer=new Module(path.resolve('game/mob-preview.cjs'),module);renderer.
 renderer._compile(ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,renderer.filename);
 const output=process.argv[2]||'.',prefix=process.argv[3]||'normal-monsters';
 const state=engine.createInitialState();engine.godSpawnBoss(state,'fiery_king');const template=state.enemies[0];
-const types=['normal','armored','fast','bomber','sniper','healer','charger','ghost','splitter','mini_splitter','shielder','energy_leech'];
+const types=['normal','armored','fast','bomber','sniper','healer','charger','ghost','splitter','mini_splitter','shielder','energy_leech','lancer'];
 function enemy(type,extra={}){return {...template,type,hp:c.ENEMY_CONFIGS[type].maxHp,maxHp:c.ENEMY_CONFIGS[type].maxHp,phaseTimer:100000,path:[],shootTicks:0,attackTimer:100,windupTicks:0,chargeDirX:0,chargeDirY:0,icyShieldHP:0,shieldTargetId:-1,...extra};}
 const samples=types.map(type=>[type.toUpperCase(),enemy(type),false]);
 samples.push(['SHIELDED',enemy('normal'),true],['ICE SHIELD',enemy('normal',{icyShieldHP:15}),false],['HEAL FLASH',enemy('normal',{healFlashTicks:12}),false],['BOMBER WARNING',enemy('bomber',{exploding:true,explodeTick:24}),false],['SNIPER AIM',enemy('sniper',{windupTicks:20}),false]);
-samples.push(['LEECH CHARGED',enemy('energy_leech',{stolenEnergy:60}),false]);
+samples.push(['LEECH CHARGED',enemy('energy_leech',{stolenEnergy:60}),false],['LANCER CHARGE',enemy('lancer',{windupTicks:15}),false]);
 const height=Math.ceil(samples.length/4)*260;
 const canvas=createCanvas(1200,height),ctx=canvas.getContext('2d');ctx.fillStyle='#101923';ctx.fillRect(0,0,1200,height);
 for(const [i,[label,mob,shielded]]of samples.entries()){

@@ -74,7 +74,7 @@ test('fast crossing is caught, fences stop at cover, and do not hit beyond their
 });
 test('fence slow is much stronger during the shard rush and he does not attack',()=>{
   const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');near(boss,12,10);boss.targetTileX=13;boss.voltSlowTicks=100;
-  j.updateJupiterReaper(s,boss);close(boss.stepProgress,c.JUPITER.fleeSpeed*c.JUPITER.exposedWallSlow);
+  j.updateJupiterReaper(s,boss);close(boss.stepProgress,c.JUPITER.fleeSpeed*c.JUPITER.exposedWallSlow*c.MOVE_SPEED_MULT);
   assert.ok(c.JUPITER.exposedWallSlow<c.JUPITER.wallSlow/2);
   near(boss,11,10);boss.pathTimer=0;const hp=s.playerHP;j.updateJupiterReaper(s,boss);close(s.playerHP,hp);assert.ok(boss.path.length>0);
 });
@@ -385,10 +385,10 @@ test('speed skill and teleport boosts are gentler only during Shard Race',()=>{
   else {s.gamePhase='teleporting';s.teleportDestOptions=[1];e.doTeleport(s,1);}
   assert.ok(s.speedActiveTicks>0);
   s.playerTargetX=s.playerTileX+1;s.map[s.playerTileY][s.playerTargetX]=c.T_FLOOR;s.playerStepProgress=0;
-  e.jupiterTest.updatePlayer(s);close(s.playerStepProgress,c.JUPITER.fleeSpeed*c.JUPITER.raceSpeedBoost);
+  e.jupiterTest.updatePlayer(s);close(s.playerStepProgress,c.JUPITER.fleeSpeed*c.JUPITER.raceSpeedBoost*c.MOVE_SPEED_MULT);
  }
  const{s}=fresh();pursue(s);s.speedActiveTicks=100;s.playerTargetX=s.playerTileX+1;s.map[s.playerTileY][s.playerTargetX]=c.T_FLOOR;
- e.jupiterTest.updatePlayer(s);close(s.playerStepProgress,c.PLAYER_BASE_SPEED*c.JUPITER.playerPursuitSpeed*c.SPEED_MULT);
+ e.jupiterTest.updatePlayer(s);close(s.playerStepProgress,c.PLAYER_BASE_SPEED*c.JUPITER.playerPursuitSpeed*c.SPEED_MULT*c.MOVE_SPEED_MULT);
 });
 
 

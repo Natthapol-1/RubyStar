@@ -200,7 +200,7 @@ export function hallwayOfTile(tileX: number, tileY: number): number {
 
 // ─── Enemy types ─────────────────────────────────────────────────────────────
 
-export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
+export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'lancer' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
   | 'fish_blue' | 'fish_red' | 'stinger' | 'water_clone' | 'water_bomb' | 'jellyfish' | 'pufferfish'
   | 'seed_pod' | 'blossom' | 'sporeling' | 'vine_crawler' | 'angry_mushroom' | 'lifebloom'
   | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_mimic' | 'cinder_wisp' | 'emberling' | 'scorch_sapper' | 'frost_raider' | 'ice_caller' | 'rime_brute';
@@ -260,6 +260,14 @@ export const SUN = {
   sapperGap: 480, sapperCap: 2, sapperHP: 3, sapperDrain: 12, sapperHeat: .5,
   emberlingSpawnChance: .35, emberlingArmor: .1, emberlingKnockback: 2,
 } as const;
+
+// Tiles a regular alien's hit on the player pushes them away (Bomber: its explosion).
+export const ALIEN_KNOCKBACK: Partial<Record<EnemyType, number>> = { armored: 2, fast: 1, ghost: 1, bomber: 2, lancer: 2 };
+// Global walking/hunting speed for the player and every unit, in every mode (attack rolls and projectiles excluded).
+export const MOVE_SPEED_MULT = 1.1;
+// Small screen shake when any knockback starts pushing the player (peak about 3px, fading over 0.2s).
+export const KNOCKBACK_SHAKE_TICKS = 12;
+export const KNOCKBACK_SHAKE_AMOUNT = 6;
 
 export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   ice_caller: {
@@ -375,12 +383,12 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
   normal: {
-    maxHp: 5, speed: 0.68, color: '#44ee44', shieldColor: '#44ee44',
+    maxHp: 5, speed: 0.884, color: '#44ee44', shieldColor: '#44ee44',
     bodyFraction: 0.7, scoreValue: 10, damageToPlayer: 10, damageToRuby: 6,
     attackCooldown: 55, attackRange: 1, bombExplodeRange: 0,
   },
   armored: {
-    maxHp: 22, speed: 0.47, color: '#4488ff', shieldColor: '#88bbff',
+    maxHp: 22, speed: 0.611, color: '#4488ff', shieldColor: '#88bbff',
     bodyFraction: 0.82, scoreValue: 25, damageToPlayer: 15, damageToRuby: 10,
     attackCooldown: 70, attackRange: 2, bombExplodeRange: 0,
   },
@@ -390,44 +398,49 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     attackCooldown: 40, attackRange: 2, bombExplodeRange: 0,
   },
   bomber: {
-    maxHp: 6, speed: 0.53, color: '#cc44ff', shieldColor: '#cc44ff',
+    maxHp: 6, speed: 0.689, color: '#cc44ff', shieldColor: '#cc44ff',
     bodyFraction: 0.78, scoreValue: 30, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 999, attackRange: 1, bombExplodeRange: 4,
   },
   sniper: {
-    maxHp: 5, speed: 0.34, color: '#ffee00', shieldColor: '#ffee00',
+    maxHp: 5, speed: 0.442, color: '#ffee00', shieldColor: '#ffee00',
     bodyFraction: 0.64, scoreValue: 20, damageToPlayer: 13, damageToRuby: 13,
     attackCooldown: 130, attackRange: 1, bombExplodeRange: 0,
   },
   healer: {
-    maxHp: 11, speed: 0.42, color: '#ff55cc', shieldColor: '#ff55cc',
+    maxHp: 11, speed: 0.546, color: '#ff55cc', shieldColor: '#ff55cc',
     bodyFraction: 0.72, scoreValue: 12, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
   charger: {
-    maxHp: 17, speed: 0.75, color: '#ff4400', shieldColor: '#ff4400',
+    maxHp: 17, speed: 0.975, color: '#ff4400', shieldColor: '#ff4400',
     bodyFraction: 0.76, scoreValue: 22, damageToPlayer: 20, damageToRuby: 14,
     attackCooldown: 90, attackRange: 1, bombExplodeRange: 0,
   },
   ghost: {
-    maxHp: 4, speed: 0.89, color: '#8855ff', shieldColor: '#8855ff',
+    maxHp: 4, speed: 1.157, color: '#8855ff', shieldColor: '#8855ff',
     bodyFraction: 0.60, scoreValue: 18, damageToPlayer: 12, damageToRuby: 9,
     attackCooldown: 50, attackRange: 3, bombExplodeRange: 0,
   },
   splitter: {
-    maxHp: 17, speed: 0.82, color: '#66ff33', shieldColor: '#66ff33',
+    maxHp: 17, speed: 1.066, color: '#66ff33', shieldColor: '#66ff33',
     bodyFraction: 0.80, scoreValue: 28, damageToPlayer: 11, damageToRuby: 8,
     attackCooldown: 60, attackRange: 2, bombExplodeRange: 0,
   },
   mini_splitter: {
-    maxHp: 4, speed: 0.95, color: '#88ff55', shieldColor: '#88ff55',
+    maxHp: 4, speed: 1.235, color: '#88ff55', shieldColor: '#88ff55',
     bodyFraction: 0.52, scoreValue: 5, damageToPlayer: 6, damageToRuby: 4,
     attackCooldown: 35, attackRange: 1, bombExplodeRange: 0,
   },
   shielder: {
-    maxHp: 10, speed: 0.44, color: '#00ddcc', shieldColor: '#00ddcc',
+    maxHp: 10, speed: 0.572, color: '#00ddcc', shieldColor: '#00ddcc',
     bodyFraction: 0.74, scoreValue: 20, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 999, attackRange: 0, bombExplodeRange: 0,
+  },
+  lancer: {
+    maxHp: 12, speed: 0.6, color: '#ff3d6e', shieldColor: '#ffb3c6',
+    bodyFraction: 0.74, scoreValue: 26, damageToPlayer: 28, damageToRuby: 18,
+    attackCooldown: 180, attackRange: 8, bombExplodeRange: 0,
   },
   energy_leech: {
     maxHp: 8, speed: 1.8, color: '#c77aff', shieldColor: '#e7baff',
@@ -498,7 +511,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   },
 };
 
-export const BOSS_SPAWN_INTERVAL = 2310; // 38.5s after boss death + 3.5s warning = 42s until the next boss
+export const BOSS_SPAWN_INTERVAL = 1890; // 31.5s after boss death + 3.5s warning = 35s until the next boss
 export const BOSS_WARNING_TICKS = 210;  // ticks of warning before boss appears (~3.5s)
 export const BOSS_ANNOUNCEMENT_TICKS = 240; // show the spawned boss's name for 4 seconds
 export const BOSS_NAMES = {
@@ -616,6 +629,16 @@ export const HEALER_HEAL_INTERVAL = 60; // ticks between heals (~1s)
 
 export const SNIPER_ATTACK_RANGE = 10; // tiles — fires from this distance
 export const SNIPER_WINDUP_TICKS = 50; // telegraph before firing (~0.83s)
+// Lancer: locks its aim and shows the line for windupTicks, then fires a beam along it that walls stop.
+// Defeating one grants rewardTicks of laser stun: each laser hit stops an alien for stunTicks (bosses bossStunTicks).
+// Endless comets: every minGap–maxGap ticks a size×size area in the player's room is marked for warningTicks, then struck.
+// Damage: player/Ruby flat; regular aliens alienDamage × skill alien scale; bosses a share of max HP (lateBossShare after Ascension).
+export const COMET = { minGap: 1200, maxGap: 4200, warningTicks: 120, fallTicks: 45, impactTicks: 30, size: 3,
+  playerDamage: 25, rubyDamage: 20, alienDamage: 15, bossShare: .08, lateBossShare: .05,
+  playerAimChance: .2 } as const; // chance the area is centred exactly on the player's tile
+// Reticulum constellation: a Laser hit stops an ordinary alien for stunTicks, then that alien is immune for recoverTicks. Bosses are immune.
+export const RETICULUM = { stunTicks: 24, recoverTicks: 120 } as const;
+export const LANCER = { windupTicks: 60, hitRadius: .55, beamTicks: 18, rewardTicks: 300, stunTicks: 30, bossStunTicks: 12 } as const;
 
 export const CHARGER_CHARGE_SPEED = 7.5; // px/tick during the committed rush
 export const CHARGER_WINDUP_TICKS = 30; // half-second locked-lane warning
@@ -690,9 +713,9 @@ export const DIFFICULTY_TIERS: DifficultyTier[] = [
   { spawnInterval: 120, maxEnemies: 11, spawnTypes: ['normal', 'normal', 'armored', 'healer'], hpMult: 1.0, spawnCount: 1 }, // after 25s
   { spawnInterval: 100, maxEnemies: 16, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'healer', 'charger'], hpMult: 1.2, spawnCount: 1 }, // after 45s
   { spawnInterval: 80, maxEnemies: 18, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'sniper', 'healer', 'charger', 'ghost', 'shielder', 'energy_leech'], hpMult: 1.3, spawnCount: 2 }, // stage 1
-  { spawnInterval: 65, maxEnemies: 21, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'bomber', 'sniper', 'healer', 'charger', 'ghost', 'shielder', 'splitter', 'energy_leech'], hpMult: 1.5, spawnCount: 2 }, // stage 2
-  { spawnInterval: 50, maxEnemies: 25, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'bomber', 'sniper', 'healer', 'charger', 'ghost', 'shielder', 'splitter', 'energy_leech'], hpMult: 1.7, spawnCount: 2 }, // stage 3
-  { spawnInterval: 38, maxEnemies: 31, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'bomber', 'sniper', 'healer', 'charger', 'ghost', 'shielder', 'splitter', 'energy_leech'], hpMult: 2.0, spawnCount: 3 }, // stage 4+
+  { spawnInterval: 65, maxEnemies: 21, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'bomber', 'sniper', 'healer', 'charger', 'ghost', 'shielder', 'splitter', 'energy_leech', 'lancer'], hpMult: 1.5, spawnCount: 2 }, // stage 2
+  { spawnInterval: 50, maxEnemies: 25, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'bomber', 'sniper', 'healer', 'charger', 'ghost', 'shielder', 'splitter', 'energy_leech', 'lancer'], hpMult: 1.7, spawnCount: 2 }, // stage 3
+  { spawnInterval: 38, maxEnemies: 31, spawnTypes: ['normal', 'normal', 'armored', 'fast', 'bomber', 'sniper', 'healer', 'charger', 'ghost', 'shielder', 'splitter', 'energy_leech', 'lancer'], hpMult: 2.0, spawnCount: 3 }, // stage 4+
 ];
 
 export const DIFFICULTY_RAMP_TICKS = 600; // first opening increase, preserving first-boss timing
@@ -710,14 +733,18 @@ export const PLAYER_CARRY_MULT = 0.6; // 60% of normal speed while carrying Ruby
 // 1. Laser beam (key J)
 export const LASER_RANGE = 8;   // tiles
 export const LASER_RANGE_PWR = 14;
-export const LASER_DMG = 2.1;
-export const LASER_DMG_PWR = 6.3;
+export const LASER_DMG = 2.268;
+export const LASER_DMG_PWR = 6.804;
 export const LASER_COOLDOWN = 40;  // ticks (~0.67s) — frequent clicks, low damage
 
 export const BULLET_COOLDOWN = 11;
 export const BULLET_DMG = 0.35;
 export const BULLET_DMG_PWR = 1.05;
 export const BULLET_SPEED = 0.45;
+// Every BULLET_HEAVY_EVERY-th bullet shot is heavy: on hit it deals ×BULLET_HEAVY_MULT and pushes a regular alien BULLET_HEAVY_PUSH tile(s).
+export const BULLET_HEAVY_EVERY = 20;
+export const BULLET_HEAVY_MULT = 1.2;
+export const BULLET_HEAVY_PUSH = 1;
 
 // 2. Charge wave (key K, tap 4×)
 export const CHARGE_NEEDED = 4;

@@ -68,7 +68,7 @@ test('reversal respects walls, pauses, and leaves in-flight steps intact', () =>
   assert.ok(state.playerX > 10 * constants.TILE_SIZE + constants.TILE_SIZE / 2);
 });
 
-test('death lifts the curse and starts the normal 42-second boss delay', () => {
+test('death lifts the curse and starts the normal 35-second boss delay', () => {
   const state = fresh();
   const boss = prayer(state);
   position(boss, state.playerTileX, state.playerTileY);
@@ -77,7 +77,7 @@ test('death lifts the curse and starts the normal 42-second boss delay', () => {
   engine.useBomb(state);
   assert.equal(engine.isMovementReversed(state), false);
   assert.equal(state.bossesKilled, 1);
-  assert.equal(state.bossTimer + constants.BOSS_WARNING_TICKS, 42 * 60);
+  assert.equal(state.bossTimer + constants.BOSS_WARNING_TICKS, 35 * 60);
   state.playerQueuedDirX = 1;
   engine.tick(state);
   assert.equal(state.playerTargetX, 11);
@@ -200,7 +200,7 @@ test('escape attack warns, deals 6 damage, boosts briefly, and obeys cooldown', 
   assert.equal(boss.prayer.escapeCooldown, 720);
   const speedBefore = boss.stepProgress;
   engine.tick(state);
-  assert.equal(boss.stepProgress - speedBefore, constants.PRAYER_ESCAPE_SPEED);
+  assert.ok(Math.abs(boss.stepProgress - speedBefore - constants.PRAYER_ESCAPE_SPEED * constants.MOVE_SPEED_MULT) < 1e-9);
   for (let i = 0; i < constants.PRAYER_ESCAPE_DURATION - 1; i++) engine.tick(state);
   assert.equal(boss.prayer.escapeBoostTicks, 0);
   assert.equal(state.playerHP, 94);

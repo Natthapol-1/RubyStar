@@ -35,7 +35,7 @@ test('eruption deals 12, plants inflict lingering non-stacking poison, Ruby stay
 });
 test('entering plants applies poison and slows movement without creating solid walls',()=>{
  const {s,boss}=fresh();patch(s,boss);s.playerQueuedDirX=1;e.tick(s);e.tick(s);
- assert.equal(s.playerStepProgress,c.PLAYER_BASE_SPEED*c.THORN_SLOW_MULT);assert.ok(s.thornPoisonTicks>0);assert.equal(s.map[10][11],c.T_FLOOR);
+ assert.ok(Math.abs(s.playerStepProgress-c.PLAYER_BASE_SPEED*c.THORN_SLOW_MULT*c.MOVE_SPEED_MULT)<1e-9);assert.ok(s.thornPoisonTicks>0);assert.equal(s.map[10][11],c.T_FLOOR);
  assert.equal(s.playerHP,100);
 });
 test('overlapping plants refresh poison without multiplying damage, shields absorb ticks',()=>{
@@ -63,7 +63,7 @@ test('patch count is bounded and boss death/replacement clears plants and poison
 });
 test('meteor uses boss damage and usual rewards and respawn timing',()=>{
  const {s,boss}=fresh();position(boss,2,2);s.meteoriteWarning=0;s.meteoriteStrikeIn=1;e.tick(s);assert.equal(boss.hp,20);
- s.meteoriteWarning=0;s.meteoriteStrikeIn=1;e.tick(s);assert.equal(s.bossesKilled,1);assert.equal(s.thornPatches.length,0);assert.equal(s.bossTimer+c.BOSS_WARNING_TICKS,42*60);
+ s.meteoriteWarning=0;s.meteoriteStrikeIn=1;e.tick(s);assert.equal(s.bossesKilled,1);assert.equal(s.thornPatches.length,0);assert.equal(s.bossTimer+c.BOSS_WARNING_TICKS,35*60);
 });
 test('natural spawning and No Mobs recognize Thorn Weaver in the encounter roster',()=>{
  const {s,boss}=fresh();assert.ok(c.BOSS_TYPES.includes('thorn_weaver'));assert.equal(boss.maxHp,80);assert.equal(s.bossSpawnName,'THORN WEAVER');e.godSetNoMobs(s,true);assert.ok(s.enemies.includes(boss));

@@ -8,6 +8,7 @@ import {
   NEPTUNE_SHARK_BOSS_DAMAGE, NEPTUNE_SHARK_DAMAGE, NEPTUNE_SHARK_GAP, NEPTUNE_SHARK_KNOCKBACK, NEPTUNE_SHARK_SPEED, NEPTUNE_SHARK_WARNING,
   NEPTUNE_STRIKE_DAMAGE, NEPTUNE_TIDE_AGAINST, NEPTUNE_TIDE_GAP, NEPTUNE_TIDE_PUSH_GAP, NEPTUNE_TIDE_ROTATE, NEPTUNE_TIDE_TICKS, NEPTUNE_TIDE_WITH,
   SEA_ALLY_HEAL_INTERVAL, SEA_SONG_FIRST_DELAY, TILE_SIZE, T_FLOOR, chamberOfTile, isBossType, neptunePhaseCeilHP, neptunePhaseFloorHP, type EnemyType,
+  MOVE_SPEED_MULT,
 } from './constants';
 import {
   stormSlowMultiplier, createEncounterEnemy, createSeaChanterAbilities, damageEnemy, damagePlayer, damageRuby, freeChamberTiles, godSpawnBoss, healPlayer, isFloorTile,
@@ -76,7 +77,7 @@ export function updateFish(state: GameState, e: Enemy) {
     if (next && isFloorTile(state.map, next[0], next[1])) { [e.targetTileX, e.targetTileY] = next; e.stepProgress = 0; }
     return;
   }
-  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS[e.type].speed * stormSlowMultiplier(state,e));
+  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS[e.type].speed * MOVE_SPEED_MULT * stormSlowMultiplier(state,e));
   e.x = (e.tileX + .5) * TILE_SIZE + (e.targetTileX - e.tileX) * e.stepProgress;
   e.y = (e.tileY + .5) * TILE_SIZE + (e.targetTileY - e.tileY) * e.stepProgress;
   if (e.stepProgress === TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.stepProgress = 0; }

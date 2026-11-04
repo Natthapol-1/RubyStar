@@ -5,7 +5,7 @@ const engine=require('../game/engine.ts'),c=require('../game/constants.ts');
 test('Endless Space starts a standard run at stage 0',()=>{
  const s=engine.createModeState('endless');
  assert.equal(s.mode,'endless');assert.equal(s.bossesKilled,0);assert.equal(s.constellationChoices.length,0);assert.equal(s.ascensionBannerTicks,0);
- assert.deepEqual({...s,mode:undefined,ambientEvents:undefined},{...engine.createInitialState(),mode:undefined,ambientEvents:undefined});
+ assert.deepEqual({...s,mode:undefined,ambientEvents:undefined,comet:undefined},{...engine.createInitialState(),mode:undefined,ambientEvents:undefined,comet:undefined});
 });
 
 test('Endless Space: Ascension starts at stage 10 with celestial skills unlocked and the hardest alien tier',()=>{

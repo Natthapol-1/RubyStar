@@ -16,7 +16,7 @@ test('Charger warns for half a second, pauses and rushes faster than the player'
  const {s,charger}=fresh(),start=charger.x;e.tick(s);assert.equal(charger.chargeWindupTicks,c.CHARGER_WINDUP_TICKS);
  s.gamePhase='teleporting';ticks(s,20);assert.equal(charger.chargeWindupTicks,c.CHARGER_WINDUP_TICKS);s.gamePhase='playing';
  ticks(s,c.CHARGER_WINDUP_TICKS);assert.equal(charger.x,start);
- e.tick(s);e.tick(s);assert.equal(charger.x-start,c.CHARGER_CHARGE_SPEED);assert.ok(c.CHARGER_CHARGE_SPEED>c.PLAYER_BASE_SPEED);
+ e.tick(s);e.tick(s);assert.ok(Math.abs(charger.x-start-c.CHARGER_CHARGE_SPEED*c.MOVE_SPEED_MULT)<1e-9);assert.ok(c.CHARGER_CHARGE_SPEED>c.PLAYER_BASE_SPEED);
 });
 test('locked rush can be dodged sideways and ends after its maximum distance',()=>{
  const {s,charger}=fresh();e.tick(s);player(s,15,11);ticks(s,c.CHARGER_WINDUP_TICKS+80);
@@ -29,8 +29,8 @@ test('a wall stops the rush on the last floor tile and grants a stun window',()=
  assert.equal(charger.tileX,11);assert.equal(charger.x,11.5*c.TILE_SIZE);assert.equal(charger.chargeDirX,0);assert.equal(charger.windupTicks,c.CHARGER_STUN_TICKS);
 });
 test('Charger deals damage on contact, not before entering the player tile',()=>{
- const {s,charger}=fresh();player(s,11,10);e.tick(s);ticks(s,c.CHARGER_WINDUP_TICKS);e.tick(s);
- assert.equal(s.playerHP,100);ticks(s,6);assert.equal(s.playerHP,100);
+ const {s,charger}=fresh();player(s,11,10);e.tick(s);ticks(s,c.CHARGER_WINDUP_TICKS);const arrive=Math.ceil(c.TILE_SIZE/(c.CHARGER_CHARGE_SPEED*c.MOVE_SPEED_MULT));e.tick(s);
+ assert.equal(s.playerHP,100);ticks(s,arrive-1);assert.equal(s.playerHP,100);
  e.tick(s);assert.equal(charger.tileX,11);assert.equal(s.playerHP,100-c.ENEMY_CONFIGS.charger.damageToPlayer);assert.ok(charger.windupTicks>0);
 });
 test('push interrupts the windup and clears the locked lane',()=>{

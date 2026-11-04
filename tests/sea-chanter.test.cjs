@@ -41,7 +41,7 @@ test('health thresholds, no passive regeneration, hysteresis, and teleport pause
 });
 
 test('diving speed exceeds hunting speed', () => {
- for(const submerged of [false,true]) {const {state,sea}=fresh();position(sea,11,10);if(submerged)dive(sea);sea.targetTileX=12;engine.tick(state);close(sea.stepProgress,submerged?4.0:3.8);}
+ for(const submerged of [false,true]) {const {state,sea}=fresh();position(sea,11,10);if(submerged)dive(sea);sea.targetTileX=12;engine.tick(state);close(sea.stepProgress,(submerged?4.0:3.8)*constants.MOVE_SPEED_MULT);}
 });
 
 test('bullets skip underwater targets, including bullets already in flight',()=>{
@@ -60,7 +60,7 @@ test('wave, bomb and laser retain underwater damage',()=>{
 
 test('meteor can kill underwater boss and preserves rewards and respawn delay',()=>{
  const {state,sea}=fresh();position(sea,2,2);dive(sea);state.meteoriteWarning=0;state.meteoriteStrikeIn=1;engine.tick(state);
- assert.equal(state.bossesKilled,1);assert.ok(!state.enemies.includes(sea));assert.equal(state.bossTimer+constants.BOSS_WARNING_TICKS,42*60);
+ assert.equal(state.bossesKilled,1);assert.ok(!state.enemies.includes(sea));assert.equal(state.bossTimer+constants.BOSS_WARNING_TICKS,35*60);
 });
 
 test('surfaced hits heal nearby allies; diving feeds only actual alien HP damage',()=>{
