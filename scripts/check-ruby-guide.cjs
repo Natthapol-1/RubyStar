@@ -16,8 +16,8 @@ const {chromium}=require('playwright');
    assert.equal(await modal.evaluate(el=>el.scrollWidth>el.clientWidth),false,'Modal overflows horizontally');
    await page.screenshot({path:path.join(output,`ruby-rules-${name}.png`)});
    await guide.getByRole('button',{name:'ALIENS & BOSSES',exact:true}).click();
-   assert.equal(await guide.locator('article').count(),23);
-   assert.equal(await guide.getByText('Energy Leech',{exact:true}).count(),1);
+   assert.equal(await guide.locator('article').count(),29);
+   assert.equal(await guide.getByText('Leech',{exact:true}).count(),1);
    assert.equal(await guide.locator('.rs-guide-skill').count(),10);
    for(const skill of ['SOLAR FLARE','LUNAR ECHO','JUPITER STORM','SINGULARITY','SATURN GUARD','SIRIUS SURGE',"NEPTUNE'S TIDE","GAIA'S ROOTS",'VENUS VEIL','BINARY STAR']){assert.equal(await guide.getByText('Celestial skill: '+skill,{exact:true}).count(),1);}
    await guide.getByRole('heading',{name:'BOSSES',exact:true}).scrollIntoViewIfNeeded();
@@ -32,6 +32,6 @@ const {chromium}=require('playwright');
    assert.equal(await guide.getByRole('heading',{name:'HOW TO PLAY',exact:true}).isVisible(),true);
    assert.deepEqual(errors,[]);await context.close();
   }
-  console.log('Desktop/mobile guide navigation, 13 aliens including Energy Leech, 10 boss entries and their celestial rewards, scrolling, pause, reopen reset and browser errors: passed.');
+  console.log('Desktop/mobile guide navigation, 19 aliens including Leech, 10 boss entries and their celestial rewards, scrolling, pause, reopen reset and browser errors: passed.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

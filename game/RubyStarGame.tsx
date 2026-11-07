@@ -33,7 +33,7 @@ import { stopAmbientEventSounds, pauseAmbientEventSounds } from './event-audio';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { drawEncounterEnemy, drawEncounterTelegraphs, drawEncounterEffects } from './encounter-art';
 import { drawNeptuneUnit, drawNeptuneOverlay, drawNeptuneRock, drawSkyLaserImpact, drawWaterBurst } from './neptune-art';
-import { drawGaiaUnit, drawGaiaGround, drawGaiaOverlay, drawForestBackdrop, drawForestAmbience, drawGaiaStone, GAIA_CHAMBER_COLORS } from './gaia-art';
+import { drawGaiaUnit, drawGaiaGround, drawScorchTile, drawGaiaOverlay, drawForestBackdrop, drawForestAmbience, drawGaiaStone, GAIA_CHAMBER_COLORS } from './gaia-art';
 import { drawMoonBackdrop, drawMoonAmbience, drawMoonCrystalBlock, drawMoonReflection, drawMoonEffects, drawMoonUnit, isMoonMap, MOON_CHAMBER_COLORS } from './moon-art';
 import { JUPITER, SUN } from './constants';
 import { godAdjustSunHeat, godSetNoWisps, godSetSunHeat, godSetSunPhase, sunStationNearPlayer, useCoolingWave } from './sun';
@@ -50,7 +50,7 @@ import { useRouter } from 'next/navigation';
 import PixelArrow from '@/components/PixelArrow';
 import RulesModal from '@/components/RulesModal';
 import RubyStarGuide from './RubyStarGuide';
-import {bosses as BOSS_GUIDE} from './guide-data';
+import {bosses as BOSS_GUIDE, aliens as ALIEN_GUIDE} from './guide-data';
 import NeptuneGuide from './NeptuneGuide';
 import GaiaGuide from './GaiaGuide';
 import MoonGuide from './MoonGuide';
@@ -75,7 +75,7 @@ import {
   PLAYER_MAX_HP, RUBY_MAX_HP,
   LASER_COOLDOWN,
   STAR_ENERGY_MAX,
-  METEORITE_WARNING, METEORITE_CYCLE, BULLET_COOLDOWN, BULLET_SPEED, COMET,
+  METEORITE_WARNING, METEORITE_CYCLE, BULLET_COOLDOWN, BULLET_SPEED, COMET, CRATER, BLESSING, ENCHANTER, BLEEDER, SNATCHER, SHOOTER,
   HEALER_HEAL_INTERVAL, QUEEN_WINDUP_TICKS, QUEEN_PHASE_TELEGRAPH, CHARGER_WINDUP_TICKS, CHARGER_CHARGE_TILES, LANCER,
   PRAYER_RUBY_WINDUP, PRAYER_ESCAPE_WINDUP, SEA_SONG_WINDUP, SEA_SONG_BLAST_RADIUS, SEA_SONG_BLAST_TICKS, SEA_ALLY_HEAL_RADIUS,
   KING_ARENA_WINDUP, KING_ARENA_FX_TICKS,
@@ -87,7 +87,7 @@ import {
   useLaser, useBullet, lancerBeamEnd, godTriggerComet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
   chooseStartingSkill, chooseSkyLaser, cancelSkyLaser, toggleCarryRuby, tryActivateTeleport, isNearTeleportPad, doTeleport, cancelTeleport,
   healRuby, isPlayerChilled, isMovementReversed, isSeaChanterDiving, isEnemyVisibleOnMinimap, startChargeSound, stopChargeSound, stopPoisonSound, stopSingularitySound, stopGaiaFieldSound,
-  METEOR_CLOCKWISE_ORDER, getMirrorTwinTile, devourerBodyScale,
+  METEOR_CLOCKWISE_ORDER, getMirrorTwinTile, devourerBodyScale, ALIEN_INTRO_TICKS,
 } from './engine';
 import { godSetNeptunePhase, openSkyLaser, canOpenSkyLaser } from './neptune';
 import { godSetGaiaPhase, useSunfire, playStrikeCharged } from './gaia';
@@ -785,7 +785,7 @@ function drawMinimap(
   }
 
   // Enemies
-  for (const e of state.enemies) {
+  for (const e of state.enemies.map(en => impostorLook(state, en))) {
     if (!isEnemyVisibleOnMinimap(e) || (moonHiddenInDark(state, e.tileX, e.tileY, e.id) && !isMoonRevealed(state, e))) continue; // she still shows on the map while revealed
     ctx.fillStyle = state.moon && moonWearsGuise(state, e) ? ENEMY_CONFIGS.moon_illusion.color : ENEMY_CONFIGS[e.type].color; // the Moon Queen hides among her illusions
     ctx.fillRect(MX + e.tileX * S, MY + e.tileY * S, S, S);
@@ -863,8 +863,8 @@ function drawMinimap(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(MX + state.playerTileX * S - 1, MY + state.playerTileY * S - 1, 4, 4);
 
-  // Boss on minimap — huge pulsing dot with glowing core and border
-  for (const e of state.enemies) {
+  // Boss on minimap — huge pulsing dot with glowing core and border (Impostors show as their boss)
+  for (const e of state.enemies.map(en => impostorLook(state, en))) {
     if (isBossType(e.type) && isEnemyVisibleOnMinimap(e) && !(state.moon && moonWearsGuise(state, e)) && !(moonHiddenInDark(state, e.tileX, e.tileY, e.id) && !isMoonRevealed(state, e))) {
       if (e.type === 'aegis_sentinel' || e.type === 'astral_twins') {
         const x = MX + e.tileX * S, y = MY + e.tileY * S;
@@ -2085,7 +2085,7 @@ function drawPixelBeam(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2
 }
 
 function drawPlayerLaser(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, powered: boolean, ticks: number, beamWidth?:number,tint?:'solar'|'emerald'|'opal'|'amber') {
-  ctx.save();ctx.lineCap='square';const fade=Math.min(1,ticks/18),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#33e89b':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff';
+  ctx.save();ctx.lineCap='square';const fade=Math.min(1,ticks/18),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#29ba7c':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff';
   for(const [width,color,alpha,glow]of [[powered?60:48,base,.4,18],[powered?27:18,light,.85,10],[powered?6:3,'#ffffff',1,0]] as const){
     ctx.globalAlpha=fade*alpha;ctx.shadowColor=base;ctx.shadowBlur=glow;ctx.strokeStyle=color;ctx.lineWidth=beamWidth?width*(beamWidth/(powered?60:48)):width;
     ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
@@ -2104,7 +2104,7 @@ function drawPlayerChain(ctx: CanvasRenderingContext2D, x1: number, y1: number, 
 }
 
 function drawPlayerWave(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, powered: boolean, ticks: number,tint?:'solar'|'emerald'|'opal'|'amber') {
-  ctx.save();const fade=Math.min(1,ticks/30),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#33e89b':tint==='solar'?'#ff5b66':powered?'#ffbb22':'#22cfff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffe0ca':tint==='amber'?'#ffd65b':powered?'#fff4b8':'#e4ffff',accent=tint==='opal'?'#ed99cc':tint==='emerald'?'#19a96c':tint==='solar'?'#e63956':tint==='amber'?'#ffad24':powered?'#ff6d37':'#9b7cff';
+  ctx.save();const fade=Math.min(1,ticks/30),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#29ba7c':tint==='solar'?'#ff5b66':powered?'#ffbb22':'#22cfff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffe0ca':tint==='amber'?'#ffd65b':powered?'#fff4b8':'#e4ffff',accent=tint==='opal'?'#ed99cc':tint==='emerald'?'#19a96c':tint==='solar'?'#e63956':tint==='amber'?'#ffad24':powered?'#ff6d37':'#9b7cff';
   ctx.shadowColor=base;ctx.shadowBlur=Math.min(6,32);ctx.globalAlpha=fade*.85;ctx.strokeStyle=base;ctx.lineWidth=18;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
   ctx.shadowBlur=Math.min(6,10);ctx.globalAlpha=fade;ctx.strokeStyle=light;ctx.lineWidth=6;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
   for(const [ratio,color,alpha]of [[.76,accent,.65],[.5,base,.35]] as const){
@@ -2135,16 +2135,23 @@ function drawPlayerCharge(ctx: CanvasRenderingContext2D, x: number, y: number, h
   ctx.restore();
 }
 
+function mixHex(a: string, b: string, t: number) {
+  const ch = (s: string, i: number) => parseInt(s.slice(1 + i * 2, 3 + i * 2), 16);
+  return '#' + [0, 1, 2].map(i => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, '0')).join('');
+}
+
 function drawPlayerBullet(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number, powered: boolean, ticks: number,tint?:'solar'|'lunar'|'emerald'|'opal'|'amber',heavy=false) {
   ctx.save();ctx.lineCap='square';const len=Math.hypot(dx,dy)||1,nx=dx/len,ny=dy/len;
-  const tail=Math.min(TILE_SIZE*1.5,Math.max(0,ticks)*BULLET_SPEED*TILE_SIZE),width=(powered?30:18)*(heavy?1.35:1);
-  const base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#33e89b':tint==='lunar'?'#c18bfa':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='lunar'?'#f2dfff':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff';
+  const tail=Math.min(TILE_SIZE*1.5,Math.max(0,ticks)*BULLET_SPEED*TILE_SIZE),width=(powered?30:18)*(heavy?1.7:1);
+  const rawBase=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#29ba7c':tint==='lunar'?'#c18bfa':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',rawLight=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='lunar'?'#f2dfff':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff';
+  // Heavy shot: a pale yellow core inside a slightly warmed outer glow (mixing cyan further toward yellow turns it green).
+  const base=heavy?mixHex(rawBase,'#ffe680',.2):rawBase,light=heavy?mixHex(rawLight,'#fff1a8',.75):rawLight;
   for(const [w,color,alpha,glow]of [[width*1.8,base,.3,22],[width,base,.8,10],[Math.max(4,width*.4),light,1,0]] as const){
     ctx.globalAlpha=alpha;ctx.shadowColor=base;ctx.shadowBlur=glow;ctx.strokeStyle=color;ctx.lineWidth=w;
     ctx.beginPath();ctx.moveTo(x-nx*tail,y-ny*tail);ctx.lineTo(x+nx*TILE_SIZE*.4,y+ny*TILE_SIZE*.4);ctx.stroke();
   }
   // Heavy shot: a white square head at the tip.
-  if(heavy){const hx=Math.round(x+nx*TILE_SIZE*.4),hy=Math.round(y+ny*TILE_SIZE*.4),h=Math.round(width*.35);ctx.globalAlpha=1;ctx.shadowColor='#ffffff';ctx.shadowBlur=8;ctx.fillStyle='#ffffff';ctx.fillRect(hx-h,hy-h,h*2,h*2);}
+  if(heavy){const hx=Math.round(x+nx*TILE_SIZE*.4),hy=Math.round(y+ny*TILE_SIZE*.4),h=Math.round(width*.4);ctx.globalAlpha=1;ctx.shadowColor='#fff3b0';ctx.shadowBlur=8;ctx.fillStyle='#fffbe3';ctx.fillRect(hx-h,hy-h,h*2,h*2);}
   ctx.restore();
 }
 
@@ -2464,7 +2471,7 @@ function drawMobBrackets(ctx: CanvasRenderingContext2D, x: number, y: number, ra
 
 
 function drawMobAttack(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, targetX: number, targetY: number, ticks: number, color: string) {
-  if(type==='ice_caller'||type==='rime_brute'||type==='sniper'||type==='lancer'||type==='healer'||type==='shielder'||type==='bomber')return;
+  if(type==='ice_caller'||type==='rime_brute'||type==='sniper'||type==='lancer'||type==='enchanter'||type==='shooter'||type==='healer'||type==='shielder'||type==='bomber')return;
   ctx.save();ctx.shadowColor=color;ctx.shadowBlur=3;
   const fade=Math.min(1,ticks/14),progress=1-fade,dx=targetX-x,dy=targetY-y,len=Math.hypot(dx,dy)||1;
   if(type==='energy_leech'){
@@ -2566,6 +2573,13 @@ function drawGuideWeaver(ctx: CanvasRenderingContext2D, x: number, y: number, ti
   const hide = hideBossHeadBars; hideBossHeadBars = true;
   ctx.save(); ctx.translate(x, y); ctx.scale(.6, .6); drawEnemy(ctx, guideWeaver, 0, 0, tick); ctx.restore();
   hideBossHeadBars = hide;
+}
+
+// Impostor: drawn, and shown on the minimap, as a copy of the boss it imitates (the boss's real HP included).
+function impostorLook(state: GameState, e: GameState['enemies'][0]): GameState['enemies'][0] {
+  if (e.type !== 'impostor') return e;
+  const boss = state.enemies.find(b => b.id === e.disguiseOf && b.hp > 0);
+  return boss ? { ...boss, id: e.id, x: e.x, y: e.y, tileX: e.tileX, tileY: e.tileY, targetTileX: e.targetTileX, targetTileY: e.targetTileY, stepProgress: e.stepProgress, flashTicks: e.flashTicks, shootTicks: 0, windupTicks: 0 } : e;
 }
 
 function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx: number, sy: number, tickN: number, shielded = false, reaperExposed = false, reaperCharge = -1) {
@@ -3724,6 +3738,9 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     const boxH=Math.floor(drawSz*.44),gap=Math.max(2,drawSz-boxH*2);
     drawMobBody(ctx,sx-drawH,sy-drawH,drawSz,boxH,color,false);
     drawMobBody(ctx,sx-drawH,sy-drawH+boxH+gap,drawSz,boxH,'#aaffcc',false);
+  }else if(e.type==='shooter'){
+    // Wide, squat turret body: broader than tall, sitting low
+    const w=Math.round(drawSz*1.25),h=Math.round(drawSz*.72);drawMobBody(ctx,sx-Math.round(w/2),sy+drawH-h,w,h,color,flash);
   }else drawMobBody(ctx,sx-drawH,sy-drawH,drawSz,drawSz,color,flash);
 
   const antH = Math.max(3, Math.floor(size * 0.28));
@@ -3831,6 +3848,33 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     ctx.fillRect(sx - sgap - 1, sy - half - antH - dotSz, dotSz, dotSz);
     ctx.fillRect(sx + sgap, sy - half - antH - dotSz, dotSz, dotSz);
     ctx.shadowBlur = 0;
+  } else if (e.type === 'shooter') {
+    // No antenna: two short vents on the squat body's top corners
+    const w = Math.round(size * 1.25), top = sy + half - Math.round(size * .72);
+    ctx.fillStyle = color; ctx.fillRect(sx - Math.round(w / 2) + 3, top - 4, 5, 4); ctx.fillRect(sx + Math.round(w / 2) - 8, top - 4, 5, 4);
+  } else if (e.type === 'snatcher') {
+    // Two grabbing claws: short arms out to the sides ending in hooks that point up
+    ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 4;
+    for (const side of [-1, 1]) {
+      const ax = side < 0 ? sx - half - 7 : sx + half;
+      ctx.fillRect(ax, sy - 2, 7, 4); ctx.fillRect(side < 0 ? ax : ax + 4, sy - 9, 3, 9);
+      ctx.fillStyle = '#f0cd8c'; ctx.fillRect(side < 0 ? ax - 1 : ax + 3, sy - 11, 5, 3); ctx.fillStyle = color;
+    }
+    ctx.shadowBlur = 0;
+  } else if (e.type === 'bleeder') {
+    // Hooked antenna: a stalk bending into a small red drip
+    ctx.fillStyle = color; ctx.fillRect(sx - 1, sy - half - antH, 3, antH); ctx.fillRect(sx - 1, sy - half - antH, 7, 3);
+    ctx.shadowColor = '#ff4d5e'; ctx.shadowBlur = 6; ctx.fillStyle = '#ff4d5e'; ctx.fillRect(sx + 5, sy - half - antH, 3, 5); ctx.shadowBlur = 0;
+  } else if (e.type === 'enchanter') {
+    // Crown: three gold prongs on a band, a glowing orb on the tall middle one
+    const band = sy - half - 3, gap = Math.floor(size * .2);
+    ctx.fillStyle = '#ffcf5a'; ctx.shadowColor = '#ffcf5a'; ctx.shadowBlur = 4;
+    ctx.fillRect(sx - gap - 3, band, gap * 2 + 6, 3);
+    ctx.fillRect(sx - gap - 3, band - antH + 2, 3, antH - 2); ctx.fillRect(sx + gap, band - antH + 2, 3, antH - 2);
+    ctx.fillRect(sx - 1, band - antH - 3, 3, antH + 3);
+    ctx.shadowColor = '#ff6b7d'; ctx.shadowBlur = 8; ctx.fillStyle = '#ffd9de';
+    ctx.fillRect(sx - 2, band - antH - 8, 5, 5);
+    ctx.shadowBlur = 0;
   } else if (e.type === 'lancer') {
     // Open railgun fork: two prongs rising from a base bar, a core between them that brightens while charging
     const charge = e.windupTicks > 0 ? 1 - e.windupTicks / LANCER.windupTicks : 0;
@@ -3870,6 +3914,28 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
         ctx.fillStyle = i < cells ? '#ffe58b' : '#82549e';
         ctx.fillRect(Math.round(sx) - 6 + i * 5, mouthY + 5, 3, 2);
       }
+      ctx.shadowBlur = 0;
+    } else if (e.type === 'shooter') {
+      // Cannon muzzle facing out: dark square ring, bright core that whitens while it winds up
+      const cy = Math.round(sy + half - size * .36), ring = Math.max(10, Math.floor(size * .42)), core = Math.max(4, Math.floor(ring * .45));
+      ctx.fillStyle = '#26300f'; ctx.fillRect(Math.round(sx - ring / 2), cy - Math.round(ring / 2), ring, ring);
+      ctx.shadowColor = '#fff2a0'; ctx.shadowBlur = e.windupTicks > 0 ? 12 : 5; ctx.fillStyle = e.windupTicks > 0 ? '#ffffff' : '#fff2a0';
+      ctx.fillRect(Math.round(sx - core / 2), cy - Math.round(core / 2), core, core); ctx.shadowBlur = 0;
+    } else if (e.type === 'snatcher') {
+      const width = Math.floor(size * .44), left = Math.round(sx - width / 2);
+      ctx.fillStyle = '#3a2410'; ctx.fillRect(left - 1, eyeY, width + 2, 7);
+      ctx.shadowColor = '#ffb35a'; ctx.shadowBlur = 6; ctx.fillStyle = '#ffb35a'; ctx.fillRect(left, eyeY + 1, width, 5);
+      ctx.fillStyle = '#2a1608'; ctx.fillRect(Math.round(sx) - 2, eyeY + 1, 4, 5); ctx.shadowBlur = 0;
+    } else if (e.type === 'bleeder') {
+      // Six red eyes in three rows of two
+      const eye = Math.max(3, Math.floor(size * .12)), gapJ = Math.max(2, Math.floor(size * .08)), row = eye + 2;
+      ctx.shadowColor = '#ff4d5e'; ctx.shadowBlur = 5; ctx.fillStyle = '#ff4d5e';
+      for (let r = 0; r < 3; r++) { const y = eyeY + 1 + r * row; ctx.fillRect(Math.round(sx) - gapJ - eye, y, eye, eye); ctx.fillRect(Math.round(sx) + gapJ, y, eye, eye); }
+      ctx.shadowBlur = 0;
+    } else if (e.type === 'enchanter') {
+      const eye = Math.max(3, Math.floor(size * .16)), gapE = Math.floor(size * .16);
+      ctx.shadowColor = '#ffcf5a'; ctx.shadowBlur = 5; ctx.fillStyle = '#ffe08a';
+      ctx.fillRect(sx - gapE - eye, eyeY + 1, eye, eye); ctx.fillRect(sx + gapE, eyeY + 1, eye, eye);
       ctx.shadowBlur = 0;
     } else if (e.type === 'lancer') {
       // Wide visor slit; it whitens while the shot charges
@@ -4462,6 +4528,29 @@ function drawReaperHallwaySeal(ctx: CanvasRenderingContext2D, state: GameState, 
   ctx.restore();
 }
 
+// Enchanter: an expanding red ring when it pulses, and pulsing red corner brackets on every buffed alien.
+function drawEnchantments(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
+  ctx.save();
+  for (const e of state.enemies) {
+    if (e.hp <= 0) continue;
+    const x = Math.round(e.x - camX), y = Math.round(e.y - camY);
+    if ((e.enchantedUntil ?? 0) > state.gameTick) {
+      const left = e.enchantedUntil! - state.gameTick, fade = Math.min(1, left / 30), half = TILE_SIZE * ENEMY_CONFIGS[e.type].bodyFraction / 2 + 6;
+      ctx.globalAlpha = fade * (.55 + .3 * Math.abs(Math.sin(tickN * .15))); ctx.fillStyle = '#ff3b4f';
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const cx = x + dx * half, cy = y + dy * half;
+        ctx.fillRect(dx < 0 ? cx : cx - 9, cy - 1.5, 9, 3); ctx.fillRect(cx - 1.5, dy < 0 ? cy : cy - 9, 3, 9);
+      }
+    }
+    if (e.type === 'enchanter' && (e.enchantPulseTicks ?? 0) > 0) {
+      const t = 1 - e.enchantPulseTicks! / 30, r = Math.floor((20 + t * (ENCHANTER.radius * TILE_SIZE - 20)) / 6) * 6;
+      ctx.globalAlpha = (1 - t) * .7; ctx.strokeStyle = '#ff3b4f'; ctx.lineWidth = 4; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+      ctx.globalAlpha = (1 - t) * .4; ctx.strokeStyle = '#ffcf5a'; ctx.lineWidth = 2; ctx.strokeRect(x - r + 6, y - r + 6, r * 2 - 12, r * 2 - 12);
+    }
+  }
+  ctx.restore();
+}
+
 // Lancer aim: the beam's hit band and a dotted line to where a wall (or range) stops it; whitens just before firing.
 function drawLancerWarnings(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
   ctx.save();
@@ -4537,6 +4626,19 @@ function drawComet(ctx: CanvasRenderingContext2D, state: GameState, camX: number
       ctx.globalAlpha = fade * .8; ctx.fillStyle = i % 3 ? '#bdf0ff' : '#ffffff';
       ctx.fillRect(Math.round((x + Math.cos(a) * d) / 2) * 2 - s / 2, Math.round((y + Math.sin(a) * d - age * .6) / 2) * 2 - s / 2, s, s);
     }
+  }
+  ctx.restore();
+}
+
+// Crater constellation: the meteor-struck room shows Gaia's meteor scorch (ash and embers), cooling as the heal runs out.
+function drawCraterField(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number) {
+  const field = state.craterField;
+  if (!field) return;
+  const [r1, c1, r2, c2] = CHAMBER_BOUNDS[field.chamber], heat = field.ticks / CRATER.ticks;
+  ctx.save(); ctx.shadowBlur = 0;
+  for (let ty = r1; ty <= r2; ty++) for (let tx = c1; tx <= c2; tx++) {
+    if ((state.map[ty]?.[tx] ?? T_WALL) === T_WALL) continue;
+    drawScorchTile(ctx, tx * TILE_SIZE - camX, ty * TILE_SIZE - camY, tx, ty, heat);
   }
   ctx.restore();
 }
@@ -4644,7 +4746,9 @@ function drawGame(
   drawReaperHallwaySeal(ctx,state,camX,camY,tickN);
   drawChargerWarnings(ctx,state,camX,camY);
   drawLancerWarnings(ctx,state,camX,camY,tickN);
+  drawEnchantments(ctx,state,camX,camY,tickN);
   drawCometWarning(ctx,state,camX,camY,tickN);
+  drawCraterField(ctx,state,camX,camY);
 
   // Frost Warden chill field — persistent icy wash + frosty border over whichever chamber
   // she currently occupies, so the chill debuff is visible, not just felt
@@ -4842,6 +4946,7 @@ function drawGame(
       drawQuenchedKing(ctx, e, sx, sy); continue;
     }
     if(state.saturn&&drawSaturnUnit(ctx,e,sx,sy,state.gameTick))continue;
+    if (e.type === 'impostor') { drawEnemy(ctx, impostorLook(state, e), sx, sy, tickN); continue; }
     // Gaia: she fades into the soil while withering between phases.
     if (state.gaia && e.id === state.gaia.bossId && state.gaia.wither > 0) ctx.globalAlpha = .25 + .2 * Math.abs(Math.sin(tickN * .1));
     if (moonHiddenInDark(state, e.tileX, e.tileY, e.id)) continue; // Moon phase 3: unseen in the dark unless just hit
@@ -4888,7 +4993,7 @@ function drawGame(
 
   for(const decoy of state.build.queenDecoys??[]){
     const x=decoy.x-camX,y=decoy.y-camY;
-    ctx.save();ctx.globalAlpha=.72;ctx.fillStyle='#ad79da';ctx.fillRect(x-17,y-17,34,34);ctx.fillStyle='#402553';ctx.fillRect(x-12,y-12,24,24);ctx.fillStyle='#c39aff';ctx.fillRect(x-3,y-11,6,22);ctx.fillRect(x-6,y-7,12,14);ctx.fillStyle='#7540a5';ctx.fillRect(x-3,y-7,6,14);ctx.fillStyle='#eedaff';ctx.fillRect(x-2,y-6,4,12);ctx.fillStyle='#ad79da';ctx.fillRect(x-3,y-23,6,6);ctx.strokeStyle='#d5acff';ctx.lineWidth=4;ctx.strokeRect(x-20,y-20,40,40);ctx.fillStyle='#cc9ff5';ctx.fillRect(x-17,y+23,34*Math.max(0,decoy.hp/12),2);ctx.restore();
+    ctx.save();ctx.globalAlpha=.72;ctx.fillStyle='#ad79da';ctx.fillRect(x-17,y-17,34,34);ctx.fillStyle='#402553';ctx.fillRect(x-12,y-12,24,24);ctx.fillStyle='#c39aff';ctx.fillRect(x-3,y-11,6,22);ctx.fillRect(x-6,y-7,12,14);ctx.fillStyle='#7540a5';ctx.fillRect(x-3,y-7,6,14);ctx.fillStyle='#eedaff';ctx.fillRect(x-2,y-6,4,12);ctx.fillStyle='#ad79da';ctx.fillRect(x-3,y-23,6,6);ctx.strokeStyle='#d5acff';ctx.lineWidth=4;ctx.strokeRect(x-20,y-20,40,40);ctx.fillStyle='#cc9ff5';ctx.fillRect(x-17,y+23,34*Math.max(0,Math.min(1,decoy.hp/BLESSING.amethystDecoyHP)),2);ctx.restore();
   }
   if(state.lunarDecoy){
     const decoy=state.lunarDecoy,x=decoy.x-camX,y=decoy.y-camY;
@@ -4915,7 +5020,26 @@ function drawGame(
   drawVenusReflects(ctx, state, camX, camY);
 
   // Frozen by a Frost Warden ice tile — blocky ice-block overlay encasing the player
-  if (state.playerFrozenTicks > 0) {
+  if ((state.bleedingUntil ?? 0) > state.gameTick) {
+    // Bleeder curse: a broken heal cross above the player, pulsing, with a red slash.
+    const cx = Math.round(psx), cy = Math.round(psy - TILE_SIZE * .85), pulse = .6 + .4 * Math.abs(Math.sin(tickN * .12));
+    ctx.save(); ctx.globalAlpha = pulse;
+    ctx.fillStyle = '#1a1626'; ctx.fillRect(cx - 9, cy - 3, 18, 6); ctx.fillRect(cx - 3, cy - 9, 6, 18);
+    ctx.fillStyle = '#8f93ad'; ctx.fillRect(cx - 7, cy - 2, 14, 4); ctx.fillRect(cx - 2, cy - 7, 4, 14);
+    ctx.fillStyle = '#ff4d5e'; ctx.shadowColor = '#ff4d5e'; ctx.shadowBlur = 6;
+    for (let i = -3; i <= 3; i++) ctx.fillRect(cx + i * 3 - 1, cy - i * 3 - 1, 3, 3);
+    ctx.restore();
+  }
+  if (state.playerFrozenTicks > 0 && state.playerStunned) {
+    // Comet stun: three small square stars circling above the player.
+    const angle = (tickN * 0.2) % (Math.PI * 2);
+    ctx.save(); ctx.shadowColor = '#ffe680'; ctx.shadowBlur = 4; ctx.fillStyle = '#fff3b0';
+    for (let d = 0; d < 3; d++) {
+      const a = angle + d * Math.PI * 2 / 3;
+      ctx.fillRect(Math.round(psx + Math.cos(a) * 16) - 3, Math.round(psy - TILE_SIZE * .55 + Math.sin(a) * 6) - 3, 6, 6);
+    }
+    ctx.restore();
+  } else if (state.playerFrozenTicks > 0) {
     const fSz = Math.floor(TILE_SIZE * 0.9);
     const fH = fSz / 2;
     const fPulse = 0.7 + 0.3 * Math.abs(Math.sin(tickN * 0.2));
@@ -4995,6 +5119,15 @@ function drawGame(
   drawGaiaOverlay(ctx, state, camX, camY, tickN);
   drawMeteorImpact(ctx, state, camX, camY);
   drawComet(ctx, state, camX, camY, tickN);
+  // Shooter orbs: a bright square core in a gold glow, with two fading trail blocks.
+  for (const shot of state.enemyShots ?? []) {
+    const x = Math.round(shot.x - camX), y = Math.round(shot.y - camY), len = Math.hypot(shot.dx, shot.dy) || 1;
+    ctx.save();
+    for (let k = 2; k >= 1; k--) { ctx.globalAlpha = .25 * (3 - k); ctx.fillStyle = '#d9c46a'; const tx = Math.round(x - shot.dx / len * 13 * k), ty = Math.round(y - shot.dy / len * 13 * k); ctx.fillRect(tx - 7, ty - 7, 14, 14); }
+    ctx.globalAlpha = 1; ctx.shadowColor = '#fff2a0'; ctx.shadowBlur = 10; ctx.fillStyle = '#d9c46a'; ctx.fillRect(x - 11, y - 11, 22, 22);
+    ctx.shadowBlur = 0; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 5, y - 5, 10, 10);
+    ctx.restore();
+  }
   drawSkyLaserImpact(ctx, state, camX, camY);
   for(const effect of state.sapphireHitEffects??[]){
     if(effect.untilTick<=state.gameTick)continue;
@@ -5933,7 +6066,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const prayerSpawnWarning = phase === 'playing' && (state?.bossSpawnTicks ?? 0) > 0 && !!state && isMovementReversed(state);
   const playerStatuses: { key: string; label: string; color: string; seconds?: number; progress?: number }[] = [];
   if(state){
-    if(state.playerFrozenTicks>0)playerStatuses.push({key:'frozen',label:'FROZEN',color:'#b4eaff',seconds:state.playerFrozenTicks/60,progress:state.playerFrozenTicks/90});
+    if((state.bulletStunUntil??0)>state.gameTick)playerStatuses.push({key:'stun-bullets',label:'STUN BULLETS · +30% DAMAGE',color:'#fff2a0',seconds:(state.bulletStunUntil!-state.gameTick)/60,progress:(state.bulletStunUntil!-state.gameTick)/SHOOTER.rewardTicks});
+    if((state.empoweredUntil??0)>state.gameTick)playerStatuses.push({key:'empowered',label:'EMPOWERED · +20% DAMAGE',color:'#ff8a5a',seconds:(state.empoweredUntil!-state.gameTick)/60,progress:(state.empoweredUntil!-state.gameTick)/ENCHANTER.rewardTicks});
+    if((state.regenUntil??0)>state.gameTick)playerStatuses.push({key:'regen',label:'REGENERATING',color:'#66cc88',seconds:(state.regenUntil!-state.gameTick)/60,progress:(state.regenUntil!-state.gameTick)/BLEEDER.regenTicks});
+    if(state.rubyStolenBy!==undefined)playerStatuses.push({key:'ruby-stolen',label:'RUBY STOLEN · DEFEAT THE SNATCHER',color:'#ffb35a'});
+    if((state.bleedingUntil??0)>state.gameTick)playerStatuses.push({key:'bleeding',label:'BLEEDERED · NO HEALING',color:'#ff6b78',seconds:(state.bleedingUntil!-state.gameTick)/60,progress:(state.bleedingUntil!-state.gameTick)/BLEEDER.curseTicks});
+    if(state.playerFrozenTicks>0&&state.playerStunned)playerStatuses.push({key:'stunned',label:'STUNNED',color:'#ffe680',seconds:state.playerFrozenTicks/60,progress:state.playerFrozenTicks/COMET.stunTicks});
+    else if(state.playerFrozenTicks>0)playerStatuses.push({key:'frozen',label:'FROZEN',color:'#b4eaff',seconds:state.playerFrozenTicks/60,progress:state.playerFrozenTicks/90});
     else if(isPlayerChilled(state))playerStatuses.push({key:'chilled',label:'CHILLED · MOVE & ATTACK SLOW',color:'#8ecfe9'});
     if((state.jupiter?.slowTicks??0)>0)playerStatuses.push({key:'static',label:'STATIC · SLOWED',color:'#9fd8ff',seconds:state.jupiter!.slowTicks/60,progress:state.jupiter!.slowTicks/JUPITER.shockSlowTicks});
     if(isMovementReversed(state))playerStatuses.push({key:'reversed',label:'CONTROLS REVERSED',color:'#ffe477'});
@@ -5990,6 +6129,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-guide-group-title { padding: 12px 0 8px; }
         .rs-guide-entry { border-left: 3px solid; padding: 9px 12px; margin-bottom: 12px; background: #111b2b; }
         .rs-guide-entry h5 { font-size: .88rem; font-weight: 700; margin-bottom: 4px; }
+        .rs-guide-entry .rs-guide-reward { margin-top: 4px; color: #ffd98a; }
         .rs-guide .rs-guide-skill { margin-top: 9px; padding-top: 8px; border-top: 1px solid #263346; font-size: .8rem; }
         .rs-guide-skill strong { display: block; font-size: .73rem; letter-spacing: .025em; }
         .rs-guide-back { margin-top: 4px; }
@@ -6611,6 +6751,23 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             <div style={{ color: '#fff0ac', fontFamily: 'var(--font-pixel)', fontSize: 16, lineHeight: 1.8 }}>MOVEMENT REVERSED</div>
           </div>
         )}
+
+        {phase === 'playing' && state?.alienIntro && (() => {
+          const intro = state.alienIntro, entry = ALIEN_GUIDE.find(a => a.type === intro.type), color = ENEMY_CONFIGS[intro.type].color;
+          const fade = Math.min(1, intro.ticks / 30, (ALIEN_INTRO_TICKS - intro.ticks + 1) / 12);
+          return (
+            <div role="status" style={{ position: 'absolute', bottom: '28px', left: '50%', transform: 'translateX(-50%)', opacity: fade,
+              display: 'flex', alignItems: 'center', gap: 12, width: 'max-content', maxWidth: 'calc(100% - 24px)', boxSizing: 'border-box', pointerEvents: 'none',
+              padding: '8px 18px 8px 10px', background: 'rgba(6,8,16,.94)', border: `2px solid ${color}`, boxShadow: `0 0 22px ${color}55`, borderRadius: '2px' }}>
+              <EnemyPortrait type={intro.type} size={56} />
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#ffd98a', letterSpacing: '.12em' }}>NEW ALIEN</div>
+                <div style={{ fontFamily: 'var(--font-pixel)', fontSize: '.9rem', lineHeight: 1.7, color }}>{(entry?.name ?? intro.type).toUpperCase()}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#dfe6f2', maxWidth: 360 }}>{entry?.description}</div>
+              </div>
+            </div>
+          );
+        })()}
 
         {phase === 'playing' && !prayerSpawnWarning && (state?.ascensionBannerTicks ?? 0) > 0 && (
           <div role="status" style={{ position: 'absolute', top: '72px', left: '50%', transform: 'translateX(-50%)',

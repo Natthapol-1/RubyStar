@@ -52,6 +52,14 @@ export function drawStone(ctx: CanvasRenderingContext2D, cx: number, cy: number,
   ctx.restore();
 }
 
+// A meteor-scorched floor tile: dark ash with an occasional ember, both fading as heat (1 → 0) cools.
+// Shared by Gaia's meteor scorch and the Crater constellation's healing room.
+export function drawScorchTile(ctx: CanvasRenderingContext2D, x: number, y: number, tx: number, ty: number, heat: number) {
+  ctx.globalAlpha = .25 + .3 * heat; block(ctx, x, y, TILE_SIZE, TILE_SIZE, '#2a2118');
+  ctx.globalAlpha = heat; if (hash(tx, ty, 5) > .7) block(ctx, x + 8 + hash(tx, ty, 6) * 28, y + 8 + hash(tx, ty, 7) * 28, 4, 4, '#ff9a3c');
+  ctx.globalAlpha = 1;
+}
+
 // Under actors: growth, scorch, Ruby's ward and ring, Sunstones and snare cracks.
 export function drawGaiaGround(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, viewW: number, viewH: number, tick: number) {
   const gaia = state.gaia; if (!gaia) return;
@@ -62,12 +70,7 @@ export function drawGaiaGround(ctx: CanvasRenderingContext2D, state: Readonly<Ga
   for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
     if (state.map[ty]?.[tx] !== T_FLOOR) continue;
     const i = ty * MAP_COLS + tx, x = tx * s - camX, y = ty * s - camY;
-    if (gaia.scorch[i] > 0) {
-      const heat = gaia.scorch[i] / GAIA_SCORCH_TICKS;
-      ctx.globalAlpha = .25 + .3 * heat; block(ctx, x, y, s, s, '#2a2118');
-      ctx.globalAlpha = heat; if (hash(tx, ty, 5) > .7) block(ctx, x + 8 + hash(tx, ty, 6) * 28, y + 8 + hash(tx, ty, 7) * 28, 4, 4, '#ff9a3c');
-      ctx.globalAlpha = 1;
-    }
+    if (gaia.scorch[i] > 0) drawScorchTile(ctx, x, y, tx, ty, gaia.scorch[i] / GAIA_SCORCH_TICKS);
     if (gaia.growth[i] > 0) drawGrowthTile(ctx, gaia.growth[i], x, y, tx, ty, tick);
   }
   // Ruby's ward (faint gold frame) and the ring warning when vines close in.

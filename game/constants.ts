@@ -200,7 +200,7 @@ export function hallwayOfTile(tileX: number, tileY: number): number {
 
 // ─── Enemy types ─────────────────────────────────────────────────────────────
 
-export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'lancer' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
+export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'lancer' | 'enchanter' | 'bleeder' | 'snatcher' | 'impostor' | 'shooter' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
   | 'fish_blue' | 'fish_red' | 'stinger' | 'water_clone' | 'water_bomb' | 'jellyfish' | 'pufferfish'
   | 'seed_pod' | 'blossom' | 'sporeling' | 'vine_crawler' | 'angry_mushroom' | 'lifebloom'
   | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_mimic' | 'cinder_wisp' | 'emberling' | 'scorch_sapper' | 'frost_raider' | 'ice_caller' | 'rime_brute';
@@ -262,9 +262,10 @@ export const SUN = {
 } as const;
 
 // Tiles a regular alien's hit on the player pushes them away (Bomber: its explosion).
-export const ALIEN_KNOCKBACK: Partial<Record<EnemyType, number>> = { armored: 2, fast: 1, ghost: 1, bomber: 2, lancer: 2 };
+export const CHARGER_KNOCKBACK = 3; // tiles a Charger's rush pushes the player along its lane
+export const ALIEN_KNOCKBACK: Partial<Record<EnemyType, number>> = { armored: 2, fast: 1, ghost: 1, bomber: 2, lancer: 3 };
 // Global walking/hunting speed for the player and every unit, in every mode (attack rolls and projectiles excluded).
-export const MOVE_SPEED_MULT = 1.1;
+export const MOVE_SPEED_MULT = 1.02;
 // Small screen shake when any knockback starts pushing the player (peak about 3px, fading over 0.2s).
 export const KNOCKBACK_SHAKE_TICKS = 12;
 export const KNOCKBACK_SHAKE_AMOUNT = 6;
@@ -404,7 +405,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   },
   sniper: {
     maxHp: 5, speed: 0.442, color: '#ffee00', shieldColor: '#ffee00',
-    bodyFraction: 0.64, scoreValue: 20, damageToPlayer: 13, damageToRuby: 13,
+    bodyFraction: 0.64, scoreValue: 20, damageToPlayer: 12, damageToRuby: 12,
     attackCooldown: 130, attackRange: 1, bombExplodeRange: 0,
   },
   healer: {
@@ -414,7 +415,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   },
   charger: {
     maxHp: 17, speed: 0.975, color: '#ff4400', shieldColor: '#ff4400',
-    bodyFraction: 0.76, scoreValue: 22, damageToPlayer: 20, damageToRuby: 14,
+    bodyFraction: 0.76, scoreValue: 22, damageToPlayer: 25, damageToRuby: 17.5,
     attackCooldown: 90, attackRange: 1, bombExplodeRange: 0,
   },
   ghost: {
@@ -437,9 +438,34 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     bodyFraction: 0.74, scoreValue: 20, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 999, attackRange: 0, bombExplodeRange: 0,
   },
+  shooter: {
+    maxHp: 8, speed: 0.55, color: '#8fa83a', shieldColor: '#e4f0a8',
+    bodyFraction: 0.68, scoreValue: 22, damageToPlayer: 8, damageToRuby: 5,
+    attackCooldown: 150, attackRange: 9, bombExplodeRange: 0,
+  },
+  impostor: {
+    maxHp: 10, speed: 1.0, color: '#9a9a9a', shieldColor: '#dddddd',
+    bodyFraction: 0.9, scoreValue: 20, damageToPlayer: 0, damageToRuby: 0,
+    attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
+  },
+  snatcher: {
+    maxHp: 16, speed: 1.2, color: '#b07a2c', shieldColor: '#f0cd8c',
+    bodyFraction: 0.72, scoreValue: 35, damageToPlayer: 0, damageToRuby: 0,
+    attackCooldown: 0, attackRange: 1, bombExplodeRange: 0,
+  },
+  bleeder: {
+    maxHp: 6, speed: 1.6, color: '#8f93ad', shieldColor: '#d4d6e6',
+    bodyFraction: 0.6, scoreValue: 22, damageToPlayer: 6, damageToRuby: 4,
+    attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
+  },
+  enchanter: {
+    maxHp: 14, speed: 0.5, color: '#c8243c', shieldColor: '#ffb3bd',
+    bodyFraction: 0.74, scoreValue: 30, damageToPlayer: 0, damageToRuby: 0,
+    attackCooldown: 360, attackRange: 6, bombExplodeRange: 0,
+  },
   lancer: {
     maxHp: 12, speed: 0.6, color: '#ff3d6e', shieldColor: '#ffb3c6',
-    bodyFraction: 0.74, scoreValue: 26, damageToPlayer: 28, damageToRuby: 18,
+    bodyFraction: 0.74, scoreValue: 26, damageToPlayer: 33.6, damageToRuby: 21.6,
     attackCooldown: 180, attackRange: 8, bombExplodeRange: 0,
   },
   energy_leech: {
@@ -469,7 +495,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   },
   devourer: {
     maxHp: 35, speed: 3.4, color: '#6b2fa8', shieldColor: '#b088e0',
-    bodyFraction: 0.95, scoreValue: 480, damageToPlayer: 5, damageToRuby: 1,
+    bodyFraction: 0.95, scoreValue: 480, damageToPlayer: 6, damageToRuby: 2,
     attackCooldown: 60, attackRange: 2, bombExplodeRange: 0,
   },
   blind_prayer: {
@@ -547,6 +573,7 @@ export const TWIN_REVIVE_HASTE_MULT = 1.4;
 export const TWIN_BERSERK_SPEED_MULT = 1.25;
 export const TWIN_BERSERK_COOLDOWN_MULT = 0.6;
 export const TWIN_BERSERK_DAMAGE_TAKEN = 0.65;
+export const TWIN_MELEE_KNOCKBACK = 2; // tiles Dawn's melee hit pushes the player
 export const TWIN_MIN_SEPARATION = 6; // preferred spacing; tight passages can compress it
 export const TWIN_RANGED_RANGE = 9;
 export const TWIN_RANGED_SPEED = 3.8;
@@ -633,9 +660,56 @@ export const SNIPER_WINDUP_TICKS = 50; // telegraph before firing (~0.83s)
 // Defeating one grants rewardTicks of laser stun: each laser hit stops an alien for stunTicks (bosses bossStunTicks).
 // Endless comets: every minGap–maxGap ticks a size×size area in the player's room is marked for warningTicks, then struck.
 // Damage: player/Ruby flat; regular aliens alienDamage × skill alien scale; bosses a share of max HP (lateBossShare after Ascension).
-export const COMET = { minGap: 1200, maxGap: 4200, warningTicks: 120, fallTicks: 45, impactTicks: 30, size: 3,
+export const COMET = { minGap: 1200, maxGap: 4200, warningTicks: 72, fallTicks: 45, impactTicks: 30, size: 3,
   playerDamage: 25, rubyDamage: 20, alienDamage: 15, bossShare: .08, lateBossShare: .05,
-  playerAimChance: .2 } as const; // chance the area is centred exactly on the player's tile
+  playerAimChance: .7, spawnRange: 5, stunTicks: 30, fromStage: 3 } as const; // fromStage: no comets (and no countdown) before this stage // stunTicks: a hit player can't move or attack for 0.5s // spawnRange: random comets land within this many tiles of the player // chance the area is centred exactly on the player's tile
+// Enemy attacks (on the player and Ruby) deal +LATE_ENEMY_DAMAGE_STEP more damage at stage LATE_ENEMY_DAMAGE_STAGE and every
+// LATE_ENEMY_DAMAGE_EVERY stages after (15: +5%, 20: +10%, 25: +15%, ...), with no cap. Not in challenges.
+export const LATE_ENEMY_DAMAGE_STAGE = 15, LATE_ENEMY_DAMAGE_EVERY = 5, LATE_ENEMY_DAMAGE_STEP = .05;
+export function lateEnemyDamageMult(stage: number) {
+  return stage < LATE_ENEMY_DAMAGE_STAGE ? 1 : 1 + LATE_ENEMY_DAMAGE_STEP * (Math.floor((stage - LATE_ENEMY_DAMAGE_STAGE) / LATE_ENEMY_DAMAGE_EVERY) + 1);
+}
+// Enchanter (Endless, stage 20+): every pulseTicks it gives aliens within radius tiles (not itself) speedMult speed and
+// damageMult damage for buffTicks; bosses get the smaller bossSpeedMult / bossDamageMult. Joins the spawn pool from fromStage, at most maxAlive at once.
+export const ENCHANTER = { fromStage: 20, maxAlive: 2, pulseTicks: 360, radius: 9, buffTicks: 240,
+  speedMult: 1.3, damageMult: 1.3, bossSpeedMult: 1.15, bossDamageMult: 1.15,
+  rewardTicks: 300, rewardDamageMult: 1.2 } as const; // kill reward: Empowered, +20% player attack damage for 5s
+// Bleeder (Endless, stage 20+): its hit curses the player for curseTicks: no healing from any source, and the shield
+// drains shieldDrainPerSecond. Killing a Bleeder lifts the curse. Joins the spawn pool from fromStage, at most maxAlive.
+export const BLEEDER = { fromStage: 20, maxAlive: 3, curseTicks: 180, shieldDrainPerSecond: 5,
+  regenTicks: 300, regenEvery: 20 } as const; // kill reward: heal 1 HP every regenEvery ticks for regenTicks (3 HP/s for 5s)
+// Snatcher (Endless, stage 20+): ignores the player and grabs a placed Ruby, then carries her away from the player at
+// fleeSpeedMult of its speed while she loses rubyDrainPerSecond. Killing it drops her. Shadows a player who carries her.
+export const SNATCHER = { fromStage: 20, maxAlive: 1, fleeSpeedMult: .6, rubyDrainPerSecond: 2, rewardRubyShield: 20 } as const;
+// Impostor (Endless, stage 20+, only while a boss is alive): looks like a living boss (model, HP bar, minimap marker)
+// but never attacks; keeps keepAway tiles from the player. Gone when no boss is left. Kill reward: a decoy.
+export const IMPOSTOR = { fromStage: 20, maxAlive: 1, keepAway: 5, disguiseDelay: 120, rewardDecoyTicks: 360 } as const; // disguiseDelay: plain look for 2s after spawning // kill reward: a 6s fragile decoy
+// Shooter (Endless/Ascension, stage 10+): with a clear line within its attackRange it glows for windupTicks, then fires a
+// slow shot (shotSpeed px/tick) at the player's position that flies until a wall; a hit stuns the player for stunTicks.
+// Kill reward: for rewardTicks, bullets deal rewardBulletMult damage and each hit stops an alien for rewardStunTicks
+// (bosses rewardBossStunTicks).
+export const SHOOTER = { fromStage: 10, maxAlive: 3, windupTicks: 24, shotSpeed: 3.5, hitRadius: .45, stunTicks: 30,
+  rewardTicks: 300, rewardBulletMult: 1.3, rewardStunTicks: 8, rewardBossStunTicks: 3 } as const;
+// Triangulum constellation: Laser-hit aliens within radius tiles of another hit alien are pulled pullTiles toward their group.
+export const TRIANGULUM = { radius: 3, pullTiles: 1 } as const;
+// Crater constellation: after a meteor strike its room heals the player healPerPulse every pulseTicks, for ticks (2.5 HP/s for 8s).
+export const CRATER = { ticks: 480, healPerPulse: 1, pulseTicks: 24 } as const;
+// Regular aliens gain this much HP every third boss defeat, up to six times (+24% at defeat 18); later defeats add LATE_ALIEN_HP_PER_STAGE each.
+export const ALIEN_HP_PER_MILESTONE = 0.04;
+// Celestial blessing tuning. Target: each is worth about 2-3 constellations (one = +25% damage or 15% less damage taken).
+export const BLESSING = {
+  amberEnergy: 1.6, amberPowerTicks: 120,                                  // Sirius: energy gain, extra powered time
+  diamondHealShield: 6, diamondHitShare: .5, diamondHitMax: 20, diamondCap: 80, // Saturn: shield from heals and hits
+  rubyDamage: 1.5, rubySpeed: 1.2,                                         // Sun: while unharmed
+  emeraldSpeedPerStack: .05, emeraldDamagePerStack: .02,                   // Jupiter: per attack stack, up to 10
+  emeraldSlowPerHit: .07, emeraldBossSlowPerHit: .035, emeraldSlowCap: .6, emeraldBossSlowCap: .3,
+  amethystShotDamage: .45, amethystDecoyHP: 36, amethystMaxDecoys: 4,      // Moon: decoys
+  obsidianChance: .75, obsidianWells: 5, obsidianPulse: 4.5, obsidianBossPulse: .0025, // Singularity: per 0.5s pulse
+  opalChance: .65,                                                         // Binary Star: copy chance
+  sapphireHealPerSecond: 5, sapphireWeaken: .8,                            // Neptune
+  peridotPulse: 4, peridotSlow: .6, peridotBossSlow: .8, peridotFields: 16, // Gaia: per 0.5s pulse
+  pearlReduction: .75, pearlBossReflectCap: .04,                           // Venus
+} as const;
 // Reticulum constellation: a Laser hit stops an ordinary alien for stunTicks, then that alien is immune for recoverTicks. Bosses are immune.
 export const RETICULUM = { stunTicks: 24, recoverTicks: 120 } as const;
 export const LANCER = { windupTicks: 60, hitRadius: .55, beamTicks: 18, rewardTicks: 300, stunTicks: 30, bossStunTicks: 12 } as const;
@@ -726,7 +800,10 @@ export const DIFFICULTY_OPENING_THRESHOLDS = [0, DIFFICULTY_RAMP_TICKS, 1500, 27
 export const PLAYER_MAX_HP = 100;
 export const RUBY_MAX_HP = 100;
 export const PLAYER_BASE_SPEED = 4.5;  // px/tick  (scaled with TILE_SIZE 48)
-export const PLAYER_CARRY_MULT = 0.6; // 60% of normal speed while carrying Ruby
+export const CARRY_DAMAGE_MULT = 0.9; // the player takes 10% less damage while carrying Ruby
+export const CARRY_BOOST_MULT = 0.7; // speed boosts last 30% shorter while carrying Ruby
+export const CARRY_PUSH_MULT = 0.5; // knockbacks, tides and pulls move a player carrying Ruby half as far
+export const PLAYER_CARRY_MULT = 0.5; // 50% of normal speed while carrying Ruby
 
 // ─── Abilities ────────────────────────────────────────────────────────────────
 
@@ -743,7 +820,10 @@ export const BULLET_DMG_PWR = 1.05;
 export const BULLET_SPEED = 0.45;
 // Every BULLET_HEAVY_EVERY-th bullet shot is heavy: on hit it deals ×BULLET_HEAVY_MULT and pushes a regular alien BULLET_HEAVY_PUSH tile(s).
 export const BULLET_HEAVY_EVERY = 20;
-export const BULLET_HEAVY_MULT = 1.2;
+export const BULLET_HEAVY_EVERY_MONOCEROS = 8; // with the Monoceros constellation
+// Hydra constellation: the next Laser gains perEnemy damage for each distinct enemy the previous cast hit, up to maxEnemies.
+export const HYDRA = { perEnemy: .075, maxEnemies: 5 } as const;
+export const BULLET_HEAVY_MULT = 2;
 export const BULLET_HEAVY_PUSH = 1;
 
 // 2. Charge wave (key K, tap 4×)

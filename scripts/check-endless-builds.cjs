@@ -19,12 +19,14 @@ const {chromium}=require('playwright');
   const dialog=page.getByRole('dialog',{name:'CONSTELLATIONS',exact:true});await dialog.waitFor();
   assert.equal(await dialog.locator('[data-constellation]').count(),3);assert.ok((await dialog.locator('[data-constellation]').first().boundingBox()).width>300);
   await page.screenshot({path:path.join(out,'three-constellations.png')});
+  await dialog.locator('.constellation-cards[aria-busy="false"]').waitFor(); // choices arm after 0.5s
   await page.keyboard.press('3');await dialog.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>window.__run.constellations.length),1);
   await page.evaluate(()=>window.__run.bossesKilled=19);await page.getByRole('button',{name:'Stage +1',exact:true}).click();
   const blessing=page.getByRole('dialog',{name:'CELESTIAL BLESSING',exact:true});await blessing.waitFor();assert.equal(await blessing.locator('[data-blessing]').count(),10);
   assert.equal(await blessing.locator('[data-gemstone]').count(),10);
   const paused=await page.evaluate(()=>window.__run.gameTick);await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>window.__run.gameTick),paused);
   await page.screenshot({path:path.join(out,'celestial-blessings.png')});
+  await blessing.locator('.constellation-cards[aria-busy="false"]').waitFor();
   await page.keyboard.press('0');await blessing.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>window.__run.build.blessings.length),1);assert.equal(await page.evaluate(()=>window.__run.build.blessings[0]),'aegis_sentinel');
   await page.getByLabel('Active celestial blessings').waitFor();
   // Render the real runtime zones and marks with a quiet, paused-free scene.

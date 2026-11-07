@@ -7,11 +7,11 @@ function fresh(){const s=e.createInitialState();s.noMobs=s.noBossSpawns=s.godMod
 function boss(s,type){e.godSpawnBoss(s,type);s.noBossSpawns=true;const a=s.enemies.find(a=>a.type===type);position(a,11,10);a.windupTicks=100000;return a;}
 function ticks(s,n){for(let i=0;i<n;i++)e.tick(s);}
 
-test('Solar kills give no energy, including the Charger bonus and Leech refunds; other specials still do',()=>{
+test('Solar kills give no energy (including the Charger bonus and Leech refunds), no killing buff and no kill heal; other specials still do',()=>{
  const s=fresh(),template=boss(s,'frost_warden');s.enemies=[];
- for(let i=0;i<24;i++)s.enemies.push({...template,id:i+100,type:i===0?'charger':i===1?'energy_leech':'normal',hp:1,maxHp:10,stolenEnergy:60});
+ for(let i=0;i<24;i++)s.enemies.push({...template,id:i+100,type:i===0?'charger':i===1?'energy_leech':i===2?'healer':i===3?'bleeder':i===4?'armored':'normal',hp:1,maxHp:10,stolenEnergy:60});
  s.starEnergy=17;s.playerHP=20;s.specialSkill='fiery_king';e.useSpecialSkill(s);
- assert.equal(s.enemies.length,0);assert.equal(s.starEnergy,17);assert.equal(s.killScore>0,true);assert.equal(s.playerHP,100);
+ assert.equal(s.enemies.length,0);assert.equal(s.starEnergy,17);assert.equal(s.killScore>0,true);assert.equal(s.playerHP,20,'no kill heal or Healer heal');assert.equal(s.regenUntil??0,0,'no Bleeder regen');assert.equal(s.playerShieldHP??0,0,'no Armored shield');
  const a={...template,type:'normal',hp:1,maxHp:10};s.enemies=[a];s.specialSkill='storm_reaper';s.specialLockTicks=0;e.useSpecialSkill(s);assert.equal(s.starEnergy,17+c.STAR_ENERGY_PER_KILL);
 });
 
@@ -39,10 +39,10 @@ test('Shooting Star grants four-second next power, combines with Phoenix, and Si
 });
 
 test('God Constellation screen freezes play and toggles every upgrade without progression or duplicates',()=>{
- const s=fresh();assert.equal(e.openGodConstellations(s),true);assert.equal(s.constellationChoices.length,40);assert.equal(s.gamePhase,'constellation');
+ const s=fresh();assert.equal(e.openGodConstellations(s),true);assert.equal(s.constellationChoices.length,Object.keys(e.CONSTELLATIONS).length);assert.equal(s.gamePhase,'constellation');
  const before=s.gameTick;ticks(s,60);assert.equal(s.gameTick,before);
  for(const kind of Object.keys(e.CONSTELLATIONS)){assert.equal(e.chooseConstellation(s,kind),true);assert.ok(s.constellations.includes(kind));}
- assert.equal(new Set(s.constellations).size,40);assert.equal(s.bossesKilled,0);assert.equal(e.chooseConstellation(s,'invalid'),false);
+ assert.equal(new Set(s.constellations).size,Object.keys(e.CONSTELLATIONS).length);assert.equal(s.bossesKilled,0);assert.equal(e.chooseConstellation(s,'invalid'),false);
  for(const kind of Object.keys(e.CONSTELLATIONS))e.chooseConstellation(s,kind);assert.deepEqual(s.constellations,[]);
  assert.equal(e.closeGodConstellations(s),true);assert.equal(s.gamePhase,'playing');assert.deepEqual(s.constellationChoices,[]);assert.equal(s.godConstellationMode,false);
  s.gamePhase='lost';assert.equal(e.openGodConstellations(s),false);assert.equal(e.createInitialState().godConstellationMode,false);
@@ -55,13 +55,13 @@ test('Solar bomber cascades give no energy even when they finish an earlier surv
  s.enemies=[armor,bomber];s.starEnergy=0;s.specialSkill='fiery_king';e.useSpecialSkill(s);assert.equal(s.enemies.length,0);assert.equal(s.starEnergy,0);
 });
 
-test('Solar Flare damage to aliens grows exactly like their HP up to stage 18, then stays',()=>{
+test('Solar Flare damage to aliens grows exactly like their HP at every stage',()=>{
  for(const [kills,tier] of [[0,0],[10,7],[18,7],[25,7]]){
   const s=fresh(),template=boss(s,'frost_warden');s.enemies=[];
   s.bossesKilled=kills;s.difficultyLevel=tier;
   const alien={...template,id:500,type:'armored',hp:10000,maxHp:10000};s.enemies.push(alien);
   s.specialSkill='fiery_king';e.useSpecialSkill(s);
-  const capped=Math.min(kills,18),mult=1+Math.min(6,Math.floor(capped/3))*.05;
+  const mult=1+Math.min(6,Math.floor(kills/3))*c.ALIEN_HP_PER_MILESTONE+Math.max(0,kills-18)*e.LATE_ALIEN_HP_PER_STAGE;
   const expected=c.SPECIAL_SKILLS.fiery_king.normalDamage*c.DIFFICULTY_TIERS[tier].hpMult*mult;
   assert.ok(Math.abs(10000-alien.hp-expected)<1e-6,'stage '+kills+': '+(10000-alien.hp)+' vs '+expected);
  }
@@ -70,27 +70,28 @@ test('Solar Flare damage to aliens grows exactly like their HP up to stage 18, t
 test("Singularity and Gaia's Roots damage to aliens grows with the stage like their HP",()=>{
  for(const [kills,tier] of [[0,0],[25,7]]){
   const s=fresh();s.bossesKilled=kills;s.difficultyLevel=tier;
-  assert.ok(Math.abs(e.skillAlienScale(s)-c.DIFFICULTY_TIERS[tier].hpMult*(1+Math.min(6,Math.floor(Math.min(kills,18)/3))*.05))<1e-9,'capped at stage 18');
+  assert.ok(Math.abs(e.skillAlienScale(s)-c.DIFFICULTY_TIERS[tier].hpMult*e.constellationAlienHPMult(s))<1e-9,'matches alien HP growth');
  }
  assert.equal(e.skillAlienScale(Object.assign(fresh(),{bossesKilled:0,difficultyLevel:0})),1,'unchanged at the start');
 });
 
-test("Neptune's Tide and Saturn Guard grow by 1 per stage, stopping at stage 18",()=>{
- for(const [kills,bonus] of [[0,0],[10,10],[18,18],[40,18]]){
+test("Neptune's Tide and Saturn Guard grow by 1 per stage to stage 18, then keep pace with late enemy damage",()=>{
+ const near=(x,y)=>assert.ok(Math.abs(x-y)<.051,`${x} != ${y}`);
+ for(const [kills,bonus] of [[0,0],[10,10],[18,18],[30,18],[40,18]]){
+  const mult=c.lateEnemyDamageMult(kills),heal=Math.min(100,(c.SPECIAL_CHANTER_HEAL+bonus)*mult),shield=Math.min(100,(c.SPECIAL_WARDEN_SHIELD+bonus)*mult);
   const s=fresh();s.bossesKilled=kills;s.godMode=false;s.playerHP=1;s.rubyHP=1;s.specialSkill='sea_chanter';e.useSpecialSkill(s);
-  assert.equal(s.playerHP,1+c.SPECIAL_CHANTER_HEAL+bonus);assert.equal(s.rubyHP,1+c.SPECIAL_CHANTER_HEAL+bonus);
+  near(s.playerHP,Math.min(100,1+heal));near(s.rubyHP,Math.min(100,1+heal));
   const t=fresh();t.bossesKilled=kills;t.playerShieldHP=t.rubyShieldHP=0;t.specialSkill='frost_warden';e.useSpecialSkill(t);
-  assert.equal(t.playerShieldHP,c.SPECIAL_WARDEN_SHIELD+bonus);assert.equal(t.rubyShieldHP,c.SPECIAL_WARDEN_SHIELD+bonus);
-  assert.equal(s.playerHP-1,t.playerShieldHP);assert.equal(s.rubyHP-1,t.rubyShieldHP);
+  near(t.playerShieldHP,shield);near(t.rubyShieldHP,shield);
  }
 });
 
-test('Jupiter Storm damage to aliens grows like their HP up to stage 18; bosses take 25%',()=>{
+test('Jupiter Storm damage to aliens grows like their HP at every stage; bosses take 25%',()=>{
  for(const [kills,tier] of [[0,0],[10,7],[25,7]]){
   const s=fresh(),template=boss(s,'frost_warden');s.enemies=[];s.bossesKilled=kills;s.difficultyLevel=tier;
   const alien={...template,id:600,type:'armored',hp:10000,maxHp:10000};position(alien,s.playerTileX+1,s.playerTileY);s.enemies.push(alien);
   s.specialSkill='storm_reaper';e.useSpecialSkill(s);
-  const expected=60*c.DIFFICULTY_TIERS[tier].hpMult*(1+Math.min(6,Math.floor(Math.min(kills,18)/3))*.05);
+  const expected=60*c.DIFFICULTY_TIERS[tier].hpMult*e.constellationAlienHPMult(s);
   assert.ok(Math.abs(10000-alien.hp-expected)<1e-6,'stage '+kills+': '+(10000-alien.hp)+' vs '+expected);
  }
 });

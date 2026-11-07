@@ -5,8 +5,8 @@ const near=(a,v)=>assert.ok(Math.abs(a-v)<1e-7,`${a} != ${v}`);
 function fresh(upgrades=[],blessings=[]){const s=e.createInitialState();s.constellations=upgrades;s.build.blessings=blessings;s.noMobs=s.noBossSpawns=true;s.meteoriteTimer=s.ambientEvents.timer=1e7;s.resourceTimer=-1e7;s.godMode=true;for(let y=1;y<50;y++)for(let x=1;x<50;x++)s.map[y][x]=c.T_FLOOR;s.playerTileX=s.playerTargetX=s.playerTileY=s.playerTargetY=10;s.playerX=s.playerY=10.5*c.TILE_SIZE;s.rubyTileX=s.rubyTileY=30;return s;}
 function mob(s,x=11,y=10,type='normal',hp=1000){const a=e.createEncounterEnemy(s,type,x,y,hp);a.pathTimer=a.windupTicks=a.attackTimer=1e7;s.enemies.push(a);return a;}
 const ticks=(s,n)=>{for(let i=0;i<n;i++)e.tick(s);};
-test('Endless overlap waits ninety seconds from stage 20, caps at two encounters and pauses in menus',()=>{
- assert.equal(e.ENDLESS_BOSS_OVERLAP_TICKS,90*60);
+test('Endless overlap waits eighty seconds from stage 20, caps at two encounters and pauses in menus',()=>{
+ assert.equal(e.ENDLESS_BOSS_OVERLAP_TICKS,80*60);
  const s=fresh();s.noBossSpawns=false;s.bossesKilled=20;mob(s,39,39,'fiery_king');s.bossOverlapTicks=e.ENDLESS_BOSS_OVERLAP_TICKS-c.BOSS_WARNING_TICKS-1;
  e.tick(s);assert.equal(e.countBossEncounters(s),1);assert.equal(s.bossWarningTicks,c.BOSS_WARNING_TICKS);
  s.gamePhase='teleporting';const timer=s.bossOverlapTicks;ticks(s,120);assert.equal(s.bossOverlapTicks,timer);s.gamePhase='playing';
@@ -111,7 +111,7 @@ test('speed trail snaps to floor cells, refreshes without duplicates and slows o
 });
 
 test('Sculptor applies one wall impact per direct Wave and preserves cover and interpolation',()=>{
- const s=fresh(['wallSlam']),a=mob(s,12,10);s.map[10][14]=c.T_WALL;e.activateWave(s);near(a.hp,1000-c.WAVE_DMG);ticks(s,3);near(a.hp,1000-c.WAVE_DMG*1.5);assert.equal(a.tileX,13);assert.equal(a.targetTileX,13);assert.equal(a.stepProgress,0);assert.equal(s.map[10][14],c.T_WALL);ticks(s,3);near(a.hp,1000-c.WAVE_DMG*1.5);
+ const s=fresh(['wallSlam']),a=mob(s,12,10);s.map[10][14]=c.T_WALL;e.activateWave(s);near(a.hp,1000-c.WAVE_DMG);ticks(s,3);near(a.hp,1000-c.WAVE_DMG*1.75);assert.equal(a.tileX,13);assert.equal(a.targetTileX,13);assert.equal(a.stepProgress,0);assert.equal(s.map[10][14],c.T_WALL);ticks(s,3);near(a.hp,1000-c.WAVE_DMG*1.75);
  const open=fresh(['wallSlam']),target=mob(open,12,10);e.activateWave(open);ticks(open,10);near(target.hp,1000-c.WAVE_DMG);assert.equal(target.buildWallDamage,undefined);
  const boss=fresh(['wallSlam']),king=mob(boss,12,10,'fiery_king');e.activateWave(boss);assert.equal(king.buildWallDamage,undefined);
 });
@@ -174,4 +174,24 @@ test('Eridanus echo wave lands two seconds after the original Wave, centred on w
  ticks(s,119);near(a.hp,after);ticks(s,1);near(after-a.hp,c.WAVE_DMG*.4);assert.equal(s.build.echoes.length,0);
  const moved=fresh(['waveEcho']),left=mob(moved,30,10);e.activateWave(moved);near(left.hp,1000);
  moved.playerTileX=moved.playerTargetX=29;moved.playerX=29.5*c.TILE_SIZE;ticks(moved,120);near(1000-left.hp,c.WAVE_DMG*.4);
+});
+test('Hydra: each enemy a Laser hits makes the next Laser 7.5% stronger, capped at 37.5%',()=>{
+ const s=fresh(['laserChain']);const right=mob(s,12,10),left=mob(s,8,10),down=mob(s,10,12);
+ e.useLaser(s);near(1000-right.hp,c.LASER_DMG);assert.equal(s.laserMomentum,3);
+ s.laserCooldown=0;e.useLaser(s);near(1000-right.hp,c.LASER_DMG*(2+3*c.HYDRA.perEnemy));
+ s.enemies=[];s.laserCooldown=0;e.useLaser(s);assert.equal(s.laserMomentum,0);
+ const crowd=fresh(['laserChain']);for(const [x,y] of [[11,10],[12,10],[9,10],[8,10],[10,11],[10,12],[10,9]])mob(crowd,x,y);e.useLaser(crowd);assert.equal(crowd.laserMomentum,7);
+ const t=crowd.enemies[0],before=t.hp;crowd.laserCooldown=0;e.useLaser(crowd);near(before-t.hp,c.LASER_DMG*(1+c.HYDRA.perEnemy*c.HYDRA.maxEnemies));
+ const plain=fresh();mob(plain,12,10);e.useLaser(plain);assert.equal(plain.laserMomentum,undefined);
+});
+test('Triangulum pulls Laser-hit aliens that stand close together toward each other, never bosses',()=>{
+ const s=fresh(['laserPull']),a=mob(s,12,10),b2=mob(s,14,10);e.useLaser(s);assert.ok(a.hp<1000&&b2.hp<1000);ticks(s,3);
+ assert.equal(a.tileX,13);assert.equal(b2.tileX,13);
+ const far=fresh(['laserPull']),x=mob(far,12,10),y=mob(far,10,16);e.useLaser(far);ticks(far,3);assert.equal(x.tileX,12);assert.equal(y.tileY,16,'more than 3 tiles apart: no pull');
+ const boss=fresh(['laserPull']),k=mob(boss,12,10,'fiery_king'),m=mob(boss,14,10);e.useLaser(boss);ticks(boss,3);assert.equal(k.tileX,12);assert.equal(m.tileX,14,'bosses are not pulled and do not count toward a group');
+ const plain=fresh(),p=mob(plain,12,10),q=mob(plain,14,10);e.useLaser(plain);ticks(plain,3);assert.equal(p.tileX,12);assert.equal(q.tileX,14);
+});
+test('from stage 30 a second boss can join after 60 seconds instead of 80',()=>{
+ const s=fresh();s.bossesKilled=29;assert.equal(e.bossOverlapTicks(s),80*60);s.bossesKilled=30;assert.equal(e.bossOverlapTicks(s),60*60);
+ s.noBossSpawns=false;mob(s,39,39,'fiery_king');s.bossOverlapTicks=60*60-c.BOSS_WARNING_TICKS-1;e.tick(s);assert.equal(s.bossWarningTicks,c.BOSS_WARNING_TICKS,'the warning starts at the shorter time');
 });

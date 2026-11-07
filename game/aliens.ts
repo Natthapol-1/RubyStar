@@ -1,14 +1,14 @@
 // Regular alien AI with its own behaviour: Sniper, Lancer, Healer, Charger, Ghost and Shielder.
-// Ordinary melee chasers (Normal, Armored, Runner, Bomber, Splitter, Energy Leech and challenge melee units)
+// Ordinary melee chasers (Normal, Armored, Runner, Bomber, Splitter, Leech and challenge melee units)
 // still use the shared chase in engine.ts. The engine calls in through updateRegularAlien; like the
 // challenge modules, this file imports engine helpers and must only use them inside functions.
 import {
-  ALIEN_KNOCKBACK, CHARGER_CHARGE_SPEED, CHARGER_CHARGE_TILES, CHARGER_SIGHT_RANGE, CHARGER_STUN_TICKS, CHARGER_WINDUP_TICKS,
-  ENEMY_CONFIGS, HEALER_HEAL_AMOUNT, HEALER_HEAL_INTERVAL, HEALER_HEAL_RADIUS, LANCER, MAP_COLS, MAP_ROWS,
-  SHIELDER_SHIELD_RANGE, SNIPER_ATTACK_RANGE, SNIPER_WINDUP_TICKS, TILE_SIZE, T_WALL,
+  ALIEN_KNOCKBACK, CHARGER_CHARGE_SPEED, CHARGER_KNOCKBACK, CHARGER_CHARGE_TILES, CHARGER_SIGHT_RANGE, CHARGER_STUN_TICKS, CHARGER_WINDUP_TICKS,
+  ENCHANTER, IMPOSTOR, SHOOTER, SNATCHER, ENEMY_CONFIGS, HEALER_HEAL_AMOUNT, HEALER_HEAL_INTERVAL, HEALER_HEAL_RADIUS, LANCER, MAP_COLS, MAP_ROWS,
+  SHIELDER_SHIELD_RANGE, SNIPER_ATTACK_RANGE, SNIPER_WINDUP_TICKS, TILE_SIZE, T_WALL, isBossType,
 } from './constants';
 import {
-  ATTACK_SFX_VOLUME, bfs, celestialMoveMultiplier, damagePlayer, damageRuby, hasLineOfSight, isFloorTile, playAudioOneShot,
+  ALIEN_ATTACK_SFX, ATTACK_SFX_VOLUME, bfs, playSFX_special, celestialMoveMultiplier, damagePlayer, damageRuby, hasLineOfSight, isFloorTile, playAudioOneShot,
   playSFX_alienShoot, playSFX_chargerImpact, playSFX_enemyAttack, playSFX_laser, playSFX_placeBomb, shovePlayerFromEnemy,
   tileDist, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
@@ -54,6 +54,10 @@ export function updateRegularAlien(state: GameState, e: Enemy, playerCarrying: b
     case 'charger': updateCharger(state, e); return true;
     case 'ghost': updateGhost(state, e, playerCarrying); return true;
     case 'shielder': updateShielder(state, e); return true;
+    case 'enchanter': updateEnchanter(state, e); return true;
+    case 'snatcher': updateSnatcher(state, e); return true;
+    case 'impostor': updateImpostor(state, e); return true;
+    case 'shooter': updateShooter(state, e); return true;
     default: return false;
   }
 }
@@ -67,7 +71,7 @@ function fireSniperLaser(state: GameState, e: Enemy) {
   else if (state.rubyTileX !== -1) damageRuby(state, ENEMY_CONFIGS.sniper.damageToRuby, e);
   e.shootTicks = 22;
   e.attackTimer = ENEMY_CONFIGS.sniper.attackCooldown;
-  playSFX_laser(0.85);
+  playSFX_laser(ALIEN_ATTACK_SFX.laser);
 }
 
 function updateSniper(state: GameState, e: Enemy, playerCarrying: boolean) {
@@ -117,7 +121,7 @@ function fireLancerBeam(state: GameState, e: Enemy) {
   e.lanceDirX = e.lanceDirY = undefined;
   e.shootTicks = LANCER.beamTicks;
   e.attackTimer = cfg.attackCooldown;
-  playSFX_laser(0.6);
+  playSFX_laser(ALIEN_ATTACK_SFX.laser);
 }
 
 function updateLancer(state: GameState, e: Enemy, playerCarrying: boolean) {
@@ -132,7 +136,7 @@ function updateLancer(state: GameState, e: Enemy, playerCarrying: boolean) {
     e.lanceDirX = ax / len; e.lanceDirY = ay / len;
     e.windupTicks = LANCER.windupTicks;
     // charging.wav (0.59s) pitched to 0.6x spans the 1s windup; distant Lancers stay quiet.
-    if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playAudioOneShot('/sounds/charging.wav', .5 * ATTACK_SFX_VOLUME, .6);
+    if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playAudioOneShot('/sounds/charging.wav', ALIEN_ATTACK_SFX.lancerCharge, .6);
     return;
   }
   if (!inRange) walkPath(state, e, tx, ty, cfg.speed);
@@ -172,7 +176,7 @@ function updateCharger(state: GameState, e: Enemy) {
   if (e.windupTicks > 0) { e.windupTicks--; return; } // stunned after a wall or a hit
   // Snowbowl's sounds: place_bomb when the lane locks, the pitched alien shot when the rush starts (nearby Chargers only).
   const heard = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16;
-  if ((e.chargeWindupTicks ?? 0) > 0) { if (--e.chargeWindupTicks! === 0 && heard) playSFX_alienShoot(3, 1.3); return; }
+  if ((e.chargeWindupTicks ?? 0) > 0) { if (--e.chargeWindupTicks! === 0 && heard) playSFX_alienShoot(ALIEN_ATTACK_SFX.shot, 1.3); return; }
   const recover = (wall: boolean) => {
     e.chargeDirX = 0; e.chargeDirY = 0; e.chargeTilesLeft = 0;
     e.windupTicks = wall ? CHARGER_STUN_TICKS : Math.floor(CHARGER_STUN_TICKS / 2);
@@ -195,7 +199,7 @@ function updateCharger(state: GameState, e: Enemy) {
         if (hitPlayer) {
           damagePlayer(state, cfg.damageToPlayer, e);
           if (state.gamePhase !== 'lost' && !state.enemyDecoyActive && !state.playerKnockback && !state.saturn?.roll) {
-            state.playerKnockback = { dirX: e.chargeDirX, dirY: e.chargeDirY, started: false };
+            state.playerKnockback = { dirX: e.chargeDirX, dirY: e.chargeDirY, started: false, tilesLeft: CHARGER_KNOCKBACK };
           }
         } else damageRuby(state, cfg.damageToRuby, e);
         e.shootTicks = 14; recover(false);
@@ -211,7 +215,7 @@ function updateCharger(state: GameState, e: Enemy) {
     if (Math.abs(ddx) >= Math.abs(ddy)) { e.chargeDirX = ddx > 0 ? 1 : -1; e.chargeDirY = 0; }
     else { e.chargeDirX = 0; e.chargeDirY = ddy > 0 ? 1 : -1; }
     e.chargeWindupTicks = CHARGER_WINDUP_TICKS; e.chargeTilesLeft = CHARGER_CHARGE_TILES; e.path = [];
-    if (heard) playSFX_placeBomb();
+    if (heard) playAudioOneShot('/sounds/place_bomb.wav', ALIEN_ATTACK_SFX.chargerLock);
   } else walkPath(state, e, state.playerTileX, state.playerTileY, cfg.speed, 35, 20);
 }
 
@@ -257,4 +261,86 @@ function updateShielder(state: GameState, e: Enemy) {
   const speed = ENEMY_CONFIGS.shielder.speed;
   if (target) { e.shieldTargetId = target.id; walkPath(state, e, target.tileX, target.tileY, speed, 20, 15); }
   else { e.shieldTargetId = -1; walkPath(state, e, state.playerTileX, state.playerTileY, speed, 30, 20); }
+}
+
+// ── Enchanter: stays near other aliens and pulses a buff (speed and damage; smaller on bosses) onto those in range; never attacks ──
+function updateEnchanter(state: GameState, e: Enemy) {
+  const allies = state.enemies.filter(a => a !== e && a.hp > 0 && !a.twin?.downedTicks && a.type !== 'aegis_construct');
+  if ((e.enchantPulseTicks ?? 0) > 0) e.enchantPulseTicks!--;
+  if (e.attackTimer > 0) e.attackTimer--;
+  else {
+    const inRange = allies.filter(a => tileEuclidDist(e.tileX, e.tileY, a.tileX, a.tileY) <= ENCHANTER.radius);
+    if (inRange.length) {
+      for (const a of inRange) a.enchantedUntil = state.gameTick + ENCHANTER.buffTicks;
+      e.enchantPulseTicks = 30; // pulse ring
+      if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playAudioOneShot('/sounds/gem_passive_trigger.wav', .5 * ATTACK_SFX_VOLUME, .8);
+    }
+    e.attackTimer = ENCHANTER.pulseTicks;
+  }
+  // Head for the nearest ally (staying a couple of tiles off), or drift toward the player when alone.
+  let target: Enemy | undefined, best = Infinity;
+  for (const a of allies) { const d = tileEuclidDist(e.tileX, e.tileY, a.tileX, a.tileY); if (d < best) { best = d; target = a; } }
+  if (target && best <= 2) { if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) stepEnemy(state, e, ENEMY_CONFIGS.enchanter.speed); return; }
+  walkPath(state, e, target ? target.tileX : state.playerTileX, target ? target.tileY : state.playerTileY, ENEMY_CONFIGS.enchanter.speed);
+}
+
+// ── Snatcher: goes for a placed Ruby, grabs her and carries her away from the player, slowed; never attacks ──
+function updateSnatcher(state: GameState, e: Enemy) {
+  const speed = ENEMY_CONFIGS.snatcher.speed;
+  if (state.rubyStolenBy === e.id) {
+    if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) { stepEnemy(state, e, speed * SNATCHER.fleeSpeedMult); return; }
+    // Step to the neighbouring floor tile farthest from the player (stays put if cornered).
+    let best: [number, number] | null = null, bestD = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = e.tileX + dx, ny = e.tileY + dy;
+      if (!isFloorTile(state.map, nx, ny)) continue;
+      const d = tileEuclidDist(nx, ny, state.playerTileX, state.playerTileY);
+      if (d > bestD) { bestD = d; best = [nx, ny]; }
+    }
+    if (best) { e.targetTileX = best[0]; e.targetTileY = best[1]; e.stepProgress = 0; }
+    return;
+  }
+  const rubyPlaced = state.rubyTileX !== -1 && !state.playerCarryingRuby && state.rubyStolenBy === undefined;
+  if (rubyPlaced && e.tileX === e.targetTileX && e.tileY === e.targetTileY && tileDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) <= 1) {
+    state.rubyStolenBy = e.id; e.path = []; e.pathTimer = 0; playSFX_special('snatch'); return; // grabbed
+  }
+  if (rubyPlaced) walkPath(state, e, state.rubyTileX, state.rubyTileY, speed);
+  else if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) > 2) walkPath(state, e, state.playerTileX, state.playerTileY, speed); // shadows a carrier
+  else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) stepEnemy(state, e, speed);
+}
+
+// ── Impostor: copies a living boss's look and hangs back like one; never attacks ──
+function updateImpostor(state: GameState, e: Enemy) {
+  const bosses = state.enemies.filter(b => isBossType(b.type) && b.hp > 0 && !b.twin?.downedTicks);
+  e.disguiseIn ??= IMPOSTOR.disguiseDelay;
+  if (e.disguiseIn > 0) { // shows its own plain look for the first 2 seconds
+    if (--e.disguiseIn === 0 && tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playSFX_special('disguise');
+  } else if (!bosses.some(b => b.id === e.disguiseOf)) {
+    if (!bosses.length) { e.impostorExpired = true; e.hp = 0; return; }
+    e.disguiseOf = bosses[Math.floor(Math.random() * bosses.length)].id;
+  }
+  const speed = ENEMY_CONFIGS.impostor.speed;
+  if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) > IMPOSTOR.keepAway) walkPath(state, e, state.playerTileX, state.playerTileY, speed);
+  else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) stepEnemy(state, e, speed);
+}
+
+// ── Shooter: stops in range with a clear line, glows briefly, then fires a slow stunning orb at the player ──
+function updateShooter(state: GameState, e: Enemy) {
+  const cfg = ENEMY_CONFIGS.shooter;
+  e.targeting = 'player';
+  if (e.windupTicks > 0) {
+    if (--e.windupTicks === 0) {
+      const dx = state.playerX - e.x, dy = state.playerY - e.y, len = Math.hypot(dx, dy) || 1;
+      (state.enemyShots ??= []).push({ x: e.x, y: e.y, dx: dx / len * SHOOTER.shotSpeed, dy: dy / len * SHOOTER.shotSpeed, ownerId: e.id, ticks: 0 });
+      e.attackTimer = cfg.attackCooldown; e.shootTicks = 14;
+      if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playSFX_alienShoot(ALIEN_ATTACK_SFX.shot, .8);
+    }
+    return;
+  }
+  if (e.attackTimer > 0) e.attackTimer--;
+  const settled = e.tileX === e.targetTileX && e.tileY === e.targetTileY;
+  const inRange = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= cfg.attackRange && hasLineOfSight(state.map, e.tileX, e.tileY, state.playerTileX, state.playerTileY);
+  if (inRange && settled && e.attackTimer === 0) { e.windupTicks = SHOOTER.windupTicks; return; }
+  if (!inRange) walkPath(state, e, state.playerTileX, state.playerTileY, cfg.speed);
+  else if (!settled) stepEnemy(state, e, cfg.speed);
 }

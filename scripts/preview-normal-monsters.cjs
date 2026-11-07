@@ -9,7 +9,7 @@ const renderer=new Module(path.resolve('game/mob-preview.cjs'),module);renderer.
 renderer._compile(ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,renderer.filename);
 const output=process.argv[2]||'.',prefix=process.argv[3]||'normal-monsters';
 const state=engine.createInitialState();engine.godSpawnBoss(state,'fiery_king');const template=state.enemies[0];
-const types=['normal','armored','fast','bomber','sniper','healer','charger','ghost','splitter','mini_splitter','shielder','energy_leech','lancer'];
+const types=['normal','armored','fast','bomber','sniper','healer','charger','ghost','splitter','mini_splitter','shielder','energy_leech','lancer','enchanter','bleeder','snatcher','shooter'];
 function enemy(type,extra={}){return {...template,type,hp:c.ENEMY_CONFIGS[type].maxHp,maxHp:c.ENEMY_CONFIGS[type].maxHp,phaseTimer:100000,path:[],shootTicks:0,attackTimer:100,windupTicks:0,chargeDirX:0,chargeDirY:0,icyShieldHP:0,shieldTargetId:-1,...extra};}
 const samples=types.map(type=>[type.toUpperCase(),enemy(type),false]);
 samples.push(['SHIELDED',enemy('normal'),true],['ICE SHIELD',enemy('normal',{icyShieldHP:15}),false],['HEAL FLASH',enemy('normal',{healFlashTicks:12}),false],['BOMBER WARNING',enemy('bomber',{exploding:true,explodeTick:24}),false],['SNIPER AIM',enemy('sniper',{windupTicks:20}),false]);
@@ -28,7 +28,7 @@ if(prefix==='aliens'){
  detail.fillStyle='#101923';detail.fillRect(0,0,600,260);
  for(const [i,charged] of [false,true].entries()){
   detail.strokeStyle='#26303c';detail.strokeRect(i*300+8,8,284,244);
-  detail.fillStyle='#c77aff';detail.font='14px monospace';detail.textAlign='center';detail.fillText(charged?'LEECH CHARGED':'ENERGY LEECH',i*300+150,35);
+  detail.fillStyle='#c77aff';detail.font='14px monospace';detail.textAlign='center';detail.fillText(charged?'LEECH CHARGED':'LEECH',i*300+150,35);
   detail.save();detail.translate(i*300+150,155);detail.scale(2,2);
   renderer.exports.drawEnemy(detail,enemy('energy_leech',{stolenEnergy:charged?60:0}),0,0,40,false);detail.restore();
  }

@@ -7,7 +7,7 @@ function fresh(){const s=e.createInitialState();s.noMobs=s.noBossSpawns=true;s.m
 function mob(s,type='normal',x=13,y=10){const a=e.createEncounterEnemy(s,type,x,y,1000);a.pathTimer=a.attackTimer=a.windupTicks=1e7;s.enemies.push(a);return a;}
 function shoot(s,a){const hp=a.hp;s.bulletCooldown=0;e.useBullet(s);for(let i=0;i<30&&a.hp===hp;i++)e.tick(s);return hp-a.hp;}
 
-test('every 20th bullet shot is heavy: 20% more damage and a one-tile knockback for a regular alien',()=>{
+test('every 20th bullet shot is heavy: double damage and a one-tile knockback for a regular alien',()=>{
   const s=fresh(),a=mob(s);
   for(let i=1;i<c.BULLET_HEAVY_EVERY;i++)near(shoot(s,a),c.BULLET_DMG);
   assert.equal(a.tileX,13);
@@ -20,4 +20,11 @@ test('every 20th bullet shot is heavy: 20% more damage and a one-tile knockback 
 test('heavy bullet hits still add damage to bosses but never push them',()=>{
   const s=fresh(),boss=mob(s,'fiery_king');s.bulletShotCount=c.BULLET_HEAVY_EVERY-1;
   near(shoot(s,boss),c.BULLET_DMG*c.BULLET_HEAVY_MULT);assert.equal(boss.pushTiles,0);
+});
+
+test('Monoceros makes every 8th shot heavy instead of every 20th',()=>{
+  const s=fresh(),a=mob(s);s.constellations=['heavyShot'];
+  for(let i=1;i<c.BULLET_HEAVY_EVERY_MONOCEROS;i++)near(shoot(s,a),c.BULLET_DMG);
+  near(shoot(s,a),c.BULLET_DMG*c.BULLET_HEAVY_MULT);
+  near(shoot(s,a),c.BULLET_DMG);
 });

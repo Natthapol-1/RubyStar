@@ -33,7 +33,7 @@ test('every third boss defeat offers three distinct eligible choices; tenth stil
    assert.ok(s.constellationChoices.every(k=>!s.constellations.includes(k)));assert.equal(e.chooseConstellation(s,s.constellationChoices[0]),true);
   }else assert.equal(s.gamePhase,'playing');
   if(n===10){assert.equal(s.specialSkill,'frost_warden');assert.equal(s.ascensionBannerTicks,360);}
- }assert.equal(s.constellations.length,total);assert.equal(total,40);
+ }assert.equal(s.constellations.length,total);assert.equal(total,Object.keys(e.CONSTELLATIONS).length);
 });
 test('choice freezes simulation and all gameplay; invalid/duplicate picks fail; restart clears upgrades',()=>{
  const s=fresh();s.bossesKilled=2;defeat(s);const before=JSON.stringify(s);ticks(s,120);
@@ -46,7 +46,7 @@ test('choice freezes simulation and all gameplay; invalid/duplicate picks fail; 
 test('laser and bullet damage upgrades work for normal/powered shots',()=>{
  for(const powered of [false,true])for(const kind of ['laser','bullets']){
   const s=fresh([kind]),a=enemy(s);s.poweredTicks=powered?100:0;
-  if(kind==='laser'){e.useLaser(s);near(100-a.hp,(powered?c.LASER_DMG_PWR:c.LASER_DMG)*1.2);}
+  if(kind==='laser'){e.useLaser(s);near(100-a.hp,(powered?c.LASER_DMG_PWR:c.LASER_DMG)*1.25);}
   else{e.useBullet(s);ticks(s,5);near(100-a.hp,(powered?c.BULLET_DMG_PWR:c.BULLET_DMG)*1.25);}
  }
 });
@@ -92,9 +92,9 @@ test('bomb gains one tile matching blast visuals, preserves self damage and Ruby
   assert.equal(s.bombBlasts[0].maxRadius,radius*c.TILE_SIZE);assert.equal(e.getBombRadius(s,powered),radius);assert.equal(s.rubyHP,100);assert.ok(s.playerHP<100);
  }
 });
-test('regular spawn and split-child HP gain five percent per milestone to thirty, then two percent per defeat after 18',()=>{
+test('regular spawn and split-child HP gain a share per milestone up to defeat 18, then two percent per defeat after',()=>{
  for(const kills of [0,2,3,5,6,8,9,18,19,20,21,30]){
-  const s=fresh();s.bossesKilled=kills;const mult=1+Math.min(6,Math.floor(kills/3))*.05+Math.max(0,kills-18)*.02;near(e.constellationAlienHPMult(s),mult);
+  const s=fresh();s.bossesKilled=kills;const mult=1+Math.min(6,Math.floor(kills/3))*c.ALIEN_HP_PER_MILESTONE+Math.max(0,kills-18)*.02;near(e.constellationAlienHPMult(s),mult);
   enemy(s,'splitter',.01);e.useLaser(s);assert.equal(s.enemies.length,2);for(const a of s.enemies)near(a.maxHp,c.ENEMY_CONFIGS.mini_splitter.maxHp*c.REGULAR_ENEMY_HP_MULT*mult);
   s.enemies=[];s.noMobs=false;s.spawnTimer=100000;e.tick(s);assert.ok(s.enemies.length>0);
   for(const a of s.enemies)near(a.maxHp,Math.ceil(c.ENEMY_CONFIGS[a.type].maxHp*c.DIFFICULTY_TIERS[s.difficultyLevel].hpMult)*c.REGULAR_ENEMY_HP_MULT*mult);
@@ -104,7 +104,7 @@ test('owned choices are rejected and never offered again, including the final si
  const s=fresh();s.constellations=Object.keys(e.CONSTELLATIONS).filter(k=>k!=='wave');s.bossesKilled=59;defeat(s);
  assert.deepEqual(s.constellationChoices,['wave']);assert.equal(e.chooseConstellation(s,'laser'),false);
  assert.equal(e.chooseConstellation(s,'wave'),true);s.bossesKilled=62;defeat(s);
- assert.equal(s.gamePhase,'playing');assert.deepEqual(s.constellationChoices,[]);assert.equal(new Set(s.constellations).size,40);
+ assert.equal(s.gamePhase,'playing');assert.deepEqual(s.constellationChoices,[]);assert.equal(new Set(s.constellations).size,Object.keys(e.CONSTELLATIONS).length);
 });
 test('Draco changes only damage, Cygnus changes reach/push, and both combine at either power level',()=>{
  for(const powered of [false,true])for(const upgrades of [[],['wave'],['waveReach'],['wave','waveReach']]){
@@ -135,7 +135,7 @@ test('laser range extends its actual hit footprint and rendered beam without cha
 });
 test('bomb damage upgrade affects enemy damage and self damage while preserving Ruby immunity',()=>{
  const s=fresh(['bombDamage']),a=enemy(s);s.bomb={tileX:10,tileY:10,powered:false};s.rubyTileX=s.rubyTileY=10;e.useBomb(s);
- near(a.hp,100-c.BOMB_DMG*1.2);assert.equal(s.playerHP,100-Math.floor(c.BOMB_DMG*1.2*.35));assert.equal(s.rubyHP,100);
+ near(a.hp,100-c.BOMB_DMG*1.25);assert.equal(s.playerHP,100-Math.floor(c.BOMB_DMG*1.25*.35));assert.equal(s.rubyHP,100);
 });
 test('longer speed bursts apply to manual, powered and free energy-shard boosts',()=>{
  for(const powered of [false,true]){const s=fresh(['burstDuration']);s.poweredTicks=powered?100:0;e.useSpeedBoost(s);assert.equal(s.speedActiveTicks,(powered?c.SPEED_DURATION_PWR:c.SPEED_DURATION)*1.25);}

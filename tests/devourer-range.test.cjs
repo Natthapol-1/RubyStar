@@ -26,9 +26,9 @@ test('Devourer is swift; each stack adds half a point of damage but no reach',()
  assert.equal(c.ENEMY_CONFIGS.devourer.speed,3.4);assert.equal(c.DEVOURER_MAX_STACKS,3);
  for(let stacks=0;stacks<=c.DEVOURER_MAX_STACKS;stacks++){
   const range=2;
-  assert.equal(encounter(stacks,range).playerHP,100-(5+.5*stacks),'player hit with '+stacks+' stacks');
+  assert.ok(Math.abs(encounter(stacks,range).playerHP-(100-(c.ENEMY_CONFIGS.devourer.damageToPlayer+.5*stacks)*c.CARRY_DAMAGE_MULT))<1e-9,'player hit with '+stacks+' stacks');
   assert.equal(encounter(stacks,range+1).playerHP,100,'misses beyond range with '+stacks+' stacks');
-  assert.equal(encounter(stacks,range,'ruby').rubyHP,100-(1+.5*stacks));
+  assert.equal(encounter(stacks,range,'ruby').rubyHP,100-(c.ENEMY_CONFIGS.devourer.damageToRuby+.5*stacks));
  }
 });
 
@@ -149,7 +149,7 @@ test('each copy generation bites for 80% of the previous generation',()=>{
   s.playerTileX=s.playerTargetX=40;s.playerTileY=s.playerTargetY=10;s.playerX=40.5*c.TILE_SIZE;s.playerY=10.5*c.TILE_SIZE;
   const e=s.enemies[0];place(e,38,10);e.attackTimer=0;e.windupTicks=1000;e.chargeDirX=2;
   if(generation)e.devourer={generation,newbornTicks:0};engine.tick(s);
-  assert.ok(Math.abs(s.playerHP-(100-6*.8**generation))<1e-9,'generation '+generation+': '+s.playerHP);
+  assert.ok(Math.abs(s.playerHP-(100-(c.ENEMY_CONFIGS.devourer.damageToPlayer+1)*.8**generation*c.CARRY_DAMAGE_MULT))<1e-9,'generation '+generation+': '+s.playerHP);
  }
 });
 

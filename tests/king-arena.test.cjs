@@ -24,7 +24,7 @@ function position(king, x, y) {
 function fresh() {
   const state = engine.createInitialState();
   state.noMobs = true;
-  state.meteoriteTimer = 1000000;
+  state.meteoriteTimer = 1000000; state.comet.timer = 1000000;
   state.resourceTimer = -1000000;
   state.playerCarryingRuby = false;
   state.rubyTileX = 39; state.rubyTileY = 10;
@@ -92,7 +92,7 @@ test('carried Ruby stays safe while the player is still hit', () => {
   state.playerCarryingRuby = true; state.rubyTileX = state.rubyTileY = -1;
   king.king.arenaWindupTicks = 1;
   engine.tick(state);
-  assert.equal(state.playerHP, 85); assert.equal(state.rubyHP, 100);
+  assert.ok(Math.abs(state.playerHP - (100 - 15 * constants.CARRY_DAMAGE_MULT)) < 1e-9); assert.equal(state.rubyHP, 100); // carrying: less damage
 });
 
 test('ordinary hits reset inactivity and cancel an active warning', () => {

@@ -2,23 +2,24 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,f);
 const e=require('../game/engine.ts'),b=require('../game/endless-builds.ts'),fx=require('../game/blessing-effects.ts'),art=require('../game/blessing-art.ts'),c=require('../game/constants.ts');
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
+const B=c.BLESSING;
 function fresh(blessings){const s=e.createModeState('endless');s.build.blessings=blessings;s.noMobs=s.noBossSpawns=true;s.meteoriteTimer=s.ambientEvents.timer=1e8;s.resourceTimer=-1e8;for(let y=1;y<50;y++)for(let x=1;x<50;x++)s.map[y][x]=c.T_FLOOR;s.playerTileX=s.playerTargetX=s.playerTileY=s.playerTargetY=10;s.playerX=s.playerY=10.5*c.TILE_SIZE;s.rubyTileX=s.rubyTileY=30;return s;}
 function mob(s,x=11,y=10,type='normal'){const enemy=e.createEncounterEnemy(s,type,x,y,1000);enemy.pathTimer=enemy.attackTimer=enemy.windupTicks=1e7;s.enemies.push(enemy);return enemy;}
 function random(value,fn){const old=Math.random;Math.random=()=>value;try{return fn();}finally{Math.random=old;}}
-test('Ruby waits three seconds, boosts damage/speed, colors attacks and resets on shield hits',()=>{const s=fresh(['fiery_king']),a=mob(s);for(let i=0;i<179;i++)fx.updateBlessingEffects(s);assert.equal(fx.solarBlessingReady(s),false);fx.updateBlessingEffects(s);assert.equal(fx.solarBlessingReady(s),true);near(fx.blessingSpeedMultiplier(s),1.15);e.useLaser(s);near(1000-a.hp,c.LASER_DMG*1.3);assert.ok(s.laserBeams.every(beam=>beam.solar));s.playerShieldHP=20;e.damagePlayer(s,1);assert.equal(s.playerHP,100);assert.equal(fx.solarBlessingReady(s),false);near(fx.blessingSpeedMultiplier(s),1);});
-test('Emerald caps haste and enemy slows and expires rather than growing without limit',()=>{const s=fresh(['storm_reaper']),a=mob(s),boss=mob(s,12,10,'fiery_king');for(let i=0;i<100;i++){fx.blessingAttack(s,'bullet');fx.blessingHit(s,a);fx.blessingHit(s,boss);}near(fx.blessingSpeedMultiplier(s),1.4);near(b.buildSlowMultiplier(s,a),.5);near(b.buildSlowMultiplier(s,boss),.75);s.gameTick=181;fx.updateBlessingEffects(s);near(fx.blessingSpeedMultiplier(s),1);near(b.buildSlowMultiplier(s,a),1);});
-test('Sapphire heals only damaging hits, with a four-HP-per-second cap and no Ruby or copy healing',()=>{
+test('Ruby waits 1.5 seconds, boosts damage/speed, colors attacks and resets only on real HP damage',()=>{const s=fresh(['fiery_king']),a=mob(s);for(let i=0;i<fx.RUBY_SAFE_TICKS-1;i++)fx.updateBlessingEffects(s);assert.equal(fx.solarBlessingReady(s),false);fx.updateBlessingEffects(s);assert.equal(fx.solarBlessingReady(s),true);near(fx.blessingSpeedMultiplier(s),B.rubySpeed);e.useLaser(s);near(1000-a.hp,c.LASER_DMG*B.rubyDamage);assert.ok(s.laserBeams.every(beam=>beam.solar));s.playerShieldHP=20;e.damagePlayer(s,1);assert.equal(s.playerHP,100);assert.equal(fx.solarBlessingReady(s),true,'a fully shield-absorbed hit keeps the surge');s.playerShieldHP=0;e.damagePlayer(s,1);assert.equal(fx.solarBlessingReady(s),false);near(fx.blessingSpeedMultiplier(s),1);});
+test('Emerald caps haste and enemy slows and expires rather than growing without limit',()=>{const s=fresh(['storm_reaper']),a=mob(s),boss=mob(s,12,10,'fiery_king');for(let i=0;i<100;i++){fx.blessingAttack(s,'bullet');fx.blessingHit(s,a);fx.blessingHit(s,boss);}near(fx.blessingSpeedMultiplier(s),1+10*B.emeraldSpeedPerStack);near(fx.blessingDamageMultiplier(s),1+10*B.emeraldDamagePerStack);near(b.buildSlowMultiplier(s,a),1-B.emeraldSlowCap);near(b.buildSlowMultiplier(s,boss),1-B.emeraldBossSlowCap);s.gameTick=181;fx.updateBlessingEffects(s);near(fx.blessingSpeedMultiplier(s),1);near(b.buildSlowMultiplier(s,a),1);});
+test('Sapphire heals only damaging hits, with a per-second cap and no Ruby or copy healing',()=>{
  const s=fresh(['sea_chanter']);s.playerHP=s.rubyHP=40;e.useLaser(s);e.useBullet(s);near(s.playerHP,40,'misses do not heal');
  const a=mob(s);s.laserCooldown=0;e.useLaser(s);near(s.playerHP,41.5);e.useLaser(s);near(s.playerHP,41.5);
  a.icyShieldHP=100;s.laserCooldown=0;e.useLaser(s);near(s.playerHP,41.5);a.icyShieldHP=0;
- for(let i=0;i<100;i++)e.damageEnemy(s,a,1,'player',3);near(s.playerHP,44);near(s.rubyHP,40);
- s.gameTick=60;e.damageEnemy(s,a,1,'player',.5);near(s.playerHP,44.5);
- e.damageEnemy(s,a,1,'summon',4);e.damageEnemy(s,a,1,'reflection',4);near(s.playerHP,44.5);
+ for(let i=0;i<100;i++)e.damageEnemy(s,a,1,'player',3);near(s.playerHP,40+B.sapphireHealPerSecond);near(s.rubyHP,40);
+ s.gameTick=60;e.damageEnemy(s,a,1,'player',.5);near(s.playerHP,40.5+B.sapphireHealPerSecond);
+ e.damageEnemy(s,a,1,'summon',4);e.damageEnemy(s,a,1,'reflection',4);near(s.playerHP,40.5+B.sapphireHealPerSecond);
  const bullets=fresh(['sea_chanter']);bullets.playerHP=40;mob(bullets);e.useBullet(bullets);near(bullets.playerHP,40);for(let i=0;i<3;i++)e.tick(bullets);near(bullets.playerHP,40.5);
  const copy=fresh(['sea_chanter','astral_twins']);copy.playerHP=40;copy.rubyTileX=12;copy.rubyTileY=10;mob(copy,13,10);random(.1,()=>e.useLaser(copy));near(copy.playerHP,41.5);
 });
-test('Diamond grants shields after real heals or incoming hits, respects its shared cooldown and keeps larger shields',()=>{const s=fresh(['frost_warden']);s.playerHP=50;e.healPlayer(s,1);near(s.playerShieldHP,4);e.damagePlayer(s,1);near(s.playerShieldHP,3);s.gameTick=60;e.damagePlayer(s,10);near(s.playerShieldHP,3);for(let i=0;i<30;i++){s.gameTick+=60;e.healPlayer(s,1);}near(s.playerShieldHP,60);s.playerShieldHP=100;s.gameTick+=60;e.healPlayer(s,1);near(s.playerShieldHP,100);s.playerHP=100;s.playerShieldHP=0;s.gameTick+=60;e.healPlayer(s,1);near(s.playerShieldHP,0);});
-test('Pearl reflects direct hits, includes shield absorption, caps boss returns and cannot reflect recursively',()=>{const s=fresh(['aegis_sentinel']),a=mob(s),boss=mob(s,12,10,'aegis_sentinel');s.playerShieldHP=100;e.damagePlayer(s,10,a);near(a.hp,990);near(s.playerShieldHP,92);e.damagePlayer(s,100,boss);near(boss.hp,970);s.playerShieldHP=0;const before=s.playerHP;e.damagePlayer(s,3);near(s.playerHP,before-2.4);});
+test('Diamond grants shields after real heals or incoming hits, respects its shared cooldown and keeps larger shields',()=>{const s=fresh(['frost_warden']);s.playerHP=50;e.healPlayer(s,1);near(s.playerShieldHP,B.diamondHealShield);e.damagePlayer(s,1);near(s.playerShieldHP,B.diamondHealShield-1);s.gameTick=60;e.damagePlayer(s,10);near(s.playerShieldHP,10*B.diamondHitShare);for(let i=0;i<30;i++){s.gameTick+=60;e.healPlayer(s,1);}near(s.playerShieldHP,B.diamondCap);s.playerShieldHP=100;s.gameTick+=60;e.healPlayer(s,1);near(s.playerShieldHP,100);s.playerHP=100;s.playerShieldHP=0;s.gameTick+=60;e.healPlayer(s,1);near(s.playerShieldHP,0);});
+test('Pearl reflects direct hits, includes shield absorption, caps boss returns and cannot reflect recursively',()=>{const s=fresh(['aegis_sentinel']),a=mob(s),boss=mob(s,12,10,'aegis_sentinel');s.playerShieldHP=100;e.damagePlayer(s,10,a);near(a.hp,990);near(s.playerShieldHP,100-10*B.pearlReduction);e.damagePlayer(s,100,boss);near(boss.hp,1000-1000*B.pearlBossReflectCap);s.playerShieldHP=0;const before=s.playerHP;e.damagePlayer(s,3);near(s.playerHP,before-3*B.pearlReduction);});
 test('Pearl blessing aura coexists with the active Venus Veil aura',()=>{
  const s=fresh(['aegis_sentinel']),ctx=new Proxy({}, {get:(target,key)=>key==='fillColors'?target.fillColors:key==='fill'?()=>{target.fillColors.push(target.fillStyle);}:()=>{},set:(target,key,value)=>{target[key]=value;return true;}});
  ctx.fillColors=[];art.drawBlessingCombatEffects(ctx,s,0,0);assert.ok(ctx.fillColors.includes('#f6e6df')&&ctx.fillColors.includes('#d8a5b4'),'Pearl shell alternates ivory and rose blocks');
@@ -26,7 +27,7 @@ test('Pearl blessing aura coexists with the active Venus Veil aura',()=>{
 });
 test('Amethyst handles manual, energy and teleport boosts; decoys shoot without recursively granting attack bonuses',()=>{const s=fresh(['splitter_queen','sea_chanter','storm_reaper']);s.playerHP=50;e.useSpeedBoost(s);assert.equal(s.build.queenDecoys.length,1);s.gameTick++;e.grantInstantSpeedBoost(s);assert.equal(s.build.queenDecoys.length,2);s.gamePhase='teleporting';s.teleportDestOptions=[1];s.gameTick++;e.doTeleport(s,1);assert.equal(s.build.queenDecoys.length,3);assert.equal(s.build.queenDecoys[2].tileX,10,'teleport echo stays at departure');s.playerTileX=s.playerTargetX=s.playerTileY=s.playerTargetY=10;s.playerX=s.playerY=504;mob(s);fx.updateBlessingEffects(s);assert.ok(s.laserBullets.some(b=>b.blessingDecoy));near(s.playerHP,50);assert.equal(s.build.reaperHaste,undefined);const oldHP=s.playerHP;for(let i=0;i<60;i++)e.tick(s);near(s.playerHP,oldHP);assert.ok(s.laserBullets.length<20);});
 test('Amethyst decoy destruction restores the real player target and never damages player/Ruby',()=>{const s=fresh(['splitter_queen']);fx.leaveQueenBlessingDecoy(s);const a=mob(s,10,10);a.attackTimer=0;a.pathTimer=0;s.build.queenDecoys[0].hp=1;s.playerTileX=s.playerTargetX=39;s.playerTileY=s.playerTargetY=39;s.playerX=s.playerY=39.5*48;const position=[s.playerX,s.playerY];e.tick(s);assert.equal(s.build.queenDecoys.length,0);near(s.playerHP,100);near(s.rubyHP,100);assert.deepEqual([s.playerX,s.playerY],position);assert.equal(s.enemyDecoyActive,false);assert.equal(s.build.queenTargetId,undefined);});
-test('Peridot follows walking with wider floor-only fields; overlaps do not stack damage or slow',()=>{const s=fresh(['thorn_weaver']);fx.updateBlessingEffects(s);assert.equal(s.build.zones.length,0);s.playerTileX=11;fx.updateBlessingEffects(s);assert.equal(s.build.zones.length,1);s.playerTileX=12;fx.updateBlessingEffects(s);const a=mob(s,11,11),boss=mob(s,12,11,'fiery_king');s.gameTick=30;fx.updateBlessingEffects(s);near(a.hp,997.5);near(boss.hp,997.5);near(b.buildSlowMultiplier(s,a),.7);near(b.buildSlowMultiplier(s,boss),.85);for(let i=13;i<40;i++){s.playerTileX=i;fx.updateBlessingEffects(s);}assert.ok(s.build.zones.filter(z=>z.kind==='growth').length<=12);});
+test('Peridot follows walking with wider floor-only fields; overlaps do not stack damage or slow',()=>{const s=fresh(['thorn_weaver']);fx.updateBlessingEffects(s);assert.equal(s.build.zones.length,0);s.playerTileX=11;fx.updateBlessingEffects(s);assert.equal(s.build.zones.length,1);s.playerTileX=12;fx.updateBlessingEffects(s);const a=mob(s,11,11),boss=mob(s,12,11,'fiery_king');s.gameTick=30;fx.updateBlessingEffects(s);near(a.hp,1000-B.peridotPulse);near(boss.hp,1000-B.peridotPulse);near(b.buildSlowMultiplier(s,a),B.peridotSlow);near(b.buildSlowMultiplier(s,boss),B.peridotBossSlow);for(let i=13;i<40;i++){s.playerTileX=i;fx.updateBlessingEffects(s);}assert.ok(s.build.zones.filter(z=>z.kind==='growth').length<=B.peridotFields);});
 test('Peridot walking fields are silent until they damage an enemy',()=>{
  const ui=require('../game/ui-sfx.ts'),original=ui.playUiSfx,cues=[];ui.playUiSfx=cue=>cues.push(cue);
  try{
@@ -36,12 +37,12 @@ test('Peridot walking fields are silent until they damage an enemy',()=>{
   mob(s,11,10);mob(s,12,10);s.gameTick=30;fx.updateBlessingEffects(s);assert.deepEqual(cues,['gemFieldHit'],'overlapping fields and multiple enemies share one hit cue');
  }finally{ui.playUiSfx=original;}
 });
-test('Obsidian has a 50% kill chance, bounded larger wells, non-stacking damage/slow and floor-safe pulls',()=>{
- const s=fresh(['devourer']),a=mob(s);random(.5,()=>fx.blessingDeath(s,a));assert.equal(s.build.zones.length,0);random(.499,()=>{for(let i=0;i<30;i++)fx.blessingDeath(s,a);});assert.equal(s.build.zones.length,4);assert.ok(s.build.zones.every(z=>z.radius===4&&z.ticks===240));
- const target=mob(s,14,10),boss=mob(s,13,11,'fiery_king');s.gameTick=29;e.tick(s);assert.equal(target.tileX,13,'overlapping wells pull only one tile per pulse');assert.equal(boss.tileX,13);near(target.hp,997);near(boss.hp,998.5);near(b.buildSlowMultiplier(s,target),.75);near(b.buildSlowMultiplier(s,boss),.85);
+test('Obsidian has a 75% kill chance, bounded larger wells, non-stacking damage/slow and floor-safe pulls',()=>{
+ const s=fresh(['devourer']),a=mob(s);random(B.obsidianChance,()=>fx.blessingDeath(s,a));assert.equal(s.build.zones.length,0);random(B.obsidianChance-.001,()=>{for(let i=0;i<30;i++)fx.blessingDeath(s,a);});assert.equal(s.build.zones.length,B.obsidianWells);assert.ok(s.build.zones.every(z=>z.radius===4&&z.ticks===240));
+ const target=mob(s,14,10),boss=mob(s,13,11,'fiery_king');s.gameTick=29;e.tick(s);assert.equal(target.tileX,13,'overlapping wells pull only one tile per pulse');assert.equal(boss.tileX,13);near(target.hp,1000-B.obsidianPulse);near(boss.hp,1000-1000*B.obsidianBossPulse);near(b.buildSlowMultiplier(s,target),.75);near(b.buildSlowMultiplier(s,boss),.85);
  s.build.zones.forEach(z=>z.ticks=1);s.gameTick=59;const before=target.hp;e.tick(s);near(target.hp,before);assert.equal(s.build.zones.length,0);
 });
-test('Amber accelerates earned energy, refreshes once on the transition to full and leaves F inventory alone',()=>{const s=fresh(['blind_prayer']);fx.addStarEnergy(s,20);near(s.starEnergy,27);s.starEnergy=99;s.laserCooldown=s.waveCooldown=s.bulletCooldown=s.speedCooldown=s.bombCooldown=s.rubyHealCooldown=100;s.specialSkill='fiery_king';fx.addStarEnergy(s,1);assert.equal(s.waveCooldown,0);assert.equal(s.specialSkill,'fiery_king');s.waveCooldown=100;fx.addStarEnergy(s,1);assert.equal(s.waveCooldown,100);s.starEnergy=0;fx.addStarEnergy(s,20,false);near(s.starEnergy,20);});
+test('Amber accelerates earned energy, refreshes once on the transition to full and leaves F inventory alone',()=>{const s=fresh(['blind_prayer']);fx.addStarEnergy(s,20);near(s.starEnergy,20*B.amberEnergy);s.starEnergy=99;s.laserCooldown=s.waveCooldown=s.bulletCooldown=s.speedCooldown=s.bombCooldown=s.rubyHealCooldown=100;s.specialSkill='fiery_king';fx.addStarEnergy(s,1);assert.equal(s.waveCooldown,0);assert.equal(s.specialSkill,'fiery_king');s.waveCooldown=100;fx.addStarEnergy(s,1);assert.equal(s.waveCooldown,100);s.starEnergy=0;fx.addStarEnergy(s,20,false);near(s.starEnergy,20);});
 test('Opal rolls once per original cast and copies from Ruby with bounded damage and no recursive copies',()=>{const s=fresh(['astral_twins']);s.rubyTileX=12;s.rubyTileY=10;const a=mob(s,13,10);random(.1,()=>e.useLaser(s));near(1000-a.hp,c.LASER_DMG*2);assert.ok(s.laserBeams.some(beam=>beam.fromX===12.5*48));s.laserCooldown=0;const hp=a.hp;random(.9,()=>e.useLaser(s));near(hp-a.hp,c.LASER_DMG);const clean=fresh(['astral_twins']);clean.rubyTileX=12;clean.rubyTileY=10;random(.1,()=>e.useBullet(clean));assert.equal(clean.laserBullets.length,2);assert.equal(clean.laserBullets[1].damageScale,1);});
 
 test('Sapphire status star appears only after an actual healing hit and pauses with combat',()=>{
@@ -82,7 +83,7 @@ test('Opal marks only coordinated Laser, Wave, bullet and bomb copies for their 
  const s=fresh(['astral_twins']);random(.1,()=>e.useLaser(s));assert.ok(s.laserBeams.some(v=>v.opal));assert.ok(s.laserBeams.some(v=>!v.opal));random(.1,()=>e.activateWave(s));assert.ok(s.waveEffects.some(v=>v.opal));assert.ok(s.waveEffects.some(v=>!v.opal));random(.1,()=>e.useBullet(s));assert.ok(s.laserBullets.some(v=>v.blessingCopy));assert.ok(s.laserBullets.some(v=>!v.blessingCopy));random(.1,()=>{e.useBomb(s);e.useBomb(s);});assert.ok(s.bombBlasts.some(v=>v.opal));assert.ok(s.bombBlasts.some(v=>!v.opal));
 });
 test('Diamond status star requires a real shield increase and does not renew at the cap',()=>{
- const s=fresh(['frost_warden']);s.playerHP=50;e.healPlayer(s,1);assert.equal(s.build.diamondShieldUntil,30);s.gameTick=60;s.playerShieldHP=60;e.healPlayer(s,1);assert.equal(s.build.diamondShieldUntil,30);
+ const s=fresh(['frost_warden']);s.playerHP=50;e.healPlayer(s,1);assert.equal(s.build.diamondShieldUntil,30);s.gameTick=60;s.playerShieldHP=B.diamondCap;e.healPlayer(s,1);assert.equal(s.build.diamondShieldUntil,30);
 });
 test('Amber shows energy gains and a longer full-energy refresh cue without repeating at full',()=>{
  const s=fresh(['blind_prayer']);fx.addStarEnergy(s,10);assert.equal(s.build.amberRefreshUntil,36);s.gameTick=10;s.starEnergy=99;fx.addStarEnergy(s,1);assert.equal(s.build.amberRefreshUntil,58);s.gameTick=20;fx.addStarEnergy(s,1);assert.equal(s.build.amberRefreshUntil,58);
@@ -93,44 +94,44 @@ test('Pearl can reflect and show its cue under debug invincibility without reset
 
 test('Sapphire hit effects initialize for an already-running state created before the feature',()=>{const s=fresh(['sea_chanter']),a=mob(s);delete s.sapphireHitEffects;e.damageEnemy(s,a,1,'player');assert.equal(s.sapphireHitEffects.length,1);delete s.sapphireHitEffects;assert.doesNotThrow(()=>e.tick(s));assert.deepEqual(s.sapphireHitEffects,[]);});
 
-test('Amethyst fires twice as often at half damage without banking shots while idle',()=>{
+test('Amethyst decoys fire every 0.375s without banking shots while idle',()=>{
  const s=fresh(['splitter_queen']);mob(s);fx.leaveQueenBlessingDecoy(s);const fired=[];
  for(let tick=0;tick<90;tick++){s.gameTick=tick;const before=s.laserBullets.length;fx.updateBlessingEffects(s);if(s.laserBullets.length>before)fired.push(tick);}
- assert.deepEqual(fired,[0,23,45,68]);assert.equal(s.laserBullets.length,4);near(s.laserBullets.reduce((sum,bullet)=>sum+bullet.blessingDamage,0),2*.55*e.skillAlienScale(s));
+ assert.deepEqual(fired,[0,23,45,68]);assert.equal(s.laserBullets.length,4);near(s.laserBullets.reduce((sum,bullet)=>sum+bullet.blessingDamage,0),4*B.amethystShotDamage*e.skillAlienScale(s));
  const idle=fresh(['splitter_queen']);fx.leaveQueenBlessingDecoy(idle);idle.gameTick=1000;mob(idle);fx.updateBlessingEffects(idle);assert.equal(idle.laserBullets.length,1);idle.gameTick++;fx.updateBlessingEffects(idle);assert.equal(idle.laserBullets.length,1,'idle time never creates a catch-up burst');
 });
 
 test('Diamond shield scales with mitigated incoming damage before absorption and respects bounds',()=>{
- for(const [damage,grant]of [[1,2],[10,3],[20,6],[40,12],[60,12]]){const s=fresh(['frost_warden']);e.damagePlayer(s,damage);near(s.playerShieldHP,grant);}
- const shielded=fresh(['frost_warden']);shielded.playerShieldHP=30;e.damagePlayer(shielded,20);near(shielded.playerShieldHP,16);near(shielded.playerHP,100);
- const guarded=fresh(['frost_warden']);guarded.constellations.push('playerGuard');e.damagePlayer(guarded,20);near(guarded.playerShieldHP,5.1);
+ for(const [damage,grant]of [[1,2],[10,5],[20,10],[40,20],[60,20]]){const s=fresh(['frost_warden']);e.damagePlayer(s,damage);near(s.playerShieldHP,grant);}
+ const shielded=fresh(['frost_warden']);shielded.playerShieldHP=30;e.damagePlayer(shielded,20);near(shielded.playerShieldHP,10+20*B.diamondHitShare);near(shielded.playerHP,100);
+ const guarded=fresh(['frost_warden']);guarded.constellations.push('playerGuard');e.damagePlayer(guarded,20);near(guarded.playerShieldHP,17*B.diamondHitShare);
  const fatal=fresh(['frost_warden']);fatal.playerHP=1;e.damagePlayer(fatal,10);near(fatal.playerShieldHP,0);
 });
 
-test('Sapphire weakens directly hit enemies by ten percent for three seconds without stacking',()=>{
+test('Sapphire weakens directly hit enemies for three seconds without stacking',()=>{
  const s=fresh(['sea_chanter']),a=mob(s);e.damageEnemy(s,a,1,'player');assert.equal(a.sapphireWeakenUntil,180);
- e.damagePlayer(s,10,a);near(s.playerHP,91);e.damageRuby(s,10,a);near(s.rubyHP,91);
- s.gameTick=100;e.damageEnemy(s,a,1,'player');assert.equal(a.sapphireWeakenUntil,280);e.damagePlayer(s,10,a);near(s.playerHP,82);
- s.gameTick=280;e.damagePlayer(s,10,a);near(s.playerHP,72);
+ const w=10*B.sapphireWeaken;e.damagePlayer(s,10,a);near(s.playerHP,100-w);e.damageRuby(s,10,a);near(s.rubyHP,100-w);
+ s.gameTick=100;e.damageEnemy(s,a,1,'player');assert.equal(a.sapphireWeakenUntil,280);e.damagePlayer(s,10,a);near(s.playerHP,100-2*w);
+ s.gameTick=280;e.damagePlayer(s,10,a);near(s.playerHP,90-2*w);
  const other=mob(s,13,10);e.damageEnemy(s,other,1,'summon');assert.equal(other.sapphireWeakenUntil,undefined);e.damageEnemy(s,other,1,'special');assert.equal(other.sapphireWeakenUntil,undefined,'passive fields do not weaken');
  other.icyShieldHP=10;e.damageEnemy(s,other,1,'player');assert.equal(other.sapphireWeakenUntil,undefined,'shield-only hits do not weaken');
- e.damagePlayer(s,10);near(s.playerHP,62,'ownerless damage is unchanged');
+ e.damagePlayer(s,10);near(s.playerHP,80-2*w,'ownerless damage is unchanged');
 });
 
-test('Amber adds one powered second on top of Phoenix and Shooting Star without extending each attack',()=>{
+test('Amber adds powered time on top of Phoenix and Shooting Star without extending each attack',()=>{
  for(const phoenix of [false,true])for(const shootingStar of [false,true]){
   const s=fresh(['blind_prayer']);if(phoenix)s.constellations.push('power');s.stellarPowerBonusTicks=shootingStar?120:0;s.starEnergy=100;e.useBullet(s);
-  const expected=180+(phoenix?60:0)+(shootingStar?120:0);assert.equal(s.poweredTicks,expected);assert.equal(s.stellarPowerBonusTicks,0);e.useLaser(s);assert.equal(s.poweredTicks,expected);
+  const expected=120+B.amberPowerTicks+(phoenix?60:0)+(shootingStar?120:0);assert.equal(s.poweredTicks,expected);assert.equal(s.stellarPowerBonusTicks,0);e.useLaser(s);assert.equal(s.poweredTicks,expected);
  }
- const surge=fresh(['blind_prayer']);surge.constellations.push('power');surge.specialSkill='blind_prayer';e.useSpecialSkill(surge);assert.equal(surge.poweredTicks,c.SPECIAL_PRAYER_DURATION+120);
+ const surge=fresh(['blind_prayer']);surge.constellations.push('power');surge.specialSkill='blind_prayer';e.useSpecialSkill(surge);assert.equal(surge.poweredTicks,c.SPECIAL_PRAYER_DURATION+60+B.amberPowerTicks);
 });
 
 test('Pearl reduces player damage but calculates reflection before its own reduction',()=>{
- const s=fresh(['aegis_sentinel']),a=mob(s);e.damagePlayer(s,20,a);near(s.playerHP,84);near(a.hp,980);
- s.constellations.push('playerGuard');e.damagePlayer(s,20,a);near(s.playerHP,70.4);near(a.hp,963);
- s.playerShieldHP=50;e.damagePlayer(s,20,a);near(s.playerShieldHP,36.4);near(a.hp,946);
- e.damagePlayer(s,20);near(s.playerShieldHP,22.8);near(a.hp,946,'hazards are reduced without reflecting');
- const veil=fresh(['aegis_sentinel']),boss=mob(veil,11,10,'fiery_king');veil.venusVeilTicks=60;e.damagePlayer(veil,100,boss);near(veil.playerHP,72);near(boss.hp,970,'Venus reflection does not duplicate');
+ const P=B.pearlReduction,s=fresh(['aegis_sentinel']),a=mob(s);e.damagePlayer(s,20,a);near(s.playerHP,100-20*P);near(a.hp,980);
+ s.constellations.push('playerGuard');e.damagePlayer(s,20,a);near(s.playerHP,100-20*P-17*P);near(a.hp,963);
+ s.playerShieldHP=50;e.damagePlayer(s,20,a);near(s.playerShieldHP,50-17*P);near(a.hp,946);
+ e.damagePlayer(s,20);near(s.playerShieldHP,50-34*P);near(a.hp,946,'hazards are reduced without reflecting');
+ const veil=fresh(['aegis_sentinel']),boss=mob(veil,11,10,'fiery_king');veil.venusVeilTicks=60;e.damagePlayer(veil,100,boss);near(veil.playerHP,100-100*c.SPECIAL_VENUS_DAMAGE_MULT*B.pearlReduction);near(boss.hp,970,'Venus reflection does not duplicate');
 });
 
 test('Obsidian boss pressure needs ten direct hits in three seconds and shares a six-second cooldown',()=>{
@@ -144,6 +145,10 @@ test('Obsidian boss pressure needs ten direct hits in three seconds and shares a
 });
 test('Opal full-damage copies keep their own origin and never add Sapphire healing or Obsidian hits',()=>{
  const s=fresh(['astral_twins','sea_chanter','devourer']);s.playerHP=50;s.rubyTileX=12;s.rubyTileY=10;mob(s,13,10,'fiery_king');random(.449,()=>e.useLaser(s));near(s.playerHP,51.5);assert.equal(s.build.obsidianBossHits.length,1);assert.ok(s.laserBeams.some(beam=>beam.opal&&beam.fromX===12.5*c.TILE_SIZE));
- const noCopy=fresh(['astral_twins']);random(.45,()=>e.useBullet(noCopy));assert.equal(noCopy.laserBullets.length,1);
- const decoy=fresh(['splitter_queen']);fx.leaveQueenBlessingDecoy(decoy);assert.equal(decoy.build.queenDecoys[0].hp,18);
+ const noCopy=fresh(['astral_twins']);random(B.opalChance,()=>e.useBullet(noCopy));assert.equal(noCopy.laserBullets.length,1);
+ const decoy=fresh(['splitter_queen']);fx.leaveQueenBlessingDecoy(decoy);assert.equal(decoy.build.queenDecoys[0].hp,B.amethystDecoyHP);
+});
+test('Amethyst keeps up to its decoy limit, replacing the oldest',()=>{
+ const s=fresh(['splitter_queen']);for(let i=0;i<B.amethystMaxDecoys+1;i++){s.gameTick=i;s.playerTileX=s.playerTargetX=10+i;s.playerX=(10.5+i)*c.TILE_SIZE;fx.leaveQueenBlessingDecoy(s);}
+ assert.equal(s.build.queenDecoys.length,B.amethystMaxDecoys);assert.equal(s.build.queenDecoys[0].tileX,11,'the oldest was replaced');
 });

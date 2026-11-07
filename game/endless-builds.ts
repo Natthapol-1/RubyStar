@@ -1,22 +1,22 @@
 import {playBlessingPassive,playGemFieldHit,blessingEnemySlow,updateBlessingEffects,type QueenBlessingDecoy} from './blessing-effects';
 import {playUiSfx} from './ui-sfx';
 import {getProfile,isDesktop} from './profile';
-import { TILE_SIZE, CHAMBER_BOUNDS, WAVE_RADIUS, WAVE_DMG, isBossType } from './constants';
+import { BLESSING, TILE_SIZE, CHAMBER_BOUNDS, WAVE_RADIUS, WAVE_DMG, isBossType } from './constants';
 import { playSFX_wave, damageEnemy, healPlayer, healCore, isFloorTile, playAudioOneShot, type Enemy, type GameState } from './engine';
 
 export const BLESSING_REVEAL_TICKS = 72;
 export const CELESTIAL_BLESSINGS = {
   stardust: {name:'Stardust',celestial:'Temporary blessing',cut:'brilliant',description:'Grants you and Ruby a small shield periodically. Clear a world to unlock its gemstone.',color:'#b4c2d6'},
-  blind_prayer: { name: 'Amber', celestial: 'Sirius', cut: 'prism', description: 'Gain energy faster, refresh abilities at full energy, and stay powered 1s longer.', color: '#ffc53d' },
+  blind_prayer: { name: 'Amber', celestial: 'Sirius', cut: 'prism', description: 'Gain energy much faster, refresh abilities at full energy, and stay powered 2s longer.', color: '#ffc53d' },
   frost_warden: { name: 'Diamond', celestial: 'Saturn', cut: 'diamond', description: 'Healing grants shield; harder incoming hits grant more.', color: '#39cde0' },
-  fiery_king: { name: 'Ruby', celestial: 'Sun', cut: 'cushion', description: 'Stay unharmed to move faster and strike with stronger red attacks. Hits end the surge.', color: '#f52b50' },
-  storm_reaper: { name: 'Emerald', celestial: 'Jupiter', cut: 'emerald', description: 'Attacking builds speed. Your hits stack a slowing charge on enemies.', color: '#1dd5a0' },
-  splitter_queen: { name: 'Amethyst', celestial: 'Moon', cut: 'crystal', description: 'Speed bursts leave up to three shooting decoys. Enemies can destroy them.', color: '#a56af0' },
+  fiery_king: { name: 'Ruby', celestial: 'Sun', cut: 'cushion', description: 'Stay unharmed to move faster and strike with stronger red attacks. Taking damage removes the buff.', color: '#f52b50' },
+  storm_reaper: { name: 'Emerald', celestial: 'Jupiter', cut: 'emerald', description: 'Attacking builds speed and damage. Your hits stack a slowing charge on enemies.', color: '#1dd5a0' },
+  splitter_queen: { name: 'Amethyst', celestial: 'Moon', cut: 'crystal', description: 'Speed bursts leave up to four shooting decoys. Enemies can destroy them.', color: '#a56af0' },
   devourer: { name: 'Obsidian', celestial: 'Singularity', cut: 'shard', description: 'Defeated enemies can leave larger gravity wells that pull, damage and slow.', color: '#75618e' },
-  astral_twins: { name: 'Opal', celestial: 'Binary Star', cut: 'twin', description: 'Ruby sometimes copies your Laser, Wave, bullets or bomb.', color: '#82baff' },
+  astral_twins: { name: 'Opal', celestial: 'Binary Star', cut: 'twin', description: 'Ruby often copies your Laser, Wave, bullets or bomb.', color: '#82baff' },
   sea_chanter: { name: 'Sapphire', celestial: 'Neptune', cut: 'sapphire', description: 'Your attacks leech health and briefly weaken enemies.', color: '#288ef0' },
   thorn_weaver: { name: 'Peridot', celestial: 'Gaia', cut: 'hexagon', description: 'Walking leaves wider, lingering fields that hurt and slow enemies.', color: '#87bf3b' },
-  aegis_sentinel: { name: 'Pearl', celestial: 'Venus', cut: 'pearl', description: 'Take 20% less damage and reflect hits before this reduction.', color: '#e8ccd3' },
+  aegis_sentinel: { name: 'Pearl', celestial: 'Venus', cut: 'pearl', description: 'Take 25% less damage and reflect hits before this reduction.', color: '#e8ccd3' },
 } as const;
 export type CelestialBlessing = keyof typeof CELESTIAL_BLESSINGS;
 export type BuildZone = { x:number; y:number; radius:number; ticks:number; damage:number; kind:'trail'|'fire'|'gravity'|'nebula'|'growth'|'void' };
@@ -31,7 +31,7 @@ export interface RunBuildState {
   zones: BuildZone[];
   echoes: { x:number; y:number; radius:number; damage:number; ticks:number }[];
   rubyWaveStored: boolean; wallStepReady: boolean; bulletBurstReadyAt: number;
-  decoy: {x:number;y:number;tileX:number;tileY:number;ticks:number}|null; decoyTargetActive: boolean;
+  decoy: {x:number;y:number;tileX:number;tileY:number;ticks:number;free?:boolean}|null; decoyTargetActive: boolean; // decoy.free: an Impostor reward, not tied to Pyxis
   impacts: {x:number;y:number;kind:'slam'|'wire'|'phase';ticks:number}[];
   waveLaserReady: boolean; godBlessingMode: boolean;
   quickWave: boolean; lastCast: 'laser'|'wave'|null; castCount:number; bulletHits:number;
@@ -117,7 +117,7 @@ export function updateRunBuilds(state:GameState) {
   const b=state.build;
   if(b.blessingReveal&&--b.blessingReveal.ticks<=0)b.blessingReveal=undefined;
   b.impacts=b.impacts.filter(effect=>--effect.ticks>0);
-  if(b.decoy&&(--b.decoy.ticks<=0||!state.constellations.includes('teleportDecoy'))){b.decoy=null;state.enemies.forEach(enemy=>enemy.pathTimer=0);}
+  if(b.decoy&&(--b.decoy.ticks<=0||(!b.decoy.free&&!state.constellations.includes('teleportDecoy')))){b.decoy=null;state.enemies.forEach(enemy=>enemy.pathTimer=0);}
   if(!state.constellations.includes('rubyDefense'))b.rubyWaveStored=false;
   if(!state.constellations.includes('wallStep'))b.wallStepReady=false;
   if(state.speedActiveTicks<=0)b.wallStepReady=false;
@@ -159,7 +159,7 @@ export function updateRunBuilds(state:GameState) {
     const slow=isBossType(enemy.type)?.85:.75;
     enemy.buildSlow=(enemy.buildSlowUntil??0)>state.gameTick?Math.min(enemy.buildSlow??1,slow):slow;
     enemy.buildSlowUntil=Math.max(enemy.buildSlowUntil??0,state.gameTick+2);
-    if(state.gameTick%30===0){const hp=enemy.hp,shield=enemy.icyShieldHP;damageEnemy(state,enemy,isBossType(enemy.type)?enemy.maxHp*.0015:3,'summon');if(enemy.hp<hp||enemy.icyShieldHP<shield)playGemFieldHit(state);}
+    if(state.gameTick%30===0){const hp=enemy.hp,shield=enemy.icyShieldHP;damageEnemy(state,enemy,isBossType(enemy.type)?enemy.maxHp*BLESSING.obsidianBossPulse:BLESSING.obsidianPulse,'summon');if(enemy.hp<hp||enemy.icyShieldHP<shield)playGemFieldHit(state);}
   }
   // Shared fields use one membership test per enemy, so neither source nor overlap stacks.
   for(const enemy of [...state.enemies])if(enemy.hp>0&&!enemy.twin?.downedTicks&&isFloorTile(state.map,enemy.tileX,enemy.tileY)&&b.zones.some(zone=>zone.kind==='nebula'&&zone.ticks>0&&nebulaContainsTile(zone,enemy.tileX,enemy.tileY))){

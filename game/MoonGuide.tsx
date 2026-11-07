@@ -39,7 +39,7 @@ export default function MoonGuide({ drawQueen, drawCelestial }: { drawQueen: Dra
         ctx.strokeStyle = '#dd88ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(44, 42); ctx.lineTo(96, 88); ctx.moveTo(158, 42); ctx.lineTo(172, 84); ctx.stroke(); }
       ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#8a7aa8'; ctx.fillText('FAKE', 40, 64); ctx.fillStyle = '#f4eaff'; ctx.fillText('REAL', 132, 64);
     } },
-    { title: 'REVEAL', color: '#ff9cf0', text: 'Just before she jumps, she shows her true self and takes more damage. She never jumps into your room.', paint: (ctx, t) => {
+    { title: 'REVEAL', color: '#ff9cf0', text: 'Just before she jumps, she shows her true self and takes a lot more damage. She never jumps into your room.', paint: (ctx, t) => {
       const cycle = t % 160, revealed = cycle >= 90;
       drawQueen(ctx, 110, 60, t, !revealed);
       if (revealed && cycle < 110) { const k = (cycle - 90) / 20; ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#f4eaff'; ctx.lineWidth = 3; ctx.strokeRect(110 - 20 - k * 20, 60 - 20 - k * 20, 40 + k * 40, 40 + k * 40); ctx.globalAlpha = 1; }

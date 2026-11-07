@@ -49,18 +49,18 @@ function impact(s,charger,dx=1,dy=0){
  e.tick(s);
 }
 
-test('Charger impact pushes the player one tile in each rush direction and preserves queued input',()=>{
+test('Charger impact pushes the player three tiles in each rush direction and preserves queued input',()=>{
  for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]]){
-  const {s,charger}=fresh();impact(s,charger,dx,dy);assert.deepEqual(s.playerKnockback,{dirX:dx,dirY:dy,started:false});
-  assert.equal(s.playerHP,80);assert.equal(charger.chargeDirX,0);s.playerQueuedDirX=-dx;s.playerQueuedDirY=-dy;
-  for(let i=0;i<60&&s.playerKnockback;i++)e.tick(s);
-  assert.equal(s.playerTileX,10+dx*2);assert.equal(s.playerTileY,10+dy*2);assert.equal(s.playerHP,80);
+  const {s,charger}=fresh();impact(s,charger,dx,dy);assert.deepEqual(s.playerKnockback,{dirX:dx,dirY:dy,started:false,tilesLeft:c.CHARGER_KNOCKBACK});
+  const hit=c.ENEMY_CONFIGS.charger.damageToPlayer;assert.equal(s.playerHP,100-hit);assert.equal(charger.chargeDirX,0);s.playerQueuedDirX=-dx;s.playerQueuedDirY=-dy;
+  for(let i=0;i<120&&s.playerKnockback;i++)e.tick(s);
+  assert.equal(s.playerTileX,10+dx*(1+c.CHARGER_KNOCKBACK));assert.equal(s.playerTileY,10+dy*(1+c.CHARGER_KNOCKBACK));assert.equal(s.playerHP,100-hit);
   assert.equal(s.playerQueuedDirX,-dx);assert.equal(s.playerQueuedDirY,-dy);assert.equal(s.playerKnockback,null);
  }
 });
 
 test('Charger push respects walls, pause and shields, and does not queue after a fatal hit',()=>{
- const {s,charger}=fresh();s.playerShieldHP=30;s.map[10][12]=c.T_WALL;impact(s,charger);assert.equal(s.playerHP,100);assert.equal(s.playerShieldHP,10);
+ const {s,charger}=fresh();s.playerShieldHP=30;s.map[10][12]=c.T_WALL;impact(s,charger);assert.equal(s.playerHP,100);assert.equal(s.playerShieldHP,30-c.ENEMY_CONFIGS.charger.damageToPlayer);
  const before=JSON.stringify(s);s.gamePhase='teleporting';ticks(s,20);s.gamePhase='playing';assert.equal(JSON.stringify(s),before);
  e.tick(s);assert.equal(s.playerKnockback,null);assert.equal(s.playerTileX,11);assert.equal(s.playerX,11.5*c.TILE_SIZE);
  const fatal=fresh();fatal.s.playerHP=1;impact(fatal.s,fatal.charger);assert.equal(fatal.s.gamePhase,'lost');assert.equal(fatal.s.playerKnockback,null);
@@ -70,7 +70,7 @@ test('Charger push completes an in-flight player step before displacing it witho
  const {s,charger}=fresh();player(s,11,10);s.playerTargetY=11;s.playerStepProgress=10;s.playerY=10.5*c.TILE_SIZE+10;
  charger.targetTileX=11;charger.chargeDirX=1;charger.chargeDirY=0;charger.chargeTilesLeft=8;charger.stepProgress=c.TILE_SIZE-c.CHARGER_CHARGE_SPEED;
  e.tick(s);assert.ok(s.playerKnockback);assert.equal(s.playerTargetY,11);assert.ok(s.playerY>10.5*c.TILE_SIZE+10);assert.equal(s.playerX,11.5*c.TILE_SIZE);
- for(let i=0;i<90&&s.playerKnockback;i++)e.tick(s);assert.equal(s.playerTileX,12);assert.equal(s.playerTileY,11);
+ for(let i=0;i<150&&s.playerKnockback;i++)e.tick(s);assert.equal(s.playerTileX,11+c.CHARGER_KNOCKBACK);assert.equal(s.playerTileY,11);
 });
 
 
@@ -87,7 +87,7 @@ test('Charger contact plays one heavy impact on player, shield or Ruby, with no 
     charger.targetTileX=11;charger.targetTileY=10;charger.chargeDirX=1;charger.chargeTilesLeft=1;charger.stepProgress=c.TILE_SIZE-c.CHARGER_CHARGE_SPEED;e.tick(s);
    }
    assert.equal(impacts().length,target==='dodge'?0:1,target);
-   if(target!=='dodge'){assert.equal(impacts()[0].volume,.55);assert.equal(impacts()[0].preservesPitch,false);ticks(s,10);assert.equal(impacts().length,1);}
+   if(target!=='dodge'){assert.equal(impacts()[0].volume,e.ALIEN_ATTACK_SFX.chargerImpact);assert.equal(impacts()[0].preservesPitch,false);ticks(s,10);assert.equal(impacts().length,1);}
   }
  }finally{global.Audio=previous;}
 });

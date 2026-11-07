@@ -42,7 +42,7 @@ Confirming a valid Constellation choice plays the separate user-supplied `conste
 
 Ascension unlock plays the user-supplied `47313572-sci-fi-launch-5-351240_dIxRlzHd.mp3`, stored as `public/sounds/ascension-unlock.mp3`, once at volume .7 on the tenth boss defeat. God Stage +1 and the direct debug Ascension helper also play it when first crossing the unlock threshold; later rewards do not retrigger it.
 
-Charger rush contact plays a heavy impact: `hitHurt.wav` at volume .55, playback rate .7 with pitch shifting, plus a short 90Hz triangle thud. It replaces the generic alien firing cue for Charger hits and also plays when shields absorb the hit or a Lunar Echo is struck. Missed rushes do not play it.
+Charger rush contact plays a heavy impact: `hitHurt.wav` at the levelled Charger-impact gain (see below), playback rate .7 with pitch shifting, plus a short 90Hz triangle thud. It replaces the generic alien firing cue for Charger hits and also plays when shields absorb the hit or a Lunar Echo is struck. Missed rushes do not play it.
 
 ## Reserved sound assets
 
@@ -131,8 +131,32 @@ Amethyst decoy placement uses the normal gem passive cue. Decoy firing uses the 
 
 Gem mechanics use the supplied `/sounds/gem_passive_2.wav` at .85 base gain: Ruby on entering its active buff, Emerald only on crossing into ten live stacks, Amethyst on actual decoy placement, Diamond on actual shield gain, Amber on actual energy gains and full-energy refresh, Pearl on reflection, Opal on a coordinated copy, Obsidian on creating a well, and Stardust on an actual shield grant. Sapphire plays the cue only when its leech actually restores player HP, with a 60-tick (one-second) sound cooldown. Other repeated events are limited to once per gem per 30 gameplay ticks; simultaneous gem procs share one cue. Peridot creates and refreshes walking fields silently. Peridot and Obsidian play `/sounds/gem_field_hit.wav` at .35 on damaging pulses, shared across overlapping fields and enemies with a 30-tick gate. All three recordings follow Other Game SFX volume; only the Amethyst firing variant is pitched up.
 
-Comets play the meteor warning pulse once when an area is marked, `falling-thing.wav` (0.75s) at .6 × attack mix as the comet starts its final 45-tick fall, and the bomb explosion at impact. A Lancer starting its charge plays `charging.wav` pitched to 0.6× (about 1s, the windup length) at .5 × attack mix, only within 16 tiles of the player; its beam reuses the laser sound at 0.6 pitch. A Charger within 16 tiles copies the Snowbowl's sounds: the bomb-placement cue when it locks its lane and the pitched alien shot (gain 3, rate 1.3) when the rush starts. The Eridanus echo wave plays the same Wave sound at the same volume as the player's Wave when it lands.
+Comets play the meteor warning pulse once when an area is marked, `falling-thing.wav` (0.75s) at .6 × attack mix as the comet starts its final 45-tick fall, and the bomb explosion at impact. A Lancer starting its charge plays `charging.wav` pitched to 0.6× (about 1s, the windup length), only within 16 tiles of the player; its beam reuses the laser sound. A Charger within 16 tiles plays the bomb-placement cue when it locks its lane and the alien shot at rate 1.3 when the rush starts. The Eridanus echo wave plays the same Wave sound at the same volume as the player's Wave when it lands.
 
 Soul Devourer bites layer `soundWaveAttack.mp3` at .49 and `slash.mp3` at .35 × attack mix; its eating sound is unchanged.
 
-A heavy bullet shot (every 20th) layers `laserBullet.mp3` at .9 × attack mix and 0.7 rate with `bomb-ready.wav` at .35 and 1.3 rate over the normal shot sound; its hit adds `hitHurt.wav` at .45 and 0.8 rate.
+A heavy bullet shot (every 20th) layers `laserBullet.mp3` at .9 × attack mix and 0.7 rate with `bomb-ready.wav` at .35 and 1.3 rate over the normal shot sound; its hit adds `hitHurt.wav` at .45 and 0.8 rate. A killed Impostor plays the decoy-break sound (`decoyDeath.mp3`).
+
+Non-boss alien attack sounds are levelled to about -21 dB (loudest 50ms RMS after gain) so no attack stands out; gains live in `ALIEN_ATTACK_SFX` (engine.ts). Boss attacks keep their own louder levels. When adding an alien attack sound, measure it and set its gain to land near -21 dB.
+
+| Attack | Sound | Gain |
+| --- | --- | --- |
+| Melee hit (all melee aliens), Charger rush start, Shooter fire | `alienShootLaser.wav` (rush 1.3 rate, Shooter 0.8 rate) | .285 |
+| Sniper shot, Lancer beam | `laserBeam.mp3` | .266 |
+| Lancer charge | `charging.wav` at 0.6 rate | .556 |
+| Charger lane lock | `place_bomb.wav` | .174 |
+| Charger impact | `hitHurt.wav` at 0.7 rate | .195 |
+| Bomber explosion | `bombExplode.wav` | .248 |
+| Shooter orb hit | `snowball-hit.mp3` + `strike-charged.wav` (combined) | .272 + .191 |
+
+Special aliens share `playSFX_special` (engine.ts):
+
+| Event | Sound |
+| --- | --- |
+| Shooter orb hits the player (damage + stun) | `snowball-hit.mp3` .272 at 1.1 rate, plus `strike-charged.wav` .191 at 1.35 rate |
+| Shooter orb hits a placed Ruby | `snowball-hit.mp3` .4 × attack mix at 0.9 rate |
+| Bleeder curse starts (not on refresh) | `poisoned.wav` .45 at 0.8 rate |
+| Snatcher grabs Ruby | `snatch-whistle.wav` (cartoon toy whistle) at 1 |
+| Impostor takes on a boss look (within 16 tiles) | `deghost.wav` .4 at 0.7 rate |
+| Enchanter pulse (within 16 tiles) | `gem_passive_trigger.wav` .5 × attack mix at 0.8 rate |
+| Kill buffs | Enchanter `powerUpBoost.mp3` .4 at 0.85 rate; Bleeder `seaHeal.mp3` .4 at 1.1 rate; Snatcher `shield.mp3` .5. The Shooter buff is silent |

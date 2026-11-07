@@ -2,7 +2,7 @@ import { updateRegularAlien } from './aliens';
 export { lancerBeamEnd } from './aliens';
 import {obsidianBossHit,blessingDeath,rubyBlessingCopy,addStarEnergy,blessingAttack,blessingLandedAttack,blessingDamageMultiplier,blessingSpeedMultiplier,blessingHit,blessingHealed,blessingIncoming,blessingReflectIncoming,blessingAfterHit,leaveQueenBlessingDecoy,solarBlessingReady} from './blessing-effects';
 import { gameAudio, channelVolume } from './audio-settings';
-import { recordBoss, recordStage, updateProfile, getProfile } from './profile';
+import { recordBoss, recordStage, updateProfile, getProfile, isDesktop } from './profile';
 import { createRunBuildState, updateRunBuilds, buildBulletHit, buildWaveHit, emitBuildWave, buildSlowMultiplier, hasBlessing, pullBuildEnemies, offerCelestialBlessing, prepareBlessingChoice, buildDeathField, buildBombStun, type RunBuildState } from './endless-builds';
 import { SATURN, createSaturnState, initializeSaturnBoss, clearSaturnEncounter, updateSaturn, updateFrostRaider, updateIceCaller, updateRimeBrute, saturnIceAt, saturnBlizzard, saturnShieldChilled, moveSaturnPlayer, cancelSnowball, freezeSaturnPlayer, grantSaturnShield, type SaturnState } from './saturn';
 import { createJupiterState, initializeJupiterBoss, clearJupiterEncounter, drainJupiterEnergy, jupiterDamageTaken, jupiterBoss, jupiterPlayerSpeed, updateJupiterReaper, updateJupiter, type JupiterState } from './jupiter';
@@ -44,7 +44,7 @@ import {
   WAVE_PUSH_TILES, WAVE_PUSH_TILES_PWR, WAVE_COOLDOWN,
   SPEED_DURATION, SPEED_DURATION_PWR, SPEED_MULT, SPEED_COOLDOWN,
   BOMB_RADIUS, BOMB_RADIUS_PWR, BOMB_DMG, BOMB_DMG_PWR,
-  BULLET_COOLDOWN, BULLET_DMG, BULLET_DMG_PWR, BULLET_SPEED, BULLET_HEAVY_EVERY, BULLET_HEAVY_MULT, BULLET_HEAVY_PUSH,
+  BULLET_COOLDOWN, BULLET_DMG, BULLET_DMG_PWR, BULLET_SPEED, BULLET_HEAVY_EVERY, BULLET_HEAVY_EVERY_MONOCEROS, BULLET_HEAVY_MULT, BULLET_HEAVY_PUSH,
   STAR_ENERGY_MAX, STAR_ENERGY_PER_KILL, ENERGY_LEECH_DRAIN,
   RESOURCE_SPAWN_INTERVAL, RESOURCE_MAX_ON_MAP, HEAL_AMOUNT, ENERGY_AMOUNT,
   RUBY_HEAL_AMOUNT, RUBY_HEAL_COOLDOWN, RUBY_HEAL_RANGE, RUBY_HEAL_CLEAR_RANGE,
@@ -77,7 +77,7 @@ import {
   FROST_CHILL_SPEED_MULT, FROST_CHILL_TICK_RATE, FROST_ICE_TILE_COUNT,
   FROST_FREEZE_DURATION, FROST_RELOCATE_INTERVAL, FROST_SHIELD_HP, FROST_SHIELD_HP_PER_DEFEAT, FROST_SHIELD_HP_MAX, FROST_SHIELD_CAST_DELAY,
   DIFFICULTY_OPENING_THRESHOLDS, DIFFICULTY_TIERS,
-  ENEMY_CONFIGS, ALIEN_KNOCKBACK, COMET, RETICULUM, MOVE_SPEED_MULT, KNOCKBACK_SHAKE_TICKS, KNOCKBACK_SHAKE_AMOUNT, LANCER, EnemyType, BOSS_TYPES,
+  ENEMY_CONFIGS, CRATER, TRIANGULUM, ENCHANTER, BLEEDER, SNATCHER, IMPOSTOR, SHOOTER, lateEnemyDamageMult, ALIEN_HP_PER_MILESTONE, BLESSING, CARRY_DAMAGE_MULT, CARRY_PUSH_MULT, CARRY_BOOST_MULT, HYDRA, ALIEN_KNOCKBACK, TWIN_MELEE_KNOCKBACK, COMET, RETICULUM, MOVE_SPEED_MULT, KNOCKBACK_SHAKE_TICKS, KNOCKBACK_SHAKE_AMOUNT, LANCER, EnemyType, BOSS_TYPES,
   generateMap,
 } from './constants';
 import {
@@ -107,12 +107,12 @@ export const CONSTELLATIONS = {
   bulletShield:{name:'Circinus',description:'Eight bullet hits restore a small player shield.',color:'#a5dfcf'},
   wallSlam: {name:'Sculptor',description:'Waves slam aliens into walls for bonus damage.',color:'#e5b48b'},
   rubyDefense: {name:'Columba',description:'Healing Ruby stores a weaker Wave that fires when enemies approach.',color:'#f4a6c6'},
-  laserWire: {name:'Reticulum',description:'Laser hits briefly stun ordinary aliens, at most once every 2s each. Bosses are immune.',color:'#9edfff'},
+  laserWire: {name:'Reticulum',description:'Laser hits briefly stun aliens.',color:'#9edfff'},
   teleportDecoy: {name:'Pyxis',description:'Teleporting leaves a fragile decoy that draws nearby aliens.',color:'#c6b8ff'},
   wallStep: {name:'Caelum',description:'Speed Boost can cross one piece of cover, ending the boost.',color:'#a2e9ce'},
   bulletBurst: {name:'Ara',description:'Bullet hits trigger a small explosion, with a short cooldown.',color:'#ffbc89'},
   healing: { name: 'Ophiuchus', description: 'Manual healing recharges 50% faster.', color: '#ff9cae' },
-  laser: { name: 'Lyra', description: 'Lasers deal 20% more damage.', color: '#7ee8f5' },
+  laser: { name: 'Lyra', description: 'Lasers deal 25% more damage.', color: '#7ee8f5' },
   speed: { name: 'Pegasus', description: 'Move 8% faster, including while carrying Ruby.', color: '#89e5c6' },
   energy: { name: 'Aquarius', description: 'Gain 20% more energy from alien kills and blue shards.', color: '#8aafff' },
   bomb: { name: 'Perseus', description: 'Bomb radius grows by one tile. Stay clear of your blast!', color: '#ffb778' },
@@ -122,7 +122,7 @@ export const CONSTELLATIONS = {
   power: { name: 'Phoenix', description: 'Powered mode lasts one extra second, including Sirius Surge.', color: '#ffd477' },
   laserRate: { name: 'Aquila', description: 'Laser cooldown is 15% shorter.', color: '#8fe7ff' },
   waveReach: { name: 'Cygnus', description: 'Waves reach one tile farther and push one extra tile.', color: '#a0c7ff' },
-  bombDamage: { name: 'Scorpius', description: 'Bombs deal 20% more damage. Your own blast hurts more too.', color: '#ffa08c' },
+  bombDamage: { name: 'Scorpius', description: 'Bombs deal 25% more damage. Your own blast hurts more too.', color: '#ffa08c' },
   burstDuration: { name: 'Taurus', description: 'All speed bursts last 25% longer.', color: '#8de6b1' },
   burstRate: { name: 'Vela', description: 'Speed-burst cooldown is 20% shorter.', color: '#a0ead8' },
   waveRate: { name: 'Centaurus', description: 'Wave cooldown is 15% shorter.', color: '#d1b1ff' },
@@ -141,6 +141,10 @@ export const CONSTELLATIONS = {
   bulletMark: { name: 'Lupus', description: 'Three bullet hits mark a target. Charge Wave detonates the mark.', color: '#d7afff' },
   boostCharge: { name: 'Puppis', description: 'Speed Boost makes your next Charge Wave charge faster.', color: '#9ae6de' },
   rubyLaser: { name: 'Pictor', description: 'Fire Laser near placed Ruby to make it fire a weaker copy.', color: '#ffaec1' },
+  laserPull: { name: 'Triangulum', description: 'Lasers pull nearby hit aliens together.', color: '#c9b6ff' },
+  meteorHeal: { name: 'Crater', description: 'Meteors leave their room healing you and Ruby.', color: '#a8e77b' },
+  heavyShot: { name: 'Monoceros', description: 'Heavy shots come every 8th bullet.', color: '#ffe9a0' },
+  laserChain: { name: 'Hydra', description: 'Hitting more enemies makes your next Laser stronger.', color: '#8fe0d0' },
 } as const;
 export type Constellation = keyof typeof CONSTELLATIONS;
 export const CONSTELLATION_INTERVAL = 3;
@@ -155,21 +159,26 @@ export function getBombRadius(state: GameState, powered: boolean): number {
 }
 
 // Extra health applies only to new regular aliens, including Splitter children.
-export const LATE_ALIEN_HP_FROM = 18;        // milestone bonus tops out here (+30%)...
+export const LATE_ALIEN_HP_FROM = 18;        // milestone bonus tops out here (+24%)...
 export const LATE_ALIEN_HP_PER_STAGE = 0.02; // ...then every further boss defeat adds 2%, without a cap
 
-// Celestial skill scaling (Solar, Jupiter, Singularity and Gaia's Roots alien damage; Saturn Guard; Neptune's Tide) follows the stage
-// only up to SKILL_SCALE_STAGE_CAP; past that the skills stop growing.
+// Saturn Guard and Neptune's Tide amounts grow with the stage only up to SKILL_SCALE_STAGE_CAP.
 export const SKILL_SCALE_STAGE_CAP = 18;
 export function skillStage(state: GameState) { return Math.min(state.bossesKilled, SKILL_SCALE_STAGE_CAP); }
-// Skill damage to regular aliens grows by the same factors as their HP, as of the capped stage.
+// Neptune's Tide heal / Saturn Guard shield: +1 per stage to the cap, then scaled with late enemy damage so they cover
+// the same number of hits as enemies hit harder, never above the player's max HP.
+export function sustainSkillAmount(state: GameState, base: number) {
+  return Math.min(PLAYER_MAX_HP, (base + SPECIAL_SUSTAIN_PER_STAGE * skillStage(state)) * (state.trial ? 1 : lateEnemyDamageMult(state.bossesKilled)));
+}
+// Skill damage to regular aliens (Solar, Jupiter, Singularity, Gaia's Roots, Amethyst decoys, comets) grows by exactly
+// the same factors as their HP at every stage, so skills keep the same effect on aliens all run.
 export function skillAlienScale(state: GameState): number {
-  return DIFFICULTY_TIERS[state.difficultyLevel].hpMult * alienHPMultAt(skillStage(state));
+  return DIFFICULTY_TIERS[state.difficultyLevel].hpMult * alienHPMultAt(state.bossesKilled);
 }
 
 export function constellationAlienHPMult(state: GameState): number { return alienHPMultAt(state.bossesKilled); }
 function alienHPMultAt(kills: number): number {
-  return 1 + Math.min(6, Math.floor(kills / CONSTELLATION_INTERVAL)) * 0.05
+  return 1 + Math.min(6, Math.floor(kills / CONSTELLATION_INTERVAL)) * ALIEN_HP_PER_MILESTONE
     + Math.max(0, kills - LATE_ALIEN_HP_FROM) * LATE_ALIEN_HP_PER_STAGE;
 }
 
@@ -334,11 +343,14 @@ export interface Enemy {
   windupTicks: number; // >0 = telegraphing before firing (charger: stun ticks)
   // charger specific
   chargeDirX: number; // locked charge direction; 0 = not charging
+  disguiseOf?: number; impostorExpired?: boolean; disguiseIn?: number; // disguiseIn: ticks left before the Impostor takes on a boss's look // Impostor: the boss it copies; removed quietly when no boss is left
+  enchantedUntil?: number; // Enchanter buff: faster and harder-hitting until this gameTick
+  enchantPulseTicks?: number; // Enchanter: pulse ring animation (its own timer, so the body does not squash)
   lanceDirX?: number; lanceDirY?: number; // Lancer: locked aim (unit vector in tiles) while charging
   chargeDirY: number;
   chargeWindupTicks?: number; // locked warning before a Charger rush; windupTicks remains its recovery
   chargeTilesLeft?: number;
-  // Energy Leech: only energy actually removed from the player is stored/refunded.
+  // Leech: only energy actually removed from the player is stored/refunded.
   stolenEnergy?: number;
   // shielder specific
   shieldTargetId: number; // ID of ally being shielded; -1 = none
@@ -410,7 +422,7 @@ export interface BombBlast {
 export interface LaserBullet {
   solar?:boolean; blessingCopy?:boolean; blessingDecoy?:boolean; blessingDamage?:number;
   avoidEnemyId?: number; // Lepus splits a volley between distinct targets when possible.
-  heavy?: boolean; // every 20th player shot: +20% damage and a push on hit
+  heavy?: boolean; // every 20th player shot: double damage and a push on hit
   damageScale?: number;
   x: number;
   y: number;
@@ -494,7 +506,15 @@ export interface GameState {
   playerQueuedDirX: number;
   playerQueuedDirY: number;
   playerStepProgress: number;
-  playerKnockback: { dirX: number; dirY: number; started: boolean; tilesLeft?: number; shaken?: boolean } | null; // one tile unless tilesLeft says more
+  playerKnockback: { dirX: number; dirY: number; started: boolean; tilesLeft?: number; shaken?: boolean; carryChecked?: boolean } | null; // one tile unless tilesLeft says more
+  carryPushRemainder?: number; // half-tile carried between pushes while carrying Ruby
+  craterField?: { chamber: number; ticks: number } | null; // Crater: the meteor-struck room heals the player for a while
+  rubyStolenBy?: number; // id of the Snatcher carrying Ruby away; Ruby's tile follows it
+  empoweredUntil?: number; // Enchanter kill: player attacks deal more damage until this gameTick
+  regenUntil?: number; // Bleeder kill: player regenerates until this gameTick
+  bleedingUntil?: number; // Bleeder curse: no player healing and a draining shield until this gameTick
+  playerStunned?: boolean; // the current freeze lock is a comet stun, not ice
+  carryBoostDrain?: number; // fractional extra speed-boost ticks drained while carrying Ruby
   playerHP: number;
   playerShieldHP: number; // Armored kill reward — absorbs damage before player HP
   playerSaturnShield: boolean;
@@ -566,6 +586,8 @@ export interface GameState {
   lightningArcs: LightningArc[];
   slashEffects: SlashEffect[];
   deathParticles: DeathParticle[];
+  enemyShots?: { x: number; y: number; dx: number; dy: number; ownerId: number; ticks: number }[]; // Shooter orbs, in pixels
+  bulletStunUntil?: number; // Shooter kill reward: bullets hit harder and briefly stop enemies until this gameTick
   sapphireHitEffects: SapphireHitEffect[];
   rewardEffects: RewardEffect[];
   prayerWaves: PrayerWave[];
@@ -589,6 +611,8 @@ export interface GameState {
   lunarDecoy: { x: number; y: number; tileX: number; tileY: number; hitsLeft: number; maxHits: number; flashTicks: number; invulnerableTicks: number } | null;
   enemyDecoyActive: boolean;
   ascensionBannerTicks: number;
+  // NEW ALIEN callout: shown once per late alien type (once ever on desktop, where the profile remembers encounters)
+  alienIntro?: { type: EnemyType; ticks: number } | null; alienIntroQueue?: EnemyType[]; introducedAliens?: string[];
   specialSkill: SpecialSkill | null;
   specialEffects: { kind: SpecialSkill; x: number; y: number; ticks: number }[];
   venusVeilTicks: number;
@@ -611,6 +635,7 @@ export interface GameState {
   // Sniper kill buff — electric chain on player attacks
   electricBuffTicks: number;
   laserStunTicks?: number; // Lancer reward: laser hits briefly stun enemies while > 0
+  laserMomentum?: number; // Hydra: distinct enemies the last Laser cast hit
   bulletShotCount?: number; // player bullet shots this run; every BULLET_HEAVY_EVERY-th is heavy
 
   // Boss spawn system
@@ -755,6 +780,16 @@ function updateSingularitySound(state: GameState) {
   } catch { stopSingularitySound(); }
 }
 
+// Non-boss alien attack sounds are levelled to about -21 dB (loudest 50ms RMS after volume); see AUDIO.md.
+export const ALIEN_ATTACK_SFX = {
+  shot: 1.86,          // alienShootLaser.wav multiplier: melee hits, Charger rush, Shooter fire
+  laser: 1.14,         // laserBeam.mp3 multiplier: Sniper shot, Lancer beam
+  lancerCharge: .556,  // charging.wav level
+  chargerLock: .174,   // place_bomb.wav level
+  chargerImpact: .195, // hitHurt.wav level
+  bomber: .248,        // bombExplode.wav level
+} as const;
+
 export function playSFX_laser(volumeMultiplier = 1) {
   try {
     const a = gameAudio('/sounds/laserBeam.mp3', 'attack'); a.volume = 0.3045 * ATTACK_SFX_VOLUME * volumeMultiplier; a.play().catch(() => {});
@@ -821,9 +856,9 @@ function playSFX_bossLaser() {
   } catch { }
 }
 
-export function playSFX_bomb() {
+export function playSFX_bomb(level = 0.832 * ATTACK_SFX_VOLUME) {
   try {
-    const a = gameAudio('/sounds/bombExplode.wav', 'attack'); a.volume = 0.832 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
+    const a = gameAudio('/sounds/bombExplode.wav', 'attack'); a.volume = level; a.play().catch(() => {});
   } catch { }
 }
 
@@ -853,7 +888,7 @@ export function playSFX_hit() {
 export function playSFX_chargerImpact() {
   try {
     const sound = gameAudio('/sounds/hitHurt.wav');
-    sound.volume = .55; sound.playbackRate = .7; sound.preservesPitch = false;
+    sound.volume = ALIEN_ATTACK_SFX.chargerImpact; sound.playbackRate = .7; sound.preservesPitch = false;
     sound.play().catch(() => {});
   } catch { }
   playTone(90, .14, .15, 'triangle');
@@ -865,6 +900,20 @@ function playSFX_healPickup() {
   try {
     const a = gameAudio('/sounds/grow.wav'); a.volume = 0.32; a.play().catch(() => {});
   } catch { }
+}
+
+/** Special-alien sounds (Enchanter, Bleeder, Snatcher, Impostor, Shooter and their kill buffs). */
+export function playSFX_special(kind: 'orbHit' | 'orbRuby' | 'bleed' | 'regen' | 'snatch' | 'rubyBack' | 'empower' | 'disguise') {
+  switch (kind) {
+    case 'orbHit': playAudioOneShot('/sounds/snowball-hit.mp3', .272, 1.1); playAudioOneShot('/sounds/strike-charged.wav', .191, 1.35); break;
+    case 'orbRuby': playAudioOneShot('/sounds/snowball-hit.mp3', .4 * ATTACK_SFX_VOLUME, .9); break;
+    case 'bleed': playAudioOneShot('/sounds/poisoned.wav', .45, .8); break;
+    case 'regen': playAudioOneShot('/sounds/seaHeal.mp3', .4, 1.1); break;
+    case 'snatch': playAudioOneShot('/sounds/snatch-whistle.wav', 1); break;
+    case 'rubyBack': playAudioOneShot('/sounds/shield.mp3', .5); break;
+    case 'empower': playAudioOneShot('/sounds/powerUpBoost.mp3', .4, .85); break;
+    case 'disguise': playAudioOneShot('/sounds/deghost.wav', .4, .7); break;
+  }
 }
 
 function playSFX_powerUp() {
@@ -925,7 +974,7 @@ export function playSFX_charge() {
 export function playSFX_enemyAttack(enemy?: Enemy) {
   const file = enemy?.type === 'aegis_sentinel' ? 'aegis-attack.mp3'
     : enemy?.type === 'astral_twins' ? enemy.twin?.index === 1 ? 'dusk-attack.mp3' : 'celestial/jupiter-storm.wav' : null;
-  if (!file) { playSFX_alienShoot(); return; }
+  if (!file) { playSFX_alienShoot(enemy && isBossType(enemy.type) ? 1 : ALIEN_ATTACK_SFX.shot); return; }
   if (enemy?.type === 'astral_twins' && enemy.twin?.index === 1) playCelestialSound('neptune_electric', 3.5);
   try {
     const sound = gameAudio('/sounds/' + file);
@@ -1235,6 +1284,7 @@ export function createInitialState(): GameState {
     lightningArcs: [],
     slashEffects: [],
     deathParticles: [],
+    enemyShots: [],
     sapphireHitEffects: [],
     rewardEffects: [],
     prayerWaves: [],
@@ -1322,7 +1372,9 @@ function reflectVenusDamage(state: GameState, attacker: Enemy | undefined, amoun
 }
 
 export function damagePlayer(state: GameState, amount: number, attacker?: Enemy, silentHit = false, shieldCost = 1) {
-  if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=.9;
+  if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=BLESSING.sapphireWeaken;
+  if(attacker&&!state.trial)amount*=lateEnemyDamageMult(state.bossesKilled); // stage 15+: enemy attacks hit harder every 5 stages
+  if(attacker&&(attacker.enchantedUntil??0)>state.gameTick)amount*=isBossType(attacker.type)?ENCHANTER.bossDamageMult:ENCHANTER.damageMult; // Enchanter buff (smaller on bosses)
   if (attacker && isMoonBoss(state, attacker)) amount *= MOON_QUEEN_DAMAGE_MULT;
   if (state.neptune && attacker?.id === state.neptune.bossId) {
     amount *= NEPTUNE_ATTACK_MULT[state.neptune.phase];
@@ -1330,12 +1382,13 @@ export function damagePlayer(state: GameState, amount: number, attacker?: Enemy,
   }
   if(state.enemyDecoyActive){damageLunarDecoy(state,amount);return;}
   reflectVenusDamage(state, attacker, amount, state.playerX, state.playerY);
-  if(state.godMode){const mitigated=amount*((state.jupiter?.guardTicks??0)>0?JUPITER.fenceGuardDamage:1)*(state.constellations.includes('playerGuard')?.85:1)*(state.venusVeilTicks>0?SPECIAL_VENUS_DAMAGE_MULT:1);blessingReflectIncoming(state,mitigated,attacker);return;}
+  if(state.godMode){const mitigated=amount*((state.jupiter?.guardTicks??0)>0?JUPITER.fenceGuardDamage:1)*(state.constellations.includes('playerGuard')?.85:1)*(state.playerCarryingRuby?CARRY_DAMAGE_MULT:1)*(state.venusVeilTicks>0?SPECIAL_VENUS_DAMAGE_MULT:1);blessingReflectIncoming(state,mitigated,attacker);return;}
   if ((state.jupiter?.guardTicks ?? 0) > 0) amount *= JUPITER.fenceGuardDamage;
   amount *= state.constellations.includes('playerGuard') ? 0.85 : 1;
+  if (state.playerCarryingRuby) amount *= CARRY_DAMAGE_MULT; // carrying Ruby: less damage taken
   if (state.venusVeilTicks > 0) amount *= SPECIAL_VENUS_DAMAGE_MULT;
   blessingIncoming(state,amount,attacker);
-  if(hasBlessing(state,'aegis_sentinel'))amount*=.8;
+  if(hasBlessing(state,'aegis_sentinel'))amount*=BLESSING.pearlReduction; // Pearl
   const incoming=amount;
   const permanent = state.saturn?.permaShield && state.playerShieldHP > 0;
   const absorbed = permanent ? amount : Math.min(state.playerShieldHP / shieldCost, amount);
@@ -1345,6 +1398,7 @@ export function damagePlayer(state: GameState, amount: number, attacker?: Enemy,
   if (absorbed > 0) showRewardEffect(state, 'player', 'shield');
   if (amount <= 0) {blessingAfterHit(state,incoming);return;}
   state.playerHP = Math.max(state.immortal ? 1 : 0, state.playerHP - amount);
+  state.build.sunUntouchedTicks = 0; // Ruby gem: only real HP loss ends the surge, not shield-absorbed hits
   blessingAfterHit(state,incoming);
   if (!silentHit) playSFX_hit();
   if (state.playerHP <= 0) endGame(state);
@@ -1352,7 +1406,9 @@ export function damagePlayer(state: GameState, amount: number, attacker?: Enemy,
 
 export function damageRuby(state: GameState, amount: number, attacker?: Enemy, silentHit = false, shieldCost = 1) {
   if (state.rubyTileX === -1) return; // carried — ruby not vulnerable
-  if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=.9;
+  if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=BLESSING.sapphireWeaken;
+  if(attacker&&!state.trial)amount*=lateEnemyDamageMult(state.bossesKilled); // stage 15+: enemy attacks hit harder every 5 stages
+  if(attacker&&(attacker.enchantedUntil??0)>state.gameTick)amount*=isBossType(attacker.type)?ENCHANTER.bossDamageMult:ENCHANTER.damageMult; // Enchanter buff (smaller on bosses)
   if (attacker && isMoonBoss(state, attacker)) amount *= MOON_QUEEN_DAMAGE_MULT;
   if (state.neptune && attacker?.id === state.neptune.bossId) {
     amount *= NEPTUNE_ATTACK_MULT[state.neptune.phase];
@@ -1530,6 +1586,34 @@ function endGame(state: GameState) {
 
 // ─── Spawn ────────────────────────────────────────────────────────────────────
 
+// Late aliens join the tier's spawn pool once their stage is reached (Endless/Ascension only), each up to its own cap;
+// the Impostor only while a boss is alive, since it copies one.
+const LATE_ALIENS = [['shooter', SHOOTER], ['enchanter', ENCHANTER], ['bleeder', BLEEDER], ['snatcher', SNATCHER], ['impostor', IMPOSTOR]] as const;
+const LATE_ALIEN_TYPES: readonly string[] = LATE_ALIENS.map(([type]) => type);
+export const ALIEN_INTRO_TICKS = 300;
+
+/** The first time each late alien appears, queue a short NEW ALIEN callout (name and one line, drawn by the HUD). */
+function updateAlienIntros(state: GameState) {
+  const seen = state.introducedAliens ??= getProfile().encountered.filter(type => LATE_ALIEN_TYPES.includes(type));
+  const queue = state.alienIntroQueue ??= [];
+  for (const e of state.enemies) {
+    if (!LATE_ALIEN_TYPES.includes(e.type) || seen.includes(e.type)) continue;
+    seen.push(e.type); queue.push(e.type);
+  }
+  if (state.alienIntro && --state.alienIntro.ticks <= 0) state.alienIntro = null;
+  if (!state.alienIntro && queue.length) {
+    state.alienIntro = { type: queue.shift()!, ticks: ALIEN_INTRO_TICKS };
+    playAudioOneShot('/sounds/constellation-choice.wav', .35);
+  }
+}
+export function spawnPool(state: GameState, base: EnemyType[]): EnemyType[] {
+  if (state.trial) return base;
+  const extra = LATE_ALIENS.filter(([type, cfg]) => state.bossesKilled >= cfg.fromStage
+    && state.enemies.filter(e => e.type === type).length < cfg.maxAlive
+    && (type !== 'impostor' || state.enemies.some(b => isBossType(b.type) && b.hp > 0))).map(([type]) => type);
+  return extra.length ? [...base, ...extra] : base;
+}
+
 function spawnEnemy(state: GameState) {
   const tier = DIFFICULTY_TIERS[Math.min(state.difficultyLevel, DIFFICULTY_TIERS.length - 1)];
   const population = state.enemies.filter(e => !isChallengeObject(e.type) && e.type !== 'moon_mimic' && e.type !== 'scorch_sapper').length; // challenge objects, mimics and sappers never block aliens
@@ -1557,13 +1641,14 @@ function spawnEnemy(state: GameState) {
     const idx = Math.floor(Math.random() * eligibleSpawns.length);
     const [tx, ty] = eligibleSpawns[idx];
 
-    const typeIdx = Math.floor(Math.random() * tier.spawnTypes.length);
+    const pool = spawnPool(state, tier.spawnTypes), typeIdx = Math.floor(Math.random() * pool.length);
     const type: EnemyType = state.sun && Math.random() < SUN.emberlingSpawnChance ? 'emberling'
       : state.neptune && Math.random() < NEPTUNE_STINGER_CHANCE ? 'stinger'
       : state.neptune && Math.random() < NEPTUNE_PUFFER_CHANCE ? 'pufferfish'
       : state.gaia && Math.random() < GAIA_ALIEN_CHANCE ? gaiaAlienType()
       : state.moon && Math.random() < MOON_SHADE_CHANCE ? 'moon_shade'
-      : state.moon && Math.random() < MOON_MITE_CHANCE ? 'mirror_mite' : tier.spawnTypes[typeIdx];
+      : state.moon && Math.random() < MOON_MITE_CHANCE ? 'mirror_mite'
+      : pool[typeIdx];
     const cfg = ENEMY_CONFIGS[type];
     const hpScaled = Math.ceil(cfg.maxHp * tier.hpMult) * REGULAR_ENEMY_HP_MULT * constellationAlienHPMult(state);
 
@@ -2144,6 +2229,7 @@ function updateAstralTwin(state: GameState, e: Enemy) {
     if (!ranged) {
       twin.strikeAngle = Math.atan2(state.playerY - e.y, state.playerX - e.x);
       damagePlayer(state, ENEMY_CONFIGS.astral_twins.damageToPlayer, e); playSFX_enemyAttack(e);
+      shovePlayerFromEnemy(state, e, TWIN_MELEE_KNOCKBACK);
       encounterEffect(state, 'melee', e, state.playerX, state.playerY, 22, '#f08062');
       e.shootTicks = 22; e.attackTimer = Math.round(ENEMY_CONFIGS.astral_twins.attackCooldown * berserkCooldown);
     }
@@ -2694,7 +2780,7 @@ export function stormSlowMultiplier(state:GameState,e:Enemy,slowStrength=1):numb
   const skillSlow=e.stormSlowUntilTick!==undefined&&state.gameTick<=e.stormSlowUntilTick?1-(1-SPECIAL_REAPER_SLOW)*slowStrength:1;
   return Math.min(skillSlow,buildSlowMultiplier(state,e));
 }
-export function celestialMoveMultiplier(state: GameState, e: Enemy): number { return MOVE_SPEED_MULT * (inCelestialField(state,e)?SPECIAL_WEAVER_SLOW:1) * Math.min((e.voltSlowTicks ?? 0)>0 ? JUPITER.wallSlow : 1,stormSlowMultiplier(state,e),buildSlowMultiplier(state,e)); }
+export function celestialMoveMultiplier(state: GameState, e: Enemy): number { return MOVE_SPEED_MULT * ((e.enchantedUntil ?? 0) > state.gameTick ? (isBossType(e.type) ? ENCHANTER.bossSpeedMult : ENCHANTER.speedMult) : 1) * (inCelestialField(state,e)?SPECIAL_WEAVER_SLOW:1) * Math.min((e.voltSlowTicks ?? 0)>0 ? JUPITER.wallSlow : 1,stormSlowMultiplier(state,e),buildSlowMultiplier(state,e)); }
 let gaiaFieldVoice: HTMLAudioElement | null = null;
 export function stopGaiaFieldSound() {
   if (!gaiaFieldVoice) return;
@@ -3272,6 +3358,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
           if (e.type === 'stinger' && state.neptune) { state.neptune.poisonTicks = NEPTUNE_POISON_TICKS; state.neptune.poisonTimer ||= 60; }
           const knockback = ALIEN_KNOCKBACK[e.type];
           if (knockback) shovePlayerFromEnemy(state, e, knockback);
+          if (e.type === 'bleeder' && !state.enemyDecoyActive && state.gamePhase === 'playing') { if ((state.bleedingUntil ?? 0) <= state.gameTick) playSFX_special('bleed'); state.bleedingUntil = state.gameTick + BLEEDER.curseTicks; }
           if (e.type === 'angry_mushroom') shovePlayerFromEnemy(state,e,GAIA_MUSHROOM_KNOCKBACK);
           if (e.type === 'emberling' && !e.extinguished) shovePlayerFromEnemy(state,e,SUN.emberlingKnockback);
           if (e.aegis) encounterEffect(state, 'sentinel-hit', e, state.playerX, state.playerY, 18, '#78dedf');
@@ -3324,7 +3411,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
 
 function triggerBomberExplosion(state: GameState, e: Enemy) {
   const RANGE = ENEMY_CONFIGS.bomber.bombExplodeRange;
-  playSFX_bomb();
+  playSFX_bomb(ALIEN_ATTACK_SFX.bomber);
   state.bombBlasts.push({ cx: e.x, cy: e.y, radius: 0, maxRadius: RANGE * TILE_SIZE, ticks: 25 });
   // Damage player if in range
   if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= RANGE) {
@@ -3423,6 +3510,7 @@ function showRewardEffect(state: GameState, target: RewardEffect['target'], kind
 }
 
 export function healPlayer(state: GameState, amount: number, showEffect = true) {
+  if ((state.bleedingUntil ?? 0) > state.gameTick) return; // Bleeder curse: no healing
   const before = state.playerHP;
   state.playerHP = Math.min(PLAYER_MAX_HP, Math.round((state.playerHP + amount) * 10) / 10);
   chargeNeptuneHealing(state, state.playerHP - before);
@@ -3438,9 +3526,13 @@ export function healCore(state: GameState, amount: number) {
   if (state.rubyHP > before) showRewardEffect(state, 'ruby', 'heal');
 }
 
+/** suppressEnergy marks a Solar Flare kill: no energy, and regular aliens give no killing buff or kill heal (bosses keep every reward). */
 export function killEnemy(state: GameState, idx: number, fromMeteor = false, suppressEnergy = false) {
   const victim = state.enemies[idx];
   if (!victim || (victim.twin?.downedTicks ?? 0) > 0) return;
+  if (victim.impostorExpired) { state.enemies.splice(idx, 1); return; } // an Impostor with no boss left to copy just vanishes
+  if (state.rubyStolenBy === victim.id) { state.rubyStolenBy = undefined; state.rubyTileX = victim.tileX; state.rubyTileY = victim.tileY; } // Snatcher drops Ruby
+  if (victim.type === 'bleeder') state.bleedingUntil = 0; // lift the curse first, so this kill's own healing works
   if (victim.type === 'sporeling') gaiaSporeCloud(state, victim);
   if (victim.type === 'jellyfish') neptuneRevealClone(state);
   if (victim.type === 'pufferfish' && state.neptune) { // it bursts as it dies
@@ -3508,7 +3600,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
   const e = state.enemies[idx];
   spawnDeathParticles(state, e);
 
-  const skipRewards = fromMeteor;
+  const skipRewards = fromMeteor, noBuff = suppressEnergy && !isBossType(e.type);
   const recoveredEnergy = e.type === 'energy_leech' ? (e.stolenEnergy ?? 0) : 0;
   const wasMax = state.starEnergy >= STAR_ENERGY_MAX;
   const energyGain = suppressEnergy ? 0 : (skipRewards ? 0 : (STAR_ENERGY_PER_KILL + (e.type === 'charger' ? 8 : 0)) * (1 + 0.2 * constellationBonus(state, 'energy'))) + recoveredEnergy;
@@ -3528,13 +3620,15 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
 
     // Passive sustain — every kill heals a small flat amount, stacking on top of any
     // type-specific reward below (e.g. a healer kill grants this +24 more, not instead of).
-    healPlayer(state, 5 + 2 * constellationBonus(state, 'killHealing'), false);
+    if (!noBuff) healPlayer(state, 5 + 2 * constellationBonus(state, 'killHealing'), false);
 
     // ── Kill effects by type ─────────────────────────────────────────────
-    if (e.type === 'bomber') {
+    // Solar Flare kills skip the buffs; Bomber blasts, Splitter splits and the Impostor's smoke still happen.
+    if (noBuff && e.type !== 'bomber' && e.type !== 'splitter' && e.type !== 'impostor') { /* no killing buff */ }
+    else if (e.type === 'bomber') {
       // Explode on death — damages nearby allies
       const RANGE = ENEMY_CONFIGS.bomber.bombExplodeRange;
-      playSFX_bomb();
+      playSFX_bomb(ALIEN_ATTACK_SFX.bomber);
       state.bombBlasts.push({ cx: e.x, cy: e.y, radius: 0, maxRadius: RANGE * TILE_SIZE, ticks: 25 });
       if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= RANGE) damagePlayer(state, 25);
       if (state.rubyTileX !== -1 && tileEuclidDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) <= RANGE) damageRuby(state, 30);
@@ -3572,6 +3666,27 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       else state.rubyShieldHP = Math.max(state.rubyShieldHP, KILL_SHIELD_HP);
       showRewardEffect(state, 'ruby', 'shield');
       playSFX_rubyToggle();
+    } else if (e.type === 'bleeder') {
+      // the curse was lifted at the start of killEnemy; now a short regeneration
+      state.regenUntil = state.gameTick + BLEEDER.regenTicks; showRewardEffect(state, 'player', 'heal'); playSFX_special('regen');
+    } else if (e.type === 'shooter') {
+      state.bulletStunUntil = state.gameTick + SHOOTER.rewardTicks; showRewardEffect(state, 'player', 'stun');
+    } else if (e.type === 'impostor') {
+      // Unmasked: grey smoke puffs rise where it fell, with the decoy-break sound, so it reads as a fake.
+      for (let i = 0; i < 18; i++) {
+        const angle = i / 18 * Math.PI * 2, size = 10 + (i % 3) * 4;
+        state.deathParticles.push({ x: e.x + Math.cos(angle) * 12, y: e.y + Math.sin(angle) * 10, vx: Math.cos(angle) * 2.4, vy: Math.sin(angle) * 1.6 - 2.2 - (i % 4) * .5, ticks: 70, maxTicks: 70, size, color: i % 3 === 0 ? '#e4e4ee' : i % 3 === 1 ? '#b4b4c2' : '#8a8a98' });
+      }
+      playSFX_decoyDeath();
+      // A fake for a fake: a fragile decoy where it fell draws nearby aliens for a few seconds.
+      if (!noBuff) {
+        state.build.decoy = { x: (e.tileX + .5) * TILE_SIZE, y: (e.tileY + .5) * TILE_SIZE, tileX: e.tileX, tileY: e.tileY, ticks: IMPOSTOR.rewardDecoyTicks, free: true };
+        state.enemies.forEach(enemy => enemy.pathTimer = 0);
+      }
+    } else if (e.type === 'snatcher') {
+      state.rubyShieldHP = Math.max(state.rubyShieldHP, SNATCHER.rewardRubyShield); showRewardEffect(state, 'ruby', 'shield'); playSFX_special('rubyBack');
+    } else if (e.type === 'enchanter') {
+      state.empoweredUntil = state.gameTick + ENCHANTER.rewardTicks; showRewardEffect(state, 'player', 'stun'); playSFX_special('empower');
     } else if (e.type === 'lancer') {
       state.laserStunTicks = Math.max(state.laserStunTicks ?? 0, LANCER.rewardTicks);
       showRewardEffect(state, 'player', 'stun');
@@ -3681,7 +3796,16 @@ function updatePlayer(state: GameState) {
 
   if (state.playerTileX === state.playerTargetX && state.playerTileY === state.playerTargetY) {
 
-    if (knockback) {
+    if (knockback && !knockback.carryChecked) {
+      // Carrying Ruby halves every push. Whole tiles only, so the half tile carries over to the next push.
+      knockback.carryChecked = true;
+      if (state.playerCarryingRuby) {
+        const half = (knockback.tilesLeft ?? 1) * CARRY_PUSH_MULT + (state.carryPushRemainder ?? 0), tiles = Math.floor(half + 1e-9);
+        state.carryPushRemainder = half - tiles;
+        if (tiles <= 0) state.playerKnockback = null; else knockback.tilesLeft = tiles;
+      }
+    }
+    if (knockback && state.playerKnockback) {
       // Finish any existing step before pushing one cardinal tile. Never snap the
       // player across a wall or overwrite held input with the forced direction.
       const nx = state.playerTileX + knockback.dirX;
@@ -3787,6 +3911,34 @@ function updatePlayer(state: GameState) {
 
 // ─── Meteorite ───────────────────────────────────────────────────────────────
 
+/** Comet and Shooter stun: reuses the freeze lock (no moving, attacking or casting). An ice freeze already running keeps its look. */
+export function stunPlayer(state: GameState, ticks: number) {
+  if (state.gamePhase !== 'playing') return;
+  if (state.playerFrozenTicks <= 0) state.playerStunned = true;
+  state.playerFrozenTicks = Math.max(state.playerFrozenTicks, ticks);
+}
+
+/** Shooter orbs fly straight until a wall. Hitting the player deals damage and stuns; a placed Ruby only takes damage. */
+function updateEnemyShots(state: GameState) {
+  const shots = state.enemyShots ??= [];
+  for (let i = shots.length - 1; i >= 0; i--) {
+    const shot = shots[i];
+    shot.x += shot.dx; shot.y += shot.dy; shot.ticks++;
+    const tx = Math.floor(shot.x / TILE_SIZE), ty = Math.floor(shot.y / TILE_SIZE);
+    if (!isFloorTile(state.map, tx, ty)) { shots.splice(i, 1); continue; }
+    const owner = state.enemies.find(en => en.id === shot.ownerId && en.hp > 0), cfg = ENEMY_CONFIGS.shooter, reach = SHOOTER.hitRadius * TILE_SIZE;
+    if (Math.hypot(shot.x - state.playerX, shot.y - state.playerY) <= reach) {
+      damagePlayer(state, cfg.damageToPlayer, owner);
+      if (!state.enemyDecoyActive) stunPlayer(state, SHOOTER.stunTicks);
+      playSFX_special('orbHit');
+      shots.splice(i, 1); continue;
+    }
+    if (state.rubyTileX !== -1 && !state.playerCarryingRuby && Math.hypot(shot.x - (state.rubyTileX + .5) * TILE_SIZE, shot.y - (state.rubyTileY + .5) * TILE_SIZE) <= reach) {
+      damageRuby(state, cfg.damageToRuby, owner); playSFX_special('orbRuby'); shots.splice(i, 1);
+    }
+  }
+}
+
 function cometGap() { return COMET.minGap + Math.floor(Math.random() * (COMET.maxGap - COMET.minGap + 1)); }
 
 /** Marks a random 3x3 area of floor in the player's room (the nearest room from a hallway) and starts the warning. */
@@ -3802,8 +3954,11 @@ function startComet(state: GameState) {
   }
   const [r1, c1, r2, c2] = CHAMBER_BOUNDS[room], edge = Math.floor(COMET.size / 2) + 1;
   let x = Math.min(c2 - edge, Math.max(c1 + edge, state.playerTileX)), y = Math.min(r2 - edge, Math.max(r1 + edge, state.playerTileY));
+  // Random spots stay within COMET.spawnRange tiles of the player (half a chamber), clamped inside the room.
+  const minX = Math.max(c1 + edge, x - COMET.spawnRange), maxX = Math.min(c2 - edge, x + COMET.spawnRange);
+  const minY = Math.max(r1 + edge, y - COMET.spawnRange), maxY = Math.min(r2 - edge, y + COMET.spawnRange);
   for (let attempt = 0; attempt < 40; attempt++) {
-    const tx = c1 + edge + Math.floor(Math.random() * (c2 - c1 - edge * 2 + 1)), ty = r1 + edge + Math.floor(Math.random() * (r2 - r1 - edge * 2 + 1));
+    const tx = minX + Math.floor(Math.random() * (maxX - minX + 1)), ty = minY + Math.floor(Math.random() * (maxY - minY + 1));
     if (isFloorTile(state.map, tx, ty)) { x = tx; y = ty; break; }
   }
   // Sometimes it aims straight at the player instead (even in a hallway).
@@ -3827,7 +3982,11 @@ function strikeComet(state: GameState, cx: number, cy: number) {
     damageEnemy(state, e, big ? e.maxHp * bossShare : COMET.alienDamage * skillAlienScale(state), 'meteor');
     if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
   }
-  if (inside(state.playerTileX, state.playerTileY)) damagePlayer(state, COMET.playerDamage);
+  if (inside(state.playerTileX, state.playerTileY)) {
+    damagePlayer(state, COMET.playerDamage);
+    // Stun: reuses the freeze lock (no moving, attacking or casting). An ice freeze already running keeps its own look.
+    stunPlayer(state, COMET.stunTicks);
+  }
   if (state.rubyTileX !== -1 && !state.playerCarryingRuby && inside(state.rubyTileX, state.rubyTileY)) damageRuby(state, COMET.rubyDamage);
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 14); state.screenShakeAmt = Math.max(state.screenShakeAmt, 6);
   playSFX_bomb();
@@ -3835,6 +3994,7 @@ function strikeComet(state: GameState, cx: number, cy: number) {
 
 function updateComet(state: GameState) {
   const comet = state.comet ??= { timer: cometGap(), target: null, impact: null };
+  if (state.bossesKilled < COMET.fromStage && !comet.target && !comet.impact) return; // comets begin at stage 3
   if (comet.impact && --comet.impact.ticks <= 0) comet.impact = null;
   if (comet.target) {
     if (--comet.target.ticks === COMET.fallTicks) playAudioOneShot('/sounds/falling-thing.wav', .6 * ATTACK_SFX_VOLUME); // 0.75s, the length of the fall
@@ -3920,6 +4080,7 @@ function updateMeteorite(state: GameState) {
       }
 
       gaiaScorchRoom(state, ch); // Gaia: a meteor scorches the room clean
+      if (state.constellations.includes('meteorHeal')) state.craterField = { chamber: ch, ticks: CRATER.ticks };
       state.meteoriteTimer = METEORITE_CYCLE + Math.floor(Math.random() * 300 - 150);
     }
   } else {
@@ -3948,7 +4109,7 @@ function checkAndConsumePower(state: GameState): boolean {
   if (state.poweredTicks > 0) return true;
   if (state.starEnergy >= STAR_ENERGY_MAX) {
     state.starEnergy = 0;
-    state.poweredTicks = 120 + state.stellarPowerBonusTicks + 60 * constellationBonus(state, 'power') + (hasBlessing(state,'blind_prayer')?60:0);
+    state.poweredTicks = 120 + state.stellarPowerBonusTicks + 60 * constellationBonus(state, 'power') + (hasBlessing(state,'blind_prayer')?BLESSING.amberPowerTicks:0);
     state.stellarPowerBonusTicks = 0;
     grantInstantSpeedBoost(state);
     return true;
@@ -3973,6 +4134,21 @@ function withMirrorTwin(state: GameState, attack: (tileX: number, tileY: number,
   return hit;
 }
 
+/** Triangulum: aliens this Laser hit that stand within TRIANGULUM.radius of another hit alien step one tile toward their group's centre. */
+function pullLaserGroup(state: GameState, hitIds: Set<number>) {
+  const hit = state.enemies.filter(e => hitIds.has(e.id) && e.hp > 0 && !isBossType(e.type) && !e.twin?.downedTicks && e.type !== 'aegis_construct');
+  for (const e of hit) {
+    const group = hit.filter(o => o === e || tileEuclidDist(o.tileX, o.tileY, e.tileX, e.tileY) <= TRIANGULUM.radius);
+    if (group.length < 2) continue;
+    const cx = group.reduce((sum, o) => sum + o.tileX, 0) / group.length, cy = group.reduce((sum, o) => sum + o.tileY, 0) / group.length;
+    const dx = cx - e.tileX, dy = cy - e.tileY;
+    if (Math.hypot(dx, dy) < .5) continue;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    e.pushDirX = horizontal ? Math.sign(dx) : 0; e.pushDirY = horizontal ? 0 : Math.sign(dy);
+    e.pushTiles = Math.max(e.pushTiles, TRIANGULUM.pullTiles); e.buildWallDamage = undefined;
+  }
+}
+
 export function useLaser(state: GameState) {
   if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
   if (cancelSnowball(state)) return;
@@ -3985,7 +4161,10 @@ export function useLaser(state: GameState) {
   const beamWidth=wide?(powered?96:72):undefined;
   state.build.waveLaserReady=false;
   const range = Math.max(1, Math.round(((powered ? LASER_RANGE_PWR : LASER_RANGE) + 2 * constellationBonus(state, 'laserRange')) * gaiaLaserRangeMult(state)));
-  const baseDmg = (powered ? LASER_DMG_PWR : LASER_DMG) * (1 + 0.2 * constellationBonus(state, 'laser'));
+  // Hydra: +HYDRA.perEnemy damage for each distinct enemy the previous Laser cast hit (up to HYDRA.maxEnemies).
+  const hydra = state.constellations.includes('laserChain') ? 1 + HYDRA.perEnemy * Math.min(HYDRA.maxEnemies, state.laserMomentum ?? 0) : 1;
+  const baseDmg = (powered ? LASER_DMG_PWR : LASER_DMG) * (1 + 0.25 * constellationBonus(state, 'laser')) * hydra;
+  const castHits = new Set<number>();
 
   const emit=(originX:number,originY:number,mult:number,fromX:number,fromY:number,mirror=false)=> {
     let hit=false;const hitIds=new Set<number>();
@@ -4004,7 +4183,7 @@ export function useLaser(state: GameState) {
           if(!state.enemies.includes(enemy)||enemy.hp<=0||enemy.twin?.downedTicks||touched.has(enemy.id)||(wide&&hitIds.has(enemy.id)))continue;
           const ex=enemy.x/TILE_SIZE-startX,ey=enemy.y/TILE_SIZE-startY,along=ex*rx+ey*ry,across=Math.abs(ex*ry-ey*rx)*TILE_SIZE;
           if(along<0||along>distance+.02||across>thickness/2+TILE_SIZE*ENEMY_CONFIGS[enemy.type].bodyFraction/2)continue;
-          touched.add(enemy.id);hitIds.add(enemy.id);damageEnemy(state,enemy,damage,'player',mirror?0:1.5);chainElectric(state,enemy);laserStun(state,enemy);hit=true;
+          touched.add(enemy.id);hitIds.add(enemy.id);castHits.add(enemy.id);damageEnemy(state,enemy,damage,'player',mirror?0:1.5);chainElectric(state,enemy);laserStun(state,enemy);hit=true;
           if(enemy.hp<=0)killEnemy(state,state.enemies.indexOf(enemy));
         }
       }
@@ -4030,7 +4209,7 @@ export function useLaser(state: GameState) {
           const inBeam=wide?(dx!==0?enemy.tileX===tx&&Math.abs(enemy.y-(ty+.5)*TILE_SIZE)<=beamWidth!/2+bodyRadius:enemy.tileY===ty&&Math.abs(enemy.x-(tx+.5)*TILE_SIZE)<=beamWidth!/2+bodyRadius):enemy.tileX===tx&&enemy.tileY===ty;
           if(!inBeam||(wide&&hitIds.has(enemy.id)))continue;
           hitIds.add(enemy.id);
-          damageEnemy(state,enemy,dmg,'player',mirror?0:1.5);chainElectric(state,enemy);laserStun(state,enemy);hit=true;
+          castHits.add(enemy.id);damageEnemy(state,enemy,dmg,'player',mirror?0:1.5);chainElectric(state,enemy);laserStun(state,enemy);hit=true;
           if(enemy.hp<=0)killEnemy(state,state.enemies.indexOf(enemy));
         }
       }
@@ -4043,6 +4222,8 @@ export function useLaser(state: GameState) {
     laserHit=emit(state.rubyTileX,state.rubyTileY,.35,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,true)||laserHit;
   }
   for(const beam of state.laserBeams.slice(firstBeam))beam.solar=solarBlessingReady(state);
+  if (state.constellations.includes('laserChain')) state.laserMomentum = castHits.size;
+  if (state.constellations.includes('laserPull') && castHits.size >= 2) pullLaserGroup(state, castHits);
   state.laserCooldown = (state.build.siriusRefreshSerial??0)!==refreshBefore?0:LASER_COOLDOWN * (state.constellations.includes('laserRate') ? 0.85 : 1);
   playSFX_laser();
   if (laserHit) playSFX_alienHit();
@@ -4097,7 +4278,7 @@ function fireWave(state: GameState) {
         e.pushDirY = Math.round(edy / len);
         if (e.pushDirX === 0 && e.pushDirY === 0) e.pushDirX = 1;
         e.pushTiles = push;
-        e.buildWallDamage=state.constellations.includes('wallSlam')&&!isBossType(e.type)?dmg*mult*.5:undefined;
+        e.buildWallDamage=state.constellations.includes('wallSlam')&&!isBossType(e.type)?dmg*mult*.75:undefined; // Sculptor: 75% of the Wave on a wall slam
         if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e));
       }
     }
@@ -4155,7 +4336,7 @@ function detonateBomb(state:GameState) {
     const refreshBefore=state.build.siriusRefreshSerial??0;
     blessingAttack(state,'bomb');
     const radius = getBombRadius(state, powered);
-    const dmg = (powered ? BOMB_DMG_PWR : BOMB_DMG) * (1 + 0.2 * constellationBonus(state, 'bombDamage'));
+    const dmg = (powered ? BOMB_DMG_PWR : BOMB_DMG) * (1 + 0.25 * constellationBonus(state, 'bombDamage'));
 
     const bx = state.bomb.tileX, by = state.bomb.tileY;
     playSFX_bomb();
@@ -4205,6 +4386,7 @@ function detonateBomb(state:GameState) {
 
 export function toggleCarryRuby(state: GameState) {
   if (state.gamePhase !== 'playing') return;
+  if (state.rubyStolenBy !== undefined) return; // a Snatcher holds her: defeat it first
   if (state.playerCarryingRuby) {
     state.rubyTileX = state.playerTileX;
     state.rubyTileY = state.playerTileY;
@@ -4304,6 +4486,7 @@ export function canHealRuby(state: GameState): boolean {
 }
 
 export function healRuby(state: GameState): boolean {
+  if (state.rubyStolenBy !== undefined) return false;
   if (state.sun && sunStationNearPlayer(state)) return false; // Space charges a nearby cooling station instead
   if (!canHealRuby(state)) return false;
   if (state.rubyHealCooldown > 0) return false;
@@ -4331,6 +4514,10 @@ function takeNextNaturalBoss(state: GameState): BossType {
   const block=Math.floor(state.bossesKilled/BOSS_TYPES.length);
   if(block!==state.bossPoolBlock||state.bossPool.length===0){state.bossPool=[...BOSS_TYPES];state.bossPoolBlock=block;}
   const active=new Set(state.enemies.filter(e=>e.hp>0&&isBossType(e.type)).map(e=>e.type));
+  // First-time players (desktop profile with no Endless King defeat) always meet the Fiery King first; random after that.
+  if(state.mode==='endless'&&state.bossesKilled===0&&!active.has('fiery_king')&&isDesktop()&&!getProfile().defeated.includes('fiery_king')){
+    state.bossPool=state.bossPool.filter(type=>type!=='fiery_king');state.lastNaturalBoss='fiery_king';return 'fiery_king';
+  }
   let available=state.bossPool.filter(type=>!active.has(type));
   if(!available.length){state.bossPool=BOSS_TYPES.filter(type=>!active.has(type));available=state.bossPool;}
   const choices=available.length>1?available.filter(type=>type!==state.lastNaturalBoss):available;
@@ -4370,7 +4557,9 @@ function detonateSupernova(state: GameState) {
 
 // ─── Main tick ───────────────────────────────────────────────────────────────
 
-export const ENDLESS_BOSS_OVERLAP_TICKS=90*60;
+export const ENDLESS_BOSS_OVERLAP_TICKS=80*60;
+export const LATE_BOSS_OVERLAP_STAGE=30, LATE_BOSS_OVERLAP_TICKS=60*60; // from stage 30 a second boss can join sooner
+export function bossOverlapTicks(state:GameState){return state.bossesKilled>=LATE_BOSS_OVERLAP_STAGE?LATE_BOSS_OVERLAP_TICKS:ENDLESS_BOSS_OVERLAP_TICKS;}
 export function countBossEncounters(state:GameState,ignore?:Enemy):number {
   return new Set(state.enemies.filter(e=>e!==ignore&&e.hp>0&&isBossType(e.type)).map(e=>e.encounterId??e.twin?.pairId??e.id)).size;
 }
@@ -4406,6 +4595,7 @@ export function tick(state: GameState) {
     if(state.lunarDecoy.invulnerableTicks>0)state.lunarDecoy.invulnerableTicks--;
   }
   if (state.ascensionBannerTicks > 0) state.ascensionBannerTicks--;
+  updateAlienIntros(state);
   state.specialEffects = state.specialEffects.filter(fx => --fx.ticks > 0);
   if (state.venusVeilTicks > 0) state.venusVeilTicks--;
   if (state.mirrorTwinTicks > 0) state.mirrorTwinTicks--;
@@ -4434,15 +4624,29 @@ export function tick(state: GameState) {
   if (state.waveCooldown > 0) state.waveCooldown -= chillRate;
   if (state.speedCooldown > 0) state.speedCooldown--;
   if (state.bombCooldown > 0 && --state.bombCooldown === 0) playUiSfx('bombReady'); // the bomb is ready again
-  if (state.speedActiveTicks > 0) state.speedActiveTicks--;
+  if (state.speedActiveTicks > 0) {
+    state.speedActiveTicks--;
+    // Carrying Ruby: boosts run out faster so they last CARRY_BOOST_MULT as long (fractional extra ticks carry over).
+    if (state.playerCarryingRuby && state.speedActiveTicks > 0) {
+      state.carryBoostDrain = (state.carryBoostDrain ?? 0) + 1 / CARRY_BOOST_MULT - 1;
+      if (state.carryBoostDrain >= 1) { const extra = Math.floor(state.carryBoostDrain); state.carryBoostDrain -= extra; state.speedActiveTicks = Math.max(0, state.speedActiveTicks - extra); }
+    }
+  }
   if (state.speedFlashTicks > 0) state.speedFlashTicks--;
   if (state.rubyPlacedFlashTicks > 0) state.rubyPlacedFlashTicks--;
   if (state.playerCastTicks > 0 && --state.playerCastTicks === 0) state.playerCastKind = null;
   if (state.specialLockTicks > 0) state.specialLockTicks--;
   if (state.runnerEnergyFlashTicks > 0) state.runnerEnergyFlashTicks--;
+  if ((state.bleedingUntil ?? 0) > state.gameTick && state.playerShieldHP > 0) state.playerShieldHP = Math.max(0, state.playerShieldHP - BLEEDER.shieldDrainPerSecond / 60);
+  if ((state.regenUntil ?? 0) > state.gameTick && state.gameTick % BLEEDER.regenEvery === 0) healPlayer(state, 1, false);
+  if (state.rubyStolenBy !== undefined) {
+    const holder = state.enemies.find(en => en.id === state.rubyStolenBy && en.hp > 0);
+    if (!holder) state.rubyStolenBy = undefined;
+    else { state.rubyTileX = holder.tileX; state.rubyTileY = holder.tileY; damageRuby(state, SNATCHER.rubyDrainPerSecond / 60, undefined, true); }
+  }
   if (state.playerFrozenTicks > 0) {
     state.playerFrozenTicks--;
-    if (state.playerFrozenTicks === 0) playSFX_thaw();
+    if (state.playerFrozenTicks === 0) { if (!state.playerStunned) playSFX_thaw(); state.playerStunned = false; }
   }
   if (state.teleportCooldown > 0) state.teleportCooldown--;
   if (state.poweredTicks > 0) state.poweredTicks--;
@@ -4465,7 +4669,7 @@ export function tick(state: GameState) {
   const encounters=countBossEncounters(state);
   const overlapping=(state.mode==='endless'||state.mode==='ascension')&&state.bossesKilled>=20;
   if(overlapping&&encounters>0)state.bossOverlapTicks++;
-  const overlapDue=overlapping&&encounters>0&&state.bossOverlapTicks>=ENDLESS_BOSS_OVERLAP_TICKS-BOSS_WARNING_TICKS;
+  const overlapDue=overlapping&&encounters>0&&state.bossOverlapTicks>=bossOverlapTicks(state)-BOSS_WARNING_TICKS;
   if (!state.noBossSpawns && (state.difficultyLevel >= 1 || state.trial) && encounters<(overlapping?2:1) && (encounters===0||overlapDue)) {
     if (state.bossWarningTicks > 0) {
       state.bossWarningTicks--;
@@ -4567,6 +4771,15 @@ export function tick(state: GameState) {
 
   // Meteorite
   if (!state.trial?.mapOnly) updateMeteorite(state);
+  if (state.craterField) { // Crater: heal the player standing in the struck room, in short pulses
+    if (--state.craterField.ticks <= 0 || !state.constellations.includes('meteorHeal')) state.craterField = null;
+    else if (state.gameTick % CRATER.pulseTicks === 0) {
+      const room = state.craterField.chamber, playerIn = chamberOfTile(state.playerTileX, state.playerTileY) === room;
+      if (playerIn) healPlayer(state, CRATER.healPerPulse, false);
+      // Ruby heals too: placed in the room, or carried by the player inside it.
+      if (state.playerCarryingRuby ? playerIn : state.rubyTileX !== -1 && chamberOfTile(state.rubyTileX, state.rubyTileY) === room) healCore(state, CRATER.healPerPulse);
+    }
+  }
   if (state.mode === 'endless' || state.mode === 'ascension') updateComet(state);
 
   // Resource spawn
@@ -4575,6 +4788,8 @@ export function tick(state: GameState) {
     state.resourceTimer = 0;
     spawnResource(state);
   }
+
+  updateEnemyShots(state);
 
   // Update bullets
   for (let i = state.laserBullets.length - 1; i >= 0; i--) {
@@ -4587,7 +4802,7 @@ export function tick(state: GameState) {
       state.laserBullets.splice(i, 1);
       continue;
     }
-    const dmg = b.blessingDamage ?? (b.powered ? BULLET_DMG_PWR : BULLET_DMG) * (1 + 0.25 * constellationBonus(state, 'bullets')) * (b.mirror ? SPECIAL_TWIN_DAMAGE_MULT : 1) * (b.damageScale??1);
+    const dmg = b.blessingDamage ?? (b.powered ? BULLET_DMG_PWR : BULLET_DMG) * (1 + 0.25 * constellationBonus(state, 'bullets')) * (b.mirror ? SPECIAL_TWIN_DAMAGE_MULT : 1) * (b.damageScale??1) * ((state.bulletStunUntil ?? 0) > state.gameTick ? SHOOTER.rewardBulletMult : 1);
     const btx = Math.floor(b.x), bty = Math.floor(b.y);
     if (!b.mirror && isMoonMirror(state, btx, bty) && (btx !== state.playerTileX || bty !== state.playerTileY)) {
       moonReflect(state, btx, bty, dmg); state.laserBullets.splice(i, 1); continue; // bounced back into you
@@ -4598,11 +4813,12 @@ export function tick(state: GameState) {
       if (!e || e.id===b.avoidEnemyId || (e.twin?.downedTicks ?? 0) > 0) continue;
       if (isSeaChanterDiving(e)) continue;
       if (Math.abs(e.tileX + 0.5 - b.x) < 0.6 && Math.abs(e.tileY + 0.5 - b.y) < 0.6) {
-        // Heavy bullets (every 20th shot): +20% damage and a one-tile push for regular aliens.
+        // Heavy bullets (every 20th shot): double damage and a one-tile push for regular aliens.
         const heavy = !!b.heavy && !b.blessingDecoy;
         const hitDmg = heavy ? dmg * BULLET_HEAVY_MULT : dmg;
         damageEnemy(state, e, hitDmg,b.blessingDecoy?'summon':'player',!b.blessingDecoy&&!b.mirror&&!b.blessingCopy?.5:0);
         if(!b.blessingDecoy){buildBulletHit(state,e,hitDmg);chainElectric(state,e);}
+        if(!b.blessingDecoy&&(state.bulletStunUntil??0)>state.gameTick&&e.hp>0)e.buildStopUntil=Math.max(e.buildStopUntil??0,state.gameTick+(isBossType(e.type)?SHOOTER.rewardBossStunTicks:SHOOTER.rewardStunTicks)); // Shooter reward
         if (heavy && e.hp > 0 && !isBossType(e.type)) {
           const horizontal = Math.abs(b.dx) >= Math.abs(b.dy);
           e.pushDirX = horizontal ? Math.sign(b.dx) || 1 : 0; e.pushDirY = horizontal ? 0 : Math.sign(b.dy) || 1;
@@ -4896,7 +5112,7 @@ export function useSpecialSkill(state: GameState): boolean {
     state.enemies.forEach(e=>e.pathTimer=0);return true;
   }
   if (kind === 'sea_chanter') {
-    const heal = SPECIAL_CHANTER_HEAL + SPECIAL_SUSTAIN_PER_STAGE * skillStage(state); // grows with the stage, up to the cap
+    const heal = sustainSkillAmount(state, SPECIAL_CHANTER_HEAL);
     healPlayer(state, heal); healCore(state, heal);
     for (const enemy of state.enemies) {
       if (enemy.hp <= 0 || Math.hypot(enemy.x-state.playerX, enemy.y-state.playerY)>SPECIAL_CHANTER_RADIUS) continue;
@@ -4909,7 +5125,7 @@ export function useSpecialSkill(state: GameState): boolean {
   }
   if (kind === 'blind_prayer') {
     playSFX_powerUp();
-    state.starEnergy=0;state.stellarPowerBonusTicks=0;state.poweredTicks=Math.max(state.poweredTicks,SPECIAL_PRAYER_DURATION+60*constellationBonus(state,'power')+(hasBlessing(state,'blind_prayer')?60:0));
+    state.starEnergy=0;state.stellarPowerBonusTicks=0;state.poweredTicks=Math.max(state.poweredTicks,SPECIAL_PRAYER_DURATION+60*constellationBonus(state,'power')+(hasBlessing(state,'blind_prayer')?BLESSING.amberPowerTicks:0));
     state.laserCooldown=0;state.bulletCooldown=0;state.waveCooldown=0;
     state.bombCooldown=0;state.speedCooldown=0;
     grantInstantSpeedBoost(state, false);return true;
@@ -4926,7 +5142,7 @@ export function useSpecialSkill(state: GameState): boolean {
     return true;
   }
   if (kind === 'frost_warden') {
-    const shield = SPECIAL_WARDEN_SHIELD + SPECIAL_SUSTAIN_PER_STAGE * skillStage(state); // grows with the stage, up to the cap
+    const shield = sustainSkillAmount(state, SPECIAL_WARDEN_SHIELD);
     if (state.saturn) { grantSaturnShield(state, 'player', shield); grantSaturnShield(state, 'ruby', shield); }
     else { state.playerShieldHP = Math.max(state.playerShieldHP, shield); state.rubyShieldHP = Math.max(state.rubyShieldHP, shield); }
     state.playerSaturnShield=true;state.rubySaturnShield=true;
@@ -5019,7 +5235,8 @@ export function useBullet(state: GameState) {
   const powered = checkAndConsumePower(state);
 
   fireBulletFrom(state, state.playerTileX, state.playerTileY, state.playerX / TILE_SIZE, state.playerY / TILE_SIZE, powered, false);
-  const heavy = (state.bulletShotCount = (state.bulletShotCount ?? 0) + 1) % BULLET_HEAVY_EVERY === 0;
+  const heavyEvery = state.constellations.includes('heavyShot') ? BULLET_HEAVY_EVERY_MONOCEROS : BULLET_HEAVY_EVERY;
+  const heavy = (state.bulletShotCount = (state.bulletShotCount ?? 0) + 1) % heavyEvery === 0;
   if (heavy) {
     for (const bullet of state.laserBullets.slice(firstBullet)) bullet.heavy = true; // the player's own shot, not twin or Ruby copies
     playAudioOneShot('/sounds/laserBullet.mp3', .9 * ATTACK_SFX_VOLUME, .7);

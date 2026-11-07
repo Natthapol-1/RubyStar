@@ -58,9 +58,9 @@ test('debug spawns do not consume the natural pool and restart clears it',()=>{
  const s=fresh();s.bossPool=['fiery_king','blind_prayer'];e.godSpawnBoss(s,'sea_chanter');assert.deepEqual(s.bossPool,['fiery_king','blind_prayer']);
  assert.deepEqual(e.createInitialState().bossPool,[]);
 });
-test('carried movement is sixty percent of normal and still respects walls',()=>{
+test('carried movement uses the carry speed multiplier and still respects walls',()=>{
  const s=fresh();e.toggleCarryRuby(s);const start=s.playerX;s.playerQueuedDirX=1;
- e.tick(s);e.tick(s);close(s.playerX-start,c.PLAYER_BASE_SPEED*.6*c.MOVE_SPEED_MULT);
+ e.tick(s);e.tick(s);close(s.playerX-start,c.PLAYER_BASE_SPEED*c.PLAYER_CARRY_MULT*c.MOVE_SPEED_MULT);
  const wall=fresh();e.toggleCarryRuby(wall);wall.map[10][11]=c.T_WALL;wall.playerQueuedDirX=1;const originalX=wall.playerX;
  for(let i=0;i<30;i++)e.tick(wall);close(wall.playerX,originalX);
 });

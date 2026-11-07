@@ -130,7 +130,7 @@ test('Lunar Echo draws direct boss attacks away from player and Ruby, restoring 
  player(s,14,10);const x=s.playerX,y=s.playerY;s.rubyTileX=11;s.rubyTileY=11;
  for(let i=0;i<11;i++){if(i>0){king.attackTimer=100000;for(let j=0;j<c.SPECIAL_QUEEN_DECOY_INVULNERABILITY;j++)engine.tick(s);}king.attackTimer=0;engine.tick(s);assert.equal(s.playerHP,100);assert.equal(s.rubyHP,100);assert.equal(s.playerX,x);assert.equal(s.playerY,y);assert.equal(s.enemyDecoyActive,false);}
  assert.equal(s.lunarDecoy.hitsLeft,1);king.attackTimer=100000;for(let j=0;j<c.SPECIAL_QUEEN_DECOY_INVULNERABILITY;j++)engine.tick(s);king.attackTimer=0;engine.tick(s);assert.equal(s.lunarDecoy,null);assert.equal(s.playerHP,100);
- s.playerCarryingRuby=true;s.rubyTileX=s.rubyTileY=-1;position(king,11,10);king.attackTimer=0;s.godMode=false;engine.tick(s);assert.equal(s.playerHP,60);
+ s.playerCarryingRuby=true;s.rubyTileX=s.rubyTileY=-1;position(king,11,10);king.attackTimer=0;s.godMode=false;engine.tick(s);assert.ok(Math.abs(s.playerHP-(100-40*c.CARRY_DAMAGE_MULT))<1e-9); // carrying: less damage
 });
 test('Lunar Echo attracts ranged Queen and Sniper attacks and does not expire on a timer',()=>{
  for(const type of ['splitter_queen','sniper']){

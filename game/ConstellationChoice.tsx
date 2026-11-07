@@ -3,7 +3,10 @@
 import BlessingGem from './BlessingGem';
 
 
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+
+/** Choices ignore input this long after they appear, so held or spammed attack clicks can't pick by accident. */
+export const CHOICE_ARM_MS = 500;
 import { CONSTELLATIONS, type Constellation } from './engine';
 import { CELESTIAL_BLESSINGS, type CelestialBlessing } from './endless-builds';
 
@@ -28,6 +31,10 @@ export const CONSTELLATION_STARS: Record<Constellation, [number, number][]> = {
   bulletMark: [[16,16],[56,16],[56,52],[16,52],[16,16],[36,32]],
   boostCharge: [[12,44],[28,44],[28,24],[44,24],[44,12],[68,12]],
   rubyLaser: [[12,32],[36,12],[36,52],[60,32],[12,32]],
+  heavyShot: [[12,52],[28,40],[44,44],[52,28],[68,8],[52,28],[36,20]],
+  laserPull: [[40,8],[12,56],[68,56],[40,8],[40,36]],
+  meteorHeal: [[16,20],[28,36],[24,52],[48,52],[56,36],[68,20],[56,36],[28,36]],
+  laserChain: [[12,20],[28,32],[44,20],[60,32],[44,44],[28,32],[20,52]],
   laserRate: [[12, 40], [28, 12], [44, 36], [64, 20]],
   waveReach: [[12, 16], [28, 40], [44, 20], [60, 44]],
   bombDamage: [[16, 16], [60, 52], [20, 52], [60, 16]],
@@ -77,6 +84,15 @@ export default function ConstellationChoice<K extends Constellation|CelestialBle
     panel.current?.querySelector('button')?.focus();
     return () => previous?.focus();
   }, []);
+  const [armed, setArmed] = useState(toggleMode);
+  const choiceKey = choices.join(',');
+  useEffect(() => {
+    if (toggleMode) return;
+    setArmed(false);
+    const timer = window.setTimeout(() => setArmed(true), CHOICE_ARM_MS);
+    return () => window.clearTimeout(timer);
+  }, [choiceKey, toggleMode]);
+  const choose = (kind: K) => { if (armed) onChoose(kind); };
 
   return <div className={"constellation-backdrop"+(toggleMode?" toggle-mode":"")+(blessing?" blessing-mode":"")} onContextMenu={e => e.preventDefault()}
     onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
@@ -92,17 +108,17 @@ export default function ConstellationChoice<K extends Constellation|CelestialBle
         }
         if (toggleMode && e.key === 'Escape') { e.preventDefault(); onClose?.(); }
         if (!toggleMode && !e.repeat && (blessing?/^[0-9]$/.test(e.key):['1','2','3'].includes(e.key))) {
-          e.preventDefault(); const choice = choices[e.key==='0'?9:Number(e.key)-1]; if (choice) onChoose(choice);
+          e.preventDefault(); const choice = choices[e.key==='0'?9:Number(e.key)-1]; if (choice) choose(choice);
         }
         e.stopPropagation();
       }}>
       {toggleMode && <div className="toggle-header"><strong>{blessing?'CELESTIAL BLESSINGS':'CONSTELLATIONS'}</strong><button type="button" onClick={onClose}>DONE</button></div>}
       {blessing&&!toggleMode&&<h2>CELESTIAL BLESSING</h2>}
-      <div className="constellation-cards">
+      <div className="constellation-cards" aria-busy={!armed} style={{ opacity: armed ? 1 : .7, transition: 'opacity .2s' }}>
         {choices.map((kind, index) => {
           const upgrade = (blessing?CELESTIAL_BLESSINGS:CONSTELLATIONS)[kind as never] as {name:string;description:string;color:string;celestial?:string};
           const points = CONSTELLATION_STARS[kind as Constellation];
-          return <button key={kind} type="button" data-constellation={blessing?undefined:kind} data-blessing={blessing?kind:undefined} aria-pressed={toggleMode?active.includes(kind):undefined} className={toggleMode&&active.includes(kind)?"is-active":undefined} onClick={() => onChoose(kind)} style={{ '--star-color': upgrade.color } as CSSProperties}>
+          return <button key={kind} type="button" data-constellation={blessing?undefined:kind} data-blessing={blessing?kind:undefined} aria-pressed={toggleMode?active.includes(kind):undefined} className={toggleMode&&active.includes(kind)?"is-active":undefined} onClick={() => choose(kind)} style={{ '--star-color': upgrade.color } as CSSProperties}>
             {blessing?<BlessingGem kind={kind as CelestialBlessing}/>:<svg viewBox="0 0 80 68" aria-hidden="true" shapeRendering="crispEdges">
               <g className="constellation-links" fill="currentColor" opacity=".65">
                 {constellationLinks(points).map(([x, y]) => <rect key={`${x},${y}`} x={x - 1} y={y - 1} width="2" height="2" />)}

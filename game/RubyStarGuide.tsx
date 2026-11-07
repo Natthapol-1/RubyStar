@@ -52,11 +52,11 @@ export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{s
 
       <div className="rs-guide-grid">
         <section className="rs-guide-section"><h4>RUBY & HEALING</h4>
-          <p>Carrying Ruby slows you. With no enemies near, use {bindingLabel('heal')} by Ruby to heal both.</p>
+          <p>Carrying Ruby slows you and shortens speed boosts, but you take 10% less damage and get pushed half as far. With no enemies near, use {bindingLabel('heal')} by Ruby to heal both.</p>
         </section>
         <section className="rs-guide-section"><h4>METEORS</h4>
           <p>Meteors move clockwise and hit everything in the chamber. Get Ruby out of the flashing one.</p>
-          <p>Comets hit a small marked area in your room. Step out before they land.</p>
+          <p>From stage 3, comets hit a small marked area near you and briefly stun you. Step out before they land.</p>
         </section>
         <section className="rs-guide-section"><h4>TELEPORT</h4>
           <p>Use {bindingLabel('teleport')} at a pad to pick a chamber. Carried Ruby comes along.</p>
@@ -75,10 +75,10 @@ export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{s
       <section className="rs-guide-section"><h4>CONSTELLATIONS</h4>
         <p>Every 3 stages, choose one of 3 upgrades for the run.</p>
       </section>
-      <section className="rs-guide-section"><h4>ASCENSION</h4>
+      <section className="rs-guide-section"><h4>ASCENSION (STAGE 10+)</h4>
         <p>From stage 10, boss kills give a one-use celestial skill ({bindingLabel('celestial')}). Hold one at a time.</p>
       </section>
-      <section className="rs-guide-section"><h4>ENDLESS · STAGE 20+</h4><p>A new boss can join 90 seconds after the last one arrived. Up to two can be active.</p><p>Choose a celestial blessing at stage 20 and every 10 stages after.</p></section>
+      <section className="rs-guide-section"><h4>TRANSCENDENCE (STAGE 20+)</h4><p>Bosses can stack up if you don't defeat them in time.</p><p>Choose a celestial blessing at stage 20 and every 10 stages after.</p></section>
       <section className="rs-guide-hints"><h4>HINTS</h4>
         <ul>
           <li>Teleport out with Ruby and leave aliens in the meteor blast.</li>
@@ -90,7 +90,7 @@ export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{s
       <section aria-labelledby="rs-aliens-title"><h4 id="rs-aliens-title" className="rs-guide-group-title">ALIENS</h4>
         <div className="rs-guide-grid">
           {aliens.map(alien => <article key={alien.type} className="rs-guide-entry" style={{ borderLeftColor: ENEMY_CONFIGS[alien.type].color }}>
-            <EnemyPortrait type={alien.type}/><h5 style={{ color: ENEMY_CONFIGS[alien.type].color }}>{alien.name}</h5><p>{alien.description}</p>
+            <EnemyPortrait type={alien.type}/><h5 style={{ color: ENEMY_CONFIGS[alien.type].color }}>{alien.name}</h5><p>{alien.description}</p>{alien.reward && <p className="rs-guide-reward">Killing buff: {alien.reward}</p>}
           </article>)}
         </div>
       </section>

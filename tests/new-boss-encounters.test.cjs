@@ -328,7 +328,7 @@ test('shield opening and cosmetic effects pause, expire, and clear on debug repl
   s.map = s.map.map(row => row.map(() => c.T_FLOOR));
   e.godSpawnBoss(s, 'astral_twins'); assert.equal(s.encounterEffects.length, 0);
   const [a, b] = s.enemies; position(a, 11, 10); position(b, 16, 16); a.attackTimer = b.attackTimer = 0;
-  e.tick(s); assert.ok(s.encounterEffects.some(fx => fx.kind === 'melee')); ticks(s, 36);
+  e.tick(s); assert.ok(s.encounterEffects.some(fx => fx.kind === 'melee')); s.playerKnockback = null; ticks(s, 36); // keep the player in Dusk's range
   assert.ok(s.encounterEffects.some(fx => fx.kind === 'shot'));
   e.godSetNoBossSpawns(s, true); assert.equal(s.encounterEffects.length, 0); assert.equal(s.enemies.length, 0);
 });
@@ -360,7 +360,7 @@ test('each twin uses its selected attack cue and revival plays only when the fal
   try {
     const s = fresh('astral_twins'), [a, b] = s.enemies; s.map = s.map.map(row => row.map(() => c.T_FLOOR));
     position(a, 11, 10); position(b, 16, 16); a.attackTimer = b.attackTimer = 0;
-    e.tick(s); assert.equal(played.filter(src => src === '/sounds/celestial/jupiter-storm.wav').length, 1);
+    e.tick(s); s.playerKnockback = null; assert.equal(played.filter(src => src === '/sounds/celestial/jupiter-storm.wav').length, 1); // keep the player in Dusk's range
     assert.equal(played.filter(src => src === '/sounds/dusk-attack.mp3').length, 0);
     ticks(s, 36); assert.equal(played.filter(src => src === '/sounds/dusk-attack.mp3').length, 1);
     assert.equal(played.filter(src => src === '/sounds/celestial/neptune-electric.wav').length, 1);
