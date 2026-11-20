@@ -137,6 +137,12 @@ test('bomb damage upgrade affects enemy damage and self damage while preserving 
  const s=fresh(['bombDamage']),a=enemy(s);s.bomb={tileX:10,tileY:10,powered:false};s.rubyTileX=s.rubyTileY=10;e.useBomb(s);
  near(a.hp,100-c.BOMB_DMG*1.25);assert.equal(s.playerHP,100-Math.floor(c.BOMB_DMG*1.25*.35));assert.equal(s.rubyHP,100);
 });
+test('Scutum: your own bombs no longer hurt you, even with Scorpius, and still hit aliens',()=>{
+ for(const powered of [false,true]){
+  const s=fresh(['bombSafe','bombDamage']),a=enemy(s);s.poweredTicks=powered?100:0;s.bomb={tileX:10,tileY:10,powered};e.useBomb(s);
+  assert.equal(s.playerHP,100);assert.ok(a.hp<100);
+ }
+});
 test('longer speed bursts apply to manual, powered and free energy-shard boosts',()=>{
  for(const powered of [false,true]){const s=fresh(['burstDuration']);s.poweredTicks=powered?100:0;e.useSpeedBoost(s);assert.equal(s.speedActiveTicks,(powered?c.SPEED_DURATION_PWR:c.SPEED_DURATION)*1.25);}
  const s=fresh(['burstDuration']);s.resources=[{type:'energy',tileX:10,tileY:10}];e.tick(s);assert.equal(s.speedActiveTicks,c.SPEED_DURATION*1.25);

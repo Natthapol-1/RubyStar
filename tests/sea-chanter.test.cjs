@@ -75,7 +75,7 @@ test('song locks aim, travels before hitting, and deals center splash damage wit
  const {state,sea}=fresh();state.godMode=false;position(sea,10,5);sea.sea.songCooldown=0;engine.tick(state);
  assert.equal(sea.sea.songWindupTicks,constants.SEA_SONG_WINDUP);const aim=sea.sea.songAimX;assert.equal(state.playerHP,100);
  for(let i=0;i<constants.SEA_SONG_WINDUP;i++)engine.tick(state);assert.ok(state.seaSongWaves.length>0);assert.equal(sea.sea.songAimX,aim);assert.equal(state.playerHP,100);
- for(let i=0;i<45;i++)engine.tick(state);assert.equal(state.playerHP,85);assert.equal(state.rubyHP,100);
+ for(let i=0;i<45;i++)engine.tick(state);assert.equal(state.playerHP,85);assert.ok(state.rubyHP<100,'a placed Ruby inside the burst is hit too');
 });
 
 test('diving cancels singing and dead casters cannot regenerate',()=>{
@@ -266,4 +266,14 @@ test('fully shielded underwater hits and surfaced hits do not block diving recov
  assert.equal(sea.hp,50);assert.equal(sea.sea.healingBlockedUntilTick,0);
  sea.icyShieldHP=0;sea.hp=sea.maxHp;sea.sea.mode='hunting';state.laserCooldown=0;engine.useLaser(state);
  assert.equal(sea.sea.healingBlockedUntilTick,0);
+});
+
+test('she chases you first: a placed Ruby only when it is in her chamber and you are not',()=>{
+ const {state,sea}=fresh();state.map=state.map.map(r=>r.slice());
+ const [r1,c1]=constants.CHAMBER_BOUNDS[0],[s1,d1]=constants.CHAMBER_BOUNDS[3];
+ position(sea,c1+3,r1+3);state.rubyTileX=c1+6;state.rubyTileY=r1+6;state.playerCarryingRuby=false;
+ Object.assign(state,{playerTileX:d1+3,playerTileY:s1+3,playerX:(d1+3.5)*48,playerY:(s1+3.5)*48});sea.pathTimer=0;engine.tick(state);
+ assert.equal(sea.targeting,'ruby','Ruby in her chamber, you elsewhere');
+ Object.assign(state,{playerTileX:c1+8,playerTileY:r1+8,playerX:(c1+8.5)*48,playerY:(r1+8.5)*48});sea.pathTimer=0;engine.tick(state);
+ assert.equal(sea.targeting,'player','you in her chamber: you, even beside Ruby');
 });

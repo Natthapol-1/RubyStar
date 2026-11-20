@@ -84,6 +84,7 @@ test('Trial: only the guardian spawns, its skill recharges after each cast, and 
 test('Trial: multi-body guardians win only when the whole encounter is defeated',()=>{
  const s=engine.createModeState('trial','astral_twins');s.noMobs=true;s.godMode=true;
  engine.godSpawnBoss(s,'astral_twins');const [a,b]=s.enemies.filter(e=>e.type==='astral_twins');
+ s.binary.phase=3; // Binary Star: the pair's last life (earlier lives are covered in binary.test.cjs)
  a.hp=0;engine.tick(s);assert.equal(s.gamePhase,'playing','one twin down is not a win');
  b.hp=0;engine.tick(s);assert.equal(s.gamePhase,'won');
 });

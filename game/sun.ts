@@ -1,10 +1,13 @@
+import { stopSunHeatWarning, stopSunburstWarning } from './event-audio';
 import { ENEMY_CONFIGS, MOVE_SPEED_MULT, SUN, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, CHAMBER_LABELS, chamberOfTile } from './constants';
-import { stormSlowMultiplier, bfs, createEncounterEnemy, grantInstantSpeedBoost, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healCore, healPlayer, killEnemy, playAudioOneShot, playCelestialSound, type Enemy, type GameState } from './engine';
+import { godPhaseClock, stormSlowMultiplier, bfs, createEncounterEnemy, grantInstantSpeedBoost, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healCore, healPlayer, killEnemy, playAudioOneShot, playCelestialSound, type Enemy, type GameState } from './engine';
 import { playUiSfx } from './ui-sfx';
 
-export interface CoolingStation { id: number; x: number; y: number; charge: number; blocked: boolean }
+export interface CoolingStation { id: number; x: number; y: number; charge: number; blocked: boolean; sapped?: boolean }
 export interface SunState {
   phase: 1 | 2 | 3; bossId: number; heat: number; rage: number;
+  kingSlowTicks?: number; // C hit: temporary movement slow on the King
+  rageCalmTicks?: number; // C hitting the King temporarily removes his rage-growth bonus
   heatWarningTimer: number;
   noWisps: boolean; // debug: independent from regular alien spawning
   stations: CoolingStation[]; charging: boolean; chargeSoundTimer: number; waveCooldown: number;
@@ -15,7 +18,8 @@ export interface SunState {
   trailPulse: number; kingTile: number; // ticks to the next burn check; the tile he last stood on
   flare: { room: number; ticks: number } | null; flareTimer: number; // phase 3: the marked room and its countdown
   flareFlash: { room: number; ticks: number; defused: boolean } | null; // visual: the flare going off, or defused
-  sapperTimer: number; // phase 2+: ticks until the next Scorch Sapper
+  spitterHits?: {x:number;y:number;ticks:number}[];
+  sapperTimer: number; // phase 3: ticks until the next Scorch Sapper
 }
 
 export function sunBoss(state: GameState) { return state.enemies.find(e => e.id === state.sun?.bossId && e.hp > 0); }
@@ -37,6 +41,7 @@ function freeTile(state: GameState, exclude?: CoolingStation, room?: number): [n
 }
 
 export function createSunState(state: GameState) {
+  stopSunHeatWarning(); stopSunburstWarning();
   state.sun = { phase: 1, bossId: -1, heat: 50, rage: 0, heatWarningTimer: 0, noWisps: false, stations: [], charging: false, chargeSoundTimer: 0, waveCooldown: 0,
     quenchedTicks: 0, empoweredCasts: 0, eruptionTicks: 0, wispTimer: SUN.wispGap, bossWispTimer: SUN.bossWispGap, ripples: [], burning: [], trailPulse: SUN.trailGap, kingTile: -1,
     flare: null, flareTimer: SUN.flareGap[0], flareFlash: null, sapperTimer: SUN.sapperGap };
@@ -50,7 +55,7 @@ export function createSunState(state: GameState) {
 
 export function initializeSunBoss(state: GameState, boss: Enemy) {
   const sun = state.sun!; sun.bossId = boss.id; sun.phase = 1;
-  sun.rage = 0; sun.quenchedTicks = 0; sun.empoweredCasts = 0;
+  sun.rage = 0; sun.rageCalmTicks = 0; sun.kingSlowTicks = 0; sun.quenchedTicks = 0; sun.empoweredCasts = 0;
   boss.hp = boss.maxHp = SUN.phaseHP * 3;
 }
 
@@ -71,6 +76,10 @@ export function spawnSunWisps(state: GameState, count: number, near?: Enemy) {
   }
 }
 
+function stationSapped(state:GameState,station:CoolingStation) {
+  return state.enemies.some(e=>e.type==='scorch_sapper'&&e.hp>0&&(e.buildStopUntil??0)<=state.gameTick&&e.tileX===e.targetTileX&&e.tileY===e.targetTileY&&Math.max(Math.abs(e.tileX-station.x),Math.abs(e.tileY-station.y))<=1);
+}
+
 export function sunStationNearPlayer(state: GameState) {
   return state.sun?.stations.filter(s => Math.hypot(s.x - state.playerX / TILE_SIZE + .5, s.y - state.playerY / TILE_SIZE + .5) <= SUN.stationReach)
     .sort((a, b) => Math.hypot(a.x - state.playerTileX, a.y - state.playerTileY) - Math.hypot(b.x - state.playerTileX, b.y - state.playerTileY))[0];
@@ -78,6 +87,7 @@ export function sunStationNearPlayer(state: GameState) {
 
 function quenchBoss(state: GameState) {
   const sun = state.sun!, boss = sunBoss(state); if (!boss || sun.quenchedTicks > 0) return;
+  stopSunHeatWarning(); stopSunburstWarning();
   sun.heatWarningTimer = 0; sun.heat = 0; sun.quenchedTicks = SUN.quenchTicks; sun.empoweredCasts = 5; sun.waveCooldown = 0; sun.rage = 0; sun.burning = []; // his trail goes out with him
   sun.flare = null; sun.flareTimer = nextFlareGap(); // and no flare is pending while he is out
   boss.king = { untouchedTicks: 0, arenaWindupTicks: 0 }; boss.path = []; boss.pushTiles = 0;
@@ -100,6 +110,7 @@ function quenchBoss(state: GameState) {
 export function coolSun(state: GameState, amount: number) {
   const sun = state.sun; if (!sun || sun.quenchedTicks > 0) return;
   sun.heat = Math.max(0, sun.heat - amount);
+  if(sun.heat<90){sun.heatWarningTimer=0;stopSunHeatWarning();}
   if (sun.heat === 0) quenchBoss(state);
 }
 
@@ -110,8 +121,9 @@ function ripple(state: GameState, x: number, y: number, empowered: boolean) {
   if (sun.flare && chamberOfTile(Math.round(x), Math.round(y)) === sun.flare.room) defuseSunFlare(state); // water in a marked room defuses it
   for (const enemy of [...state.enemies]) {
     if (enemy.hp <= 0 || distance(x, y, enemy) > SUN.waveRadius) continue;
-    if (enemy.type === 'cinder_wisp' || enemy.type === 'scorch_sapper') enemy.hp = 0; // water snuffs out wisps and sappers
+    if (enemy.type === 'cinder_wisp') enemy.hp = 0; // water snuffs out wisps
     else {
+      if (enemy.type === 'flare_spitter') { enemy.spit=undefined;enemy.doused=true; } // water interrupts its windup and strips its flame armor for good (no stun)
       if (enemy.type === 'emberling') {
         enemy.extinguished = true; enemy.path = []; enemy.pushTiles = 0;
         enemy.tileX = enemy.targetTileX = Math.round(enemy.x / TILE_SIZE - .5);
@@ -132,7 +144,7 @@ function ripple(state: GameState, x: number, y: number, empowered: boolean) {
 
 function completeStation(state: GameState, station: CoolingStation) {
   healPlayer(state, SUN.stationHealing);
-  healCore(state, SUN.stationHealing);
+  healCore(state, SUN.stationRubyHealing);
   ripple(state, station.x, station.y, false);
   coolSun(state, SUN.stationCooling);
   station.charge = 0;
@@ -166,9 +178,15 @@ export function useCoolingWave(state: GameState): boolean {
   if (state.gamePhase !== 'playing') return true;
   coolSun(state, SUN.waveCooling);
   const boss = sunBoss(state);
+  if(boss&&distance(state.playerX/TILE_SIZE-.5,state.playerY/TILE_SIZE-.5,boss)<=SUN.waveRadius) {
+    sun.rageCalmTicks=SUN.rageCalmTicks;
+    sun.kingSlowTicks=SUN.waveSlowTicks;
+  }
   for (const station of stations) {
-    station.blocked = !!boss && sun.quenchedTicks === 0 && distance(station.x, station.y, boss) <= SUN.stationBossReach;
-    if (station.blocked) { station.charge = 0; continue; }
+    const kingBlocked=!!boss&&sun.quenchedTicks===0&&distance(station.x,station.y,boss)<=SUN.stationBossReach;
+    station.sapped=stationSapped(state,station);station.blocked=kingBlocked||station.sapped;
+    if(kingBlocked){station.charge=0;continue;}
+    if(station.sapped)continue;
     station.charge = Math.min(100, station.charge + SUN.waveStationCharge);
     if (station.charge >= 100) completeStation(state, station);
   }
@@ -177,15 +195,30 @@ export function useCoolingWave(state: GameState): boolean {
 }
 
 export function clearSunEncounter(state: GameState) {
+  stopSunHeatWarning(); stopSunburstWarning();
   if (!state.sun) return;
+  state.sun.kingSlowTicks=0;state.sun.rageCalmTicks=0;state.sun.spitterHits=[];
+  state.enemyShots=(state.enemyShots??[]).filter(shot=>!shot.flare);
   state.sun.charging = false; state.sun.ripples = []; state.sun.burning = []; state.sun.flare = null; state.sun.flareFlash = null; state.sun.quenchedTicks = 0; state.sun.empoweredCasts = 0; state.sun.eruptionTicks = 0;
   state.enemies = state.enemies.filter(e => e.type !== 'cinder_wisp');
+}
+
+export function igniteSpitterTile(state:GameState,x:number,y:number) {
+  const sun=state.sun;if(!sun||sun.quenchedTicks>0)return;
+  const tx=Math.floor(x/TILE_SIZE),ty=Math.floor(y/TILE_SIZE);if(state.map[ty]?.[tx]!==T_FLOOR)return;
+  const existing=sun.burning.find(b=>b.x===tx&&b.y===ty);
+  if(existing)existing.ticks=Math.max(existing.ticks,SUN.spitter.fireTicks);
+  else{sun.burning.push({x:tx,y:ty,ticks:SUN.spitter.fireTicks});if(sun.burning.length>SUN.trailCap)sun.burning.shift();}
 }
 
 export function updateSun(state: GameState) {
   const sun = state.sun; if (!sun || state.gamePhase !== 'playing') return;
   state.ambientEvents.timer = Math.max(state.ambientEvents.timer, 3600);
+  if((sun.kingSlowTicks??0)>0)sun.kingSlowTicks=(sun.kingSlowTicks??0)-1;
+  const rageCalmed=(sun.rageCalmTicks??0)>0;
+  if(rageCalmed)sun.rageCalmTicks=(sun.rageCalmTicks??0)-1;
   sun.ripples = sun.ripples.filter(r => --r.ticks > 0);
+  sun.spitterHits=(sun.spitterHits??[]).filter(hit=>--hit.ticks>0);
   if (sun.eruptionTicks > 0) sun.eruptionTicks--;
   if (sun.waveCooldown > 0 && --sun.waveCooldown === 0 && !sun.quenchedTicks) playUiSfx('waveReady'); // ready again (silent during the extinguished window's rapid casts)
   const boss = sunBoss(state);
@@ -203,17 +236,20 @@ export function updateSun(state: GameState) {
   if (!sun.noWisps && --sun.wispTimer <= 0) { spawnSunWisps(state, SUN.wispBatch); sun.wispTimer = SUN.wispGap; }
   updateBurningTrail(state, boss);
   updateSunFlare(state, boss);
-  if (boss && sun.phase >= 2 && !state.noMobs && --sun.sapperTimer <= 0) { sun.sapperTimer = SUN.sapperGap; spawnScorchSapper(state); }
+  if (boss && sun.phase >= SUN.sapperFromPhase && !state.noMobs && --sun.sapperTimer <= 0) { sun.sapperTimer = SUN.sapperGap; spawnScorchSapper(state); }
   if (boss) {
-    sun.rage = Math.min(100, sun.rage + (sun.phase >= 2 ? SUN.lateRagePerSecond : SUN.ragePerSecond) / 60);
+    const rageRate=sun.phase>=2 ? SUN.lateRagePerSecond*(sun.phase===3?SUN.phase3RageMult:1) : SUN.ragePerSecond;
+    const calmedRate=sun.phase>=2 ? SUN.lateRagePerSecond*SUN.lateRageCalmMult : SUN.ragePerSecond*SUN.rageCalmMult;
+    sun.rage = Math.min(100, sun.rage + (rageCalmed?calmedRate:rageRate) / 60);
     if (!sun.noWisps && --sun.bossWispTimer <= 0) { spawnSunWisps(state, 1 + Math.floor(sun.rage / 25), boss); sun.bossWispTimer = SUN.bossWispGap; }
   }
   const station = sun.charging ? sunStationNearPlayer(state) : undefined;
   let filling = false;
   for (const s of sun.stations) {
-    s.blocked = !!boss && distance(s.x, s.y, boss) <= SUN.stationBossReach;
-    if (s.blocked) s.charge = 0;
-    else if (station === s) {
+    const kingBlocked=!!boss&&distance(s.x,s.y,boss)<=SUN.stationBossReach;
+    s.sapped=stationSapped(state,s);s.blocked=kingBlocked||s.sapped;
+    if(kingBlocked)s.charge=0;
+    else if(!s.sapped&&station===s) {
       filling = true;
       if ((sun.chargeSoundTimer ?? 0) <= 0) {
         playUiSfx('stationCharge'); sun.chargeSoundTimer = 20;
@@ -230,9 +266,10 @@ export function updateSun(state: GameState) {
   if (sun.quenchedTicks > 0) return;
   sun.heat = Math.min(100, sun.heat + state.enemies.filter(e => e.type === 'cinder_wisp' && e.hp > 0).length * SUN.heatPerWisp / 60);
   if (sun.heat >= 90 && sun.heat < 100) {
-    if ((sun.heatWarningTimer ?? 0) <= 0) { playUiSfx('sunHeatWarning'); sun.heatWarningTimer = sun.heat >= 97 ? 30 : 60; }
+    sun.heatWarningTimer=Math.min(sun.heatWarningTimer??0,sun.heat>=97?24:48);
+    if ((sun.heatWarningTimer ?? 0) <= 0) { playUiSfx('sunHeatWarning'); sun.heatWarningTimer = sun.heat >= 97 ? 24 : 48; }
     sun.heatWarningTimer--;
-  } else sun.heatWarningTimer = 0;
+  } else {sun.heatWarningTimer = 0;stopSunHeatWarning();}
   if (sun.heat >= 100) {
     sun.heat = 50; sun.eruptionTicks = 90;
     state.screenShakeTicks = 30; state.screenShakeAmt = 10;
@@ -243,7 +280,10 @@ export function updateSun(state: GameState) {
       damageEnemy(state, e, SUN.eruptionDamage, 'meteor');
       const i = state.enemies.indexOf(e); if (i >= 0 && e.hp <= 0) killEnemy(state, i, true);
     }
-    playCelestialSound('solar_swoosh');
+    stopSunHeatWarning();
+    playCelestialSound('solar_swoosh',1.25);
+    playAudioOneShot('/sounds/sci-fi-explosion-09.mp3',1);
+    playAudioOneShot('/sounds/bombExplode.wav',1);
   }
 }
 
@@ -273,7 +313,7 @@ function updateBurningTrail(state: GameState, boss: Enemy | undefined) {
   if (state.rubyTileX !== -1 && on(state.rubyTileX, state.rubyTileY)) damageRuby(state, SUN.trailRubyDamage);
 }
 
-// Phase 2+: a Scorch Sapper appears on open floor away from you and the stations (at most sapperCap alive).
+// Phase 3: a Scorch Sapper appears on open floor away from you and the stations (at most sapperCap alive).
 function spawnScorchSapper(state: GameState) {
   if (state.enemies.filter(e => e.type === 'scorch_sapper' && e.hp > 0).length >= SUN.sapperCap) return;
   const tile = freeTile(state);
@@ -288,6 +328,9 @@ export function updateScorchSapper(state: GameState, e: Enemy) {
   const settled = e.tileX === e.targetTileX && e.tileY === e.targetTileY;
   if (settled && Math.max(Math.abs(e.tileX - station.x), Math.abs(e.tileY - station.y)) <= 1) {
     e.sapStation = station.id; e.path = []; e.chargeDirX = Math.sign(station.x - e.tileX) || 1; // nozzle faces the station (visual)
+    if(station.charge>0&&(e.sapSoundAt??0)<=state.gameTick){
+      playAudioOneShot('/sounds/celestial/empty-charge.wav',.18,.75);e.sapSoundAt=state.gameTick+SUN.sapperSoundGap;
+    }
     station.charge = Math.max(0, station.charge - SUN.sapperDrain / 60);
     if (sun.quenchedTicks === 0) sun.heat = Math.min(100, sun.heat + SUN.sapperHeat / 60);
     return;
@@ -309,8 +352,9 @@ const nextFlareGap = () => SUN.flareGap[0] + Math.floor(Math.random() * (SUN.fla
 function updateSunFlare(state: GameState, boss: Enemy | undefined) {
   const sun = state.sun!;
   if (sun.flareFlash && --sun.flareFlash.ticks <= 0) sun.flareFlash = null;
-  if (!boss || sun.phase < 3) return;
+  if (!boss || sun.phase < 3) {stopSunburstWarning();return;}
   if (!sun.flare) {
+    stopSunburstWarning();
     if (--sun.flareTimer > 0) return;
     const room = Math.floor(Math.random() * 4);
     sun.flare = { room, ticks: SUN.flareWarning };
@@ -319,7 +363,11 @@ function updateSunFlare(state: GameState, boss: Enemy | undefined) {
     playAudioOneShot('/sounds/kingFireSpell.mp3', .7);
     return;
   }
-  if (--sun.flare.ticks > 0) return;
+  if (--sun.flare.ticks > 0) {
+    if(sun.flare.ticks%(sun.flare.ticks<=120?24:48)===0)playUiSfx('sunburstWarning');
+    return;
+  }
+  stopSunburstWarning();
   sun.heat = Math.min(100, sun.heat + SUN.flareHeat); // the eruption check below handles a full arena
   // It also burns you and a placed Ruby if you are inside that room.
   if (chamberOfTile(state.playerTileX, state.playerTileY) === sun.flare.room) damagePlayer(state, SUN.flareDamage);
@@ -327,13 +375,16 @@ function updateSunFlare(state: GameState, boss: Enemy | undefined) {
   sun.flareFlash = { room: sun.flare.room, ticks: 45, defused: false };
   sun.flare = null; sun.flareTimer = nextFlareGap();
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 14); state.screenShakeAmt = Math.max(state.screenShakeAmt, 6);
-  playCelestialSound('fiery_king', .8);
-  playAudioOneShot('/sounds/kingFireSpell.mp3', .7); // the King's fire spell under the flare
+  playCelestialSound('fiery_king', 1.3);
+  playAudioOneShot('/sounds/kingFireSpell.mp3', .95);
+  playAudioOneShot('/sounds/sci-fi-explosion-09.mp3',1);
+  playAudioOneShot('/sounds/bombExplode.wav',1);
 }
 
 // Water in the marked room, a station burst there, or Solar Flare stops the flare and cools the arena a little.
 export function defuseSunFlare(state: GameState) {
   const sun = state.sun; if (!sun?.flare) return;
+  stopSunburstWarning();
   sun.flareFlash = { room: sun.flare.room, ticks: 45, defused: true };
   sun.flare = null; sun.flareTimer = nextFlareGap();
   coolSun(state, SUN.flareDefuseCool);
@@ -341,12 +392,13 @@ export function defuseSunFlare(state: GameState) {
 }
 
 export function godSetSunPhase(state: GameState, phase: 1 | 2 | 3) {
+  godPhaseClock(state, phase); // phase 2+ starts at least a minute in
   if (!state.sun || state.gamePhase !== 'playing') return;
   if (!sunBoss(state)) godSpawnBoss(state, 'fiery_king');
   const boss = sunBoss(state); if (!boss) return;
   boss.hp = (4 - phase) * SUN.phaseHP; state.sun.phase = phase;
   if (phase < 2) state.sun.burning = [];
-  if (phase < 3) state.sun.flare = null;
+  if (phase < 3) {state.sun.flare = null;stopSunburstWarning();}
   state.sun.flareTimer = nextFlareGap();
   state.bossSpawnName = `PHASE ${phase}`; state.bossSpawnTicks = 120;
 }

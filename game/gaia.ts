@@ -4,19 +4,19 @@ import {
   GAIA_BLOSSOM_SHOT_RANGE, GAIA_CREEP_CAP, GAIA_CREEP_CHANCE, GAIA_CREEP_GAP, GAIA_LIFEBLOOM_GAP, GAIA_LIFEBLOOM_LIFE, GAIA_LIFEBLOOM_MAX,
   GAIA_MOSS_CHANCE, GAIA_P3_TWIN_OFFSET, GAIA_PHASE_HP, GAIA_POD_BURST_RADIUS, GAIA_POD_FUSE, GAIA_POD_GAP, GAIA_POLLEN_DRIFT_SLOW, GAIA_POLLEN_GAP,
   GAIA_POLLEN_LASER, GAIA_POLLEN_SLOW, GAIA_POLLEN_SLOW_TICKS, GAIA_POLLEN_TICKS, GAIA_RING_DAMAGE, GAIA_RING_RADIUS, GAIA_SCORCH_TICKS,
-  GAIA_SEEK_RANGE, GAIA_SNARE_DAMAGE, GAIA_SNARE_GAP, GAIA_SNARE_ROOT, GAIA_SNARE_WARNING, GAIA_SPORE_RADIUS, GAIA_SPORE_SLOW, GAIA_SPORE_TICKS,
-  GAIA_STONE_DRIFT_GAP, GAIA_STONE_DRIFT_STEP, GAIA_STONE_DRIFT_TICKS, GAIA_STONE_RELIGHT, GAIA_STONE_SELF_DAMAGE, GAIA_STONE_TRAVEL,
+  GAIA_SPORE_SHOT, GAIA_SEEK_RANGE, GAIA_SNARE_DAMAGE, GAIA_SNARE_GAP, GAIA_SNARE_ROOT, GAIA_SNARE_WARNING, GAIA_SPORE_RADIUS, GAIA_SPORE_SLOW, GAIA_SPORE_TICKS, GAIA_SPORE_DAMAGE, GAIA_SPORE_EVERY, GAIA_SPORE_GROWTH,
+  GAIA_STONE_DRIFT_GAP, GAIA_STONE_DRIFT_STEP, GAIA_STONE_DRIFT_TICKS, GAIA_STONE_RELIGHT, GAIA_STONE_HEAL, GAIA_STONE_SELF_DAMAGE, GAIA_STONE_TRAVEL,
   GAIA_STRIKE_DAMAGE, GAIA_SUN_CHARGE_RATE, GAIA_SUN_MAX, GAIA_SUN_MIN, GAIA_SUN_RADIUS, GAIA_SUN_SELF_DAMAGE, GAIA_THICKET_ARMOR, GAIA_THICKET_DAMAGE,
   GAIA_THICKET_HEAL, GAIA_THICKET_SLOW, GAIA_TRAIL_GAP, GAIA_TRAIL_RADIUS, GAIA_VINE_HEAL, GAIA_VINE_SLOW, GAIA_WARD_RADIUS, GAIA_WITHER_TICKS,
-  MAP_COLS, MAP_ROWS, SPECIAL_WEAVER_RADIUS, THORN_CONTACT_INTERVAL, TILE_SIZE, T_FLOOR, chamberOfTile, getThornFieldBounds, isBossType,
+  PLAYER_MAX_HP, RUBY_MAX_HP, MAP_COLS, MAP_ROWS, SPECIAL_WEAVER_RADIUS, THORN_CONTACT_INTERVAL, TILE_SIZE, T_FLOOR, chamberOfTile, getThornFieldBounds, isBossType,
   type EnemyType,
 } from './constants';
 import {
   playUiSfx,
 } from './ui-sfx';
-import {
-  ATTACK_SFX_VOLUME, bfs, clearThornHazards, createEncounterEnemy, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, isFloorTile, killEnemy,
-  playAudioOneShot, playCelestialSound, playSFX_objectBreak, playThornCut, tileEuclidDist, type Enemy, type GameState,
+import { godPhaseClock,
+  ATTACK_SFX_VOLUME, bfs, clearThornHazards, createEncounterEnemy, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, healCore, isFloorTile, killEnemy,
+  playAudioOneShot, playCelestialSound, playSFX_objectBreak, playThornCut, playerCCImmune, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
 import {
   isNeptuneObject, randomFloorTileAwayFromPlayer,
@@ -40,6 +40,8 @@ export interface GaiaState {
   podTimer: number; blossomTimer: number; lifebloomTimer: number;
   bolts: { fromX: number; fromY: number; toX: number; toY: number; ticks: number }[];
   pollenSlowTicks: number;
+  sporeSlowTicks?: number;
+  sporeBursts?: { x: number; y: number; ticks: number }[];
   snareTimer: number; snares: { tileX: number; tileY: number; ticks: number; ruby: boolean }[]; snaredTicks: number;
   rubyRootTicks: number; // visual: roots binding Ruby after a snare hits it
   wither: number; // >0 between phases
@@ -59,7 +61,7 @@ export function createGaiaState(state: GameState): GaiaState {
     phase: 1, bossId: -1, growth: new Array(MAP_COLS * MAP_ROWS).fill(0), scorch: new Array(MAP_COLS * MAP_ROWS).fill(0),
     trailTimer: GAIA_TRAIL_GAP, creepTimer: GAIA_CREEP_GAP, secondTimer: 60,
     sunCharge: 0, sunfire: null, sunImpact: null, sunBurst: null, stones: [], stoneFlashes: [],
-    podTimer: GAIA_POD_GAP[1], blossomTimer: GAIA_BLOSSOM_GAP, lifebloomTimer: GAIA_LIFEBLOOM_GAP[1], bolts: [], pollenSlowTicks: 0,
+    podTimer: GAIA_POD_GAP[1], blossomTimer: GAIA_BLOSSOM_GAP, lifebloomTimer: GAIA_LIFEBLOOM_GAP[1], bolts: [], pollenSlowTicks: 0, sporeSlowTicks: 0,
     snareTimer: GAIA_SNARE_GAP, snares: [], snaredTicks: 0, rubyRootTicks: 0, wither: 0,
     ringClosure: 0, rubyThornTimer: THORN_CONTACT_INTERVAL, spores: [], pollen: null, pollenTimer: GAIA_POLLEN_GAP, phaseBannerTicks: 0,
   };
@@ -88,6 +90,22 @@ function gaiaCanGrow(state: GameState, x: number, y: number) {
   return state.map[y]?.[x] === T_FLOOR && gaia.scorch[gaiaIndex(x, y)] <= 0 && !gaiaWarded(state, x, y) &&
     !gaia.stones.some(s => s.x === x && s.y === y) && !inGaiaRootsField(state, x, y);
 }
+/** One creep pass: vines spread moss into clean neighbours, and moss beside vines thickens (only one chamber if given). */
+function gaiaCreep(state: GameState, chamber?: number) {
+  const gaia = state.gaia!;
+  let budget = GAIA_CREEP_CAP;
+  const start = Math.floor(Math.random() * gaia.growth.length);
+  for (let n = 0; n < gaia.growth.length && budget > 0; n++) {
+    const i = (start + n) % gaia.growth.length;
+    if (gaia.growth[i] < 2 || Math.random() >= GAIA_CREEP_CHANCE) continue;
+    const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)];
+    const x = i % MAP_COLS + dx, y = Math.floor(i / MAP_COLS) + dy;
+    if (x < 0 || y < 0 || x >= MAP_COLS || y >= MAP_ROWS) continue;
+    if (chamber !== undefined && chamberOfTile(x, y) !== chamber) continue;
+    const level = gaiaLevel(state, x, y);
+    if (level === 0 ? gaiaGrow(state, x, y, 1) : level === 1 && Math.random() < GAIA_MOSS_CHANCE / GAIA_CREEP_CHANCE ? gaiaGrow(state, x, y, 2) : false) budget--;
+  }
+}
 function gaiaGrow(state: GameState, x: number, y: number, max: number): boolean {
   const gaia = state.gaia!, i = gaiaIndex(x, y);
   if (gaia.growth[i] >= max || !gaiaCanGrow(state, x, y)) return false;
@@ -112,7 +130,7 @@ export function addGaiaSunCharge(state: GameState, amount: number) {
   gaia.sunCharge = Math.min(GAIA_SUN_MAX, gaia.sunCharge + amount);
   if (before < GAIA_SUN_MAX && gaia.sunCharge >= GAIA_SUN_MAX) playStrikeCharged(); // full Sunfire is ready
 }
-// A room strike (Trident or full Sunfire) is ready: the sci-fi "acquired" cue over the bright chime.
+// The acquired recording and bright chime used for full charge and celestial recharge.
 export function playStrikeCharged() {
   playUiSfx('charged');
   try { const a = gameAudio('/sounds/strike-charged.wav'); a.volume = .55; a.play().catch(() => {}); } catch { }
@@ -205,6 +223,8 @@ function moveGaiaStone(state: GameState, index: number, room?: number) {
 function burnAtStone(state: GameState, boss: Enemy, index: number, share: number) {
   const gaia = state.gaia!, stone = gaia.stones[index];
   gaia.stoneFlashes.push({ x: stone.x, y: stone.y, toX: boss.tileX, toY: boss.tileY, ticks: 30 });
+  healPlayer(state, PLAYER_MAX_HP * GAIA_STONE_HEAL);
+  healCore(state, RUBY_MAX_HP * GAIA_STONE_HEAL);
   gaiaSelfDamage(state, boss, share);
   moveGaiaStone(state, index);
   playSFX_objectBreak('frost'); playCelestialSound('fiery_king', .6);
@@ -261,7 +281,7 @@ export function gaiaPlayerSpeed(state: GameState) {
   const gaia = state.gaia; if (!gaia) return 1;
   const level = gaiaLevel(state, state.playerTileX, state.playerTileY);
   let mult = level >= 3 ? GAIA_THICKET_SLOW : level === 2 ? GAIA_VINE_SLOW : 1;
-  if (gaia.pollenSlowTicks > 0) mult *= GAIA_POLLEN_SLOW;
+  mult *= Math.min(gaia.pollenSlowTicks > 0 ? GAIA_POLLEN_SLOW : 1, (gaia.sporeSlowTicks ?? 0) > 0 ? GAIA_SPORE_SHOT.slow : 1);
   if (gaia.pollen && chamberOfTile(state.playerTileX, state.playerTileY) === gaia.pollen.chamber) mult *= GAIA_POLLEN_DRIFT_SLOW; // walking through the haze
   if (gaia.spores.some(c => tileEuclidDist(c.x, c.y, state.playerTileX, state.playerTileY) <= GAIA_SPORE_RADIUS)) mult *= GAIA_SPORE_SLOW;
   return mult;
@@ -289,7 +309,17 @@ export function gaiaSporeCloud(state: GameState, victim: Enemy) {
   gaia.spores.push({ x: victim.tileX, y: victim.tileY, ticks: GAIA_SPORE_TICKS });
   for (let y = victim.tileY - GAIA_SPORE_RADIUS; y <= victim.tileY + GAIA_SPORE_RADIUS; y++)
     for (let x = victim.tileX - GAIA_SPORE_RADIUS; x <= victim.tileX + GAIA_SPORE_RADIUS; x++)
-      if (tileEuclidDist(x, y, victim.tileX, victim.tileY) <= GAIA_SPORE_RADIUS) gaiaSet(state, x, y, 1);
+      if (tileEuclidDist(x, y, victim.tileX, victim.tileY) <= GAIA_SPORE_RADIUS) gaiaSet(state, x, y, GAIA_SPORE_GROWTH); // straight to vines
+}
+
+// Projectile impacts grow vines; the on-death cloud is separate.
+export function gaiaSporeImpact(state: GameState, px: number, py: number) {
+  const gaia = state.gaia; if (!gaia) return;
+  const cx = Math.floor(px / TILE_SIZE), cy = Math.floor(py / TILE_SIZE), radius = GAIA_SPORE_SHOT.radius;
+  (gaia.sporeBursts ??= []).push({ x: px, y: py, ticks: 24 });
+  for (let y = cy - Math.ceil(radius); y <= cy + radius; y++) for (let x = cx - Math.ceil(radius); x <= cx + radius; x++)
+    if (Math.hypot(x - cx, y - cy) <= radius) gaiaSet(state, x, y, GAIA_SPORE_GROWTH);
+  playAudioOneShot('/sounds/place-plant.mp3', .3, 1.3);
 }
 
 // Gaia alien mix: 40% Ragecaps, 30% each sporelings and vine crawlers.
@@ -323,6 +353,7 @@ function advanceGaiaPhase(state: GameState, boss: Enemy) {
 
 // God panel: jump straight to a phase at full phase HP (summoning her first if she has not arrived).
 export function godSetGaiaPhase(state: GameState, phase: 1 | 2 | 3) {
+  godPhaseClock(state, phase); // phase 2+ starts at least a minute in
   const gaia = state.gaia;
   if (!gaia || state.gamePhase !== 'playing') return;
   let boss = gaiaBoss(state);
@@ -346,20 +377,9 @@ function updateGaiaGrowth(state: GameState, boss: Enemy | undefined) {
       if (tileEuclidDist(x, y, boss.tileX, boss.tileY) <= radius) gaiaGrow(state, x, y, 2);
   }
   // Creep: vines spread moss into clean neighbours, and moss beside vines thickens.
-  if (--gaia.creepTimer <= 0) {
-    gaia.creepTimer = GAIA_CREEP_GAP;
-    let budget = GAIA_CREEP_CAP;
-    const start = Math.floor(Math.random() * gaia.growth.length);
-    for (let n = 0; n < gaia.growth.length && budget > 0; n++) {
-      const i = (start + n) % gaia.growth.length;
-      if (gaia.growth[i] < 2 || Math.random() >= GAIA_CREEP_CHANCE) continue;
-      const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)];
-      const x = i % MAP_COLS + dx, y = Math.floor(i / MAP_COLS) + dy;
-      if (x < 0 || y < 0 || x >= MAP_COLS || y >= MAP_ROWS) continue;
-      const level = gaiaLevel(state, x, y);
-      if (level === 0 ? gaiaGrow(state, x, y, 1) : level === 1 && Math.random() < GAIA_MOSS_CHANCE / GAIA_CREEP_CHANCE ? gaiaGrow(state, x, y, 2) : false) budget--;
-    }
-  }
+  if (--gaia.creepTimer <= 0) { gaia.creepTimer = GAIA_CREEP_GAP; gaiaCreep(state); }
+  // The pollen haze feeds the vines: its chamber gets an extra creep pass between the usual ones (1.5x as fast).
+  if (gaia.pollen && gaia.creepTimer === Math.floor(GAIA_CREEP_GAP / 2)) gaiaCreep(state, gaia.pollen.chamber);
   // Vine crawlers and Ragecaps thicken the ground they walk on.
   if (state.gameTick % 30 === 0) for (const crawler of state.enemies) if ((crawler.type === 'vine_crawler' || crawler.type === 'angry_mushroom') && crawler.hp > 0) gaiaGrow(state, crawler.tileX, crawler.tileY, 2);
 }
@@ -460,7 +480,7 @@ function updateGaiaPlants(state: GameState, boss: Enemy | undefined, second: boo
     if (--snare.ticks > 0) continue;
     if (snare.ruby) { if (state.rubyTileX === snare.tileX && state.rubyTileY === snare.tileY) { damageRuby(state, GAIA_SNARE_DAMAGE, boss); gaia.rubyRootTicks = GAIA_SNARE_ROOT; } }
     else if (state.playerTileX === snare.tileX && state.playerTileY === snare.tileY) {
-      damagePlayer(state, GAIA_SNARE_DAMAGE, boss); gaia.snaredTicks = GAIA_SNARE_ROOT; playThornCut();
+      damagePlayer(state, GAIA_SNARE_DAMAGE, boss); if(!playerCCImmune(state))gaia.snaredTicks = GAIA_SNARE_ROOT; playThornCut();
     }
   }
   gaia.snares = gaia.snares.filter(s => s.ticks > 0);
@@ -492,7 +512,7 @@ function updateGaiaBoss(state: GameState, boss: Enemy, second: boolean) {
 // she takes a big share of the phase if she is there, and her plants and aliens in the chamber burn.
 function gaiaSunStrike(state: GameState, chamber: number) {
   const gaia = state.gaia!;
-  gaia.sunImpact = { chamber, ticks: 60 };
+  gaia.sunImpact = { chamber, ticks: 120 };
   gaiaScorchRoom(state, chamber);
   // Like the Trident it can be dodged: only you and Ruby inside the burning room are hurt.
   if (chamberOfTile(state.playerTileX, state.playerTileY) === chamber) damagePlayer(state, GAIA_SUN_SELF_DAMAGE);
@@ -521,11 +541,21 @@ export function updateGaia(state: GameState) {
   if (gaia.snaredTicks > 0) gaia.snaredTicks--;
   if (gaia.rubyRootTicks > 0) gaia.rubyRootTicks--;
   if (gaia.pollenSlowTicks > 0) gaia.pollenSlowTicks--;
+  if ((gaia.sporeSlowTicks ?? 0) > 0) gaia.sporeSlowTicks!--;
+  if (gaia.sporeBursts) gaia.sporeBursts = gaia.sporeBursts.filter(b => --b.ticks > 0);
   if (gaia.phaseBannerTicks > 0) gaia.phaseBannerTicks--;
   gaia.spores = gaia.spores.filter(c => --c.ticks > 0);
+  // Standing in a spore cloud poisons you.
+  if (state.gameTick % GAIA_SPORE_EVERY === 0 && gaia.spores.some(c => tileEuclidDist(c.x, c.y, state.playerTileX, state.playerTileY) <= GAIA_SPORE_RADIUS)) {
+    damagePlayer(state, GAIA_SPORE_DAMAGE); if (state.gamePhase !== 'playing') return;
+  }
   if (gaia.pollen && --gaia.pollen.ticks <= 0) gaia.pollen = null;
   if (!gaia.pollen && --gaia.pollenTimer <= 0) { gaia.pollenTimer = GAIA_POLLEN_GAP; gaia.pollen = { chamber: Math.floor(Math.random() * 4), ticks: GAIA_POLLEN_TICKS }; }
-  if (gaia.sunfire && --gaia.sunfire.ticks <= 0) { gaiaSunStrike(state, gaia.sunfire.chamber); gaia.sunfire = null; }
+  if (gaia.sunfire) {
+    gaia.sunfire.ticks--;
+    if(gaia.sunfire.ticks===94)playAudioOneShot('/sounds/meteorFalling.mp3',.5,1.6); // match the Trident descent
+    if(gaia.sunfire.ticks<=0){gaiaSunStrike(state,gaia.sunfire.chamber);gaia.sunfire=null;}
+  }
   if (gaia.sunImpact && --gaia.sunImpact.ticks <= 0) gaia.sunImpact = null;
   if (gaia.sunBurst && --gaia.sunBurst.ticks <= 0) gaia.sunBurst = null;
   // Thicket thorns hurt while you stand in them.

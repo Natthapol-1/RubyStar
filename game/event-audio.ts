@@ -1,4 +1,4 @@
-import { gameAudio, channelVolume } from './audio-settings';
+import { gameAudio, channelVolume, getAudioCtx } from './audio-settings';
 import type { AmbientEventKind } from './events';
 import { JUPITER } from './constants';
 
@@ -25,6 +25,9 @@ const cues: Record<AmbientEventKind, Partial<Record<Stage, readonly Layer[]>>> =
   },
 };
 const voices = new Set<HTMLAudioElement>();
+const sunWarnings = {heat: new Set<HTMLAudioElement>(), burst: new Set<HTMLAudioElement>()};
+let moonDarknessEntry: HTMLAudioElement | null = null;
+let disconnectMoonDarknessEntry: (() => void) | undefined;
 let jupiterAmbient: HTMLAudioElement | null = null;
 let jupiterCharge: HTMLAudioElement | null = null;
 const fadingVoices = new Map<HTMLAudioElement, { gain: number; ticks: number }>();
@@ -36,11 +39,79 @@ const repeaters: Record<RepeatKind, { voices: Set<HTMLAudioElement>; lastAge: nu
 let paused = false;
 
 function releaseVoice(voice: HTMLAudioElement) {
+  sunWarnings.heat.delete(voice);sunWarnings.burst.delete(voice);
+  if (moonDarknessEntry === voice) {
+    moonDarknessEntry = null;
+    disconnectMoonDarknessEntry?.();
+    disconnectMoonDarknessEntry = undefined;
+  }
   if (jupiterAmbient === voice) jupiterAmbient = null;
   if (jupiterCharge === voice) jupiterCharge = null;
   voice.pause(); voices.delete(voice); fadingVoices.delete(voice);
   for (const repeat of Object.values(repeaters)) repeat.voices.delete(voice);
   voice.onended = voice.ontimeupdate = voice.onerror = voice.onloadedmetadata = null;
+}
+
+/** Simulation schedules warning repeats; Sunburst is pitched up and overlapping tails have a fixed cap. */
+function stopSunWarning(kind: keyof typeof sunWarnings) {
+  for(const voice of [...sunWarnings[kind]]){releaseVoice(voice);voice.currentTime=0;}
+}
+function playSunWarning(kind: keyof typeof sunWarnings) {
+  if(paused||typeof Audio==='undefined'||(typeof document!=='undefined'&&document.hidden)||channelVolume('effects')===0)return;
+  const group=sunWarnings[kind];
+  while(group.size>=7)releaseVoice(group.values().next().value!);
+  try {
+    const voice=gameAudio('/sounds/sun-heat-warning.mp3','effects');
+    voice.volume=1;voice.loop=false;voice.playbackRate=kind==='burst'?1.2:1;voice.preservesPitch=kind!=='burst';
+    group.add(voice);voices.add(voice);
+    voice.onended=voice.onerror=()=>releaseVoice(voice);
+    voice.play().catch(()=>releaseVoice(voice));
+  }catch{stopSunWarning(kind);}
+}
+export function stopSunburstWarning(){stopSunWarning('burst');}
+export function stopSunHeatWarning(){stopSunWarning('heat');}
+export function playSunburstWarning(){playSunWarning('burst');}
+export function playSunHeatWarning(){playSunWarning('heat');}
+
+function boostMoonDarknessEntry(voice: HTMLAudioElement) {
+  try {
+    const context = getAudioCtx();
+    if (!context) return;
+    const boost = context.createGain();
+    boost.gain.value = 2.5;
+    const compressor = context.createDynamicsCompressor();
+    compressor.threshold.value = -8;
+    compressor.knee.value = 8;
+    compressor.ratio.value = 12;
+    compressor.attack.value = .003;
+    compressor.release.value = .12;
+    const source = context.createMediaElementSource(voice);
+    source.connect(boost);
+    boost.connect(compressor);
+    compressor.connect(context.destination);
+    disconnectMoonDarknessEntry = () => {
+      source.disconnect();
+      boost.disconnect();
+      compressor.disconnect();
+    };
+  } catch {
+    // Play at the normal media volume if Web Audio is unavailable.
+  }
+}
+
+export function playMoonDarknessEntry() {
+  if (paused || typeof Audio === 'undefined' || (typeof document !== 'undefined' && document.hidden) || channelVolume('effects') === 0) return;
+  if (moonDarknessEntry) releaseVoice(moonDarknessEntry);
+  try {
+    const voice = gameAudio('/sounds/moon-darkness-entry.mp3', 'effects');
+    voice.volume = 1;
+    voice.loop = false;
+    moonDarknessEntry = voice;
+    boostMoonDarknessEntry(voice);
+    voices.add(voice);
+    voice.onended = voice.onerror = () => releaseVoice(voice);
+    voice.play().catch(() => releaseVoice(voice));
+  } catch {}
 }
 
 // Shares the existing pause/resume/unmount lifecycle, with one electric ambience voice at a time.

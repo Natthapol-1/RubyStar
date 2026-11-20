@@ -1,6 +1,6 @@
 import {playUiSfx} from './ui-sfx';
-import {BLESSING,BULLET_SPEED,ENCHANTER,TILE_SIZE,isBossType} from './constants';
-import {damageEnemy,healPlayer,isFloorTile,skillAlienScale,type GameState,type Enemy} from './engine';
+import {BLESSING,BULLET_SPEED,ENCHANTER,REFLECTOR,SIRIUS_HOLY_PER_ENERGY,STAR_ENERGY_MAX,TILE_SIZE,isBossType} from './constants';
+import {damageEnemy,healPlayer,isFloorTile,playSFX_powerUp,skillAlienScale,type GameState,type Enemy} from './engine';
 import {hasBlessing,type CelestialBlessing,type BuildZone} from './endless-builds';
 export const RUBY_SAFE_TICKS = 90; // Ruby gem: 1.5s without incoming player damage
 export const RUBY_DAMAGE_MULTIPLIER = BLESSING.rubyDamage;
@@ -98,9 +98,14 @@ export function updateBlessingEffects(s:GameState){
  }
 }
 export function addStarEnergy(s:GameState,amount:number,accelerate=true){
- const previous=s.starEnergy;s.starEnergy=Math.min(100,s.starEnergy+Math.max(0,amount)*(accelerate&&hasBlessing(s,'blind_prayer')?BLESSING.amberEnergy:1));
+ const previous = s.starEnergy;
+ s.starEnergy = Math.min(STAR_ENERGY_MAX, previous + Math.max(0, amount) * (accelerate && hasBlessing(s, 'blind_prayer') ? BLESSING.amberEnergy : 1));
+ const filled = previous < STAR_ENERGY_MAX && s.starEnergy >= STAR_ENERGY_MAX;
+ if (filled) playSFX_powerUp();
+ if(s.sirius&&s.starEnergy>previous)s.sirius.holy=Math.min(100,s.sirius.holy+(s.starEnergy-previous)*SIRIUS_HOLY_PER_ENERGY); // Sirius: energy you gain fills Holy Light
  if(hasBlessing(s,'blind_prayer')&&s.starEnergy>previous){s.build.amberRefreshUntil=s.gameTick+36;playBlessingPassive(s,'blind_prayer');}
- if(hasBlessing(s,'blind_prayer')&&previous<100&&s.starEnergy>=100){s.laserCooldown=s.bulletCooldown=s.waveCooldown=s.speedCooldown=s.bombCooldown=s.rubyHealCooldown=0;s.build.siriusRefreshSerial=(s.build.siriusRefreshSerial??0)+1;s.build.amberRefreshUntil=s.gameTick+48;playBlessingPassive(s,'blind_prayer');s.rewardEffects.push({target:'player',kind:'restore',ticks:45});}
+ if(hasBlessing(s,'blind_prayer')&&filled){s.laserCooldown=s.bulletCooldown=s.waveCooldown=s.speedCooldown=s.bombCooldown=s.rubyHealCooldown=0;s.build.siriusRefreshSerial=(s.build.siriusRefreshSerial??0)+1;s.build.amberRefreshUntil=s.gameTick+48;playBlessingPassive(s,'blind_prayer');s.rewardEffects.push({target:'player',kind:'restore',ticks:45});}
+ return filled;
 }
 export function blessingDeath(s:GameState,e:Enemy){
  if(!hasBlessing(s,'devourer')||Math.random()>=BLESSING.obsidianChance)return;
@@ -113,12 +118,15 @@ function createObsidianWell(s:GameState,e:Enemy){
  s.build.zones.push({x:(e.tileX+.5)*TILE_SIZE,y:(e.tileY+.5)*TILE_SIZE,radius:4,ticks:240,damage:6,kind:'void'});
 }
 export function rubyBlessingCopy(s:GameState){
- if(!hasBlessing(s,'astral_twins')||Math.random()>=BLESSING.opalChance)return null;
  const tileX=s.rubyTileX>=0?s.rubyTileX:s.playerTileX,tileY=s.rubyTileY>=0?s.rubyTileY:s.playerTileY;
+ if(!hasBlessing(s,'astral_twins')||Math.random()>=BLESSING.opalChance){
+  // Reflector kill reward: Ruby copies every attack for a while, weaker than Opal's copy
+  return (s.rubyCopyUntil??0)>s.gameTick?{tileX,tileY,mult:REFLECTOR.rubyCopyMult,opal:false}:null; // drawn in normal colours
+ }
  
  playBlessingPassive(s,'astral_twins');
  s.build.opalFlash={x:(tileX+.5)*TILE_SIZE,y:(tileY+.5)*TILE_SIZE,until:s.gameTick+18};
- return {tileX,tileY,mult:1};
+ return {tileX,tileY,mult:1,opal:true}; // Opal's copies get the pink tint
 }
 
 export function obsidianBossHit(s:GameState,e:Enemy){

@@ -37,15 +37,17 @@ test('she grows vines around her, and the laser clears them and charges Sunfire'
   for (let x = s.playerTileX + 1; x <= s.playerTileX + 3; x++) s.gaia.growth[idx(x, y)] = 2;
   e.useLaser(s);
   assert.equal(s.gaia.growth[idx(s.playerTileX + 1, y)], 1);
-  assert.ok(s.gaia.sunCharge >= 3);
+  assert.ok(s.gaia.sunCharge >= 3 * c.GAIA_SUN_CHARGE_RATE);
   void boss;
 });
 
 test('a field landing on a lit Sunstone burns away, costs the boss its Sunstone share and the stone moves room', () => {
   const { s, boss } = fresh();
   const stone = s.gaia.stones[0], room = c.chamberOfTile(stone.x, stone.y), hp = boss.hp;
+  s.playerHP = 50; s.rubyHP = 60;
   api.eruptThornField(s, boss, (stone.x + .5) * c.TILE_SIZE, (stone.y + .5) * c.TILE_SIZE);
   assert.equal(s.thornPatches.length, 0, 'no thorn patch');
+  assert.equal(s.playerHP, 51.5); assert.equal(s.rubyHP, 61.5);
   assert.ok(Math.abs(hp - boss.hp - c.GAIA_STONE_SELF_DAMAGE * PH) < .01);
   assert.notEqual(c.chamberOfTile(stone.x, stone.y), room);
   assert.equal(stone.lit, false);
@@ -302,4 +304,38 @@ test('phase 3 lifeblooms sprout; breaking one heals you and Ruby; unbroken ones 
   const next = s.enemies.find(x => x.type === 'lifebloom' && x.hp > 0); assert.ok(next);
   s.gaia.lifebloomTimer = 1e9; for (let i = 0; i < c.GAIA_LIFEBLOOM_LIFE + 1; i++) e.tick(s);
   assert.ok(!s.enemies.includes(next), 'faded');
+});
+
+test('full Sunfire plays the Trident incoming shot once, 94 ticks before impact, and pauses its countdown',()=>{
+ const original=e.playAudioOneShot,cues=[];e.playAudioOneShot=(...args)=>cues.push(args);
+ try {
+  const {s}=fresh();s.gaia.sunfire={chamber:0,ticks:96};
+  g.updateGaia(s);assert.equal(cues.length,0);
+  s.gamePhase='laserTarget';e.tick(s);assert.equal(s.gaia.sunfire.ticks,95);assert.equal(cues.length,0);
+  s.gamePhase='playing';g.updateGaia(s);assert.deepEqual(cues,[['/sounds/meteorFalling.mp3',.5,1.6]]);
+  for(let i=0;i<20;i++)g.updateGaia(s);assert.equal(cues.length,1);
+ }finally{e.playAudioOneShot=original;}
+});
+
+test('a Sporeling death cloud poisons you while you stand in it and grows vines', () => {
+  const { s } = fresh(); s.godMode = false; s.playerHP = 100; s.rubyTileX = -1; s.enemies = [];
+  const x = s.playerTileX, y = s.playerTileY;
+  g.gaiaSporeCloud(s, { tileX: x, tileY: y });
+  assert.ok(g.gaiaLevel(s, x + 1, y) >= c.GAIA_SPORE_GROWTH || g.gaiaLevel(s, x, y + 1) >= c.GAIA_SPORE_GROWTH, 'vines around it');
+  let hits = 0; for (let i = 0; i < 60; i++) { s.gameTick++; const hp = s.playerHP; g.updateGaia(s); if (s.playerHP < hp) hits++; }
+  assert.equal(hits, 2, 'poisoned twice a second');
+  assert.equal(c.ENEMY_CONFIGS.sporeling.speed, .9);
+});
+
+
+test('Sunstone healing caps at full HP and cannot repeat from an unlit stone', () => {
+  const {s,boss} = fresh(), stone = s.gaia.stones[0];
+  s.gaia.stones = [stone];
+  const x = (stone.x+.5)*c.TILE_SIZE, y = (stone.y+.5)*c.TILE_SIZE;
+  s.playerHP = c.PLAYER_MAX_HP-.5; s.rubyHP = c.RUBY_MAX_HP-.5;
+  assert.equal(g.gaiaStoneBlocksField(s,boss,x,y,c.THORN_RADIUS),true);
+  assert.equal(s.playerHP,c.PLAYER_MAX_HP);assert.equal(s.rubyHP,c.RUBY_MAX_HP);
+  s.playerHP=50;s.rubyHP=60;
+  assert.equal(g.gaiaStoneBlocksField(s,boss,x,y,c.THORN_RADIUS),false);
+  assert.equal(s.playerHP,50);assert.equal(s.rubyHP,60);
 });

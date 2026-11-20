@@ -21,10 +21,13 @@ test('buffed aliens hit harder and move faster until the buff ends',()=>{
   s.gameTick+=100;assert.ok(Math.abs(e.celestialMoveMultiplier(s,a)-c.MOVE_SPEED_MULT)<1e-9);
 });
 
-test('Enchanters join the spawn pool from stage 20, at most two alive',()=>{
-  const s=fresh(),base=['normal'];s.bossesKilled=19;assert.ok(!e.spawnPool(s,base).includes('enchanter'));
-  s.bossesKilled=20;assert.ok(e.spawnPool(s,base).includes('enchanter'));
-  for(let i=0;i<E.maxAlive;i++)mob(s,'enchanter',30+i,30);assert.ok(!e.spawnPool(s,base).includes('enchanter'),'capped');
+test('Enchanter and Bleeder join at Stage 18 in Endless and Ascension, obey caps and stay out of challenges',()=>{
+  for(const mode of ['endless','ascension'])for(const [type,cfg] of [['enchanter',c.ENCHANTER],['bleeder',c.BLEEDER]]){
+    const s=fresh(),base=['normal'];s.mode=mode;s.bossesKilled=17;assert.ok(!e.spawnPool(s,base).includes(type));
+    s.bossesKilled=18;assert.ok(e.spawnPool(s,base).includes(type));
+    for(let i=0;i<cfg.maxAlive;i++)mob(s,type,30+i,30);assert.ok(!e.spawnPool(s,base).includes(type),'capped');
+    s.enemies=[];s.trial={boss:'fiery_king'};assert.deepEqual(e.spawnPool(s,base),base);
+  }
 });
 
 test('bosses get a smaller Enchanter buff',()=>{

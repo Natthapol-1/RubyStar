@@ -76,7 +76,8 @@ test('fence slow is much stronger during the shard rush and he does not attack',
   const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');near(boss,12,10);boss.targetTileX=13;boss.voltSlowTicks=100;
   j.updateJupiterReaper(s,boss);close(boss.stepProgress,c.JUPITER.fleeSpeed*c.JUPITER.exposedWallSlow*c.MOVE_SPEED_MULT);
   assert.ok(c.JUPITER.exposedWallSlow<c.JUPITER.wallSlow/2);
-  near(boss,11,10);boss.pathTimer=0;const hp=s.playerHP;j.updateJupiterReaper(s,boss);close(s.playerHP,hp);assert.ok(boss.path.length>0);
+  near(boss,11,10);boss.pathTimer=0;s.jupiter.shards=s.jupiter.shards.filter(sh=>sh.x!==s.playerTileX||sh.y!==s.playerTileY); // a shard under you would heal you
+  const hp=s.playerHP;j.updateJupiterReaper(s,boss);close(s.playerHP,hp);assert.ok(boss.path.length>0);
 });
 test('celestial skill hits for a phase share, protected during pursuit and full during escape',()=>{
   const{s,boss}=fresh();near(boss,12,10);pursue(s);let hp=boss.hp;e.useSpecialSkill(s);close(hp-boss.hp,c.JUPITER.phaseHP*c.JUPITER.celestialShare*c.JUPITER.damageTaken);
@@ -171,8 +172,10 @@ test('phase controls summon a missing Reaper and begin a fresh loop in the chose
   pursue(s,2);j.godSetJupiterPhase(s,3);assert.equal(s.jupiter.phase,3);assert.equal(s.jupiter.round,1);assert.equal(s.jupiter.energy,0);assert.equal(s.jupiter.stage,'charging');
 });
 test('pursuit entry flashes/shakes through its real transition state and preserves stronger shake',()=>{
-  const{s}=fresh();s.screenShakeTicks=30;s.screenShakeAmt=12;pursue(s);
-  assert.equal(s.jupiter.stormAge,0);assert.equal(s.screenShakeTicks,30);assert.equal(s.screenShakeAmt,12);
+  const{s}=fresh();pursue(s);
+  assert.equal(s.jupiter.stormAge,0);assert.equal(s.screenShakeTicks,36);assert.equal(s.screenShakeAmt,17);
+  s.screenShakeTicks=42;s.screenShakeAmt=22;pursue(s);
+  assert.equal(s.screenShakeTicks,42);assert.equal(s.screenShakeAmt,22);
 });
 test('room storms hurt aliens, spare the Reaper and safe room, and grant no player kill rewards',()=>{
   const{s,boss}=fresh();near(boss,39,39);pursue(s);s.playerHP=50;s.starEnergy=0;
@@ -440,12 +443,26 @@ test('shared pursuit overdrive fills, stays full without expiring fragments, pau
  const f=q.fragments[0];player(s,f.x,f.y);j.updateJupiter(s);assert.equal(q.overdriveCharge,0);assert.equal(q.fragmentOverdrive,false);assert.equal(q.fragments.length,2);
 });
 
-test('full Overdrive plays the supplied Aegis attack recording once',()=>{
+test('full Overdrive plays the supplied Aegis attack recording once, at the boosted level',()=>{
  const original=e.playAudioOneShot,files=[];e.playAudioOneShot=(file,volume)=>files.push({file,volume});
  try{
   const{s}=fresh();j.godSetJupiterPhase(s,2);pursue(s);s.jupiter.overdriveCharge=c.JUPITER.fragmentChargeTicks-1;
   j.updateJupiter(s);
-  assert.deepEqual(files.filter(v=>v.file==='/sounds/aegis-attack.mp3'),[{file:'/sounds/aegis-attack.mp3',volume:.8*e.ATTACK_SFX_VOLUME}]);
+  assert.deepEqual(files.filter(v=>v.file==='/sounds/aegis-attack.mp3'),[{file:'/sounds/aegis-attack.mp3',volume:1.6*e.ATTACK_SFX_VOLUME}]);
   j.updateJupiter(s);assert.equal(files.filter(v=>v.file==='/sounds/aegis-attack.mp3').length,1);
  } finally {e.playAudioOneShot=original;}
+});
+test('collecting a Storm Shard heals the player a little',()=>{
+  const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');near(boss,40,40);s.playerHP=50;
+  const shard=s.jupiter.shards[0];player(s,shard.x,shard.y);s.jupiter.shardPlayerX=s.playerX;s.jupiter.shardPlayerY=s.playerY;
+  j.updateJupiter(s);assert.equal(s.playerHP,50+c.JUPITER.shardHeal);
+});
+
+test('a meteor always hits the Reaper for 10% of a phase, ignoring his charge and pursuit protection',()=>{
+  for(const stage of ['charging','pursuit']){
+    const{s,boss}=fresh();s.godMode=true;if(stage==='pursuit')pursue(s);
+    const hp=boss.hp,energy=s.jupiter.energy;s.meteoriteWarning=c.chamberOfTile(boss.tileX,boss.tileY);s.meteoriteStrikeIn=1;e.tick(s);
+    if(stage==='pursuit')assert.ok(energy-s.jupiter.energy<c.JUPITER.phaseHP*c.JUPITER.meteorShare*c.JUPITER.damageTaken*c.JUPITER.energyPerDamage+.5,'energy drain stays small: '+(energy-s.jupiter.energy));
+    assert.ok(Math.abs(hp-boss.hp-c.JUPITER.phaseHP*c.JUPITER.meteorShare)<1e-6,stage+': '+(hp-boss.hp));
+  }
 });

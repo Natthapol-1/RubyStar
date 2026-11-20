@@ -10,8 +10,8 @@ export default function CoolingWaveStatus({ cooldown, empowered, casts }: {
 }) {
   const cooling = cooldown > 0, total = empowered ? SUN.rapidCooldown : SUN.waveCooldown;
   const progress = Math.max(0, Math.min(1, 1 - cooldown / total));
-  const label = empowered ? `Cooling Wave empowered — ${casts} casts left${cooling ? ', recharging' : ' — '+bindingLabel('mapSkill')+' to cast'}`
-    : cooling ? `Cooling Wave recharging — ${Math.ceil(cooldown / 60)} seconds` : 'Cooling Wave ready — '+bindingLabel('mapSkill')+' to cast';
+  const label = empowered ? `Hydro Pulse empowered — ${casts} casts left${cooling ? ', recharging' : ' — '+bindingLabel('mapSkill')+' to cast'}`
+    : cooling ? `Hydro Pulse recharging — ${Math.ceil(cooldown / 60)} seconds` : 'Hydro Pulse ready — '+bindingLabel('mapSkill')+' to cast';
   const color = cooling ? '#526b7e' : empowered ? '#dcffff' : '#8be7f7';
   return <div className="cooling-status" role="img" aria-label={label} title={label}
     data-cooling-state={cooling ? 'cooldown' : empowered ? 'empowered' : 'ready'}>

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), test = require('node:test'), ts = require('typescript');
 require.extensions['.ts'] = (m, f) => {
   let source = fs.readFileSync(f, 'utf8');
-  if (f.endsWith('engine.ts')) source += '\nexport const moonTest = { damageEnemy, killEnemy };';
+  if (f.endsWith('engine.ts')) source += '\nexport const moonTest = { damageEnemy, killEnemy, fireQueenBolt };';
   m._compile(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 } }).outputText, f);
 };
 const e = require('../game/engine.ts'), c = require('../game/constants.ts'), moon = require('../game/moon.ts'), api = e.moonTest;
@@ -170,7 +170,12 @@ test('hitting the real Queen heals you only when she next jumps; illusions and m
   api.damageEnemy(s, illusions(s)[0], 2, 'player');
   api.damageEnemy(s, boss, 20, 'meteor');
   assert.equal(s.playerHP, 50, 'no heal on the hit');
+  const departed={x:boss.x,y:boss.y,room:c.chamberOfTile(boss.tileX,boss.tileY)};
   jump(s, boss);
+  const pulse=s.moon.healPulses.at(-1);assert.ok(pulse);
+  assert.equal(pulse.x,departed.x);assert.equal(pulse.y,departed.y);assert.equal(pulse.room,departed.room);
+  assert.notEqual(pulse.room,c.chamberOfTile(boss.tileX,boss.tileY),'healing effect stays in the old chamber');
+  assert.deepEqual(pulse.targets.map(t=>t.ruby),[false,true]);
   assert.equal(s.playerHP, 50 + 20 * c.MOON_HIT_HEAL);
   assert.equal(s.rubyHP, 40 + 20 * c.MOON_HIT_HEAL, 'Ruby too');
   assert.equal(s.moon.healBank, 0);
@@ -379,7 +384,7 @@ test('every wall-side spawn spot (used by bosses, illusions and mimics) is open 
   c.CHAMBER_SPAWN_TILES.forEach((pool, room) => pool.forEach(([x, y]) => assert.equal(map[y][x], c.T_FLOOR, `room ${room} spot ${x},${y}`)));
 });
 
-test('phase 3 darkens one room: units there are hidden until hit, and the dark moves to another room', () => {
+test('phase 3 darkness hides units until hit and shifts away from the previous room', () => {
   const { s, boss } = fresh();
   moon.godSetMoonPhase(s, 2);
   assert.equal(s.moon.dark, -1, 'no dark in phase 2');
@@ -399,4 +404,145 @@ test('phase 3 darkens one room: units there are hidden until hit, and the dark m
   assert.notEqual(s.moon.dark, room, 'the dark moved');
   moon.godSetMoonPhase(s, 1);
   assert.equal(s.moon.dark, -1);
+});
+
+
+test('jump heal visuals require banked healing, pause with gameplay and clear on defeat',()=>{
+ const{s,boss}=fresh();jump(s,boss);assert.equal(s.moon.healPulses?.length??0,0);
+ s.moon.healBank=10;jump(s,boss);assert.equal(s.moon.healPulses.length,1);
+ const ticks=s.moon.healPulses[0].ticks;s.gamePhase='paused';e.tick(s);assert.equal(s.moon.healPulses[0].ticks,ticks);
+ s.gamePhase='playing';boss.phaseTimer=10000;
+ for(let i=0;i<90;i++)e.tick(s);assert.equal(s.moon.healPulses.length,0);
+ s.moon.healBank=10;jump(s,boss);moon.clearMoonIllusions(s);assert.equal(s.moon.healPulses.length,0);
+});
+
+
+test('the Moon healing-wave sound plays once with the healing pulse, never on an empty jump',()=>{
+ const ui=require('../game/ui-sfx.ts'),original=ui.playUiSfx,cues=[];
+ ui.playUiSfx=kind=>cues.push(kind);
+ try{
+  const{s,boss}=fresh();jump(s,boss);assert.equal(cues.filter(k=>k==='moonHealingWave').length,0);
+  s.moon.healBank=15;jump(s,boss);assert.ok(s.moon.healPulses.length);
+  assert.equal(cues.filter(k=>k==='moonHealingWave').length,1);
+  boss.phaseTimer=10000;for(let i=0;i<20;i++)e.tick(s);
+  assert.equal(cues.filter(k=>k==='moonHealingWave').length,1,'no per-frame replay');
+ }finally{ui.playUiSfx=original;}
+});
+
+
+test('Moon healing uses the requested gem recording once at original speed and pitch',()=>{
+ const original=global.Audio,played=[];
+ global.Audio=class{constructor(src){this.src=src;this.playbackRate=1;}play(){played.push(this);return Promise.resolve();}};
+ try{
+  require('../game/ui-sfx.ts').playUiSfx('moonHealingWave');
+  assert.equal(played.length,1);assert.equal(played[0].src,'/sounds/gem_passive_2.wav');
+  assert.equal(played[0].playbackRate,1);assert.equal(played[0].loop,false);assert.equal(played[0].volume,.75);
+ }finally{if(original===undefined)delete global.Audio;else global.Audio=original;}
+});
+
+
+test('the real Moon Queen attack mix is 10% quieter than the ordinary Queen mix',()=>{
+ const original=global.Audio,played=[];global.Audio=class{constructor(src){this.src=src;}play(){played.push(this);return Promise.resolve();}pause(){}};
+ try{
+  const{s,boss}=fresh(),moonState=s.moon;s.invincible=true;s.moon=null;
+  api.fireQueenBolt(s,boss,s.playerX,s.playerY,true);
+  const normal=played.filter(a=>['/sounds/bossQueenAttack1.mp3','/sounds/gameModeClick.mp3'].includes(a.src)).slice(-2).map(a=>a.volume);
+  s.moon=moonState;api.fireQueenBolt(s,boss,s.playerX,s.playerY,true);
+  const quiet=played.filter(a=>['/sounds/bossQueenAttack1.mp3','/sounds/gameModeClick.mp3'].includes(a.src)).slice(-2).map(a=>a.volume);
+  assert.equal(normal.length,2);quiet.forEach((v,i)=>assert.ok(Math.abs(v-normal[i]*.9)<1e-9));
+ }finally{if(original===undefined)delete global.Audio;else global.Audio=original;}
+});
+
+test('a darkness shift can hide two distinct rooms and cross-fades both when it moves', () => {
+  const { s } = fresh();
+  s.moon.phase = 3;
+  const random = Math.random;
+  try {
+    Math.random = () => .349;
+    moon.moveMoonDark(s);
+    const first = [s.moon.dark, s.moon.secondDark];
+    assert.equal(new Set(first).size, 2);
+    for (const room of first) assert.ok(moon.moonHiddenInDark(s, ...c.TELEPORT_PADS[room]));
+    moon.moveMoonDark(s);
+    assert.deepEqual([s.moon.oldDark, s.moon.oldSecondDark], first);
+    assert.equal(s.moon.darkFade, c.MOON_DARK_FADE);
+    assert.ok(!first.includes(s.moon.dark) && !first.includes(s.moon.secondDark));
+    for (const room of first) assert.equal(moon.moonHiddenInDark(s, ...c.TELEPORT_PADS[room]), false);
+    Math.random = () => .35;
+    moon.moveMoonDark(s);
+    assert.equal(s.moon.secondDark, -1);
+  } finally {
+    Math.random = random;
+  }
+});
+
+test('darkness haze ramps in on entry and ramps out after leaving', () => {
+  const { s } = fresh();
+  s.moon.dark = 0;
+  s.moon.secondDark = 1;
+  s.moon.darkTimer = 300;
+  [s.playerTileX, s.playerTileY] = c.TELEPORT_PADS[1];
+  for (let i = 0; i < c.MOON_DARK_OVERLAY_TICKS; i++) moon.updateMoon(s);
+  assert.equal(s.moon.darkOverlayTicks, c.MOON_DARK_OVERLAY_TICKS);
+  [s.playerTileX, s.playerTileY] = c.TELEPORT_PADS[2];
+  moon.updateMoon(s);
+  assert.equal(s.moon.darkOverlayTicks, c.MOON_DARK_OVERLAY_TICKS - 1);
+  for (let i = 1; i < c.MOON_DARK_OVERLAY_TICKS; i++) moon.updateMoon(s);
+  assert.equal(s.moon.darkOverlayTicks, 0);
+});
+
+test('mirror strips never lie right alongside a wall (a one-tile gap is fine), and every room still gets its strips', () => {
+  for (let run = 0; run < 25; run++) {
+    const { s } = fresh(); moon.placeMoonMirrors(s);
+    const set = new Set(s.moon.mirrors), strips = [];
+    for (const i of s.moon.mirrors) { const x = i % c.MAP_COLS, y = Math.floor(i / c.MAP_COLS);
+      if (!set.has(i - 1) && !set.has(i - c.MAP_COLS)) strips.push(set.has(i + 1) ? [[x, y], [x + 1, y], [x + 2, y]] : [[x, y], [x, y + 1], [x, y + 2]]); }
+    assert.equal(strips.length, 4 * c.MOON_MIRROR_STRIPS);
+    for (const strip of strips) {
+      const vertical = strip[0][0] === strip[1][0], [sx, sy] = vertical ? [1, 0] : [0, 1];
+      for (const side of [1, -1]) assert.ok(strip.filter(([x, y]) => s.map[y + sy * side]?.[x + sx * side] !== c.T_FLOOR).length < 2, 'not hugging a wall');
+    }
+  }
+});
+
+test('darkness entry plays once and reentry restarts the clip while the haze is still fading', () => {
+  const audio = require('../game/event-audio.ts');
+  const { s } = fresh();
+  const previousAudio = global.Audio, entries = [];
+  global.Audio = class {
+    constructor(src) { this.src = src; }
+    play() { if (this.src === '/sounds/moon-darkness-entry.mp3') entries.push(this); return Promise.resolve(); }
+    pause() { this.paused = true; }
+  };
+  try {
+    s.moon.dark = 0;
+    s.moon.secondDark = 1;
+    s.moon.darkTimer = 300;
+    [s.playerTileX, s.playerTileY] = c.TELEPORT_PADS[1];
+    for (let i = 0; i < 5; i++) moon.updateMoon(s);
+    assert.equal(entries.length, 1);
+    [s.playerTileX, s.playerTileY] = c.TELEPORT_PADS[2];
+    moon.updateMoon(s);
+    assert.equal(entries.length, 1);
+    [s.playerTileX, s.playerTileY] = c.TELEPORT_PADS[0];
+    moon.updateMoon(s);
+    assert.equal(entries.length, 2);
+    assert.equal(entries[0].paused, true);
+  } finally {
+    audio.stopAmbientEventSounds();
+    global.Audio = previousAudio;
+  }
+});
+
+test('Blinkers join the regular spawns only from phase 3, at most two alive', () => {
+  const run = phase => {
+    const s = e.createModeState('trial', 'splitter_queen');
+    s.meteoriteTimer = 100000; s.bossTimer = 100000; s.immortal = true; s.moon.phase = phase;
+    let most = 0;
+    for (let i = 0; i < 6000; i++) { e.tick(s); s.moon.phase = phase; most = Math.max(most, s.enemies.filter(x => x.type === 'blinker').length); }
+    return most;
+  };
+  assert.equal(run(1), 0, 'none before phase 3');
+  const most = run(3);
+  assert.ok(most >= 1 && most <= c.MOON_BLINKER_MAX, 'phase 3 spawns them, capped: ' + most);
 });

@@ -12,3 +12,37 @@ export function gameAudio(src:string,channel:AudioChannel=/(?:celestial\/|laser|
  if(!listening){listening=true;window.addEventListener('ruby-audio',()=>{for(const refresh of active)if(!refresh())active.delete(refresh);});}
  apply();return sound;
 }
+
+let audioContext: AudioContext | null = null;
+// Reversed clips: decoded once through Web Audio, flipped in memory and cached, so no reversed file is shipped.
+const reversed = new Map<string, Promise<AudioBuffer | null>>();
+export function preloadReversed(src: string) {
+ const ctx = getAudioCtx(); if (!ctx) return null;
+ let buffer = reversed.get(src);
+ if (!buffer) {
+  buffer = fetch(src).then(r => r.arrayBuffer()).then(data => ctx.decodeAudioData(data)).then(decoded => {
+   for (let c = 0; c < decoded.numberOfChannels; c++) decoded.getChannelData(c).reverse();
+   return decoded;
+  }).catch(() => null);
+  reversed.set(src, buffer);
+ }
+ return buffer;
+}
+/** Plays a clip backwards on a player channel; playbackRate also raises the pitch. */
+export function playReversed(src: string, volume: number, playbackRate = 1, channel: AudioChannel = 'effects') {
+ const ctx = getAudioCtx(); const buffer = preloadReversed(src); if (!ctx || !buffer) return;
+ void buffer.then(decoded => {
+  if (!decoded) return;
+  const source = ctx.createBufferSource(), gain = ctx.createGain();
+  source.buffer = decoded; source.playbackRate.value = playbackRate; gain.gain.value = volume * channelVolume(channel);
+  source.connect(gain).connect(ctx.destination); source.start();
+ });
+}
+export function getAudioCtx(): AudioContext | null {
+ if (typeof window === 'undefined') return null;
+ const Context = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+ if (!Context) return null;
+ audioContext ??= new Context();
+ if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+ return audioContext;
+}

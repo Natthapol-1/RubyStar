@@ -26,9 +26,9 @@ test('Devourer is swift; each stack adds half a point of damage but no reach',()
  assert.equal(c.ENEMY_CONFIGS.devourer.speed,3.4);assert.equal(c.DEVOURER_MAX_STACKS,3);
  for(let stacks=0;stacks<=c.DEVOURER_MAX_STACKS;stacks++){
   const range=2;
-  assert.ok(Math.abs(encounter(stacks,range).playerHP-(100-(c.ENEMY_CONFIGS.devourer.damageToPlayer+.5*stacks)*c.CARRY_DAMAGE_MULT))<1e-9,'player hit with '+stacks+' stacks');
+  assert.ok(Math.abs(encounter(stacks,range).playerHP-(100-(c.ENEMY_CONFIGS.devourer.damageToPlayer+c.DEVOURER_ENDLESS_BITE_BONUS+.5*stacks)*c.CARRY_DAMAGE_MULT))<1e-9,'player hit with '+stacks+' stacks');
   assert.equal(encounter(stacks,range+1).playerHP,100,'misses beyond range with '+stacks+' stacks');
-  assert.equal(encounter(stacks,range,'ruby').rubyHP,100-(c.ENEMY_CONFIGS.devourer.damageToRuby+.5*stacks));
+  assert.equal(encounter(stacks,range,'ruby').rubyHP,100-(c.ENEMY_CONFIGS.devourer.damageToRuby+c.DEVOURER_ENDLESS_BITE_BONUS+.5*stacks));
  }
 });
 
@@ -77,18 +77,14 @@ test('copies eat and split again; newborns wait only a short first meal',()=>{
  assert.equal(next[0].windupTicks,c.DEVOURER_COPY_FIRST_MEAL);assert.equal(s.bossesKilled,0);
 });
 
-test('meteors hit every Devourer body for the boss share of the original max HP',()=>{
- for(const [late,share] of [[false,.75],[true,.45]]){
-  const s=fresh(),e=s.enemies[0];s.godMode=true;if(late)s.bossesKilled=c.SPECIAL_UNLOCK_KILLS;
-  e.devourer.originMaxHp=100;e.maxHp=e.hp=200;place(e,5,5);e.chargeDirX=2;e.windupTicks=100000;e.attackTimer=100000;
-  s.meteoriteWarning=c.chamberOfTile(5,5);s.meteoriteStrikeIn=1;engine.tick(s);
-  close(e.hp,200-100*share);
-  const copy={...e,id:s.nextEnemyId++,maxHp:40,hp:40,chargeDirX:1,devourer:{generation:1,newbornTicks:0,originMaxHp:100}};place(copy,6,5);s.enemies.push(copy);
-  s.meteoriteWarning=c.chamberOfTile(6,5);s.meteoriteStrikeIn=1;engine.tick(s);
-  assert.ok(!s.enemies.includes(copy),'a copy dies to the original-sized hit');assert.equal(s.bossesKilled,late?c.SPECIAL_UNLOCK_KILLS:0);
- }
+test('a meteor destroys every Devourer body it hits, the original too, without creating copies',()=>{
+ const s=fresh(),e=s.enemies[0];s.godMode=true;
+ e.maxHp=e.hp=200;place(e,5,5);e.chargeDirX=2;e.windupTicks=100000;e.attackTimer=100000;
+ const copy={...e,id:s.nextEnemyId++,maxHp:40,hp:40,chargeDirX:1,devourer:{generation:1,newbornTicks:0,originMaxHp:200}};place(copy,6,5);s.enemies.push(copy);
+ s.meteoriteWarning=c.chamberOfTile(5,5);s.meteoriteStrikeIn=1;engine.tick(s);
+ assert.ok(!s.enemies.includes(e),'the original is destroyed');assert.ok(!s.enemies.includes(copy),'the copy is destroyed');
+ assert.equal(s.enemies.filter(x=>x.type==='devourer'&&x.hp>0).length,0,'no stacks survive to make copies');
 });
-
 test('at 0-1 stacks she heads for the nearest alien to eat; at 2+ she chases the player',()=>{
  for(const [stacks,huntsFood] of [[0,true],[1,true],[2,false]]){
   const s=fresh(),e=s.enemies[0];s.godMode=true;s.playerCarryingRuby=true;s.rubyTileX=s.rubyTileY=-1;
@@ -149,7 +145,7 @@ test('each copy generation bites for 80% of the previous generation',()=>{
   s.playerTileX=s.playerTargetX=40;s.playerTileY=s.playerTargetY=10;s.playerX=40.5*c.TILE_SIZE;s.playerY=10.5*c.TILE_SIZE;
   const e=s.enemies[0];place(e,38,10);e.attackTimer=0;e.windupTicks=1000;e.chargeDirX=2;
   if(generation)e.devourer={generation,newbornTicks:0};engine.tick(s);
-  assert.ok(Math.abs(s.playerHP-(100-(c.ENEMY_CONFIGS.devourer.damageToPlayer+1)*.8**generation*c.CARRY_DAMAGE_MULT))<1e-9,'generation '+generation+': '+s.playerHP);
+  assert.ok(Math.abs(s.playerHP-(100-(c.ENEMY_CONFIGS.devourer.damageToPlayer+c.DEVOURER_ENDLESS_BITE_BONUS+1)*.8**generation*c.CARRY_DAMAGE_MULT))<1e-9,'generation '+generation+': '+s.playerHP);
  }
 });
 
@@ -189,4 +185,13 @@ test('Devourer gains 6 HP per prior boss defeat instead of the usual 15',()=>{
   const s=engine.createInitialState();s.noMobs=true;s.bossesKilled=defeats;engine.godSpawnBoss(s,'devourer');
   const e=s.enemies.find(x=>x.type==='devourer');assert.equal(e.maxHp,35+6*defeats);assert.equal(e.hp,e.maxHp);
  }
+});
+
+test('30% of the Devourer bites on you also knock you back',()=>{
+ const roll=Math.random;
+ try{
+  Math.random=()=>0;let s=encounter(0,1);assert.ok(s.playerKnockback,'low roll: shoved');assert.equal(s.playerKnockback.dirX,1);
+  Math.random=()=>.99;s=encounter(0,1);assert.equal(s.playerKnockback,null,'high roll: no shove');
+ }finally{Math.random=roll;}
+ assert.equal(c.DEVOURER_KNOCKBACK_CHANCE,.3);
 });

@@ -1,8 +1,12 @@
 import type { BossType } from './constants';
 import type { GameState } from './engine';
+import type { TrialBody } from './trials';
 export interface Profile {
   keyBindings?:Record<string,string[]>;
-  version: 1; tutorialCompleted: boolean;
+  version: 1; tutorialCompleted: boolean; introSeen?: boolean; // introSeen: the opening cutscene has played once
+  sunArrivalSeen?: boolean;
+  arrivalsSeen?: Partial<Record<TrialBody, boolean>>;
+  sunExplore?: import('./sun-explore-story').SunExploreProgress;
   defeated: BossType[]; completed: BossType[]; encountered: string[]; constellations: string[]; skills: string[];
   highestEndless: number;
   highestAscension?: number;
@@ -21,6 +25,25 @@ const createSession=():ProfileSession=>({profile:emptyProfile(),writing:Promise.
 const session=typeof window==='undefined'?createSession():(window.rubyProfileSession??=createSession());
 const profile=session.profile;
 export function isDesktop(){return typeof window!=='undefined'&&!!window.rubyDesktop;}
+/** Whether the opening cutscene has already played (the desktop profile, or this browser's storage on the web). */
+export function introSeen(){if(isDesktop())return !!profile.introSeen;try{return localStorage.getItem('rubyStar.intro.v1')==='1';}catch{return true;}}
+export function markIntroSeen(){if(isDesktop())updateProfile(p=>{p.introSeen=true;});else{try{localStorage.setItem('rubyStar.intro.v1','1');}catch{}}}
+export function arrivalSeen(id: TrialBody) {
+  if (profile.arrivalsSeen?.[id] === true || (id === 'sun' && profile.sunArrivalSeen === true)) return true;
+  if (isDesktop()) return false;
+  try {
+    return localStorage.getItem('rubyStar.arrival.v1.' + id) === '1'
+      || (id === 'sun' && localStorage.getItem('rubyStar.sunArrival.v1') === '1');
+  } catch { return false; }
+}
+export function markArrivalSeen(id: TrialBody) {
+  if (isDesktop()) {
+    updateProfile(p => { p.arrivalsSeen = { ...p.arrivalsSeen, [id]: true }; });
+  } else {
+    profile.arrivalsSeen = { ...profile.arrivalsSeen, [id]: true };
+    try { localStorage.setItem('rubyStar.arrival.v1.' + id, '1'); } catch {}
+  }
+}
 export function getProfile(){return profile;}
 export function saveError(){return session.error;}
 function signal(){if(typeof window!=='undefined')window.dispatchEvent(new Event('ruby-profile'));}
@@ -54,11 +77,21 @@ export async function loadProfile(){
 }
 export function recordBoss(boss:BossType,state:GameState){
   if(state.mode==='tutorial')return;
+  if (!isDesktop() && state.trial?.boss === boss && !state.trial.mapOnly && !challengeCleared(boss)) {
+    profile.completed.push(boss);
+    try { localStorage.setItem('rubyStar.challengeClear.v1.' + boss, '1'); } catch {}
+    signal();
+  }
   updateProfile(p=>{
     if(state.mode==='endless'&&!p.defeated.includes(boss))p.defeated.push(boss);
     if(state.mode==='endless'||state.mode==='ascension')p.highestEndless=Math.max(p.highestEndless,state.bossesKilled);
     if(state.trial&&!state.trial.mapOnly&&!p.completed.includes(boss)){p.completed.push(boss);state.gemstoneReward=boss;}
   });
+}
+export function challengeCleared(boss: BossType) {
+  if (profile.completed.includes(boss)) return true;
+  if (isDesktop()) return false;
+  try { return localStorage.getItem('rubyStar.challengeClear.v1.' + boss) === '1'; } catch { return false; }
 }
 export function canEnter(mode:string,boss?:BossType){return !isDesktop()||(mode==='tutorial'?true:!profile.tutorialCompleted?false:mode==='ascension'?profile.highestEndless>=10:mode==='trial'?!!boss&&profile.defeated.includes(boss):true);}
 export function resumeKey(mode:string,trialId?:string){return mode==='endless'||mode==='ascension'?'endless':trialId??mode;}
@@ -74,6 +107,7 @@ export function restoreRun(mode:string,trialId?:string):GameState|null{
   const entry=profile.resumes[resumeKey(mode,trialId)];if(!entry||entry.version!==1)return null;
   const s=entry.state;
   if(trialId==='saturn'&&!s?.saturn)return null;
+  if(trialId==='binary'&&!s?.binary)return null;
   if(!s||!Array.isArray(s.map)||s.map.length!==51||!s.map.every(row=>Array.isArray(row)&&row.length===51)||!Array.isArray(s.enemies)||!s.build||!s.ambientEvents||!Number.isFinite(s.playerHP)||!Number.isFinite(s.gameTick)||!['playing','teleporting','laserTarget','constellation','blessing','skillChoice'].includes(s.gamePhase))return null;
   const arrays=['resources','frostIceTiles','laserBeams','laserBullets','waveEffects','bombBlasts','lightningArcs','slashEffects','deathParticles','rewardEffects','prayerWaves','thornPatches','encounterEffects','seaSongWaves','seaSongBursts','specialEffects','venusReflects','teleportDestOptions','constellations','constellationChoices','bossPool'];
   const buildArrays=['blessings','blessingChoices','zones','echoes','impacts'];
@@ -82,8 +116,9 @@ export function restoreRun(mode:string,trialId?:string):GameState|null{
   if(!['endless','ascension','tutorial','trial'].includes(entry.mode)||s.mode!==entry.mode)return null;
   if((trialId??null)!==(entry.trialId??null))return null;
   if(s.sapphireHitEffects!==undefined&&!Array.isArray(s.sapphireHitEffects))return null;
-  const restored=JSON.parse(JSON.stringify(s)) as GameState;restored.sapphireHitEffects??=[];
-  if(restored.saturn){restored.saturn.charging=false;restored.saturn.charge=0;}
+  // Runs saved before the pylon → totem rename keep working: their pylon keys and values become totem ones.
+  const restored=JSON.parse(JSON.stringify(s).replace(/PYLON/g,'TOTEM').replace(/Pylon/g,'Totem').replace(/pylon/g,'totem')) as GameState;restored.sapphireHitEffects??=[];
+  if(restored.saturn)restored.saturn.field=null;
   return restored;
 }
 export function loadWebSettings(){

@@ -26,16 +26,16 @@ const { chromium } = require('playwright');
       const hit = await page.evaluate(() => [window.__encounter.enemies[0].hp, window.__encounter.playerHP]);
       assert.ok(hit[0] > 89 && hit[0] < 90); assert.ok(hit[1] >= 96);
       await page.screenshot({ path: path.join(output, `sentinel-shield-${name}.png`) });
-      const pylonId = await page.evaluate(() => {
-        const s = window.__encounter, pylon = s.enemies[1], other = s.enemies[2]; s.playerHP = 100;
-        for (const [enemy,x,y] of [[pylon,2,2],[other,40,40]]) Object.assign(enemy,{tileX:x,tileY:y,targetTileX:x,targetTileY:y,x:(x+.5)*48,y:(y+.5)*48,stepProgress:0});
-        pylon.pylon.ageTicks = 1199; return pylon.id;
+      const totemId = await page.evaluate(() => {
+        const s = window.__encounter, totem = s.enemies[1], other = s.enemies[2]; s.playerHP = 100;
+        for (const [enemy,x,y] of [[totem,2,2],[other,40,40]]) Object.assign(enemy,{tileX:x,tileY:y,targetTileX:x,targetTileY:y,x:(x+.5)*48,y:(y+.5)*48,stepProgress:0});
+        totem.totem.ageTicks = 1199; return totem.id;
       });
-      await page.waitForFunction(id => window.__encounter.enemies.find(e=>e.id===id)?.pylon.overloadTicks > 0, pylonId);
-      await page.screenshot({path:path.join(output,`pylon-overload-warning-${name}.png`)});
-      await page.waitForFunction(id => {const p=window.__encounter.enemies.find(e=>e.id===id);return p && (p.tileX!==2 || p.tileY!==2) && p.pylon.overloadTicks===0;},pylonId);
+      await page.waitForFunction(id => window.__encounter.enemies.find(e=>e.id===id)?.totem.overloadTicks > 0, totemId);
+      await page.screenshot({path:path.join(output,`totem-overload-warning-${name}.png`)});
+      await page.waitForFunction(id => {const p=window.__encounter.enemies.find(e=>e.id===id);return p && (p.tileX!==2 || p.tileY!==2) && p.totem.overloadTicks===0;},totemId);
       assert.equal(await page.evaluate(()=>window.__encounter.playerHP),20);assert.equal(await page.evaluate(()=>window.__encounter.rubyHP),100);
-      await page.screenshot({path:path.join(output,`pylon-overload-blast-${name}.png`)});
+      await page.screenshot({path:path.join(output,`totem-overload-blast-${name}.png`)});
 
       await page.evaluate(() => { const s = window.__encounter; s.godMode = true; for (const enemy of s.enemies) if (enemy.type === 'aegis_construct') enemy.hp = 0; });
       await page.waitForFunction(() => !window.__encounter.enemies[0].aegis.shielded && window.__encounter.enemies[0].aegis.openAmount >= .99 && window.__encounter.enemies.length === 1);
@@ -80,6 +80,6 @@ const { chromium } = require('playwright');
       assert.equal(await page.getByRole('heading', { name: 'ASTRAL TWINS', exact: true }).count(), 1);
       assert.deepEqual(errors, []); await page.close();
     }
-    console.log('New bosses: desktop/mobile summons, reflected laser, shield opening, pylon overload/relocation/player-only damage, exposed core, twin revival timer bar, single completion reward, guide entries and browser errors passed.');
+    console.log('New bosses: desktop/mobile summons, reflected laser, shield opening, totem overload/relocation/player-only damage, exposed core, twin revival timer bar, single completion reward, guide entries and browser errors passed.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -7,7 +7,7 @@ const { createCanvas } = require('@napi-rs/canvas');
 const c = require('../game/constants.ts'), engine = require('../game/engine.ts'), moon = require('../game/moon-art.ts');
 const source = fs.readFileSync('game/RubyStarGame.tsx', 'utf8');
 // Local art modules keep their real imports; React/UI imports are dropped since only canvas drawing runs.
-const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun)';/gm)]
+const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
   .map(m => `const ${m[1].replace(/\btype\s+/g, '')}=require('./${m[2]}.ts');`).join('');
 const code = 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
   + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;';
@@ -85,7 +85,7 @@ fs.writeFileSync(path.join(out, 'moon-crystal-cover.png'), close.toBuffer('image
   p3.noMobs = true; p3.meteoriteTimer = 100000;
   moonLogic.godSetMoonPhase(p3, 3);
   const boss = p3.enemies.find(e => e.type === 'splitter_queen'); boss.phaseTimer = 1; engine.tick(p3); boss.phaseTimer = 300;
-  const room = c.chamberOfTile(p3.playerTileX, p3.playerTileY); p3.moon.dark = room; p3.moon.darkFade = 0; p3.moon.oldDark = -1;
+  const room = c.chamberOfTile(p3.playerTileX, p3.playerTileY); p3.moon.dark = room; p3.moon.secondDark = (room + 1) % 4; p3.moon.darkFade = 0; p3.moon.oldDark = p3.moon.oldSecondDark = -1; p3.gameTick = 420; p3.moon.darkOverlayTicks = c.MOON_DARK_OVERLAY_TICKS;
   const [r1, c1] = c.CHAMBER_BOUNDS[room];
   const shown = p3.enemies.find(e => e.type === 'moon_illusion');
   Object.assign(shown, { tileX: c1 + 9, tileY: r1 + 6, targetTileX: c1 + 9, targetTileY: r1 + 6, x: (c1 + 9.5) * c.TILE_SIZE, y: (r1 + 6.5) * c.TILE_SIZE, flashTicks: 6 });
@@ -96,3 +96,49 @@ fs.writeFileSync(path.join(out, 'moon-crystal-cover.png'), close.toBuffer('image
   fs.writeFileSync(path.join(out, 'moon-dark.png'), canvas.toBuffer('image/png'));
 }
 console.log('wrote', path.join(out, 'moon-world.png'), path.join(out, 'moon-crystal-cover.png'), path.join(out, 'moon-illusions.png'), path.join(out, 'moon-mirrors.png'), path.join(out, 'moon-dark.png'));
+
+// Inspect the full taper where lower-room parallax previously exposed rectangular stems.
+{
+  const cv = createCanvas(960, 540);
+  moon.drawMoonBackdrop(cv.getContext('2d'), 960, 540, 700, 1800, 360);
+  fs.writeFileSync(path.join(out, 'moon-lower-backdrop.png'), cv.toBuffer('image/png'));
+}
+
+// Moon Mark: cast travel, lock-on, persistent seal and dark-room readability.
+{
+ const logic=require('../game/moon.ts'),s=engine.createModeState('trial','splitter_queen');
+ s.noMobs=true;engine.godSpawnBoss(s,'splitter_queen');
+ const boss=s.enemies.find(e=>e.type==='splitter_queen');
+ Object.assign(boss,{tileX:12,targetTileX:12,tileY:10,targetTileY:10,x:12.5*48,y:10.5*48,phaseTimer:300});
+ Object.assign(s,{playerTileX:10,playerTargetX:10,playerTileY:10,playerTargetY:10,playerX:10.5*48,playerY:10.5*48});
+ logic.useMoonMark(s);
+ const w=720,h=460,sheet=createCanvas(w*2,h*2),ctx=sheet.getContext('2d');
+ for(const [i,age] of [8,20,90,180].entries()) {
+  s.gameTick=200+age;s.moon.mark.ticks=c.MOON_MARK_TICKS-age;
+  s.moon.dark=i===3?0:-1;s.moon.secondDark=-1;s.moon.oldDark=s.moon.oldSecondDark=-1;s.moon.darkFade=0;
+  const frame=createCanvas(w,h),before=JSON.stringify(s);
+  renderer.exports.drawGame(frame.getContext('2d'),s,w,h,s.gameTick,0,false);
+  if(before!==JSON.stringify(s))throw Error('Moon Mark art changed state');
+  ctx.drawImage(frame,(i%2)*w,Math.floor(i/2)*h);
+ }
+ fs.writeFileSync(path.join(out,'moon-mark.png'),sheet.toBuffer('image/png'));
+}
+
+
+// Banked healing released from the Queen's actual departure chamber, across four animation ages.
+{
+ const s=engine.createModeState('trial','splitter_queen');s.noMobs=true;s.meteoriteTimer=1e6;s.resources=[];
+ engine.godSpawnBoss(s,'splitter_queen');const boss=s.enemies.find(e=>e.type==='splitter_queen');
+ const open=engine.freeChamberTiles(s,0),near=(x,y)=>open.slice().sort((a,b)=>Math.hypot(a[0]-x,a[1]-y)-Math.hypot(b[0]-x,b[1]-y))[0];
+ const [bx,by]=near(14,8),[px,py]=near(12,12),[rx,ry]=near(13,13);
+ Object.assign(boss,{tileX:bx,targetTileX:bx,tileY:by,targetTileY:by,x:(bx+.5)*48,y:(by+.5)*48,phaseTimer:1});
+ Object.assign(s,{playerTileX:px,playerTargetX:px,playerTileY:py,playerTargetY:py,playerX:(px+.5)*48,playerY:(py+.5)*48,rubyTileX:rx,rubyTileY:ry,playerHP:50,rubyHP:50});
+ s.moon.healBank=24;engine.tick(s);if(!s.moon.healPulses?.length)throw Error('Missing departure heal pulse');
+ const w=1000,h=660,sheet=createCanvas(w*2,h*2),ctx=sheet.getContext('2d');
+ for(const [i,age] of [12,30,58,82].entries()){
+  s.moon.healPulses[0].ticks=90-age;s.moon.arrivals=[];
+  const frame=createCanvas(w,h),before=JSON.stringify(s);renderer.exports.drawGame(frame.getContext('2d'),s,w,h,s.gameTick,0,false);
+  if(before!==JSON.stringify(s))throw Error('Moon heal art changed state');ctx.drawImage(frame,(i%2)*w,Math.floor(i/2)*h);
+ }
+ fs.writeFileSync(path.join(out,'moon-healing.png'),sheet.toBuffer('image/png'));
+}

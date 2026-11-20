@@ -4,12 +4,12 @@ const compile=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.Com
 require.extensions['.ts']=(m,f)=>m._compile(compile(fs.readFileSync(f,'utf8')),f);
 const {createCanvas}=require('@napi-rs/canvas'),c=require('../game/constants.ts'),engine=require('../game/engine.ts');
 const source=fs.readFileSync('game/RubyStarGame.tsx','utf8');
-const modules='field-art|blessing-art|blessing-effects|endless-build-art|warning-art|singularity-art|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun';
+const modules='thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun';
 const imports=[...source.matchAll(new RegExp("^import\\s+(\\{[^}]*\\})\\s+from\\s+'\\./("+modules+")';",'gm'))].map(m=>`const ${m[1].replace(/\btype\s+/g,'')}=require('./${m[2]}.ts');`).join('');
 const code='const {'+Object.keys(c).join(',')+"}=require('./constants.ts');const {"+Object.keys(engine).filter(k=>!(k in c)).join(',')+"}=require('./engine.ts');"+imports+source.slice(source.indexOf('const BG_COLOR'),source.indexOf('// Challenge HUD centre: the guardian'))+';exports.drawEnemy=drawEnemy;';
 const renderer=new Module(path.resolve('game/enemy-health-preview.cjs'),module);renderer.filename=path.resolve('game/enemy-health-preview.cjs');renderer.paths=module.paths;renderer._compile(compile(code),renderer.filename);
 const saturn=require('../game/saturn-art.ts');
-const types=['normal','cinder_wisp','emberling','scorch_sapper','stinger','jellyfish','pufferfish','water_clone','water_bomb','fish_blue','fish_red','sporeling','vine_crawler','angry_mushroom','seed_pod','blossom','lifebloom','mirror_mite','moon_shade','moon_mimic','frost_raider','ice_caller','rime_brute','aegis_construct'];
+const types=['normal','cinder_wisp','emberling','scorch_sapper','stinger','jellyfish','pufferfish','water_clone','water_bomb','fish_blue','fish_red','sporeling','vine_crawler','angry_mushroom','seed_pod','blossom','lifebloom','mirror_mite','moon_shade','moon_mimic','frostbiter','sleet_mortar','glacier_hulk','aegis_construct'];
 const out=process.argv[2]||'docs/ruby-star/visual-reference';fs.mkdirSync(out,{recursive:true});
 const cv=createCanvas(1440,720),ctx=cv.getContext('2d'),s=engine.createInitialState();
 ctx.fillStyle='#0c1728';ctx.fillRect(0,0,1440,720);ctx.imageSmoothingEnabled=false;

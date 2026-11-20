@@ -16,7 +16,7 @@ function fresh() {
 const close = (a, b) => assert.ok(Math.abs(a-b) < 1e-7, `${a} != ${b}`);
 
 test('Sun starts half hot, separated stations, independent wisps and three phases', () => {
-  const {s,boss} = fresh(); assert.equal(s.sun.heat,50); assert.equal(s.sun.stations.length,c.SUN.stations);
+  const {s,boss} = fresh(); assert.equal(s.sun.heat,50); assert.equal(s.sun.stations.length,5);
   assert.equal(wisps(s).length,c.SUN.initialWisps); assert.equal(boss.maxHp,c.SUN.phaseHP*3);
   for(const station of s.sun.stations) assert.equal(s.map[station.y][station.x], c.T_FLOOR);
   for(const phase of [1,2,3]) { sun.godSetSunPhase(s,phase); assert.equal(boss.hp,(4-phase)*c.SUN.phaseHP); assert.equal(s.sun.phase,phase); }
@@ -83,18 +83,18 @@ test('Solar Flare clears all wisps and deals its set share of one boss phase', (
   assert.equal(wisps(s).length,0); close(hp-boss.hp,c.SUN.phaseHP*c.SUN.solarShare); assert.equal(s.specialSkill,null);
   assert.equal(c.trialSkillCooldown('fiery_king'), 1620);
 });
-test('Cooling Wave clears only its radius, cools heat, calms rage and obeys cooldown', () => {
+test('Hydro Pulse clears only its radius, cools heat, calms rage and obeys cooldown', () => {
   const {s,boss}=fresh(); s.sun.stations=[]; s.enemies=[boss]; near(boss,12,10); s.sun.rage=50;
   const a=e.createEncounterEnemy(s,'cinder_wisp',11,10,3), b=e.createEncounterEnemy(s,'cinder_wisp',39,10,3); s.enemies.push(a,b);
   assert.equal(sun.useCoolingWave(s),true); assert.ok(!s.enemies.includes(a)); assert.ok(s.enemies.includes(b));
   close(s.sun.heat,48); close(s.sun.rage,50-c.SUN.rageCooling-c.SUN.waveDamage*c.SUN.rageOnHit); assert.equal(sun.useCoolingWave(s),false);
 });
-test('water reaches eight tiles and removes fifteen rage points from the King', () => {
+test('water reaches eight tiles and removes twenty rage points from the King', () => {
   const {s,boss}=fresh();s.sun.stations=[];s.enemies=[boss];near(boss,18,10);s.sun.rage=50;
   const edge=e.createEncounterEnemy(s,'cinder_wisp',18,10,3),outside=e.createEncounterEnemy(s,'cinder_wisp',19,10,3);
   s.enemies.push(edge,outside);sun.useCoolingWave(s);
   assert.ok(!s.enemies.includes(edge));assert.ok(s.enemies.includes(outside));
-  close(s.sun.rage,34.9); // fifteen from water, plus 0.1 from the normal one-HP hit
+  close(s.sun.rage,29.9); // twenty from water, plus 0.1 from the normal one-HP hit
 });
 test('burning Emberling takes 10% damage; water leaves it unarmored and unable to move or attack', () => {
   const {s,boss}=fresh(); s.sun.stations=[]; s.enemies=[boss];
@@ -117,15 +117,15 @@ test('holding Space trickles cooling; completion bursts and relocates the statio
   s.playerHP=50;s.rubyHP=50;
   const station=s.sun.stations[0]; station.x=11;station.y=10;s.sun.charging=true; const before=[station.x,station.y];
   for(let i=0;i<c.SUN.stationChargeTicks+1;i++)sun.updateSun(s);
-  close(s.sun.heat,34); assert.equal(station.charge,0);assert.notDeepEqual([station.x,station.y],before); assert.ok(s.sun.ripples.length);
-  assert.equal(s.playerHP,50+c.SUN.stationHealing);assert.equal(s.rubyHP,50+c.SUN.stationHealing);
-  for(let i=0;i<10;i++)sun.updateSun(s);assert.equal(s.playerHP,50+c.SUN.stationHealing);
+  close(s.sun.heat,35.04); assert.equal(station.charge,0);assert.notDeepEqual([station.x,station.y],before); assert.ok(s.sun.ripples.length);
+  assert.equal(s.playerHP,75);assert.equal(s.rubyHP,75);
+  for(let i=0;i<10;i++)sun.updateSun(s);assert.equal(s.playerHP,75);
 });
-test('a Cooling Wave instantly adds station charge and can complete it', () => {
+test('a Hydro Pulse instantly adds station charge and can complete it', () => {
   const {s}=fresh(); const station=s.sun.stations[0]; station.x=11;station.y=10;station.charge=60;
   s.playerHP=95;s.rubyHP=50;
-  sun.useCoolingWave(s);assert.equal(station.charge,0); close(s.sun.heat,35);assert.notDeepEqual([station.x,station.y],[11,10]);
-  assert.equal(s.playerHP,100);assert.equal(s.rubyHP,50+c.SUN.stationHealing);
+  sun.useCoolingWave(s);assert.equal(station.charge,0); close(s.sun.heat,36.04);assert.notDeepEqual([station.x,station.y],[11,10]);
+  assert.equal(s.playerHP,100);assert.equal(s.rubyHP,75);
 });
 test('King proximity resets stations and blocks water charging', () => {
   const {s,boss}=fresh(); const station=s.sun.stations[0];station.x=11;station.y=10;station.charge=75;near(boss,12,10);s.sun.charging=true;
@@ -219,7 +219,7 @@ test('rage raises nearby wisp production without changing regular spawn timers',
 test('King rage increases at the configured rate per second and is capped at 100', () => {
   const {s}=fresh(); s.sun.rage=0;
   for(let i=0;i<60;i++) sun.updateSun(s);
-  close(s.sun.rage, c.SUN.ragePerSecond);
+  close(s.sun.rage, 1.75);
   s.sun.rage=99.8;
   for(let i=0;i<60;i++) sun.updateSun(s);
   assert.equal(s.sun.rage, 100);
@@ -369,11 +369,11 @@ test('the burning trail covers a centered 3 by 3 patch, refreshes overlaps and e
   assert.ok(s.sun.burning.every(b=>s.map[b.y][b.x]===c.T_FLOOR));
   assert.equal(new Set(s.sun.burning.map(b=>`${b.x},${b.y}`)).size,s.sun.burning.length);
 });
-test('rage grows at 1.6 per second in phases two and three', () => {
+test('rage grows at 2.6 per second in phase two and 5% faster in phase three', () => {
   for(const phase of [2,3]) {
     const {s}=fresh();sun.godSetSunPhase(s,phase);s.sun.rage=0;
     for(let i=0;i<60;i++)sun.updateSun(s);
-    close(s.sun.rage,1.6);
+    close(s.sun.rage,phase===3?2.73:2.6);
   }
 });
 
@@ -411,7 +411,7 @@ test('phase 3: a room is marked, then flares and heats the arena; phase 2 has no
   assert.equal(s.sun.flare, null); assert.ok(s.sun.heat >= 40 + c.SUN.flareHeat - 1e-6, 'it flared'); assert.equal(s.sun.flareFlash.defused, false);
 });
 
-test('Sunburst warning sounds once globally even when another room is marked', () => {
+test('Sunburst warning starts globally even when another room is marked', () => {
   const ui=require('../game/ui-sfx.ts'), original=ui.playUiSfx, originalAudio=e.playAudioOneShot, random=Math.random;
   const cues=[], layers=[];
   ui.playUiSfx=kind=>cues.push(kind);e.playAudioOneShot=(file,volume)=>layers.push({file,volume});
@@ -466,21 +466,21 @@ test('a flare that goes off burns you and Ruby only if you are in that room', ()
   }
 });
 
-test('Scorch Sappers arrive only from phase 2, up to a cap', () => {
+test('Scorch Sappers arrive only from phase 3, up to a cap', () => {
   const p1=fresh(); p1.s.noMobs=false; p1.s.sun.sapperTimer=1; sun.updateSun(p1.s);
   assert.equal(p1.s.enemies.filter(x=>x.type==='scorch_sapper').length,0,'none in phase 1');
-  const {s}=fresh(); s.noMobs=false; sun.godSetSunPhase(s,2);
+  const {s}=fresh();s.noMobs=false;sun.godSetSunPhase(s,2);s.sun.sapperTimer=1;sun.updateSun(s);assert.equal(s.enemies.filter(x=>x.type==='scorch_sapper').length,0,'none in phase two');sun.godSetSunPhase(s,3);
   for (let i=0;i<c.SUN.sapperCap+2;i++){ s.sun.sapperTimer=1; sun.updateSun(s); }
   const n=s.enemies.filter(x=>x.type==='scorch_sapper').length;
   assert.ok(n>0 && n<=c.SUN.sapperCap, 'spawned, capped: '+n);
 });
 
-test('a Scorch Sapper walks to the nearest station and drains it, never hurting you; water destroys it', () => {
+test('a Scorch Sapper walks to the nearest station and drains it, never hurting you; water deals normal damage', () => {
   const {s}=fresh(); sun.godSetSunPhase(s,2); s.enemies=s.enemies.filter(x=>x.type==='fiery_king');
   const st=s.sun.stations[0]; s.sun.stations=[st]; st.charge=60; st.blocked=false;
   const boss=sun.sunBoss(s); near(boss,1,1);
   const startX=[st.x-3,st.x+3,st.x].find(x=>s.map[st.y][x]===c.T_FLOOR) ?? st.x;
-  const imp=e.createEncounterEnemy(s,'scorch_sapper',startX,st.y,3); s.enemies.push(imp);
+  const imp=e.createEncounterEnemy(s,'scorch_sapper',startX,st.y,c.SUN.sapperHP); s.enemies.push(imp);
   Object.assign(s,{playerTileX:startX,playerTileY:st.y,playerTargetX:startX,playerTargetY:st.y,playerX:(startX+.5)*c.TILE_SIZE,playerY:(st.y+.5)*c.TILE_SIZE});
   const hp=s.playerHP;
   for (let i=0;i<600&&imp.sapStation===undefined;i++) sun.updateScorchSapper(s,imp);
@@ -489,11 +489,92 @@ test('a Scorch Sapper walks to the nearest station and drains it, never hurting 
   assert.ok(st.charge<60,'charge drained'); assert.equal(s.playerHP,hp,'never attacks');
   Object.assign(s,{playerTileX:imp.tileX,playerTileY:imp.tileY,playerX:imp.x,playerY:imp.y}); s.sun.waveCooldown=0;
   sun.useCoolingWave(s);
-  assert.ok(!s.enemies.includes(imp),'water destroys it');
+  assert.ok(s.enemies.includes(imp),'water no longer destroys it');assert.equal(imp.hp,c.SUN.sapperHP-c.SUN.waveDamage);
 });
 
 test('reaching zero heat gives you a free speed burst', () => {
   const {s}=fresh(); s.speedActiveTicks=0;
   sun.coolSun(s,100);
   assert.ok(s.speedActiveTicks>0);
+});
+
+
+test('Sun regular aliens spawn at the normal rate, while No Mobs still pauses their timer',()=>{
+ const{s}=fresh();s.noMobs=false;s.spawnTimer=0;
+ const tier=c.DIFFICULTY_TIERS[s.difficultyLevel],interval=tier.spawnInterval;
+ const regular=()=>s.enemies.filter(m=>m.type!=='cinder_wisp'&&m.type!=='fiery_king'&&m.type!=='scorch_sapper').length;
+ const before=regular();for(let i=0;i<interval-1;i++)e.tick(s);assert.equal(regular(),before);
+ e.tick(s);assert.equal(regular(),before+tier.spawnCount);
+ s.noMobs=true;s.spawnTimer=interval-1;const count=regular();e.tick(s);
+ assert.equal(s.spawnTimer,interval-1);assert.equal(regular(),count);
+});
+
+
+test('Hydro Pulse removes the rage bonus and reduces base growth by 35% for ten seconds in every phase',()=>{
+ for(const phase of [1,2,3]){
+  const{s,boss}=fresh();sun.godSetSunPhase(s,phase);s.sun.stations=[];s.enemies=[boss];s.sun.noWisps=true;s.noMobs=true;near(boss,12,10);
+  s.sun.flareTimer=1e6;s.sun.rage=50;assert.ok(sun.useCoolingWave(s));assert.equal(s.sun.rageCalmTicks,600);
+  const before=s.sun.rage;for(let i=0;i<600;i++)sun.updateSun(s);
+  close(s.sun.rage,before+(phase===1?9.1:13));assert.equal(s.sun.rageCalmTicks,0);
+  const resumed=s.sun.rage;for(let i=0;i<60;i++)sun.updateSun(s);close(s.sun.rage,resumed+(phase===1?1.75:phase===2?2.6:2.73));
+ }
+});
+
+test('rage suppression needs the King in C range, pauses, and refreshes on another hit',()=>{
+ const{s,boss}=fresh();s.sun.stations=[];s.enemies=[boss];near(boss,39,39);
+ sun.godSetSunPhase(s,2);near(boss,39,39);s.sun.waveCooldown=0;sun.useCoolingWave(s);assert.equal(s.sun.rageCalmTicks??0,0,'miss does not suppress');
+ near(boss,12,10);s.sun.waveCooldown=0;sun.useCoolingWave(s);sun.updateSun(s);assert.equal(s.sun.rageCalmTicks,599);
+ s.gamePhase='paused';sun.updateSun(s);assert.equal(s.sun.rageCalmTicks,599);
+ s.gamePhase='playing';s.sun.waveCooldown=0;sun.useCoolingWave(s);assert.equal(s.sun.rageCalmTicks,600);
+});
+
+
+test('Hydro Pulse slows King movement by 50% for 1.5 seconds, refreshes, pauses and restores normal speed',()=>{
+ const{s,boss}=fresh();s.sun.stations=[];s.enemies=[boss];near(boss,12,10);s.sun.rage=50;
+ assert.ok(sun.useCoolingWave(s));assert.equal(s.sun.kingSlowTicks,90);
+ const movement=()=>{
+  near(boss,12,10);boss.targetTileX=13;boss.stepProgress=1;boss.pathTimer=1e6;boss.attackTimer=1e6;
+  e.sunTest.updateEnemies(s);return boss.stepProgress-1;
+ };
+ const slow=movement();s.sun.kingSlowTicks=0;const normal=movement();close(slow,normal*.5);
+ near(boss,12,10);s.sun.waveCooldown=0;sun.useCoolingWave(s);
+ s.gamePhase='paused';sun.updateSun(s);assert.equal(s.sun.kingSlowTicks,90);
+ s.gamePhase='playing';for(let i=0;i<89;i++)sun.updateSun(s);assert.equal(s.sun.kingSlowTicks,1);
+ sun.updateSun(s);assert.equal(s.sun.kingSlowTicks,0);
+ near(boss,12,10);s.sun.waveCooldown=0;sun.useCoolingWave(s);assert.equal(s.sun.kingSlowTicks,90);
+ sun.clearSunEncounter(s);assert.equal(s.sun.kingSlowTicks,0);
+});
+
+test('a Cooling Wave missing the King does not apply the movement slow',()=>{
+ const{s}=fresh();s.sun.stations=[];sun.useCoolingWave(s);assert.equal(s.sun.kingSlowTicks??0,0);
+});
+
+test('Sun warnings repeat every .8s normally and .4s near full heat or detonation',()=>{
+ const ui=require('../game/ui-sfx.ts'),original=ui.playUiSfx,cues=[];ui.playUiSfx=kind=>cues.push(kind);
+ try {
+  const {s}=fresh();sun.godSetNoWisps(s,true);s.sun.heat=95;
+  for(let i=0;i<97;i++)sun.updateSun(s);
+  assert.equal(cues.filter(k=>k==='sunHeatWarning').length,3);
+  s.sun.heat=98;s.sun.heatWarningTimer=0;cues.length=0;
+  for(let i=0;i<49;i++)sun.updateSun(s);
+  assert.equal(cues.filter(k=>k==='sunHeatWarning').length,3);
+  sun.godSetSunPhase(s,3);s.sun.heat=50;s.sun.flareTimer=1;cues.length=0;sun.updateSun(s);
+  for(let i=0;i<96;i++)sun.updateSun(s);
+  assert.equal(cues.filter(k=>k==='sunburstWarning').length,3);
+  s.sun.flare.ticks=121;cues.length=0;
+  for(let i=0;i<49;i++)sun.updateSun(s);
+  assert.equal(cues.filter(k=>k==='sunburstWarning').length,3);
+ }finally{ui.playUiSfx=original;}
+});
+
+test('Thermal Eruption and Sunburst each play their full-volume explosion layers once',()=>{
+ const original=e.playAudioOneShot,cues=[];e.playAudioOneShot=(...args)=>cues.push(args);
+ try {
+  const {s}=fresh();s.godMode=true;sun.godSetNoWisps(s,true);s.sun.heat=100;
+  sun.updateSun(s);sun.updateSun(s);
+  for(const file of ['/sounds/sci-fi-explosion-09.mp3','/sounds/bombExplode.wav'])assert.equal(cues.filter(([f,v])=>f===file&&v===1).length,1);
+  cues.length=0;sun.godSetSunPhase(s,3);s.sun.flare={room:0,ticks:1};
+  sun.updateSun(s);sun.updateSun(s);
+  for(const file of ['/sounds/sci-fi-explosion-09.mp3','/sounds/bombExplode.wav'])assert.equal(cues.filter(([f,v])=>f===file&&v===1).length,1);
+ }finally{e.playAudioOneShot=original;}
 });

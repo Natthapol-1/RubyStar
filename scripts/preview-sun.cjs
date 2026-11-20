@@ -2,11 +2,12 @@
 const fs = require('fs'), path = require('path'), Module = require('module'), ts = require('typescript');
 const compile = src => ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, jsx: ts.JsxEmit.React } }).outputText;
 require.extensions['.ts'] = (m, f) => m._compile(compile(fs.readFileSync(f, 'utf8')), f);
+require.extensions['.tsx'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, jsx: ts.JsxEmit.ReactJSX } }).outputText, f);
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const c = require('../game/constants.ts'), engine = require('../game/engine.ts');
 const source = fs.readFileSync('game/RubyStarGame.tsx', 'utf8');
 // Local art modules keep their real imports; React/UI imports are dropped since only canvas drawing runs.
-const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(field-art|blessing-art|blessing-effects|endless-build-art|warning-art|singularity-art|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun)';/gm)]
+const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
   .map(m => `const ${m[1].replace(/\btype\s+/g, '')}=require('./${m[2]}.ts');`).join('');
 const code = 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
   + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;exports.drawMinimap=drawMinimap;exports.drawGuideCelestial=drawGuideCelestial;';
@@ -108,7 +109,8 @@ onset.sun.heat=0;onset.sun.empoweredCasts=5;onset.resources=[];
 const quenchSheet=createCanvas(1280,720),qc=quenchSheet.getContext('2d');
 for(const [i,age] of [0,12,30,65].entries()) {
  onset.sun.quenchedTicks=c.SUN.quenchTicks-age;onset.gameTick=age;
- const cv=createCanvas(1280,720);renderer.exports.drawGame(cv.getContext('2d'),onset,1280,720,age,0,false);
+ const cv=createCanvas(1280,720),before=JSON.stringify(onset);renderer.exports.drawGame(cv.getContext('2d'),onset,1280,720,age,0,false);
+ if(before!==JSON.stringify(onset))throw Error('Zero heat art mutated simulation');
  qc.drawImage(cv,(i%2)*640,Math.floor(i/2)*360,640,360);
 }
 fs.writeFileSync(path.join(out,'sun-zero-heat-stages.png'),quenchSheet.toBuffer('image/png'));
@@ -129,3 +131,18 @@ for(const [i,label] of ['SUNBURST · 8s','METEOR · 3s','BOTH · SAME ROOM'].ent
  warn.fillStyle='#ffe778';warn.font='bold 16px monospace';warn.textAlign='left';warn.fillText(label,16,i*480+20);
 }
 fs.writeFileSync(path.join(out,'sun-warning-comparison.png'),warnings.toBuffer('image/png'));
+
+// Thermal eruption and Sunburst use their real above-actor explosion renderers.
+for(const kind of ['eruption','sunburst']) {
+ const sheet=createCanvas(1280,720),ctx=sheet.getContext('2d');
+ for(const [i,age] of [3,12,25,38].entries()) {
+  const state=engine.createModeState('trial','fiery_king');state.enemies=[];state.resources=[];state.noMobs=true;state.sun.heat=50;
+  if(kind==='eruption')state.sun.eruptionTicks=90-age;
+  else state.sun.flareFlash={room:0,ticks:45-age,defused:false};
+  const cv=createCanvas(1280,720),before=JSON.stringify(state);
+  renderer.exports.drawGame(cv.getContext('2d'),state,1280,720,age,0,false);
+  if(before!==JSON.stringify(state))throw Error('Solar explosion art mutated simulation');
+  ctx.drawImage(cv,(i%2)*640,Math.floor(i/2)*360,640,360);
+ }
+ fs.writeFileSync(path.join(out,'sun-'+kind+'-stages.png'),sheet.toBuffer('image/png'));
+}

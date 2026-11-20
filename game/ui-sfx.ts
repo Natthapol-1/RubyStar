@@ -1,4 +1,5 @@
 import { gameAudio, channelVolume } from './audio-settings';
+import { playSunHeatWarning, playSunburstWarning } from './event-audio';
 // Sci-fi UI cues for Ruby Star menus and in-game readiness, with a recorded cue for Volt Fence recharge.
 let ctx: AudioContext | null = null;
 const UI_VOLUME = 5; // master boost for every menu cue
@@ -28,10 +29,12 @@ function blip(type: OscillatorType, from: number, to: number, start: number, dur
   osc.start(t); osc.stop(t + dur + 0.02);
 }
 
-export type UiSfx = 'hover' | 'endless' | 'ascension' | 'locked' | 'page' | 'back' | 'close' | 'confirm' | 'teleport' | 'victory' | 'charged' | 'bombReady' | 'markReady' | 'markCast' | 'stationCharge' | 'coolingUltimate' | 'sunExtinguish' | 'sunburstWarning' | 'sunHeatWarning' | 'jupiterExposed' | 'jupiterDash' | 'voltFence' | 'fenceReady' | 'voltBreak' | 'waveReady' | 'gemBlessing' | 'gemPassive' | 'gemFieldHit' | 'gemDecoyShot';
+export type UiSfx = 'hover' | 'endless' | 'ascension' | 'locked' | 'page' | 'back' | 'close' | 'confirm' | 'teleport' | 'victory' | 'charged' | 'celestialReady' | 'bombReady' | 'markReady' | 'markCast' | 'stationCharge' | 'coolingUltimate' | 'sunExtinguish' | 'sunburstWarning' | 'sunHeatWarning' | 'moonHealingWave' | 'jupiterExposed' | 'jupiterDash' | 'voltFence' | 'fenceReady' | 'voltBreak' | 'waveReady' | 'gemBlessing' | 'gemPassive' | 'gemFieldHit' | 'gemDecoyShot';
 
 export function playUiSfx(kind: UiSfx) {
   switch (kind) {
+    case 'celestialReady':
+      try{const sound=gameAudio('/sounds/celestial-ready.mp3','effects');sound.volume=.7;sound.playbackRate=1;sound.play().catch(()=>{});}catch{}break;
     case 'gemBlessing':
       try{const sound=gameAudio('/sounds/gem_passive_trigger.wav','effects');sound.volume=.75;sound.play().catch(()=>{});}catch{}break;
     case 'gemPassive':
@@ -77,13 +80,21 @@ export function playUiSfx(kind: UiSfx) {
       blip('triangle', 140, 36, 0, .34, .12); blip('sine', 56, 28, 0, .4, .08);
       blip('triangle', 1568, 196, 0, .28, .045);
       blip('sine', 784, 1175, .18, .14, .04); blip('triangle', 1175, 1568, .32, .18, .045); break;
-    case 'sunHeatWarning': // urgent double alarm, global and scheduled by heat simulation
-      blip('square', 330, 220, 0, .18, .09); blip('square', 330, 220, .23, .18, .09); break;
+    case 'sunHeatWarning': // original recording speed; simulation increases repetition near full heat
+      if(channelVolume('effects')>0)playSunHeatWarning();break;
     case 'jupiterExposed':
-      blip('triangle', 1320, 220, 0, .3, .08); blip('sine', 660, 880, .3, .2, .07); break;
-    case 'fenceReady':
+      if (channelVolume('effects') === 0) break;
       try {
-        const sound=gameAudio('/sounds/celestial/skill-ready.wav');sound.volume=.3825;
+        const sound = gameAudio('/sounds/jupiter-shard-race.mp3', 'effects');
+        sound.volume = .85;
+        sound.play().catch(() => {});
+      } catch {}
+      break;
+    case 'markReady':
+    case 'waveReady':
+    case 'fenceReady': // shared primal readiness: Jupiter's recording, gain and pitch
+      try {
+        const sound=gameAudio('/sounds/celestial/skill-ready.wav');sound.volume=.7;sound.playbackRate=1;
         sound.play().catch(()=>{});
       } catch {}
       break;
@@ -92,17 +103,15 @@ export function playUiSfx(kind: UiSfx) {
       blip('sawtooth', 220, 1320, 0, .12, .045); blip('triangle', 1760, 880, .06, .16, .07); break;
     case 'voltBreak':
       blip('square', 1800, 100, 0, .15, .06); blip('triangle', 90, 45, 0, .22, .07); break;
-    case 'sunburstWarning': // map-wide solar alarm: three firm rising pulses, distinct from an impact or ready chime
-      for (let i = 0; i < 3; i++) {
-        blip('square', 440, 660, i * .26, .18, .085);
-        blip('triangle', 220, 330, i * .26, .21, .055);
-      }
-      break;
-    case 'waveReady': // Cooling Wave has recharged: prominent icy chime (matches Moon Mark)
-    case 'markReady': // the Moon Mark has recharged: a prominent icy chime
-      blip('triangle', 1760, 1760, 0, .06, .09); blip('triangle', 2637, 2637, .06, .14, .105); blip('sine', 3520, 3136, .12, .2, .06); break;
-    case 'markCast': // the Moon Mark locks on: a falling ping and two quick beeps
-      blip('sine', 2400, 1200, 0, .12, .135); blip('square', 1200, 1200, .1, .04, .075); blip('square', 1200, 1200, .16, .04, .075); break;
+    case 'sunburstWarning':
+      if(channelVolume('effects')>0)playSunburstWarning();break;
+    case 'moonHealingWave': // the supplied gem recording, at its original pitch
+      try{const sound=gameAudio('/sounds/gem_passive_2.wav','effects');sound.volume=.75;sound.loop=false;sound.play().catch(()=>{});}catch{}break;
+    case 'markCast': // lunar inscription: an airy rise landing in a layered glass chime
+      blip('sine', 260, 1047, 0, .14, .06);
+      blip('triangle', 1568, 1480, .1, .35, .065);
+      blip('sine', 2349, 2217, .13, .42, .045);
+      blip('sine', 3136, 2960, .17, .3, .025); break;
     case 'confirm': // two-tone acknowledge
       blip('square', 988, 988, 0, .06, .04); blip('square', 1480, 1480, .06, .1, .045); break;
   }

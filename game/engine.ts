@@ -1,15 +1,21 @@
+import { swallowAtField, updateSingularityMaws, clearSingularityMaws, phaseHP as singularityPhaseHP, phaseStacks as singularityPhaseStacks, updateLostSoul, mawAvoider, nearlyFull, singularityHeld, bodyStackCap, bodyJump, gasPlayerSlow, toxicSoullessCloud, rollGnasher, gnasherBite, gnasherPrey, bodySpreadStep, SINGULARITY_BURST_TICKS, SINGULARITY_LAND_TICKS, type SingularityTrial } from './singularity-maw';
+import { VENUS, createVenusState, initializeVenusBoss, updateVenus, clearVenusEncounter, venusAirborne, venusHoldsBoss, venusTotemDestroyed, venusGuard, venusRelicDestroyed, venusCoreHit, venusCoreDestroyed, venusReflectScale, venusBand, venusFloor, venusPhaseOf, duneWormHidden, updateDuneWorm, updateSandScorpion, type VenusState } from './venus';
+export { pressGravityHook, releaseGravityHook, hookTarget, mawWindow, singularityOpenness } from './singularity-maw';
 import { updateRegularAlien } from './aliens';
 export { lancerBeamEnd } from './aliens';
 import {obsidianBossHit,blessingDeath,rubyBlessingCopy,addStarEnergy,blessingAttack,blessingLandedAttack,blessingDamageMultiplier,blessingSpeedMultiplier,blessingHit,blessingHealed,blessingIncoming,blessingReflectIncoming,blessingAfterHit,leaveQueenBlessingDecoy,solarBlessingReady} from './blessing-effects';
-import { gameAudio, channelVolume } from './audio-settings';
+import { gameAudio, channelVolume, getAudioCtx } from './audio-settings';
 import { recordBoss, recordStage, updateProfile, getProfile, isDesktop } from './profile';
 import { createRunBuildState, updateRunBuilds, buildBulletHit, buildWaveHit, emitBuildWave, buildSlowMultiplier, hasBlessing, pullBuildEnemies, offerCelestialBlessing, prepareBlessingChoice, buildDeathField, buildBombStun, type RunBuildState } from './endless-builds';
-import { SATURN, createSaturnState, initializeSaturnBoss, clearSaturnEncounter, updateSaturn, updateFrostRaider, updateIceCaller, updateRimeBrute, saturnIceAt, saturnBlizzard, saturnShieldChilled, moveSaturnPlayer, cancelSnowball, freezeSaturnPlayer, grantSaturnShield, type SaturnState } from './saturn';
+import { SATURN, createSaturnState, initializeSaturnBoss, clearSaturnEncounter, updateSaturn, updateSaturnAlien, interruptSaturnAlien, isSaturnAlien, saturnTimeStopped, saturnDamageTaken, saturnShatter, saturnEmpower, saturnIceAt, saturnBlizzard, freezeSaturnPlayer, type SaturnState } from './saturn';
+import { SIRIUS, siriusCanFloat, siriusPlayerSpeed, guessSiriusRitual, createSiriusState, initializeSiriusBoss, clearSiriusEncounter, updateSirius, updateSiriusAlien, interruptSiriusAlien, isSiriusAlien, siriusReversed, siriusDamageTaken, siriusEmpower, type SiriusState } from './sirius';
+import { createGambitState, updateGambit, type GambitState } from './gambit';
+import { createBinaryState, initializeBinaryTwins, binaryLoseLife, clearBinaryEncounter, updateBinary, binaryDamageTaken, binaryTwinBusy, binaryWallStun, updateGrounder, pulsarDied, BINARY, type BinaryState } from './binary';
 import { createJupiterState, initializeJupiterBoss, clearJupiterEncounter, drainJupiterEnergy, jupiterDamageTaken, jupiterBoss, jupiterPlayerSpeed, updateJupiterReaper, updateJupiter, type JupiterState } from './jupiter';
-import { JUPITER, SUN } from './constants';
-import { clearSunEncounter, createSunState, defuseSunFlare, updateScorchSapper, initializeSunBoss, spawnSunWisps, sunStationNearPlayer, updateSun, type SunState } from './sun';
+import { CHALLENGE_EXTRA_POOL, JUPITER, SINGULARITY_CHALLENGE, SUN } from './constants';
+import { clearSunEncounter, createSunState, defuseSunFlare, igniteSpitterTile, updateScorchSapper, initializeSunBoss, spawnSunWisps, sunStationNearPlayer, updateSun, type SunState } from './sun';
 import {
-  NEPTUNE_PHASE_HPS, NEPTUNE_TOTAL_HP, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_SPEED,
+  NEPTUNE_PHASE_HPS, NEPTUNE_TOTAL_HP, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_SPEED, NEPTUNE_BOSS_SPEED_MULT,
   NEPTUNE_BOMB_INTERVAL, NEPTUNE_SONG_BONUS, NEPTUNE_BOMB_SELF_DAMAGE, NEPTUNE_ATTACK_MULT, NEPTUNE_LIFESTEAL,
   NEPTUNE_STRIKE_DAMAGE,
   NEPTUNE_FISH_HURT, NEPTUNE_STINGER_CHANCE, NEPTUNE_POISON_TICKS,
@@ -17,53 +23,53 @@ import {
   NEPTUNE_JELLY_GAP, NEPTUNE_SHARK_GAP, NEPTUNE_PUFFER_CHANCE, NEPTUNE_PUFF_RADIUS,
   GAIA_CAST_COOLDOWN, GAIA_THORN_CONTACT_DAMAGE, GAIA_THORN_RUBY_DAMAGE, GAIA_THORN_RUBY_CUT,
   GAIA_STRIKE_DAMAGE, GAIA_SUN_WARNING, NEPTUNE_LASER_WARNING,
-  MOON_PHASE_HP, MOON_QUEEN_DAMAGE_MULT, MOON_STRIKE_DAMAGE, MOON_MITE_CHANCE, MOON_SHADE_CHANCE, MOON_MITE_KILL_HEAL, MOON_HIT_HEAL,
+  MOON_PHASE_HP, MOON_QUEEN_DAMAGE_MULT, MOON_STRIKE_DAMAGE, MOON_MITE_CHANCE, MOON_SHADE_CHANCE, MOON_BLINKER_CHANCE, MOON_BLINKER_MAX, MOON_MITE_KILL_HEAL, MOON_HIT_HEAL,
   GAIA_POD_CHARGE,
   GAIA_BLOSSOM_SELF_DAMAGE, GAIA_BLOSSOM_KILL_HEAL, GAIA_LIFEBLOOM_HEAL,
   GAIA_ALIEN_CHANCE, GAIA_MUSHROOM_KNOCKBACK, GAIA_SPAWN_RATE, GAIA_EXTRA_ENEMIES,
 } from './constants';
-import { stopAmbientEventSounds, pauseAmbientEventSounds, resumeAmbientEventSounds } from './event-audio';
+import { stopSunHeatWarning, stopSunburstWarning, stopAmbientEventSounds, pauseAmbientEventSounds, resumeAmbientEventSounds } from './event-audio';
 import { playUiSfx } from './ui-sfx';
 import { createAmbientEvents, updateAmbientEvents, isEclipseActive, hitSupernova, SUPERNOVA_PLAYER_RADIUS, SUPERNOVA_FULL_DAMAGE_RADIUS, type AmbientEventState } from './events';
 export { AMBIENT_EVENTS, STAR_FALL_TICKS, SUPERNOVA_CHARGE_TICKS, SUPERNOVA_BLAST_TICKS, triggerAmbientEvent } from './events';
 export type { AmbientEventKind } from './events';
 import {
   TILE_SIZE, MAP_COLS, MAP_ROWS,
-  SpecialSkill, SPECIAL_UNLOCK_KILLS, SPECIAL_SKILLS, SPECIAL_REAPER_RADIUS, SPECIAL_REAPER_SLOW, SPECIAL_REAPER_SLOW_TICKS, SPECIAL_WARDEN_SHIELD, SPECIAL_SUSTAIN_PER_STAGE,
+  SpecialSkill, SPECIAL_UNLOCK_KILLS, SPECIAL_SKILLS, SPECIAL_REAPER_RADIUS, SPECIAL_REAPER_HASTE, SPECIAL_REAPER_HASTE_TICKS, SPECIAL_REAPER_SLOW, SPECIAL_REAPER_SLOW_TICKS, SPECIAL_WARDEN_SHIELD, SPECIAL_SUSTAIN_PER_STAGE,
   SPECIAL_VENUS_DURATION, SPECIAL_VENUS_DAMAGE_MULT, SPECIAL_VENUS_BOSS_REFLECT_CAP, SPECIAL_TWIN_DURATION, SPECIAL_TWIN_DAMAGE_MULT,
   SPECIAL_CHANTER_HEAL, SPECIAL_CHANTER_RADIUS, SPECIAL_CHANTER_PUSH, SPECIAL_PRAYER_DURATION, SPECIAL_QUEEN_DECOY_HITS, SPECIAL_QUEEN_DECOY_INVULNERABILITY,
   SPECIAL_WEAVER_DURATION, SPECIAL_WEAVER_RADIUS, SPECIAL_WEAVER_SLOW, SPECIAL_WEAVER_NORMAL_DAMAGE, SPECIAL_WEAVER_BOSS_DAMAGE,
   SPECIAL_SINGULARITY_RADIUS, SPECIAL_SINGULARITY_TICKS, SPECIAL_SINGULARITY_NORMAL_DAMAGE, SPECIAL_SINGULARITY_BOSS_DAMAGE, REGULAR_ENEMY_HP_MULT,
   T_WALL, T_TELEPORT, T_FLOOR,
-  PLAYER_START, CHAMBER_SPAWN_TILES, CHAMBER_BOUNDS, TELEPORT_PADS, HALLWAY_BOUNDS,
+  PLAYER_START, CHAMBER_SPAWN_TILES, CHAMBER_BOUNDS, TELEPORT_PADS, TELEPORT_COOLDOWN, HALLWAY_BOUNDS,
   chamberOfTile, hallwayOfTile,
   PLAYER_MAX_HP, RUBY_MAX_HP, PLAYER_BASE_SPEED, PLAYER_CARRY_MULT,
   LASER_RANGE, LASER_RANGE_PWR, LASER_DMG, LASER_DMG_PWR, LASER_COOLDOWN,
   CHARGE_NEEDED, CHARGE_DECAY_TICKS,
   WAVE_RADIUS, WAVE_RADIUS_PWR, WAVE_DMG, WAVE_DMG_PWR,
   WAVE_PUSH_TILES, WAVE_PUSH_TILES_PWR, WAVE_COOLDOWN,
-  SPEED_DURATION, SPEED_DURATION_PWR, SPEED_MULT, SPEED_COOLDOWN,
+  SPEED_DURATION, SPEED_DURATION_PWR, SPEED_MULT, SPEED_COOLDOWN, CARRY_BOOST_SPEED_MULT,
   BOMB_RADIUS, BOMB_RADIUS_PWR, BOMB_DMG, BOMB_DMG_PWR,
   BULLET_COOLDOWN, BULLET_DMG, BULLET_DMG_PWR, BULLET_SPEED, BULLET_HEAVY_EVERY, BULLET_HEAVY_EVERY_MONOCEROS, BULLET_HEAVY_MULT, BULLET_HEAVY_PUSH,
-  STAR_ENERGY_MAX, STAR_ENERGY_PER_KILL, ENERGY_LEECH_DRAIN,
+  STAR_ENERGY_MAX, SIRIUS_HOLY_PER_ENERGY, STAR_ENERGY_PER_KILL, ENERGY_LEECH_DRAIN,
   RESOURCE_SPAWN_INTERVAL, RESOURCE_MAX_ON_MAP, HEAL_AMOUNT, ENERGY_AMOUNT,
   RUBY_HEAL_AMOUNT, RUBY_HEAL_COOLDOWN, RUBY_HEAL_RANGE, RUBY_HEAL_CLEAR_RANGE,
   METEORITE_CYCLE, METEORITE_WARNING, TUTORIAL_STEPS, TUTORIAL_STEP_PAUSE, TRIAL_BOSS_DELAY, trialSkillCooldown, SPECIAL_RECAST_LOCK, METEORITE_PLAYER_DMG, METEORITE_RUBY_DMG,
   SNIPER_ATTACK_RANGE, SNIPER_WINDUP_TICKS, SNIPER_CHAIN_RANGE, SNIPER_CHAIN_DMG,
   HEALER_HEAL_RADIUS, HEALER_HEAL_AMOUNT, HEALER_HEAL_INTERVAL,
   CHARGER_CHARGE_SPEED, CHARGER_WINDUP_TICKS, CHARGER_CHARGE_TILES, CHARGER_SIGHT_RANGE, CHARGER_STUN_TICKS,
-  SHIELDER_SHIELD_RANGE, KILL_SHIELD_HP,
+  SHIELDER_SHIELD_RANGE, KILL_SHIELD_HP, KILL_SHIELD_CAP,
   BOSS_SPAWN_INTERVAL, BOSS_WARNING_TICKS, BOSS_METEOR_DMG, BOSS_LATE_METEOR_DMG, BOSS_ATTACK_RANGE, BOSS_FIRST_SPAWN_TIMER,
   BOSS_ANNOUNCEMENT_TICKS, BOSS_NAMES, BossType, isBossType, PRAYER_FLEE_REPATH_TICKS,
   BOSS_SKILL_REWARDS, AEGIS_DAMAGE_MULT, AEGIS_REFLECT_RATIO, AEGIS_EXPOSE_TICKS, AEGIS_RESHIELD_WARNING_TICKS, AEGIS_EXPOSED_SPEED,
-  PYLON_LIFETIME_TICKS, PYLON_OVERLOAD_WINDUP, PYLON_OVERLOAD_DAMAGE,
+  TOTEM_LIFETIME_TICKS, TOTEM_OVERLOAD_WINDUP, TOTEM_OVERLOAD_DAMAGE,
   TWIN_REVIVE_TICKS, TWIN_REVIVE_HP_RATIO, TWIN_REVIVE_HASTE_TICKS, TWIN_REVIVE_HASTE_MULT, TWIN_BERSERK_SPEED_MULT, TWIN_BERSERK_COOLDOWN_MULT, TWIN_BERSERK_DAMAGE_TAKEN, TWIN_MIN_SEPARATION,
   TWIN_RANGED_RANGE, TWIN_RANGED_SPEED, TWIN_RANGED_WINDUP, TWIN_RANGED_COOLDOWN, TWIN_RANGED_DAMAGE,
   TWIN_TRANSFER_MIN_TICKS, TWIN_TRANSFER_MAX_TICKS, TWIN_TRANSFER_RATIO, TWIN_TRANSFER_FX_TICKS,
   PRAYER_RUBY_COOLDOWN, PRAYER_RUBY_WINDUP, PRAYER_ESCAPE_WINDUP,
   PRAYER_ESCAPE_DURATION, PRAYER_ESCAPE_SPEED, PRAYER_ESCAPE_GRACE,
   PRAYER_KNOCKBACK_SPEED,
-  THORN_WINDUP, THORN_FIRST_DELAY, THORN_RADIUS, THORN_DEFENSE_RADIUS, THORN_DEFENSE_TRIGGER_RANGE, THORN_DEFENSE_COOLDOWN, THORN_LIFETIME, THORN_MAX_PATCHES, getThornFieldBounds,
+  GAIA_SPORE_SHOT, THORN_WINDUP, THORN_FIRST_DELAY, THORN_RADIUS, THORN_DEFENSE_RADIUS, THORN_DEFENSE_TRIGGER_RANGE, THORN_DEFENSE_COOLDOWN, THORN_LIFETIME, THORN_MAX_PATCHES, getThornFieldBounds,
   THORN_POISON_TICKS, THORN_POISON_INTERVAL, THORN_POISON_DAMAGE, THORN_CONTACT_DAMAGE, THORN_CONTACT_INTERVAL, THORN_SLOW_MULT, THORN_FLEE_RANGE,
   SEA_DIVE_DAMAGE_MULTIPLIER, SEA_DIVE_SPEED, SEA_DIVE_FLEE_RANGE, SEA_DIVE_ENTER_HP, SEA_DIVE_EXIT_HP, SEA_MINIMAP_INTERVAL, SEA_MINIMAP_REVEAL,
   SEA_ALLY_HEAL_RADIUS, SEA_ALLY_HEAL_AMOUNT, SEA_ALLY_HEAL_INTERVAL, SEA_ALLY_PASSIVE_HEAL, SEA_FEED_HEAL_RATIO, SEA_FEED_HEAL_CAP, SEA_HEALING_BLOCK_TICKS,
@@ -72,20 +78,21 @@ import {
   KING_UNTOUCHED_TICKS, KING_ARENA_WINDUP, KING_ARENA_DAMAGE, KING_ARENA_DAMAGE_MAX, KING_RAMP_SECONDS, KING_ARENA_FX_TICKS,
   QUEEN_PHASE_INTERVAL, QUEEN_ATTACK_RANGE, QUEEN_WINDUP_TICKS, QUEEN_PHASE_HEAL_PCT, QUEEN_PHASE_HEAL_CAP,
   REAPER_SEAL_DURATION, REAPER_SEAL_COOLDOWN,
-  DEVOURER_ABSORB_RANGE, DEVOURER_ABSORB_COOLDOWN, DEVOURER_ABSORB_COOLDOWN_PER_GEN, DEVOURER_ABSORB_COOLDOWN_GEN_STEP, DEVOURER_MAX_STACKS, DEVOURER_STACK_HP_PCT, DEVOURER_STACK_DAMAGE,
+  DEVOURER_ABSORB_RANGE, DEVOURER_ABSORB_COOLDOWN, DEVOURER_ABSORB_COOLDOWN_PER_GEN, DEVOURER_ABSORB_COOLDOWN_GEN_STEP, DEVOURER_MAX_STACKS, DEVOURER_STACK_HP_PCT, DEVOURER_STACK_DAMAGE, DEVOURER_ENDLESS_BITE_BONUS, DEVOURER_KNOCKBACK_CHANCE, DEVOURER_KNOCKBACK_TILES,
   DEVOURER_FULL_HEAL_PCT, DEVOURER_HUNGRY_BELOW, DEVOURER_NEWBORN_TICKS, DEVOURER_NEWBORN_SPEED_MULT, DEVOURER_COPY_FIRST_MEAL, DEVOURER_START_STACKS, DEVOURER_GEN_SPEED_MULT, DEVOURER_GEN_DAMAGE_MULT, DEVOURER_FAMILY_CAP, DEVOURER_SELF_SPLIT_TICKS, DEVOURER_BODY_KILL_HEAL, DEVOURER_HP_PER_DEFEAT, DEVOURER_COPY_HP_RATIO, DEVOURER_COPY_SCALE,
   FROST_CHILL_SPEED_MULT, FROST_CHILL_TICK_RATE, FROST_ICE_TILE_COUNT,
   FROST_FREEZE_DURATION, FROST_RELOCATE_INTERVAL, FROST_SHIELD_HP, FROST_SHIELD_HP_PER_DEFEAT, FROST_SHIELD_HP_MAX, FROST_SHIELD_CAST_DELAY,
   DIFFICULTY_OPENING_THRESHOLDS, DIFFICULTY_TIERS,
-  ENEMY_CONFIGS, CRATER, TRIANGULUM, ENCHANTER, BLEEDER, SNATCHER, IMPOSTOR, SHOOTER, lateEnemyDamageMult, ALIEN_HP_PER_MILESTONE, BLESSING, CARRY_DAMAGE_MULT, CARRY_PUSH_MULT, CARRY_BOOST_MULT, HYDRA, ALIEN_KNOCKBACK, TWIN_MELEE_KNOCKBACK, COMET, RETICULUM, MOVE_SPEED_MULT, KNOCKBACK_SHAKE_TICKS, KNOCKBACK_SHAKE_AMOUNT, LANCER, EnemyType, BOSS_TYPES,
-  generateMap,
+  ENEMY_CONFIGS, CRATER, TRIANGULUM, ENCHANTER, BLEEDER, SNATCHER, IMPOSTOR, SHOOTER, REFLECTOR, TRAPPER, DROPPER, BLINKER, JAMMER, SPOOK, GRAPPLER, lateEnemyDamageMult, ALIEN_HP_PER_MILESTONE, BLESSING, CARRY_DAMAGE_MULT, CARRY_PUSH_MULT, URSA_PUSH_MULT, CARRY_BOOST_MULT, HYDRA, ALIEN_KNOCKBACK, TWIN_MELEE_KNOCKBACK, COMET, RETICULUM, MOVE_SPEED_MULT, KNOCKBACK_SHAKE_TICKS, KNOCKBACK_SHAKE_AMOUNT, LANCER, EnemyType, BOSS_TYPES,
+  generateMap, generateBazaarMap, applyChamberLayout,
 } from './constants';
 import {
   blueFishPopped, chargeNeptuneHealing, healNeptune, isNeptuneObject, neptunePhaseFloor, neptuneRevealClone, neptuneTideSpeed, pufferBurst, updateFish, updateNeptune, updatePufferfish,
 } from './neptune';
 import type { NeptuneState } from './neptune';
 import {
-  addGaiaSunCharge, createGaiaState, gaiaAlienType, gaiaBoss, gaiaBossDamageMult, gaiaClearArea, gaiaClearRootsField, gaiaClearTile, gaiaLaserRangeMult, gaiaLevel, gaiaPhaseFloor, gaiaPlayerSpeed, gaiaScorchRoom, gaiaSeekPath, gaiaSelfDamage, gaiaSporeCloud, gaiaStoneBlocksField, gaiaStrikeDamage, gaiaTwinFieldAim, initializeGaiaBoss, isGaiaObject, updateGaia,
+  addGaiaSunCharge, createGaiaState, gaiaAlienType, gaiaBoss, gaiaBossDamageMult, gaiaClearArea, gaiaClearRootsField, gaiaClearTile, gaiaLaserRangeMult, gaiaLevel, gaiaPhaseFloor, gaiaPlayerSpeed, gaiaScorchRoom, gaiaSeekPath, gaiaSelfDamage, gaiaSporeCloud, gaiaSporeImpact, gaiaStoneBlocksField, gaiaStrikeDamage, gaiaTwinFieldAim, initializeGaiaBoss, isGaiaObject, updateGaia,
+  playStrikeCharged,
 } from './gaia';
 import type { GaiaState } from './gaia';
 export type { NeptuneTide, NeptuneState } from './neptune';
@@ -144,6 +151,8 @@ export const CONSTELLATIONS = {
   laserPull: { name: 'Triangulum', description: 'Lasers pull nearby hit aliens together.', color: '#c9b6ff' },
   meteorHeal: { name: 'Crater', description: 'Meteors leave their room healing you and Ruby.', color: '#a8e77b' },
   heavyShot: { name: 'Monoceros', description: 'Heavy shots come every 8th bullet.', color: '#ffe9a0' },
+  bombSafe: { name: 'Scutum', description: 'Your bombs no longer hurt you.', color: '#ffb38a' },
+  steady: { name: 'Ursa Major', description: 'Knockbacks and pushes move you half as far.', color: '#c9b08a' },
   laserChain: { name: 'Hydra', description: 'Hitting more enemies makes your next Laser stronger.', color: '#8fe0d0' },
 } as const;
 export type Constellation = keyof typeof CONSTELLATIONS;
@@ -161,6 +170,7 @@ export function getBombRadius(state: GameState, powered: boolean): number {
 // Extra health applies only to new regular aliens, including Splitter children.
 export const LATE_ALIEN_HP_FROM = 18;        // milestone bonus tops out here (+24%)...
 export const LATE_ALIEN_HP_PER_STAGE = 0.02; // ...then every further boss defeat adds 2%, without a cap
+export const DEEP_ALIEN_HP_FROM = 30, DEEP_ALIEN_HP_PER_STAGE = 0.01; // from stage 30, every further stage adds another 1% on top
 
 // Saturn Guard and Neptune's Tide amounts grow with the stage only up to SKILL_SCALE_STAGE_CAP.
 export const SKILL_SCALE_STAGE_CAP = 18;
@@ -179,7 +189,7 @@ export function skillAlienScale(state: GameState): number {
 export function constellationAlienHPMult(state: GameState): number { return alienHPMultAt(state.bossesKilled); }
 function alienHPMultAt(kills: number): number {
   return 1 + Math.min(6, Math.floor(kills / CONSTELLATION_INTERVAL)) * ALIEN_HP_PER_MILESTONE
-    + Math.max(0, kills - LATE_ALIEN_HP_FROM) * LATE_ALIEN_HP_PER_STAGE;
+    + Math.max(0, kills - LATE_ALIEN_HP_FROM) * LATE_ALIEN_HP_PER_STAGE + Math.max(0, kills - DEEP_ALIEN_HP_FROM) * DEEP_ALIEN_HP_PER_STAGE;
 }
 
 // force skips the every-third-boss check (used for Ascension's starting picks).
@@ -263,7 +273,7 @@ export interface ThornAbilities {
 }
 export interface ThornPatch { x: number; y: number; ticks: number; ownerId: number; radius?: number; }
 export interface EncounterEffect {
-  kind: 'reflect' | 'shield-break' | 'shield-form' | 'construct-break' | 'pylon-overload' | 'sentinel-hit' | 'sentinel-death' | 'melee' | 'shot' | 'transfer' | 'fall' | 'revive';
+  kind: 'reflect' | 'shield-break' | 'shield-form' | 'construct-break' | 'totem-overload' | 'sentinel-hit' | 'sentinel-death' | 'melee' | 'shot' | 'transfer' | 'fall' | 'revive';
   x: number; y: number; toX: number; toY: number; ticks: number; maxTicks: number; ownerId: number; targetId?: number; color: string;
 }
 
@@ -292,6 +302,7 @@ export interface SeaSongWave {
   aimX: number; aimY: number;
   hitPlayer: boolean;
   hitDecoy?: boolean;
+  hitRuby?: boolean;
   ownerId: number;
 }
 
@@ -329,7 +340,7 @@ export interface Enemy {
   attackTimer: number; // ticks until next attack
   targeting: 'player' | 'ruby';
   // push state (from charge wave)
-  buildWallDamage?: number; buildStopUntil?: number; reticulumReadyAt?: number;
+  buildWallDamage?: number; buildStopUntil?: number; reticulumReadyAt?: number; slamStun?: number; surgeShoved?: number; magnetMoved?: number; // magnetMoved: ticks a Binary magnetic move (field pulse or swap shove) can still cause a collision; // surgeShoved: ticks a Binary surge shove can still cause a collision; slamStun: ticks stunned when a wall slam lands (Binary Star surge)
   pushDirX: number;
   pushDirY: number;
   pushTiles: number; // remaining push tiles
@@ -343,12 +354,20 @@ export interface Enemy {
   windupTicks: number; // >0 = telegraphing before firing (charger: stun ticks)
   // charger specific
   chargeDirX: number; // locked charge direction; 0 = not charging
+  faceX?: number; faceY?: number; turnTimer?: number; mirrorDownUntil?: number; mirrorDown?: boolean; // Reflector: mirrored front, turn delay, knocked-down mirror
+  blinkOnDeath?: boolean; // a player/skill kill triggers the Blinker warp, environmental deaths do not
+  boneLunge?: { phase: 'warning'|'dash'|'recover'; dx: number; dy: number; ticks: number; left: number };
+  hook?: { phase: 'warning'|'flying'|'retract'|'pull'; dx: number; dy: number; x: number; y: number; ticks: number; travel: number };
+  dropAttack?: { tileX: number; tileY: number; ticks: number }; // Dropper's locked 2x2 warning, anchored at its top-left tile
+  dropImpact?: { tileX: number; tileY: number; until: number }; // cosmetic impact, on the gameplay clock
+  mineTimer?: number; // Trapper: ticks until its next mine
   disguiseOf?: number; impostorExpired?: boolean; disguiseIn?: number; // disguiseIn: ticks left before the Impostor takes on a boss's look // Impostor: the boss it copies; removed quietly when no boss is left
   enchantedUntil?: number; // Enchanter buff: faster and harder-hitting until this gameTick
   enchantPulseTicks?: number; // Enchanter: pulse ring animation (its own timer, so the body does not squash)
   lanceDirX?: number; lanceDirY?: number; // Lancer: locked aim (unit vector in tiles) while charging
   chargeDirY: number;
-  chargeWindupTicks?: number; // locked warning before a Charger rush; windupTicks remains its recovery
+  chargeWindupTicks?: number; // locked warning before a Charger rush (or Lodestone snap); windupTicks remains its recovery
+  snapCooldown?: number; snapRecover?: number; // Lodestone Magnet Snap: ticks until the next snap, and rest after one
   chargeTilesLeft?: number;
   // Leech: only energy actually removed from the player is stored/refunded.
   stolenEnergy?: number;
@@ -358,8 +377,12 @@ export interface Enemy {
   phaseTimer: number;
   // frost_warden specific — remaining absorb capacity of an icy shield she granted this
   // ally; damageEnemy drains this before touching real hp. 0 = no shield.
-  frostRollLeft?: number; frostStole?: boolean;
-  saturnSnowballKill?: boolean;
+  relicKind?: 'urn' | 'sun' | 'eye'; // Venus: which sand relic this is
+  burrow?: 'under' | 'rising' | 'up' | 'sinking'; burrowTicks?: number; // Venus Dune Worm: underground (unhittable) until it bursts up
+  coreSealed?: boolean; // Venus phase 3: his core is sealed while totems are left (drawing)
+  venusOrder?: number; // Venus challenge: this totem's place in the shield sequence (0-based)
+  siriusAct?: { ticks: number; tx: number; ty: number; dx: number; dy: number; fromX: number; fromY: number; dashing: boolean; hit?: boolean; hitRuby?: boolean; tiles?: [number, number][] }; // Sirius alien attack in progress
+  frostAct?: { kind: 'pounce' | 'slam'; ticks: number; tx: number; ty: number; fromX: number; fromY: number; leaping?: boolean }; // Saturn alien attack in progress
   icyShieldHP: number;
   prayer?: PrayerAbilities;
   king?: KingAbilities;
@@ -367,9 +390,16 @@ export interface Enemy {
   thorn?: ThornAbilities;
   aegis?: { shielded: boolean; exposedUntilTick: number; constructsLeft: number; openAmount?: number; reflectTicks?: number; brokenOnce?: boolean; reshieldTicks?: number };
   constructOwnerId?: number;
-  pylon?: { ageTicks: number; overloadTicks: number };
+  totem?: { ageTicks: number; overloadTicks: number };
   visualSpawnTicks?: number;
-  devourer?: { generation: number; newbornTicks?: number; splitTicks?: number; originMaxHp?: number }; // generation, newborn sprint, self-split timer, original's spawn HP
+  toxin?: { ticks: number; stacks: number };
+  goldenSoul?: boolean; // Singularity: a Golden Soul (a lost_soul worth two stacks and a burst of speed to the swarm)
+  singularityPull?: { started: boolean; dx?: number; dy?: number; speed?: number }; // environmental gravity overrides ordinary knockback immunity
+  sapSoundAt?: number;
+  spit?: { dx:number; dy:number; ticks:number }; // Flare Spitter: locked fan warning
+  doused?: boolean; // Sun Flare Spitter: water has stripped its flame armor (for good)
+  devourer?: { generation: number; newbornTicks?: number; splitTicks?: number; originMaxHp?: number; challenge?: boolean; consumed?: boolean; gorgeTicks?: number; stunTicks?: number; jumpTicks?: number; aggroTicks?: number; mealSpeedTicks?: number; merging?: boolean; gnasher?: boolean; biteTicks?: number; landTicks?: number; roamTo?: [number, number] }; // stunTicks: Singularity, after a hook slam // gorgeTicks: Singularity fuse before a full body bursts // generation, newborn sprint, self-split timer, original's spawn HP
+  pole?: 'north' | 'south'; // Binary Star Lodestone: its magnetic pole
   twin?: { pairId: number; index: number; downedTicks: number; partnerDownTicks: number; transferTicks: number; transferGiveTicks?: number; transferGetTicks?: number; shotAimX?: number; shotAimY?: number; shotTargetX?: number; shotTargetY?: number; strikeAngle?: number; fallTicks?: number; reviveTicks?: number; hasteTicks?: number };
 }
 
@@ -407,6 +437,7 @@ export interface WaveEffect {
   maxRadius: number;
   ticks: number;
   powered?: boolean;
+  echo?: boolean; // Binary Star: repeated by the past-self echo
 }
 
 export interface BombBlast {
@@ -417,10 +448,13 @@ export interface BombBlast {
   maxRadius: number;
   ticks: number;
   water?: boolean; // Neptune's water ball: drawn as a water burst instead of a bomb blast
+  trap?: boolean; // hostile crimson blast shared by Trapper mines and Bomber explosions
+  echo?: boolean; // Binary Star: the past-self echo's bomb
 }
 
 export interface LaserBullet {
-  solar?:boolean; blessingCopy?:boolean; blessingDecoy?:boolean; blessingDamage?:number;
+  solar?:boolean; blessingCopy?:boolean; plainCopy?:boolean; // plainCopy: a Ruby copy drawn in normal colours (Reflector reward)
+  blessingDecoy?:boolean; blessingDamage?:number;
   avoidEnemyId?: number; // Lepus splits a volley between distinct targets when possible.
   heavy?: boolean; // every 20th player shot: double damage and a push on hit
   damageScale?: number;
@@ -463,7 +497,7 @@ export interface SapphireHitEffect {
   untilTick: number;
 }
 
-export type GamePhase = 'playing' | 'teleporting' | 'laserTarget' | 'constellation' | 'blessing' | 'skillChoice' | 'won' | 'lost';
+export type GamePhase = 'playing' | 'teleporting' | 'laserTarget' | 'constellation' | 'blessing' | 'skillChoice' | 'loadout' | 'won' | 'lost'; // loadout: Star Gambit weapon picker
 
 export interface RewardEffect {
   target: 'player' | 'ruby';
@@ -478,13 +512,17 @@ export interface GameState {
   queuedConstellationRewards: number;
   bossOverlapTicks: number;
   tutorial: TutorialState | null;
-  trial: { boss: BossType; skill: SpecialSkill; cooldown: number; mapOnly?: boolean } | null; // cooldown counts down after a cast
+  trial: { boss: BossType; skill: SpecialSkill; cooldown: number; mapOnly?: boolean; siriusLight?: boolean; siriusLightBlend?: number; devourer?: SingularityTrial } | null; // Sirius lighting is cosmetic; cooldown counts down after a cast
   neptune: NeptuneState | null;
   gaia: GaiaState | null;
   moon: MoonState | null;
   sun: SunState | null;
   jupiter: JupiterState | null;
   saturn: SaturnState | null;
+  gambit?: GambitState | null; // Star Gambit: weapon slots and their effects
+  binary: BinaryState | null; // Binary Star challenge: twin lives, opposite-room jumps and the past-self echo
+  sirius: SiriusState | null; // Sirius challenge: light/dark control swaps, traced runes and the Ruby guess
+  venus: VenusState | null; // Venus challenge: the buried totem sequence, his leap and lance, and Sand Swirl
   ambientEvents: AmbientEventState;
   map: number[][];
   gameTick: number;
@@ -506,7 +544,7 @@ export interface GameState {
   playerQueuedDirX: number;
   playerQueuedDirY: number;
   playerStepProgress: number;
-  playerKnockback: { dirX: number; dirY: number; started: boolean; tilesLeft?: number; shaken?: boolean; carryChecked?: boolean } | null; // one tile unless tilesLeft says more
+  playerKnockback: { dirX: number; dirY: number; started: boolean; tilesLeft?: number; shaken?: boolean; carryChecked?: boolean; hookOwnerId?: number; speedMult?: number } | null; // one tile unless tilesLeft says more
   carryPushRemainder?: number; // half-tile carried between pushes while carrying Ruby
   craterField?: { chamber: number; ticks: number } | null; // Crater: the meteor-struck room heals the player for a while
   rubyStolenBy?: number; // id of the Snatcher carrying Ruby away; Ruby's tile follows it
@@ -538,6 +576,7 @@ export interface GameState {
   chargeCount: number;
   chargeDecayTimer: number; // ticks since last charge press
   speedActiveTicks: number; // remaining ticks of speed boost
+  stormHasteTicks?: number; // Jupiter Storm: remaining ticks of its +30% speed
   speedFlashTicks: number; // burst glow ticks on initial cast
   playerCastTicks: number; // cosmetic cast pose; never blocks movement or attacks
   specialLockTicks: number; // endless: brief lockout after a celestial cast
@@ -586,7 +625,14 @@ export interface GameState {
   lightningArcs: LightningArc[];
   slashEffects: SlashEffect[];
   deathParticles: DeathParticle[];
-  enemyShots?: { x: number; y: number; dx: number; dy: number; ownerId: number; ticks: number }[]; // Shooter orbs, in pixels
+  enemyShots?: { x: number; y: number; dx: number; dy: number; ownerId: number; ticks: number; mirror?: boolean; flare?: boolean; spore?: boolean }[]; // Shooter orbs and Reflector bounces (mirror), in pixels
+  mines?: { tileX: number; tileY: number; ownerId: number; ticks: number; fuse?: number }[]; // Trapper mines
+  rubyCopyUntil?: number; // Reflector kill reward: Ruby copies your attacks
+  ccImmuneUntil?: number; // Grappler kill: immunity to forced movement and disabling effects
+  jammerWasActive?: boolean; // entry cue only on an outside-to-inside transition
+  jammerWaveReady?: boolean; // next completed pad teleport releases a larger free Wave
+  heavyImpactUntil?: number; // Dropper kill reward: larger, stronger Waves, extra push and faster recharge
+  explosiveBulletsUntil?: number; // Trapper kill reward: bullets explode on hit
   bulletStunUntil?: number; // Shooter kill reward: bullets hit harder and briefly stop enemies until this gameTick
   sapphireHitEffects: SapphireHitEffect[];
   rewardEffects: RewardEffect[];
@@ -603,15 +649,17 @@ export interface GameState {
 
   // Teleport
   playerChamber: number;   // -1 if in hallway
+  spookFace?: { until: number; id: number }; // one brief death-face overlay; successive deaths replace it
+  blinkerWarp?: { fromX: number; fromY: number; x: number; y: number; until: number };
   teleportDestOptions: number[]; // which chambers can be jumped to
-  teleportCooldown: number; // ticks after teleport/cancel before pad can re-trigger
+  teleportCooldown: number; // ticks after arrival before another teleport
 
   singularity: { x: number; y: number; ticks: number; maxTicks: number; pullTimer: number; damageTimer: number } | null;
   celestialField: { x: number; y: number; ticks: number; damageTimer: number } | null;
   lunarDecoy: { x: number; y: number; tileX: number; tileY: number; hitsLeft: number; maxHits: number; flashTicks: number; invulnerableTicks: number } | null;
   enemyDecoyActive: boolean;
   ascensionBannerTicks: number;
-  // NEW ALIEN callout: shown once per late alien type (once ever on desktop, where the profile remembers encounters)
+  // NEW ALIEN callout (desktop only): shown once ever per late alien type, using the profile's encountered list
   alienIntro?: { type: EnemyType; ticks: number } | null; alienIntroQueue?: EnemyType[]; introducedAliens?: string[];
   specialSkill: SpecialSkill | null;
   specialEffects: { kind: SpecialSkill; x: number; y: number; ticks: number }[];
@@ -664,6 +712,8 @@ export function bfs(
   map: number[][],
   fx: number, fy: number,
   tx: number, ty: number,
+  avoid?: (x: number, y: number) => boolean, // optional tiles to route around
+  closest = false, // when the target cannot be reached, path to the reachable tile nearest it instead
 ): [number, number][] {
   if (fx === tx && fy === ty) return [];
   const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -673,21 +723,25 @@ export function bfs(
   const q: [number, number][] = [[fx, fy]];
   visited.add(key(fx, fy));
 
+  const trace = (end: number) => {
+    const path: [number, number][] = [];
+    let k = end;
+    while (prev.has(k)) {
+      path.unshift([k % MAP_COLS, Math.floor(k / MAP_COLS)]);
+      k = prev.get(k)!;
+    }
+    return path;
+  };
+  let nearest = key(fx, fy), nearestDist = Math.hypot(fx - tx, fy - ty);
   while (q.length) {
     const [cx, cy] = q.shift()!;
-    if (cx === tx && cy === ty) {
-      const path: [number, number][] = [];
-      let k = key(cx, cy);
-      while (prev.has(k)) {
-        path.unshift([k % MAP_COLS, Math.floor(k / MAP_COLS)]);
-        k = prev.get(k)!;
-      }
-      return path;
-    }
+    if (cx === tx && cy === ty) return trace(key(cx, cy));
+    const d = Math.hypot(cx - tx, cy - ty); if (d < nearestDist) { nearestDist = d; nearest = key(cx, cy); }
     for (const [dx, dy] of DIRS) {
       const nx = cx + dx, ny = cy + dy;
       if (nx < 0 || nx >= MAP_COLS || ny < 0 || ny >= MAP_ROWS) continue;
       if (map[ny][nx] === T_WALL) continue;
+      if (avoid && avoid(nx, ny)) continue;
       const nk = key(nx, ny);
       if (visited.has(nk)) continue;
       visited.add(nk);
@@ -695,21 +749,13 @@ export function bfs(
       q.push([nx, ny]);
     }
   }
-  return [];
+  return closest ? trace(nearest) : [];
 }
 
 // ─── Audio helpers ───────────────────────────────────────────────────────────
 
 // Shared trim for player and enemy attack sounds, preserving their relative mix.
 export const ATTACK_SFX_VOLUME = 0.765;
-
-let _actx: AudioContext | null = null;
-function getAudioCtx(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (!_actx) _actx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  if (_actx.state === 'suspended') _actx.resume();
-  return _actx;
-}
 
 function playTone(freq: number, dur: number, vol = 0.16, type: OscillatorType = 'square') {
   try {
@@ -840,10 +886,10 @@ export function playSFX_alienShoot(volumeMultiplier = 1, pitch = 1) {
   } catch { }
 }
 
-function playSFX_queenAttack() {
+function playSFX_queenAttack(volumeMult = 1) {
   try {
-    const a = gameAudio('/sounds/bossQueenAttack1.mp3', 'attack'); a.volume = 0.765 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const b = gameAudio('/sounds/gameModeClick.mp3', 'attack'); b.volume = 0.72 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/bossQueenAttack1.mp3', 'attack'); a.volume = 0.765 * ATTACK_SFX_VOLUME * volumeMult; a.play().catch(() => {});
+    const b = gameAudio('/sounds/gameModeClick.mp3', 'attack'); b.volume = 0.72 * ATTACK_SFX_VOLUME * volumeMult; b.play().catch(() => {});
   } catch { }
 }
 
@@ -903,12 +949,11 @@ function playSFX_healPickup() {
 }
 
 /** Special-alien sounds (Enchanter, Bleeder, Snatcher, Impostor, Shooter and their kill buffs). */
-export function playSFX_special(kind: 'orbHit' | 'orbRuby' | 'bleed' | 'regen' | 'snatch' | 'rubyBack' | 'empower' | 'disguise') {
+export function playSFX_special(kind: 'orbHit' | 'orbRuby' | 'bleed' | 'snatch' | 'rubyBack' | 'empower' | 'disguise') {
   switch (kind) {
     case 'orbHit': playAudioOneShot('/sounds/snowball-hit.mp3', .272, 1.1); playAudioOneShot('/sounds/strike-charged.wav', .191, 1.35); break;
     case 'orbRuby': playAudioOneShot('/sounds/snowball-hit.mp3', .4 * ATTACK_SFX_VOLUME, .9); break;
     case 'bleed': playAudioOneShot('/sounds/poisoned.wav', .45, .8); break;
-    case 'regen': playAudioOneShot('/sounds/seaHeal.mp3', .4, 1.1); break;
     case 'snatch': playAudioOneShot('/sounds/snatch-whistle.wav', 1); break;
     case 'rubyBack': playAudioOneShot('/sounds/shield.mp3', .5); break;
     case 'empower': playAudioOneShot('/sounds/powerUpBoost.mp3', .4, .85); break;
@@ -916,7 +961,7 @@ export function playSFX_special(kind: 'orbHit' | 'orbRuby' | 'bleed' | 'regen' |
   }
 }
 
-function playSFX_powerUp() {
+export function playSFX_powerUp() {
   try {
     const a = gameAudio('/sounds/powerUpBoost.mp3'); a.volume = 0.38; a.play().catch(() => {});
   } catch { }
@@ -983,7 +1028,7 @@ export function playSFX_enemyAttack(enemy?: Enemy) {
   } catch { }
 }
 
-function playSFX_twinRevive() {
+export function playSFX_twinRevive() {
   try {
     const sound = gameAudio('/sounds/twin-revive.mp3');
     sound.volume = .85 * ATTACK_SFX_VOLUME; sound.loop = false;
@@ -993,19 +1038,19 @@ function playSFX_twinRevive() {
 
 function playSFX_twinTransfer() { playCelestialSound('ready'); }
 
-export function playSFX_objectBreak(kind: 'frost' | 'pylon' | 'aegis') {
+export function playSFX_objectBreak(kind: 'frost' | 'totem' | 'aegis') {
   const clips = {
     frost: { file: 'frost-shield-break.mp3', gain: .7 },
-    pylon: { file: 'pylon-break.wav', gain: .85 },
+    totem: { file: 'totem-break.wav', gain: .85 },
     aegis: { file: 'aegis-shield-break.wav', gain: 3 },
   };
   const clip = clips[kind];
   playAudioOneShot('/sounds/' + clip.file, clip.gain * ATTACK_SFX_VOLUME);
 }
 
-function playSFX_pylonExplosion() {
+export function playSFX_totemExplosion() {
   try {
-    const sound = gameAudio('/sounds/pylon-explode.mp3');
+    const sound = gameAudio('/sounds/totem-explode.mp3');
     sound.volume = .9 * ATTACK_SFX_VOLUME; sound.loop = false;
     sound.play().catch(() => {});
   } catch { }
@@ -1044,17 +1089,30 @@ export function playSFX_reaperStrike() {
   } catch { }
 }
 
-function playSFX_devourerBite() {
+/** Singularity sound cooldowns, so a swarm never stacks the same sound: each kind (bite, eat, boom, swallow, fuse, hit,
+ * ready, alien) plays at most once every soundGap ticks (1s). Outside the challenge everything plays. */
+export function devourerSoundAllowed(state:GameState|undefined,kind:string) {
+  const t=state?.trial?.devourer;if(!t||!state)return true;
+  const ticks=t.soundTicks??={},last=ticks[kind];
+  if(last!==undefined&&state.gameTick-last<(kind==='eat'?SINGULARITY_CHALLENGE.eatSoundGap:SINGULARITY_CHALLENGE.soundGap))return false;
+  ticks[kind]=state.gameTick;return true;
+}
+
+function playSFX_devourerBite(state?:GameState) {
+  if(!devourerSoundAllowed(state,'bite'))return;
+  const multiplier=state?.trial?.devourer ? .4 : 1;
   try {
-    const a = gameAudio('/sounds/soundWaveAttack.mp3', 'attack'); a.volume = 0.49 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const b = gameAudio('/sounds/slash.mp3', 'attack'); b.volume = 0.35 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/soundWaveAttack.mp3', 'attack'); a.volume = 0.49 * ATTACK_SFX_VOLUME * multiplier; a.play().catch(() => {});
+    const b = gameAudio('/sounds/slash.mp3', 'attack'); b.volume = 0.35 * ATTACK_SFX_VOLUME * multiplier; b.play().catch(() => {});
   } catch { }
 }
 
-function playSFX_devourerAbsorb() {
+function playSFX_devourerAbsorb(state?:GameState) {
+  if(!devourerSoundAllowed(state,'eat'))return;
+  const quiet=state?.trial?.devourer ? .8 : 1; // the Singularity swarm eats often: the Endless meal sound, a little quieter (and once a second at most)
   try {
-    const a = gameAudio('/sounds/reverse.mp3', 'attack'); a.volume = 0.7 * ATTACK_SFX_VOLUME; a.play().catch(() => {});
-    const b = gameAudio('/sounds/grow.wav', 'attack'); b.volume = 0.5 * ATTACK_SFX_VOLUME; b.play().catch(() => {});
+    const a = gameAudio('/sounds/reverse.mp3', 'attack'); a.volume = 0.7 * ATTACK_SFX_VOLUME * quiet; a.play().catch(() => {});
+    const b = gameAudio('/sounds/grow.wav', 'attack'); b.volume = 0.5 * ATTACK_SFX_VOLUME * quiet; b.play().catch(() => {});
   } catch { }
 }
 
@@ -1104,7 +1162,7 @@ export function playSFX_meteorFalling() {
   } catch { }
 }
 
-function playSFX_meteorWarning(urgent: boolean) {
+export function playSFX_meteorWarning(urgent: boolean) {
   playTone(urgent ? 1320 : 880, 0.1, 0.1, 'square');
 }
 
@@ -1145,7 +1203,7 @@ export function chooseStartingSkill(state: GameState, kind: SpecialSkill): boole
 
 // Game modes picked in the lobby. Endless Space is the standard run; Ascension starts at stage 10
 // with celestial skills already unlocked and regular aliens at their hardest tier.
-export type RubyStarMode = 'endless' | 'ascension' | 'tutorial' | 'trial';
+export type RubyStarMode = 'endless' | 'ascension' | 'tutorial' | 'trial' | 'gambit';
 
 export function createModeState(mode: RubyStarMode, trialBoss?: BossType): GameState {
   const state = createInitialState();
@@ -1172,17 +1230,20 @@ export function createModeState(mode: RubyStarMode, trialBoss?: BossType): GameS
     if (trialBoss === 'splitter_queen') createMoonState(state);
     if (trialBoss === 'fiery_king') createSunState(state);
     if (trialBoss === 'storm_reaper') createJupiterState(state);
-    if (trialBoss === 'devourer') {
-      state.trial.mapOnly = true; state.noMobs = true;
-      godSpawnBoss(state, 'devourer');
-      const boss = state.enemies.find(enemy => enemy.type === 'devourer');
-      if (boss) {
-        boss.tileX = boss.targetTileX = 14; boss.tileY = boss.targetTileY = 10;
-        boss.x = 14.5 * TILE_SIZE; boss.y = 10.5 * TILE_SIZE;
-      }
-      state.noBossSpawns = true;
-    }
+    if (trialBoss === 'blind_prayer') createSiriusState(state);
+    if (trialBoss === 'devourer') state.trial.devourer = { phase: 1, encounterId: -1, defeatedMaxHp: 0 };
+    if (trialBoss === 'aegis_sentinel') createVenusState(state); // Venus: the buried totem sequence
     if (trialBoss === 'frost_warden') createSaturnState(state);
+    if (trialBoss === 'astral_twins') createBinaryState(state);
+  }
+  if (mode === 'gambit') {
+    // Star Gambit (first step): the Bazaar Ring map as an empty sandbox: no aliens, bosses, meteors or events yet.
+    applyChamberLayout('bazaar'); state.map = generateBazaarMap(); state.noMobs = true; state.noBossSpawns = true;
+    // Start in the first stall: Ruby on its pad, you just below it.
+    [state.rubyTileX, state.rubyTileY] = TELEPORT_PADS[0];
+    const [sx, sy] = [TELEPORT_PADS[0][0], TELEPORT_PADS[0][1] + 2];
+    Object.assign(state, { playerTileX: sx, playerTileY: sy, playerTargetX: sx, playerTargetY: sy, playerX: (sx + .5) * TILE_SIZE, playerY: (sy + .5) * TILE_SIZE, playerStepProgress: 0 });
+    createGambitState(state);
   }
   if (mode === 'tutorial') {
     // A safe sandbox: no natural aliens, bosses, meteors or events; you and Ruby never drop below 1 HP.
@@ -1193,15 +1254,17 @@ export function createModeState(mode: RubyStarMode, trialBoss?: BossType): GameS
 }
 
 export function createInitialState(): GameState {
+  stopSunHeatWarning();stopSunburstWarning();
   stopGaiaFieldSound();
   stopSingularitySound();
   stopPoisonSound();
   stopSeaSounds();
   stopChargeSound();
+  applyChamberLayout('standard'); // every mode starts on the four-chamber station; Star Gambit swaps in its Bazaar below
   const map = generateMap();
   const [px, py] = PLAYER_START;
   return {
-    mode: 'endless', build: createRunBuildState(), queuedConstellationRewards: 0, bossOverlapTicks: 0, tutorial: null, trial: null, neptune: null, gaia: null, moon: null, sun: null, jupiter: null, saturn: null,
+    mode: 'endless', build: createRunBuildState(), queuedConstellationRewards: 0, bossOverlapTicks: 0, tutorial: null, trial: null, neptune: null, gaia: null, moon: null, sun: null, jupiter: null, saturn: null, binary: null, sirius: null, venus: null,
     map,
     gameTick: 0,
     gamePhase: 'playing',
@@ -1362,10 +1425,14 @@ function damageLunarDecoy(state: GameState, amount: number) {
   }
 }
 
+/** Venus Veil: the share of damage you and Ruby still take (85% cut in the Venus challenge, 65% elsewhere). */
+const veilDamageMult = (state: GameState) => state.venus ? VENUS.veilDamage : SPECIAL_VENUS_DAMAGE_MULT;
+
 // Venus returns the full incoming hit to a direct attacker; bosses take a capped share.
 function reflectVenusDamage(state: GameState, attacker: Enemy | undefined, amount: number, fromX: number, fromY: number) {
   if (state.venusVeilTicks <= 0 || !attacker || attacker.hp <= 0 || amount <= 0) return;
-  const damage = isBossType(attacker.type) ? Math.min(amount, attacker.maxHp * SPECIAL_VENUS_BOSS_REFLECT_CAP) : amount;
+  const scaled = amount * venusReflectScale(state, attacker); // Venus: scaled with his HP so it stays the same share
+  const damage = isBossType(attacker.type) && !state.venus ? Math.min(scaled, attacker.maxHp * SPECIAL_VENUS_BOSS_REFLECT_CAP) : scaled; // no cap in the Venus challenge
   damageEnemy(state, attacker, damage, 'reflection');
   state.venusReflects.push({ fromX, fromY, toX: attacker.x, toY: attacker.y, ticks: 18 });
   if (state.venusReflects.length > 24) state.venusReflects.shift();
@@ -1375,24 +1442,27 @@ export function damagePlayer(state: GameState, amount: number, attacker?: Enemy,
   if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=BLESSING.sapphireWeaken;
   if(attacker&&!state.trial)amount*=lateEnemyDamageMult(state.bossesKilled); // stage 15+: enemy attacks hit harder every 5 stages
   if(attacker&&(attacker.enchantedUntil??0)>state.gameTick)amount*=isBossType(attacker.type)?ENCHANTER.bossDamageMult:ENCHANTER.damageMult; // Enchanter buff (smaller on bosses)
+  if (attacker) amount *= saturnEmpower(state, attacker, 'damage') * siriusEmpower(state, attacker, 'damage'); // Saturn ice / Sirius wrath make them hit harder
   if (attacker && isMoonBoss(state, attacker)) amount *= MOON_QUEEN_DAMAGE_MULT;
   if (state.neptune && attacker?.id === state.neptune.bossId) {
     amount *= NEPTUNE_ATTACK_MULT[state.neptune.phase];
     if (state.neptune.phase === 3 && !state.enemyDecoyActive) healNeptune(state, attacker, amount * NEPTUNE_LIFESTEAL);
   }
   if(state.enemyDecoyActive){damageLunarDecoy(state,amount);return;}
-  reflectVenusDamage(state, attacker, amount, state.playerX, state.playerY);
-  if(state.godMode){const mitigated=amount*((state.jupiter?.guardTicks??0)>0?JUPITER.fenceGuardDamage:1)*(state.constellations.includes('playerGuard')?.85:1)*(state.playerCarryingRuby?CARRY_DAMAGE_MULT:1)*(state.venusVeilTicks>0?SPECIAL_VENUS_DAMAGE_MULT:1);blessingReflectIncoming(state,mitigated,attacker);return;}
+  // Venus: his leap and lance hit 30% softer but reflect at their full strength (reflectAs).
+  const reflectBase = state.venus?.reflectAs ?? amount; if (state.venus) state.venus.reflectAs = undefined;
+  reflectVenusDamage(state, attacker, reflectBase, state.playerX, state.playerY);
+  if (state.venus) amount = venusGuard(state, attacker, amount, reflectBase); // Venus: the Sand Swirl guard cuts the hit and reflects it (on top of Venus Veil)
+  if(state.godMode){const mitigated=amount*((state.jupiter?.guardTicks??0)>0?JUPITER.fenceGuardDamage:1)*(state.constellations.includes('playerGuard')?.85:1)*(state.playerCarryingRuby?CARRY_DAMAGE_MULT:1)*(state.venusVeilTicks>0?veilDamageMult(state):1);blessingReflectIncoming(state,mitigated,attacker);return;}
   if ((state.jupiter?.guardTicks ?? 0) > 0) amount *= JUPITER.fenceGuardDamage;
   amount *= state.constellations.includes('playerGuard') ? 0.85 : 1;
   if (state.playerCarryingRuby) amount *= CARRY_DAMAGE_MULT; // carrying Ruby: less damage taken
-  if (state.venusVeilTicks > 0) amount *= SPECIAL_VENUS_DAMAGE_MULT;
+  if (state.venusVeilTicks > 0) amount *= veilDamageMult(state);
   blessingIncoming(state,amount,attacker);
   if(hasBlessing(state,'aegis_sentinel'))amount*=BLESSING.pearlReduction; // Pearl
   const incoming=amount;
-  const permanent = state.saturn?.permaShield && state.playerShieldHP > 0;
-  const absorbed = permanent ? amount : Math.min(state.playerShieldHP / shieldCost, amount);
-  if (!permanent) state.playerShieldHP = Math.max(0,state.playerShieldHP-absorbed*shieldCost);
+  const absorbed = Math.min(state.playerShieldHP / shieldCost, amount);
+  state.playerShieldHP = Math.max(0,state.playerShieldHP-absorbed*shieldCost);
   if(state.playerShieldHP<=0)state.playerSaturnShield=false;
   amount -= absorbed;
   if (absorbed > 0) showRewardEffect(state, 'player', 'shield');
@@ -1409,6 +1479,7 @@ export function damageRuby(state: GameState, amount: number, attacker?: Enemy, s
   if(attacker&&state.build.blessings.includes('sea_chanter')&&(attacker.sapphireWeakenUntil??0)>state.gameTick)amount*=BLESSING.sapphireWeaken;
   if(attacker&&!state.trial)amount*=lateEnemyDamageMult(state.bossesKilled); // stage 15+: enemy attacks hit harder every 5 stages
   if(attacker&&(attacker.enchantedUntil??0)>state.gameTick)amount*=isBossType(attacker.type)?ENCHANTER.bossDamageMult:ENCHANTER.damageMult; // Enchanter buff (smaller on bosses)
+  if (attacker) amount *= saturnEmpower(state, attacker, 'damage') * siriusEmpower(state, attacker, 'damage'); // Saturn ice / Sirius wrath make them hit harder
   if (attacker && isMoonBoss(state, attacker)) amount *= MOON_QUEEN_DAMAGE_MULT;
   if (state.neptune && attacker?.id === state.neptune.bossId) {
     amount *= NEPTUNE_ATTACK_MULT[state.neptune.phase];
@@ -1418,10 +1489,9 @@ export function damageRuby(state: GameState, amount: number, attacker?: Enemy, s
   if (state.godMode) return;
   if ((state.jupiter?.guardTicks ?? 0) > 0) amount *= JUPITER.fenceGuardDamage;
   amount *= 1 - 0.15 * constellationBonus(state, 'ruby');
-  if (state.venusVeilTicks > 0) amount *= SPECIAL_VENUS_DAMAGE_MULT;
-  const permanent = state.saturn?.permaShield && state.rubyShieldHP > 0;
-  const absorbed = permanent ? amount : Math.min(state.rubyShieldHP / shieldCost, amount);
-  if (!permanent) state.rubyShieldHP = Math.max(0,state.rubyShieldHP-absorbed*shieldCost);
+  if (state.venusVeilTicks > 0) amount *= veilDamageMult(state);
+  const absorbed = Math.min(state.rubyShieldHP / shieldCost, amount);
+  state.rubyShieldHP = Math.max(0,state.rubyShieldHP-absorbed*shieldCost);
   if(state.rubyShieldHP<=0)state.rubySaturnShield=false;
   amount -= absorbed;
   if (absorbed > 0) showRewardEffect(state, 'ruby', 'shield');
@@ -1431,8 +1501,12 @@ export function damageRuby(state: GameState, amount: number, attacker?: Enemy, s
   if (state.rubyHP <= 0) endGame(state);
 }
 
+export function playerCCImmune(state:Readonly<GameState>):boolean {
+  return (state.ccImmuneUntil??0)>state.gameTick;
+}
+
 export function shovePlayerFromEnemy(state:GameState,e:Enemy,tiles:number):boolean{
-  if(state.gamePhase!=='playing'||state.enemyDecoyActive||state.playerKnockback||state.saturn?.roll)return false;
+  if(state.gamePhase!=='playing'||state.enemyDecoyActive||state.playerKnockback||playerCCImmune(state))return false;
   const dx=state.playerTileX-e.tileX,dy=state.playerTileY-e.tileY;
   const [kx,ky]=Math.abs(dx)>=Math.abs(dy)?[Math.sign(dx)||1,0]:[0,Math.sign(dy)||1];
   const open=isFloorTile(state.map,state.playerTargetX+kx,state.playerTargetY+ky);
@@ -1441,15 +1515,31 @@ export function shovePlayerFromEnemy(state:GameState,e:Enemy,tiles:number):boole
   return open;
 }
 
+/** Phase HP for guardians whose three phases are equal bands of one HP pool (Sun, Jupiter, Saturn, Moon, Sirius). */
+function phasedBossStep(state: GameState, e: Enemy): number {
+  if (state.sun && e.id === state.sun.bossId) return SUN.phaseHP;
+  if (state.jupiter && e.id === state.jupiter.bossId) return JUPITER.phaseHP;
+  if (state.saturn && e.id === state.saturn.bossId) return SATURN.phaseHP;
+  if (state.sirius && e.id === state.sirius.bossId) return SIRIUS.phaseHP;
+  if (state.venus && e.id === state.venus.bossId) return VENUS.phaseHP;
+  if (isMoonBoss(state, e)) return MOON_PHASE_HP;
+  return 0;
+}
+
 export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 'player' | 'meteor' | 'enemy' | 'special' | 'reflection' | 'summon' = 'player', sapphireHealing = 0, shieldCost = 1) {
-  if (e.hp <= 0 || (e.twin?.downedTicks ?? 0) > 0 || amount <= 0) return;
-  if (state.saturn?.bossId === e.id && state.saturn.barrier > 0) return;
+  if (e.devourer?.merging || e.hp <= 0 || (e.twin?.downedTicks ?? 0) > 0 || amount <= 0) return;
+  if (duneWormHidden(e)) return; // Venus: a Dune Worm under the sand cannot be hit
+  if (state.venus && e.type === 'sand_core' && venusCoreHit(state, e)) return; // Venus: his core is sealed while totems are left
+  if (state.venus && e.type === 'sand_core') amount = Math.max(amount, e.hp); // once open, any hit breaks it
+  if (state.venus && venusAirborne(state, e)) return; // Venus: mid-leap he cannot be hit
   if(source==='player'||source==='special'){amount*=blessingDamageMultiplier(state);blessingHit(state,e);}
+  if((source==='player'||source==='special')&&e.type==='devourer'&&e.devourer?.challenge){e.devourer.aggroTicks=SINGULARITY_CHALLENGE.aggroTicks;e.pathTimer=0;} // Singularity: a body you hit drops its food and hunts you
   const wasSeaHunting = e.type === 'sea_chanter' && !isSeaChanterDiving(e);
   const previousHP = e.hp;
   const shielded = state.enemies.some(s => s.type === 'shielder' && s.shieldTargetId === e.id);
-  let actual = (shielded ? amount / 2 : amount) * jupiterDamageTaken(state, e);
+  let actual = (shielded ? amount / 2 : amount) * jupiterDamageTaken(state, e) * saturnDamageTaken(state, e, source) * siriusDamageTaken(state, e, source) * binaryDamageTaken(state, e, source);
   if (e.type === 'emberling' && !e.extinguished) actual *= SUN.emberlingArmor;
+  if (e.type === 'flare_spitter' && !e.doused) actual *= SUN.spitter.armor; // flame armor until water douses it
   if (e.twin?.partnerDownTicks) actual *= TWIN_BERSERK_DAMAGE_TAKEN; // berserk survivor
   if (e.aegis) {
     refreshAegisShield(state, e);
@@ -1469,10 +1559,8 @@ export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 
   if (e.icyShieldHP > 0) {
     const absorbed = Math.min(e.icyShieldHP / shieldCost, actual);
     e.icyShieldHP = Math.max(0,e.icyShieldHP-absorbed*shieldCost);
-    if(state.saturn&&!isBossType(e.type)&&absorbed>0&&(source==='player'||source==='special')){
-      grantSaturnShield(state,'player',absorbed*shieldCost*SATURN.shieldDamageAbsorb);
-      showRewardEffect(state,'player','shield');
-    }
+    // Saturn: her ice is her life. Ice you break on her aliens is taken from her.
+    if(state.saturn&&!isBossType(e.type)&&absorbed>0&&(source==='player'||source==='special'))saturnShatter(state,absorbed*shieldCost,e);
     if (absorbed > 0 && e.icyShieldHP <= 0) playSFX_objectBreak('frost');
     actual -= absorbed;
   }
@@ -1482,7 +1570,14 @@ export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 
   const gaia = state.gaia;
   if (gaia && e.id === gaia.bossId) actual *= gaiaBossDamageMult(state, e);
   if (isMoonBoss(state, e)) actual *= moonBossDamageMult(state, e);
+  if((e.type==='spook'||e.type==='lost_soul')&&actual>0)actual=Math.max(actual,e.hp); // one damaging hit, even a fractional bullet
   e.hp -= actual;
+  if(e.type==='blinker'&&e.hp<=0)e.blinkOnDeath=source!=='enemy'&&source!=='meteor';
+  // One hit never carries damage across a phase: it stops at the boundary, and the next hit starts the next phase.
+  // (Gaia and Neptune have their own floors below; Binary Star's twins lose one life per phase.)
+  const phaseStep = phasedBossStep(state, e);
+  if (state.venus && e.id === state.venus.bossId && previousHP > 0) { const floor = venusFloor(venusPhaseOf(previousHP)); if (floor > 0 && e.hp < floor) e.hp = floor; } // Venus: unequal bands (a bigger final phase)
+  else if (phaseStep && previousHP > 0) { const floor = Math.floor((previousHP - .001) / phaseStep) * phaseStep; if (floor > 0 && e.hp < floor) e.hp = floor; }
   if (gaia && e.id === gaia.bossId && gaia.phase < 3) e.hp = Math.max(e.hp, gaiaPhaseFloor(gaia) + .01); // phases 1–2 end only through the wither
   if (gaia && previousHP > 0 && e.hp <= 0 && e.type === 'seed_pod' && source === 'player') addGaiaSunCharge(state, GAIA_POD_CHARGE);
   // Breaking a lifebloom heals you and Ruby.
@@ -1520,7 +1615,7 @@ export function damageEnemy(state: GameState, e: Enemy, amount: number, source: 
     else effects.push({enemyId:e.id,x:e.x,y:e.y,untilTick:state.gameTick+72});
   }
   if(previousHP>e.hp&&!isChallengeObject(e.type)&&(source==='player'||source==='special')){blessingLandedAttack(state,sapphireHealing);if(sapphireHealing>0)obsidianBossHit(state,e);}
-  if (state.jupiter && hpLost > 0) drainJupiterEnergy(state, e, hpLost);
+  if (state.jupiter && hpLost > 0) drainJupiterEnergy(state, e, source === 'meteor' ? hpLost * jupiterDamageTaken(state, e) : hpLost); // a meteor ignores his protection but drains energy as if it were cut
   if (state.sun && hpLost > 0 && e.id === state.sun.bossId) state.sun.rage = Math.max(0, state.sun.rage - hpLost * SUN.rageOnHit); // hurting the King cools his rage a little
   if (state.moon && amount > 0) moonSeenWhenHit(state, e); // a hit lights it up in the dark
   // HP the real Queen loses to you banks a heal, paid out when she jumps, so a hit never gives her away on the spot.
@@ -1588,16 +1683,23 @@ function endGame(state: GameState) {
 
 // Late aliens join the tier's spawn pool once their stage is reached (Endless/Ascension only), each up to its own cap;
 // the Impostor only while a boss is alive, since it copies one.
-const LATE_ALIENS = [['shooter', SHOOTER], ['enchanter', ENCHANTER], ['bleeder', BLEEDER], ['snatcher', SNATCHER], ['impostor', IMPOSTOR]] as const;
+const LATE_ALIENS = [['shooter', SHOOTER], ['reflector', REFLECTOR], ['trapper', TRAPPER], ['dropper', DROPPER], ['blinker', BLINKER], ['jammer', JAMMER], ['spook', SPOOK], ['grappler', GRAPPLER], ['enchanter', ENCHANTER], ['bleeder', BLEEDER], ['snatcher', SNATCHER], ['impostor', IMPOSTOR]] as const;
 const LATE_ALIEN_TYPES: readonly string[] = LATE_ALIENS.map(([type]) => type);
 export const ALIEN_INTRO_TICKS = 300;
 
-/** The first time each late alien appears, queue a short NEW ALIEN callout (name and one line, drawn by the HUD). */
+// Aliens too basic (or too derivative) for an introduction card.
+const NO_INTRO: readonly string[] = ['normal', 'mini_splitter', 'queen_echo'];
+const INTRO_ALIENS: readonly string[] = [...new Set([...DIFFICULTY_TIERS.flatMap(t => t.spawnTypes), ...LATE_ALIEN_TYPES])].filter(t => !NO_INTRO.includes(t));
+
+/** Desktop Endless/Ascension only: the first time each alien (except the basic ones) or boss ever appears, queue a short
+ *  NEW ALIEN / NEW BOSS callout (name and one line, drawn by the HUD). */
 function updateAlienIntros(state: GameState) {
-  const seen = state.introducedAliens ??= getProfile().encountered.filter(type => LATE_ALIEN_TYPES.includes(type));
+  if (!isDesktop() || (state.mode !== 'endless' && state.mode !== 'ascension')) return;
+  const introduced = (type: string) => INTRO_ALIENS.includes(type) || isBossType(type as EnemyType);
+  const seen = state.introducedAliens ??= getProfile().encountered.filter(introduced);
   const queue = state.alienIntroQueue ??= [];
   for (const e of state.enemies) {
-    if (!LATE_ALIEN_TYPES.includes(e.type) || seen.includes(e.type)) continue;
+    if (!introduced(e.type) || seen.includes(e.type)) continue;
     seen.push(e.type); queue.push(e.type);
   }
   if (state.alienIntro && --state.alienIntro.ticks <= 0) state.alienIntro = null;
@@ -1607,7 +1709,14 @@ function updateAlienIntros(state: GameState) {
   }
 }
 export function spawnPool(state: GameState, base: EnemyType[]): EnemyType[] {
-  if (state.trial) return base;
+  if (state.trial) {
+    if ((state.sun || state.gaia || state.moon || state.venus || state.binary || state.neptune || state.saturn || state.sirius) && state.difficultyTimer >= CHALLENGE_EXTRA_POOL.afterTicks) {
+      const common = [...new Set(base)]; // each type once: Normal's opening double weight ends here
+      for (const type of ['ghost','bomber','lancer'] as EnemyType[]) if (!common.includes(type)) common.push(type);
+      return [...common.flatMap(type=>Array<EnemyType>(type==='normal'?CHALLENGE_EXTRA_POOL.normalWeight:CHALLENGE_EXTRA_POOL.commonWeight).fill(type)),...Array<EnemyType>(CHALLENGE_EXTRA_POOL.shooterWeight).fill('shooter')];
+    }
+    return base;
+  }
   const extra = LATE_ALIENS.filter(([type, cfg]) => state.bossesKilled >= cfg.fromStage
     && state.enemies.filter(e => e.type === type).length < cfg.maxAlive
     && (type !== 'impostor' || state.enemies.some(b => isBossType(b.type) && b.hp > 0))).map(([type]) => type);
@@ -1616,6 +1725,7 @@ export function spawnPool(state: GameState, base: EnemyType[]): EnemyType[] {
 
 function spawnEnemy(state: GameState) {
   const tier = DIFFICULTY_TIERS[Math.min(state.difficultyLevel, DIFFICULTY_TIERS.length - 1)];
+  if (state.trial?.devourer) return; // the Singularity has no aliens: its only food is Lost Souls
   const population = state.enemies.filter(e => !isChallengeObject(e.type) && e.type !== 'moon_mimic' && e.type !== 'scorch_sapper').length; // challenge objects, mimics and sappers never block aliens
   const maxEnemies = tier.maxEnemies + (state.gaia ? GAIA_EXTRA_ENEMIES : 0);
   if (population >= maxEnemies) return;
@@ -1636,21 +1746,30 @@ function spawnEnemy(state: GameState) {
   }
   if (!eligibleSpawns.length) return;
 
-  const spawnCount = Math.min(tier.spawnCount, maxEnemies - population);
-  for (let s = 0; s < spawnCount; s++) {
+  const baseCount = Math.min(tier.spawnCount, maxEnemies - population);
+  // Sun phase 2+: now and then one extra ordinary alien comes along after the usual spawn (it replaces nothing). Rolled
+  // only once the usual spawns are done.
+  const extraPlain = () => !!state.sun && state.sun.phase >= 2 && baseCount > 0 && baseCount < maxEnemies - population && Math.random() < SUN.extraPlainChance;
+  for (let s = 0; s < baseCount || (s === baseCount && extraPlain()); s++) {
     const idx = Math.floor(Math.random() * eligibleSpawns.length);
     const [tx, ty] = eligibleSpawns[idx];
 
     const pool = spawnPool(state, tier.spawnTypes), typeIdx = Math.floor(Math.random() * pool.length);
-    const type: EnemyType = state.sun && Math.random() < SUN.emberlingSpawnChance ? 'emberling'
+    const type: EnemyType = s >= baseCount ? pool[typeIdx] // the extra ordinary alien skips the themed rolls
+      : state.sun && Math.random() < SUN.emberlingSpawnChance ? 'emberling'
+      : state.sun && state.sun.phase>=SUN.spitter.fromPhase && state.enemies.filter(e=>e.type==='flare_spitter'&&e.hp>0).length<SUN.spitter.cap && Math.random()<SUN.spitter.chance ? 'flare_spitter'
       : state.neptune && Math.random() < NEPTUNE_STINGER_CHANCE ? 'stinger'
       : state.neptune && Math.random() < NEPTUNE_PUFFER_CHANCE ? 'pufferfish'
       : state.gaia && Math.random() < GAIA_ALIEN_CHANCE ? gaiaAlienType()
+      : state.moon && state.moon.phase >= 3 && Math.random() < MOON_BLINKER_CHANCE && state.enemies.filter(e => e.type === 'blinker').length < MOON_BLINKER_MAX ? 'blinker'
       : state.moon && Math.random() < MOON_SHADE_CHANCE ? 'moon_shade'
       : state.moon && Math.random() < MOON_MITE_CHANCE ? 'mirror_mite'
+      : state.venus && state.venus.phase >= VENUS.wormFromPhase && Math.random() < VENUS.wormChance && state.enemies.filter(e => e.type === 'dune_worm').length < VENUS.wormMax ? 'dune_worm'
+      : state.binary && state.binary.phase >= BINARY.lodestoneFromPhase && Math.random() < BINARY.lodestoneChance && state.enemies.filter(e => e.type === 'lodestone').length < BINARY.lodestoneMax ? 'lodestone'
+      : state.binary && state.binary.phase >= BINARY.pulsar.fromPhase && Math.random() < BINARY.pulsar.chance && state.enemies.filter(e => e.type === 'pulsar').length < BINARY.pulsar.max ? 'pulsar'
       : pool[typeIdx];
     const cfg = ENEMY_CONFIGS[type];
-    const hpScaled = Math.ceil(cfg.maxHp * tier.hpMult) * REGULAR_ENEMY_HP_MULT * constellationAlienHPMult(state);
+    const hpScaled = type==='spook' ? 1 : Math.ceil(cfg.maxHp * tier.hpMult) * REGULAR_ENEMY_HP_MULT * constellationAlienHPMult(state);
 
     const enemy: Enemy = {
       id: state.nextEnemyId++,
@@ -1675,6 +1794,7 @@ function spawnEnemy(state: GameState) {
       phaseTimer: 0,
       icyShieldHP: 0,
     };
+    if (type === 'lodestone' || type === 'pulsar') enemy.pole = Math.random() < .5 ? 'north' : 'south';
     state.enemies.push(enemy);
   }
 }
@@ -1696,7 +1816,7 @@ function spawnResource(state: GameState) {
   }
   if (!candidates.length) return;
   const [tx, ty] = candidates[Math.floor(Math.random() * candidates.length)];
-  const type: Resource['type'] = state.saturn ? (['health', 'energy', 'shield'] as const)[Math.floor(Math.random() * 3)] : Math.random() < 0.5 ? 'health' : 'energy';
+  const type: Resource['type'] = Math.random() < 0.5 ? 'health' : 'energy';
   state.resources.push({ tileX: tx, tileY: ty, type });
 }
 
@@ -1729,7 +1849,7 @@ function fireQueenBolt(state: GameState, e: Enemy, tgtX: number, tgtY: number, t
   else if (state.rubyTileX !== -1) damageRuby(state, cfg.damageToRuby, e);
   e.shootTicks = 20;
   e.attackTimer = cfg.attackCooldown;
-  playSFX_queenAttack();
+  playSFX_queenAttack(state.moon?.bossId === e.id ? .9 : 1);
 }
 
 // Walls off (or reopens) every tile in a hallway — hallways are pure floor by construction
@@ -1757,7 +1877,8 @@ function setHallwayWalled(state: GameState, hallwayIdx: number, walled: boolean)
 // Whether the player currently shares a chamber with a living Frost Warden — drives both
 // the movement slow and the attack-speed slow, computed fresh each tick rather than stored.
 export function isPlayerChilled(state: GameState): boolean {
-  if (state.saturn) return saturnBlizzard(state) && (state.playerShieldHP <= 0 || saturnShieldChilled(state));
+  if(playerCCImmune(state))return false;
+  if (state.saturn) return saturnBlizzard(state) && state.playerShieldHP <= 0; // the blizzard chills you only while you have no shield
   const playerChamber = chamberOfTile(state.playerTileX, state.playerTileY);
   if (playerChamber === -1) return false;
   return state.enemies.some(e => e.type === 'frost_warden' && chamberOfTile(e.tileX, e.tileY) === playerChamber);
@@ -1783,13 +1904,15 @@ function scatterFrostIceTiles(state: GameState, chamberIdx: number) {
   }
 }
 
-// Teleports the Frost Warden to a different chamber and re-scatters her ice tiles there.
+// Teleports the Frost Warden into the player's chamber (a random other chamber if she is already there or the
+// player is in a hallway) and re-scatters her ice tiles there. She lands at least 3 tiles from the player when possible.
 export function relocateFrostWarden(state: GameState, e: Enemy) {
   if (isEnemyInSingularity(state,e)) return;
-  const curChamber = chamberOfTile(e.tileX, e.tileY);
+  const curChamber = chamberOfTile(e.tileX, e.tileY), playerChamber = chamberOfTile(state.playerTileX, state.playerTileY);
   const others = [0, 1, 2, 3].filter(ch => ch !== curChamber);
-  const nextChamber = others[Math.floor(Math.random() * others.length)];
-  const pool = CHAMBER_SPAWN_TILES[nextChamber];
+  const nextChamber = playerChamber >= 0 && playerChamber !== curChamber ? playerChamber : others[Math.floor(Math.random() * others.length)];
+  const spawns = CHAMBER_SPAWN_TILES[nextChamber], clear = spawns.filter(([x, y]) => tileEuclidDist(x, y, state.playerTileX, state.playerTileY) >= 3);
+  const pool = clear.length ? clear : spawns;
   const [tx, ty] = pool[Math.floor(Math.random() * pool.length)];
   e.tileX = tx; e.tileY = ty; e.targetTileX = tx; e.targetTileY = ty;
   e.x = tx * TILE_SIZE + TILE_SIZE / 2; e.y = ty * TILE_SIZE + TILE_SIZE / 2;
@@ -1833,6 +1956,7 @@ function castFrostShield(state: GameState, e: Enemy) {
 function phaseQueenJump(state: GameState, e: Enemy) {
   if (isEnemyInSingularity(state,e)) return;
   const curChamber = chamberOfTile(e.tileX, e.tileY);
+  const departed = { x: e.x, y: e.y, room: curChamber };
   const playerChamber = chamberOfTile(state.playerTileX, state.playerTileY);
 
   if (!state.moon) state.enemies.push({
@@ -1865,7 +1989,7 @@ function phaseQueenJump(state: GameState, e: Enemy) {
   e.windupTicks = 0;
   e.attackTimer = 0;
 
-  if (state.moon) { moonQueenJumped(state, e); playSFX_queenTeleport(); return; }
+  if (state.moon) { moonQueenJumped(state, e, departed); playSFX_queenTeleport(); return; }
 
   // Each jump heals her a small amount — rewards ignoring her in favor of the decoys.
   if (e.hp < e.maxHp) {
@@ -1879,6 +2003,7 @@ function phaseQueenJump(state: GameState, e: Enemy) {
 // ─── Enemy update ────────────────────────────────────────────────────────────
 
 export function isMovementReversed(state: GameState): boolean {
+  if (state.sirius) return siriusReversed(state); // Sirius: the dark reverses you, not the Prayer
   return state.enemies.some(e => e.type === 'blind_prayer' && e.hp > 0);
 }
 
@@ -1889,7 +2014,7 @@ export function stopSeaSound(cue: SeaSound) {
   if (voice) { voice.pause(); voice.ontimeupdate = null; delete seaVoices[cue]; }
 }
 function stopSeaSounds() { for (const cue of Object.keys(seaVoices) as SeaSound[]) stopSeaSound(cue); }
-export function playSeaSound(cue: SeaSound) {
+export function playSeaSound(cue: SeaSound, playbackRate = 1) {
   try {
     stopSeaSound(cue);
     const mix = { diveSinging: ['seaSinging4.mp3', 0.32], dive: ['seaDive.mp3', 0.28], attack: ['seaSong.mp3', 0.30], heal: ['seaHeal.mp3', 0.52], singing: ['seaSinging.mp3', 0.58] } as const;
@@ -1897,6 +2022,10 @@ export function playSeaSound(cue: SeaSound) {
     const voice = gameAudio('/sounds/' + file);
     voice.volume = Number(gain) * ATTACK_SFX_VOLUME;
     if (cue === 'singing') voice.playbackRate = 1; // full natural note overlaps the faster wave launch
+    if (playbackRate !== 1) {
+      voice.playbackRate = playbackRate;
+      voice.preservesPitch = false;
+    }
     if (cue === 'heal') {
       // The supplied healing clip is 10 seconds; use a short, fading cue without stacking.
       voice.ontimeupdate = () => {
@@ -1919,12 +2048,13 @@ export function isSeaChanterDiving(enemy: Enemy): boolean {
 }
 
 export function isEnemyVisibleOnMinimap(enemy: Enemy): boolean {
+  if (duneWormHidden(enemy)) return false; // under the sand: only its trail shows
   if (!isSeaChanterDiving(enemy)) return true;
   const phase = (enemy.sea?.diveElapsedTicks ?? 0) % SEA_MINIMAP_INTERVAL;
   return phase >= SEA_MINIMAP_INTERVAL - SEA_MINIMAP_REVEAL;
 }
 
-function encounterEffect(state: GameState, kind: EncounterEffect['kind'], enemy: Enemy, toX = enemy.x, toY = enemy.y, ticks = 24, color = ENEMY_CONFIGS[enemy.type].color) {
+export function encounterEffect(state: GameState, kind: EncounterEffect['kind'], enemy: Enemy, toX = enemy.x, toY = enemy.y, ticks = 24, color = ENEMY_CONFIGS[enemy.type].color) {
   // Rapid reflected bullets refresh one return streak instead of piling up effects.
   const old = kind === 'reflect' ? state.encounterEffects.find(fx => fx.kind === kind && fx.ownerId === enemy.id) : undefined;
   if (old) { Object.assign(old, { x: enemy.x, y: enemy.y, toX, toY, ticks, maxTicks: ticks }); return old; }
@@ -1934,39 +2064,91 @@ function encounterEffect(state: GameState, kind: EncounterEffect['kind'], enemy:
   return effect;
 }
 
-// Regular aliens only: no bosses, echoes, pylons or downed twins.
+// Regular aliens only: no bosses, echoes, totems or downed twins.
 function nearestDevourerFood(state: GameState, e: Enemy, maxDist: number): Enemy | null {
   let nearest: Enemy | null = null, nearestDist = maxDist;
   for (const ally of state.enemies) {
+    if (state.trial?.devourer && (state.trial.devourer.hook?.id === ally.id || state.trial.devourer.flings?.some(f=>f.id===ally.id))) continue;
     if (ally === e || ally.type === 'aegis_construct' || (ally.twin?.downedTicks ?? 0) > 0) continue;
-    if (isBossType(ally.type) || ally.type === 'queen_echo') continue;
+    if (isBossType(ally.type) || ally.type === 'queen_echo' || (isChallengeObject(ally.type) && ally.type !== 'lost_soul') || ally.type === 'soulless' || ally.type === 'toxic_soulless') continue; // Lost Souls are food; a Soulless is not
     const d = tileEuclidDist(e.tileX, e.tileY, ally.tileX, ally.tileY);
     if (d <= nearestDist) { nearest = ally; nearestDist = d; }
   }
   return nearest;
 }
 
-function devourerAbsorbCooldown(e: Enemy) {
+function devourerAbsorbCooldown(state: GameState, e: Enemy) {
   // Generation g adds 3s + 4s + ... : g * 180 + 60 * g(g-1)/2 ticks.
-  const g = e.devourer?.generation ?? 0;
-  return DEVOURER_ABSORB_COOLDOWN + DEVOURER_ABSORB_COOLDOWN_PER_GEN * g + DEVOURER_ABSORB_COOLDOWN_GEN_STEP * g * (g - 1) / 2;
+  const g = devourerStatGeneration(e);
+  const cooldown=(state.trial?.devourer ? SINGULARITY_CHALLENGE.mealCooldown : DEVOURER_ABSORB_COOLDOWN) + (DEVOURER_ABSORB_COOLDOWN_PER_GEN * g + DEVOURER_ABSORB_COOLDOWN_GEN_STEP * g * (g - 1) / 2) * (state.trial?.devourer ? SINGULARITY_CHALLENGE.mealPenalty : 1);
+  return state.trial?.devourer ? Math.min(SINGULARITY_CHALLENGE.mealMaxCooldown, cooldown) : cooldown;
 }
 
+// The generation used for weakening. In the Singularity it stops at weakestGeneration, so later copies are never
+// smaller, slower, weaker or lower in HP than the second generation, and killing by hand never grinds the swarm down.
+function devourerStatGeneration(e: Enemy) {
+  const g = e.devourer?.generation ?? 0;
+  return e.devourer?.challenge ? Math.min(g, SINGULARITY_CHALLENGE.weakestGeneration) : g;
+}
 // Visual size: each stack swells the body; each generation of copies is smaller.
 export function devourerBodyScale(e: Enemy) {
-  return (1 + e.chargeDirX * 0.1) * Math.pow(DEVOURER_COPY_SCALE, e.devourer?.generation ?? 0);
+  const scale=Math.pow(e.devourer?.challenge ? SINGULARITY_CHALLENGE.generationScale : DEVOURER_COPY_SCALE, devourerStatGeneration(e));
+  const gorge=e.devourer?.gorgeTicks,swell=gorge===undefined?1:1+.3*(1-gorge/SINGULARITY_CHALLENGE.gorgeTicks)+.06*Math.sin(gorge*.6); // a full body swells and throbs before it bursts
+  return (1 + e.chargeDirX * 0.1) * (e.devourer?.challenge ? Math.max(SINGULARITY_CHALLENGE.minimumScale,scale) : scale) * swell;
 }
 
 // Each stack bursts out as a fresh copy on nearby floor; copies start empty but can eat and split again.
 function devourerFamilyRoom(state: GameState, parent: Enemy) {
-  // Shared safety cap: the whole family never exceeds DEVOURER_FAMILY_CAP living bodies.
-  return DEVOURER_FAMILY_CAP - state.enemies.filter(other => other !== parent && other.type === 'devourer' && (other.encounterId ?? other.id) === (parent.encounterId ?? parent.id) && other.hp > 0).length;
+  // Shared family limit applies to death-splits and self-splits.
+  const cap = state.trial?.devourer ? SINGULARITY_CHALLENGE.familyCap[state.trial.devourer.phase - 1] : DEVOURER_FAMILY_CAP;
+  return cap - state.enemies.filter(other => other !== parent && other.type === 'devourer' && (other.encounterId ?? other.id) === (parent.encounterId ?? parent.id) && other.hp > 0).length;
 }
 
-function spawnDevourerCopies(state: GameState, parent: Enemy, wanted = parent.chargeDirX) {
-  const count = Math.max(0, Math.min(DEVOURER_MAX_STACKS, wanted, devourerFamilyRoom(state, parent)));
+/** Singularity: a meal adds `stacks` stacks (each +stackHP, healing it to full). Reaching the phase's full stacks lights
+ * its fuse: it swells and bursts gorgeTicks later (explodeDevourer), unless a Maw swallows it first. */
+function feedSingularityBody(state: GameState, e: Enemy, stacks: number) {
+  const cap = bodyStackCap(state.trial!.devourer!.phase, e), add = Math.max(0, Math.min(stacks, cap - e.chargeDirX));
+  e.chargeDirX += add; e.maxHp += add * SINGULARITY_CHALLENGE.stackHP; e.hp = e.maxHp;
+  (e.devourer ??= { generation: 0 }).mealSpeedTicks = SINGULARITY_CHALLENGE.mealSpeedTicks;
+  if (e.chargeDirX >= cap && e.devourer && e.devourer.gorgeTicks === undefined) { e.devourer.gorgeTicks = SINGULARITY_CHALLENGE.gorgeTicks; if (devourerSoundAllowed(state, 'fuse')) playAudioOneShot('/sounds/charging.wav', .5, .8); }
+}
+/** Singularity: a full body explodes, flinging its copies across the whole map. */
+/** Singularity: a body splits into itself and one new copy beside it (a Gnasher's bite on a stackless body). */
+export function splitBody(state: GameState, e: Enemy) {
+  if (devourerFamilyRoom(state, e) <= 0) return;
+  spawnDevourerCopies(state, e, SINGULARITY_CHALLENGE.stacksPerCopy); e.healFlashTicks = 26;
+}
+export function explodeDevourer(state: GameState, e: Enemy) {
+  const trial = state.trial?.devourer; if (!trial) return;
+  trial.defeatedMaxHp += e.maxHp;
+  // Every burst makes one copy per stack (the original's 7 or 8, a full copy's 3); a body killed by hand leaves one per two.
+  const original = (e.devourer?.generation ?? 0) === 0; void original;
+  // The burst hits everything nearby before the copies fly out: you (and a shove), a placed Ruby, and other enemies.
+  const B = SINGULARITY_CHALLENGE.burst, near = (x: number, y: number) => Math.hypot(x - e.x, y - e.y) <= B.radius * TILE_SIZE;
+  if (state.rubyTileX !== -1 && !state.playerCarryingRuby && near((state.rubyTileX + .5) * TILE_SIZE, (state.rubyTileY + .5) * TILE_SIZE)) { damageRuby(state, B.rubyDamage, e); if (state.gamePhase !== 'playing') return; }
+  for (const o of state.enemies.filter(o => o !== e && o.hp > 0 && o.type !== 'lost_soul' && near(o.x, o.y))) {
+    damageEnemy(state, o, B.enemyDamage, 'special');
+    if (o.hp <= 0 && state.enemies.includes(o)) killEnemy(state, state.enemies.indexOf(o), false, true);
+    if (state.gamePhase !== 'playing') return;
+  }
+  const spots = spawnDevourerCopies(state, e, e.chargeDirX * SINGULARITY_CHALLENGE.stacksPerCopy, true);
+  (trial.bursts ??= []).push({ x: e.x, y: e.y, ticks: SINGULARITY_BURST_TICKS, to: spots.map(([x, y]) => [(x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE]) });
+  state.bombBlasts.push({ cx: e.x, cy: e.y, radius: 0, maxRadius: B.radius * TILE_SIZE, ticks: 30, powered: true });
+  if (near(state.playerX, state.playerY)) { damagePlayer(state, B.damage, e); if (state.gamePhase === 'playing') shovePlayerFromEnemy(state, e, B.knock); }
+  if (devourerSoundAllowed(state, 'boom')) playAudioOneShot('/sounds/sci-fi-explosion-09.mp3', .8, .8);
+  playSFX_devourerAbsorb(state);
+  state.screenShakeTicks = Math.max(state.screenShakeTicks, 22); state.screenShakeAmt = Math.max(state.screenShakeAmt, 9);
+  spawnDeathParticles(state, e);
+  const i = state.enemies.indexOf(e); if (i >= 0) state.enemies.splice(i, 1);
+}
+
+function spawnDevourerCopies(state: GameState, parent: Enemy, wanted = parent.chargeDirX, acrossMap = false) {
+  // Singularity: one copy per stacksPerCopy stacks (rounded up), so the swarm stays small.
+  const copies = state.trial?.devourer ? Math.ceil(wanted / SINGULARITY_CHALLENGE.stacksPerCopy) : wanted;
+  const count = Math.max(0, Math.min(state.trial?.devourer ? singularityPhaseStacks(state.trial.devourer.phase) : DEVOURER_MAX_STACKS, copies, devourerFamilyRoom(state, parent)));
   const generation = (parent.devourer?.generation ?? 0) + 1;
-  const hp = Math.max(1, Math.round(parent.maxHp * DEVOURER_COPY_HP_RATIO));
+  // Singularity: every copy has the phase's fixed copyHP; the normal fight halves the parent's.
+  const hp = state.trial?.devourer ? SINGULARITY_CHALLENGE.copyHP[state.trial.devourer.phase - 1] : Math.max(1, Math.round(parent.maxHp * DEVOURER_COPY_HP_RATIO));
   const spots: [number, number][] = [];
   for (let r = 0; r <= 3 && spots.length < count; r++) {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -1976,15 +2158,23 @@ function spawnDevourerCopies(state: GameState, parent: Enemy, wanted = parent.ch
     }
   }
   while (spots.length < count) spots.push([parent.tileX, parent.tileY]);
+  if (acrossMap) { // flung across the map: random open floor in every chamber, away from you
+    const far = [0, 1, 2, 3].flatMap(room => freeChamberTiles(state, room)).filter(([x, y]) => Math.hypot(x - state.playerTileX, y - state.playerTileY) >= 4);
+    for (let i = 0; i < spots.length && far.length; i++) spots[i] = far.splice(Math.floor(Math.random() * far.length), 1)[0];
+  }
   for (const [x, y] of spots) {
     const copy = createEncounterEnemy(state, 'devourer', x, y, hp);
     spawnAbsorbBurst(state, parent.x, parent.y, (x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE);
     copy.encounterId = parent.encounterId ?? parent.id;
-    copy.devourer = { generation, newbornTicks: DEVOURER_NEWBORN_TICKS, originMaxHp: parent.devourer?.originMaxHp ?? parent.maxHp };
-    copy.windupTicks = DEVOURER_COPY_FIRST_MEAL;
+    copy.devourer = { generation, ...(state.trial?.devourer ? { challenge: true } : {}), newbornTicks: DEVOURER_NEWBORN_TICKS, originMaxHp: parent.devourer?.originMaxHp ?? parent.maxHp };
+    if (rollGnasher(state)) { copy.devourer.gnasher = true; copy.devourer.biteTicks = SINGULARITY_CHALLENGE.gnasher.biteTicks; } // phase 3: some copies are Gnashers
+    copy.windupTicks = state.trial?.devourer ? SINGULARITY_CHALLENGE.firstMeal : DEVOURER_COPY_FIRST_MEAL;
+    if(state.trial?.devourer)copy.chargeDirX = 0; // Singularity: copies start empty and build stacks by eating
     copy.attackTimer = 45; copy.visualSpawnTicks = 30; copy.healFlashTicks = 26;
+    if (acrossMap && state.trial?.devourer) copy.devourer.landTicks = SINGULARITY_LAND_TICKS; // Singularity: flung up and falls onto its spot
     state.enemies.push(copy);
   }
+  return spots;
 }
 
 export function createEncounterEnemy(state: GameState, type: EnemyType, tx: number, ty: number, hp: number): Enemy {
@@ -2019,7 +2209,7 @@ function summonAegisConstructs(state: GameState, boss: Enemy) {
     const [x, y] = tiles[Math.floor(Math.random() * tiles.length)];
     const construct = createEncounterEnemy(state, 'aegis_construct', x, y, ENEMY_CONFIGS.aegis_construct.maxHp + state.bossesKilled * 3);
     construct.constructOwnerId = boss.id;
-    construct.pylon = { ageTicks: 0, overloadTicks: 0 };
+    construct.totem = { ageTicks: 0, overloadTicks: 0 };
     construct.visualSpawnTicks = 30;
     state.enemies.push(construct);
   }
@@ -2030,7 +2220,7 @@ function summonAegisConstructs(state: GameState, boss: Enemy) {
 }
 
 function refreshAegisShield(state: GameState, boss: Enemy) {
-  if (!boss.aegis) return;
+  if (!boss.aegis || state.venus) return; // Venus runs its own shield (the totem sequence)
   const count = state.enemies.filter(e => e.constructOwnerId === boss.id && e.hp > 0).length;
   boss.aegis.constructsLeft = count;
   if (boss.aegis.shielded && count === 0) {
@@ -2043,10 +2233,10 @@ function refreshAegisShield(state: GameState, boss: Enemy) {
   }
 }
 
-function initializeNewEncounter(state: GameState, boss: Enemy) {
+function initializeNewEncounter(state: GameState, boss: Enemy, playArrivalSound = true) {
   boss.encounterId ??= boss.id;
   if (boss.type === 'aegis_sentinel' || boss.type === 'astral_twins') boss.visualSpawnTicks = 30;
-  if (boss.type === 'aegis_sentinel') summonAegisConstructs(state, boss);
+  if (boss.type === 'aegis_sentinel') { if (state.venus) initializeVenusBoss(state, boss); else summonAegisConstructs(state, boss); }
   if (boss.type === 'sea_chanter' && state.neptune) {
     // Neptune guardian: one body carrying all three phases; the challenge controls her dives.
     boss.hp = boss.maxHp = NEPTUNE_TOTAL_HP;
@@ -2055,15 +2245,23 @@ function initializeNewEncounter(state: GameState, boss: Enemy) {
     (boss.sea ??= createSeaChanterAbilities()).neptune = true;
   }
   if (boss.type === 'thorn_weaver' && state.gaia) initializeGaiaBoss(state, boss);
-  if (boss.type === 'splitter_queen' && state.moon) initializeMoonBoss(state, boss);
+  if (boss.type === 'splitter_queen' && state.moon) initializeMoonBoss(state, boss, playArrivalSound);
   if (boss.type === 'fiery_king' && state.sun) initializeSunBoss(state, boss);
   if (boss.type === 'storm_reaper' && state.jupiter) initializeJupiterBoss(state, boss);
   if (boss.type === 'frost_warden' && state.saturn) initializeSaturnBoss(state, boss);
+  if (boss.type === 'blind_prayer' && state.sirius) initializeSiriusBoss(state, boss);
   if (boss.type === 'devourer') {
-    boss.chargeDirX = DEVOURER_START_STACKS; // the original is born with one stack, so it always splits
+    boss.chargeDirX = state.trial?.devourer ? singularityPhaseStacks(state.trial.devourer.phase) : DEVOURER_START_STACKS; // challenge originals begin full; copies still start empty
     // Its swarm multiplies effective HP, so it scales slower than the usual +15 per defeat.
-    boss.hp = boss.maxHp = ENEMY_CONFIGS.devourer.maxHp + state.bossesKilled * DEVOURER_HP_PER_DEFEAT;
-    boss.devourer = { generation: 0, originMaxHp: boss.maxHp };
+    boss.hp = boss.maxHp = state.trial?.devourer ? singularityPhaseHP(state.trial.devourer.phase) : ENEMY_CONFIGS.devourer.maxHp + state.bossesKilled * DEVOURER_HP_PER_DEFEAT;
+    boss.devourer = { generation: 0, originMaxHp: boss.maxHp, ...(state.trial?.devourer ? { challenge: true, gorgeTicks: SINGULARITY_CHALLENGE.gorgeTicks } : {}) }; // Singularity: the full original bursts after 2s
+    if (state.trial?.devourer) {
+      const trial=state.trial.devourer;
+      trial.encounterId=boss.encounterId!;trial.defeatedMaxHp=0;trial.phaseStartTick=state.gameTick;
+      trial.convergence=undefined;trial.convergenceTimer=SINGULARITY_CHALLENGE.convergence.everyTicks;
+      trial.hook=undefined;trial.hookCooldown=0;trial.flings=[];trial.hookFx=[];trial.feast=undefined;trial.jaw=undefined;trial.jawTimer=undefined;trial.gas=[];
+      // Lost Souls, the Soulless and their signs all carry over into the next phase.
+    }
   }
   if (boss.type !== 'astral_twins') return;
   // One encounter's +15 HP per stage is shared between its two bodies.
@@ -2081,6 +2279,7 @@ function initializeNewEncounter(state: GameState, boss: Enemy) {
   twin.attackTimer = 90;
   twin.visualSpawnTicks = 30;
   state.enemies.push(twin);
+  if (state.binary) initializeBinaryTwins(state, boss);
 }
 
 function updateBossEncounters(state: GameState) {
@@ -2088,14 +2287,14 @@ function updateBossEncounters(state: GameState) {
   for (const boss of [...state.enemies]) {
     if (boss.hp <= 0) continue;
     if ((boss.visualSpawnTicks ?? 0) > 0) boss.visualSpawnTicks = (boss.visualSpawnTicks ?? 0) - 1;
-    if (boss.pylon && !isEclipseActive(state)) updatePylonOverload(state, boss);
+    if (boss.totem && boss.venusOrder === undefined && !isEclipseActive(state)) updateTotemOverload(state, boss); // Venus totems run their own overload
     if (boss.aegis) {
       refreshAegisShield(state, boss);
       // The last seconds of exposure count down with a closing frame and a beep each second.
       const reshieldLeft = boss.aegis.shielded ? 0 : boss.aegis.exposedUntilTick - state.gameTick;
       boss.aegis.reshieldTicks = reshieldLeft > 0 && reshieldLeft <= AEGIS_RESHIELD_WARNING_TICKS ? reshieldLeft : 0;
       if (boss.aegis.reshieldTicks && boss.aegis.reshieldTicks % 60 === 0) playSFX_aegisReshieldWarning(boss.aegis.reshieldTicks <= 60);
-      if (!boss.aegis.shielded && state.gameTick >= boss.aegis.exposedUntilTick) summonAegisConstructs(state, boss);
+      if (!state.venus && !boss.aegis.shielded && state.gameTick >= boss.aegis.exposedUntilTick) summonAegisConstructs(state, boss);
       const target = boss.aegis.shielded ? 0 : 1;
       const previous = boss.aegis.openAmount ?? target;
       boss.aegis.openAmount = previous + Math.max(-1 / 24, Math.min(1 / 24, target - previous));
@@ -2106,9 +2305,10 @@ function updateBossEncounters(state: GameState) {
     if ((boss.twin?.hasteTicks ?? 0) > 0) boss.twin!.hasteTicks = (boss.twin!.hasteTicks ?? 0) - 1;
     if ((boss.twin?.transferGiveTicks ?? 0) > 0) boss.twin!.transferGiveTicks = (boss.twin!.transferGiveTicks ?? 0) - 1;
     if ((boss.twin?.transferGetTicks ?? 0) > 0) boss.twin!.transferGetTicks = (boss.twin!.transferGetTicks ?? 0) - 1;
-    if (boss.twin?.downedTicks) {
+    // Binary Star: a fallen twin cannot revive while it is stunned; its revival timer waits for the stun to end.
+    if (boss.twin?.downedTicks && !(state.binary && (boss.buildStopUntil ?? 0) > state.gameTick)) {
       if (--boss.twin.downedTicks === 0) {
-        boss.hp = Math.max(1, boss.maxHp * TWIN_REVIVE_HP_RATIO);
+        boss.hp = Math.max(1, boss.maxHp * (state.binary ? BINARY.reviveHpRatio : TWIN_REVIVE_HP_RATIO)); // Binary Star revives weaker
         boss.icyShieldHP = 0; boss.healFlashTicks = 30; boss.attackTimer = 60;
         boss.path = []; boss.pathTimer = 0;
         boss.twin.reviveTicks = 48; boss.twin.hasteTicks = TWIN_REVIVE_HASTE_TICKS;
@@ -2125,7 +2325,7 @@ function updateBossEncounters(state: GameState) {
     partner.twin.partnerDownTicks = leader.twin.downedTicks;
     if (leader.twin.downedTicks || partner.twin.downedTicks || isEclipseActive(state)) continue;
     if (--leader.twin.transferTicks > 0) continue;
-    leader.twin.transferTicks = TWIN_TRANSFER_MIN_TICKS + Math.floor(Math.random() * (TWIN_TRANSFER_MAX_TICKS - TWIN_TRANSFER_MIN_TICKS + 1));
+    leader.twin.transferTicks = TWIN_TRANSFER_MIN_TICKS + Math.floor(Math.random() * (TWIN_TRANSFER_MAX_TICKS - TWIN_TRANSFER_MIN_TICKS + 1)) + (state.binary ? BINARY.transferDelay : 0); // Binary Star: 4s rarer
     const transfers = [[leader, partner], [partner, leader]].filter(([donor, receiver]) => donor.hp > 1 && receiver.hp < receiver.maxHp);
     if (!transfers.length) continue;
     const [donor, receiver] = transfers[Math.floor(Math.random() * transfers.length)];
@@ -2138,22 +2338,22 @@ function updateBossEncounters(state: GameState) {
   }
 }
 
-function updatePylonOverload(state: GameState, e: Enemy) {
-  const pylon = e.pylon!;
-  if (pylon.overloadTicks <= 0) {
-    if (++pylon.ageTicks >= PYLON_LIFETIME_TICKS) pylon.overloadTicks = PYLON_OVERLOAD_WINDUP;
+function updateTotemOverload(state: GameState, e: Enemy) {
+  const totem = e.totem!;
+  if (totem.overloadTicks <= 0) {
+    if (++totem.ageTicks >= TOTEM_LIFETIME_TICKS) totem.overloadTicks = TOTEM_OVERLOAD_WINDUP;
     return;
   }
   const chamber = chamberOfTile(e.tileX, e.tileY);
-  if (pylon.overloadTicks % 60 === 0) playSFX_meteorWarning(pylon.overloadTicks <= 60);
-  if (--pylon.overloadTicks > 0) return;
-  encounterEffect(state, 'pylon-overload', e, e.x, e.y, 36, '#ffce8a');
+  if (totem.overloadTicks % 60 === 0) playSFX_meteorWarning(totem.overloadTicks <= 60);
+  if (--totem.overloadTicks > 0) return;
+  encounterEffect(state, 'totem-overload', e, e.x, e.y, 36, '#ffce8a');
   if (chamber >= 0 && chamberOfTile(state.playerTileX, state.playerTileY) === chamber) {
-    damagePlayer(state, PYLON_OVERLOAD_DAMAGE);
+    damagePlayer(state, TOTEM_OVERLOAD_DAMAGE);
     state.screenShakeTicks = Math.max(state.screenShakeTicks, 22);
     state.screenShakeAmt = Math.max(state.screenShakeAmt, 8);
   }
-  playSFX_pylonExplosion();
+  playSFX_totemExplosion();
   const occupied = new Set(state.enemies.filter(other => other !== e && other.constructOwnerId === e.constructOwnerId && other.hp > 0).map(other => chamberOfTile(other.tileX, other.tileY)));
   const chambers = [0, 1, 2, 3].filter(ch => ch !== chamber && !occupied.has(ch));
   const destination = chambers[Math.floor(Math.random() * chambers.length)];
@@ -2163,18 +2363,18 @@ function updatePylonOverload(state: GameState, e: Enemy) {
     Object.assign(e, { tileX: x, tileY: y, targetTileX: x, targetTileY: y, x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE, stepProgress: 0 });
   }
   e.hp = e.maxHp; e.icyShieldHP = 0; e.visualSpawnTicks = 30; e.path = []; e.pushTiles = 0;
-  pylon.ageTicks = 0; pylon.overloadTicks = 0;
+  totem.ageTicks = 0; totem.overloadTicks = 0;
 }
 
 // Dusk picks its own firing spot: about 7 tiles from the player, off their row/column, near its current position.
-function twinRangedPath(state: GameState, e: Enemy): [number, number][] {
+function twinRangedPath(state: GameState, e: Enemy, goalX = state.playerTileX, goalY = state.playerTileY): [number, number][] {
   const start = e.targetTileY * MAP_COLS + e.targetTileX;
   const queue = [start], parents = new Map<number, number>([[start, -1]]), distances = new Map<number, number>([[start, 0]]);
   let best = start, bestScore = Infinity;
   for (let i = 0; i < queue.length; i++) {
     const tile = queue[i], x = tile % MAP_COLS, y = Math.floor(tile / MAP_COLS), steps = distances.get(tile)!;
-    const playerDistance = tileEuclidDist(x, y, state.playerTileX, state.playerTileY);
-    const aligned = Math.abs(x - state.playerTileX) < 2 || Math.abs(y - state.playerTileY) < 2;
+    const playerDistance = tileEuclidDist(x, y, goalX, goalY);
+    const aligned = Math.abs(x - goalX) < 2 || Math.abs(y - goalY) < 2;
     const score = Math.abs(playerDistance - 7) + Math.max(0, playerDistance - TWIN_RANGED_RANGE) * 2 +
       (aligned ? 8 : 0) + steps * .12;
     if (score < bestScore) { best = tile; bestScore = score; }
@@ -2191,19 +2391,32 @@ function twinRangedPath(state: GameState, e: Enemy): [number, number][] {
   return path.reverse();
 }
 
+/** The survivor's berserk multipliers while its partner is down; the Binary Star challenge makes them much harsher. */
+export function twinBerserk(state: GameState, e: Enemy) {
+  const base = !e.twin?.partnerDownTicks ? { speed: 1, cooldown: 1, damage: 1 }
+    : state.binary ? BINARY.berserk : { speed: TWIN_BERSERK_SPEED_MULT, cooldown: TWIN_BERSERK_COOLDOWN_MULT, damage: 1 };
+  return state.binary ? { ...base, damage: base.damage * BINARY.twinDamage } : base; // Binary Star: twin attacks deal twinDamage
+}
+
 function updateAstralTwin(state: GameState, e: Enemy) {
+  if (state.binary && binaryTwinBusy(state, e)) return; // Binary Star: Dawn is marking or running her Comet Dash
   const twin = e.twin!;
-  // Each twin hunts on its own path; there is no leash or regrouping.
-  e.targeting = 'player';
+  // Each twin hunts on its own path; there is no leash or regrouping. Like most aliens, each goes for whichever is
+  // closer to it: you, or a placed Ruby (you while you carry it).
+  const rubyPlaced = state.rubyTileX !== -1 && !state.playerCarryingRuby;
+  const toRuby = rubyPlaced && tileEuclidDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) < tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY);
+  e.targeting = toRuby ? 'ruby' : 'player';
+  const goalTX = toRuby ? state.rubyTileX : state.playerTileX, goalTY = toRuby ? state.rubyTileY : state.playerTileY;
+  const goalX = toRuby ? (state.rubyTileX + .5) * TILE_SIZE : state.playerX, goalY = toRuby ? (state.rubyTileY + .5) * TILE_SIZE : state.playerY;
   if (e.attackTimer > 0) e.attackTimer--;
   const ranged = twin.index === 1;
-  const berserkCooldown = twin.partnerDownTicks ? TWIN_BERSERK_COOLDOWN_MULT : 1;
-  const inRange = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= (ranged ? TWIN_RANGED_RANGE : 1);
+  const berserk = twinBerserk(state, e), berserkCooldown = berserk.cooldown;
+  const inRange = tileEuclidDist(e.tileX, e.tileY, goalTX, goalTY) <= (ranged ? TWIN_RANGED_RANGE : 1);
   const chamber = chamberOfTile(e.tileX, e.tileY);
-  const canTrack = inRange && chamber >= 0 && chamber === chamberOfTile(state.playerTileX, state.playerTileY);
+  const canTrack = inRange && chamber >= 0 && chamber === chamberOfTile(goalTX, goalTY);
   if (ranged) {
-    twin.shotAimX = state.playerTileX; twin.shotAimY = state.playerTileY;
-    twin.shotTargetX = state.playerX; twin.shotTargetY = state.playerY;
+    twin.shotAimX = goalTX; twin.shotAimY = goalTY;
+    twin.shotTargetX = goalX; twin.shotTargetY = goalY;
   } else {
     e.windupTicks = inRange && e.attackTimer > 0 && e.attackTimer <= 12 ? e.attackTimer : 0;
   }
@@ -2212,31 +2425,33 @@ function updateAstralTwin(state: GameState, e: Enemy) {
     if (!canTrack) e.windupTicks = 0;
     else {
       if (--e.windupTicks === 0) {
-        state.laserBeams.push({ fromX: e.x, fromY: e.y, endX: state.playerX, endY: state.playerY,
+        state.laserBeams.push({ fromX: e.x, fromY: e.y, endX: goalX, endY: goalY,
           dirX: 0, dirY: 0, ticks: 18, color: '#89cbff' });
-        damagePlayer(state, TWIN_RANGED_DAMAGE, e);
+        if (toRuby) damageRuby(state, Math.round(TWIN_RANGED_DAMAGE * ENEMY_CONFIGS.astral_twins.damageToRuby / ENEMY_CONFIGS.astral_twins.damageToPlayer) * berserk.damage, e);
+        else damagePlayer(state, TWIN_RANGED_DAMAGE * berserk.damage, e);
         playSFX_enemyAttack(e); e.shootTicks = 14; e.attackTimer = Math.round(TWIN_RANGED_COOLDOWN * berserkCooldown);
-        encounterEffect(state, 'shot', e, state.playerX, state.playerY, 18, '#83cfff');
+        encounterEffect(state, 'shot', e, goalX, goalY, 18, '#83cfff');
       }
       return;
     }
   }
   if (inRange && e.attackTimer <= 0) {
     if (ranged && canTrack) {
-      twin.shotAimX = state.playerTileX; twin.shotAimY = state.playerTileY; e.windupTicks = TWIN_RANGED_WINDUP;
+      twin.shotAimX = goalTX; twin.shotAimY = goalTY; e.windupTicks = TWIN_RANGED_WINDUP;
       return;
     }
     if (!ranged) {
-      twin.strikeAngle = Math.atan2(state.playerY - e.y, state.playerX - e.x);
-      damagePlayer(state, ENEMY_CONFIGS.astral_twins.damageToPlayer, e); playSFX_enemyAttack(e);
-      shovePlayerFromEnemy(state, e, TWIN_MELEE_KNOCKBACK);
-      encounterEffect(state, 'melee', e, state.playerX, state.playerY, 22, '#f08062');
+      twin.strikeAngle = Math.atan2(goalY - e.y, goalX - e.x);
+      if (toRuby) damageRuby(state, ENEMY_CONFIGS.astral_twins.damageToRuby * berserk.damage, e);
+      else { damagePlayer(state, ENEMY_CONFIGS.astral_twins.damageToPlayer * berserk.damage, e); shovePlayerFromEnemy(state, e, TWIN_MELEE_KNOCKBACK); }
+      playSFX_enemyAttack(e);
+      encounterEffect(state, 'melee', e, goalX, goalY, 22, '#f08062');
       e.shootTicks = 22; e.attackTimer = Math.round(ENEMY_CONFIGS.astral_twins.attackCooldown * berserkCooldown);
     }
   }
   e.pathTimer--;
   if (e.pathTimer <= 0) {
-    e.path = ranged ? twinRangedPath(state, e) : bfs(state.map, e.targetTileX, e.targetTileY, state.playerTileX, state.playerTileY);
+    e.path = ranged ? twinRangedPath(state, e, goalTX, goalTY) : bfs(state.map, e.targetTileX, e.targetTileY, goalTX, goalTY);
     e.pathTimer = 18;
   }
   if (e.tileX === e.targetTileX && e.tileY === e.targetTileY) {
@@ -2246,7 +2461,7 @@ function updateAstralTwin(state: GameState, e: Enemy) {
     if (!next || !isFloorTile(state.map, next[0], next[1])) return;
     [e.targetTileX, e.targetTileY] = next; e.stepProgress = 0;
   } else {
-    const haste = ((e.twin?.hasteTicks ?? 0) > 0 ? TWIN_REVIVE_HASTE_MULT : 1) * (e.twin?.partnerDownTicks ? TWIN_BERSERK_SPEED_MULT : 1);
+    const haste = ((e.twin?.hasteTicks ?? 0) > 0 ? TWIN_REVIVE_HASTE_MULT : 1) * berserk.speed;
     e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + (ranged ? TWIN_RANGED_SPEED : ENEMY_CONFIGS.astral_twins.speed) * haste * celestialMoveMultiplier(state, e));
     e.x = (e.tileX + .5) * TILE_SIZE + (e.targetTileX - e.tileX) * e.stepProgress;
     e.y = (e.tileY + .5) * TILE_SIZE + (e.targetTileY - e.tileY) * e.stepProgress;
@@ -2285,7 +2500,7 @@ function updatePoisonSound(state: GameState) {
 
 // The Weaver's field: a falling sound timed to land as the seed hits and the thorns erupt.
 const THORN_FALL_SOUND_TICKS = 45; // falling-thing.wav is 0.75s long
-function playThornFall() {
+export function playThornFall() {
   try { const sound = gameAudio('/sounds/falling-thing.wav', 'attack'); sound.volume = 0.6 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
 }
 
@@ -2451,6 +2666,16 @@ function healSeaAllies(state: GameState, e: Enemy, amount: number) {
   }
 }
 
+/** Sea Chanter chases you first: you whenever you are in her chamber (so beside Ruby she aims at you); a placed Ruby
+ * only when it is in her chamber and you are not; otherwise you. */
+function seaGoal(state: GameState, e: Enemy) {
+  const room = chamberOfTile(e.tileX, e.tileY);
+  const ruby = room >= 0 && state.rubyTileX !== -1 && !state.playerCarryingRuby && !state.enemyDecoyActive &&
+    chamberOfTile(state.playerTileX, state.playerTileY) !== room && chamberOfTile(state.rubyTileX, state.rubyTileY) === room;
+  e.targeting = ruby ? 'ruby' : 'player';
+  return ruby ? { tx: state.rubyTileX, ty: state.rubyTileY, x: (state.rubyTileX + .5) * TILE_SIZE, y: (state.rubyTileY + .5) * TILE_SIZE }
+    : { tx: state.playerTileX, ty: state.playerTileY, x: state.playerX, y: state.playerY };
+}
 function updateSeaChanter(state: GameState, e: Enemy) {
   if (e.hp <= 0) return;
   const sea = e.sea ??= createSeaChanterAbilities();
@@ -2483,8 +2708,8 @@ function updateSeaChanter(state: GameState, e: Enemy) {
       sea.songCooldown = ENEMY_CONFIGS.sea_chanter.attackCooldown;
     }
   } else if (sea.songCooldown === 0 && e.tileX === e.targetTileX && e.tileY === e.targetTileY &&
-      tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= ENEMY_CONFIGS.sea_chanter.attackRange) {
-    sea.songAimX = state.playerX; sea.songAimY = state.playerY;
+      tileEuclidDist(e.tileX, e.tileY, seaGoal(state, e).tx, seaGoal(state, e).ty) <= ENEMY_CONFIGS.sea_chanter.attackRange) {
+    const goal = seaGoal(state, e); sea.songAimX = goal.x; sea.songAimY = goal.y;
     sea.songWindupTicks = SEA_SONG_WINDUP;
     playSeaSound('singing');
   }
@@ -2498,7 +2723,7 @@ function updateSeaChanter(state: GameState, e: Enemy) {
       else if (sea.diveFleeing || e.path.length === 0) e.path = roamPath(state, e);
       sea.diveFleeing = threatened;
     } else {
-      e.path = bfs(state.map, e.targetTileX, e.targetTileY, state.playerTileX, state.playerTileY);
+      const goal = seaGoal(state, e); e.path = bfs(state.map, e.targetTileX, e.targetTileY, goal.tx, goal.ty);
     }
     e.pathTimer = 20;
   }
@@ -2508,7 +2733,8 @@ function updateSeaChanter(state: GameState, e: Enemy) {
       [e.targetTileX, e.targetTileY] = next; e.stepProgress = 0;
     }
   } else {
-    const speed = isSeaChanterDiving(e) ? (sea.neptune ? NEPTUNE_DIVE_SPEED : SEA_DIVE_SPEED) : ENEMY_CONFIGS.sea_chanter.speed;
+    const baseSpeed = isSeaChanterDiving(e) ? (sea.neptune ? NEPTUNE_DIVE_SPEED : SEA_DIVE_SPEED) : ENEMY_CONFIGS.sea_chanter.speed;
+    const speed = baseSpeed * (sea.neptune ? NEPTUNE_BOSS_SPEED_MULT : 1);
     e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + speed * celestialMoveMultiplier(state,e));
     e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + (e.targetTileX - e.tileX) * e.stepProgress;
     e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + (e.targetTileY - e.tileY) * e.stepProgress;
@@ -2539,6 +2765,12 @@ function updateSeaSongWaves(state: GameState) {
           Math.hypot(wave.x - state.playerX, wave.y - state.playerY) <= SEA_SONG_HIT_RADIUS) {
         damagePlayer(state, ENEMY_CONFIGS.sea_chanter.damageToPlayer + bonus, state.enemies.find(e => e.id === wave.ownerId)); wave.hitPlayer = true;
       }
+      if (!wave.hitRuby && state.rubyTileX !== -1 && !state.playerCarryingRuby) { // the wave washes over a placed Ruby on its way, too
+        const rx = (state.rubyTileX + .5) * TILE_SIZE, ry = (state.rubyTileY + .5) * TILE_SIZE;
+        if (Math.hypot(wave.aimX - rx, wave.aimY - ry) > SEA_SONG_HIT_RADIUS && Math.hypot(wave.x - rx, wave.y - ry) <= SEA_SONG_HIT_RADIUS) {
+          damageRuby(state, ENEMY_CONFIGS.sea_chanter.damageToRuby + bonus, state.enemies.find(e => e.id === wave.ownerId)); wave.hitRuby = true;
+        }
+      }
       if (wave.rangeLeft <= 0) {
         bursts.push({ x: wave.aimX, y: wave.aimY, ticks: SEA_SONG_BLAST_TICKS, ownerId: wave.ownerId });
         const decoy=state.lunarDecoy;
@@ -2552,8 +2784,8 @@ function updateSeaSongWaves(state: GameState) {
             (SEA_SONG_BLAST_DAMAGE_CENTER - SEA_SONG_BLAST_DAMAGE_EDGE) * blastDistance / SEA_SONG_BLAST_RADIUS) + bonus;
           damagePlayer(state, damage, state.enemies.find(e => e.id === wave.ownerId));
         }
-        // Neptune challenge: her bursts also hit a placed Ruby, exactly as hard as they hit you.
-        if (state.neptune && state.rubyTileX !== -1) {
+        // Her bursts also hit a placed Ruby, exactly as hard as they hit you.
+        if (state.rubyTileX !== -1 && !state.playerCarryingRuby) {
           const rubyDistance = Math.hypot(wave.aimX - (state.rubyTileX + .5) * TILE_SIZE, wave.aimY - (state.rubyTileY + .5) * TILE_SIZE);
           if (rubyDistance <= SEA_SONG_BLAST_RADIUS) damageRuby(state, Math.round(SEA_SONG_BLAST_DAMAGE_CENTER -
             (SEA_SONG_BLAST_DAMAGE_CENTER - SEA_SONG_BLAST_DAMAGE_EDGE) * rubyDistance / SEA_SONG_BLAST_RADIUS) + bonus, state.enemies.find(e => e.id === wave.ownerId));
@@ -2736,35 +2968,90 @@ export function fleePath(state: GameState, e: Enemy): [number, number][] {
   return path.reverse();
 }
 
+/** Singularity: with no food to chase, a body you just hit hunts you; otherwise it flees from you when you are within
+ * fleeRadius tiles, and roams to random spots away from you, routing around the Maws. */
+function singularityIdlePath(state: GameState, e: Enemy, angry: boolean, avoid?: (x: number, y: number) => boolean): [number, number][] {
+  const R = SINGULARITY_CHALLENGE.fleeRadius;
+  if (angry) return bfs(state.map, e.targetTileX, e.targetTileY, state.playerTileX, state.playerTileY, avoid, !!avoid);
+  if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= R) return fleePath(state, e);
+  const d = e.devourer!;
+  if (!d.roamTo || (e.targetTileX === d.roamTo[0] && e.targetTileY === d.roamTo[1])) {
+    const spots = [0, 1, 2, 3].flatMap(room => freeChamberTiles(state, room)).filter(([x, y]) => Math.hypot(x - state.playerTileX, y - state.playerTileY) > R);
+    d.roamTo = spots.length ? spots[Math.floor(Math.random() * spots.length)] : [e.tileX, e.tileY];
+  }
+  return bfs(state.map, e.targetTileX, e.targetTileY, d.roamTo[0], d.roamTo[1], avoid, !!avoid);
+}
+
+/** Short, reachable escape routes that separate newborn siblings as well as fleeing the player. */
+export function devourerScatterPath(state:GameState,e:Enemy):[number,number][] {
+  const cols=state.map[0].length,start=e.targetTileY*cols+e.targetTileX;
+  const peers=state.enemies.filter(other=>other!==e&&other.type==='devourer'&&other.hp>0&&(other.encounterId??other.id)===(e.encounterId??e.id));
+  const forecast=peers.map(other=>other.path.length?other.path[Math.min(3,other.path.length-1)]:[other.targetTileX,other.targetTileY]);
+  const parent=new Map<number,number>(),distance=new Map<number,number>([[start,0]]),queue=[start];
+  const startThreat=Math.hypot(e.targetTileX-state.playerTileX,e.targetTileY-state.playerTileY);
+  let best=start,bestScore=-Infinity;
+  for(let head=0;head<queue.length;head++) {
+    const tile=queue[head],x=tile%cols,y=Math.floor(tile/cols),steps=distance.get(tile)!;
+    const threat=Math.hypot(x-state.playerTileX,y-state.playerTileY);
+    if(tile!==start&&threat>=startThreat) {
+      const crowd=forecast.reduce((total,[px,py])=>total+Math.pow(Math.max(0,4-Math.hypot(x-px,y-py)),2),0);
+      const angle=Math.atan2(y-e.targetTileY,x-e.targetTileX);
+      const score=threat*.9-crowd*.8-steps*.15+Math.cos(angle-e.id*2.399)*.3;
+      if(score>bestScore){best=tile;bestScore=score;}
+    }
+    if(steps>=6)continue;
+    const directions=[[1,0],[0,1],[-1,0],[0,-1]];
+    for(let i=0;i<4;i++) {
+      const [dx,dy]=directions[(i+e.id)%4],nx=x+dx,ny=y+dy,next=ny*cols+nx;
+      if(!isFloorTile(state.map,nx,ny)||distance.has(next))continue;
+      distance.set(next,steps+1);parent.set(next,tile);queue.push(next);
+    }
+  }
+  const path:[number,number][]=[];
+  while(best!==start&&parent.has(best)){path.push([best%cols,Math.floor(best/cols)]);best=parent.get(best)!;}
+  return path.reverse();
+}
+
 function isEnemyInSingularity(state: GameState, enemy: Enemy): boolean {
   const field=state.singularity;if(!field||field.ticks<=0)return false;
+  const radius=SPECIAL_SINGULARITY_RADIUS;
   const x=Math.floor(enemy.x/TILE_SIZE),y=Math.floor(enemy.y/TILE_SIZE);
-  return isFloorTile(state.map,x,y)&&Math.hypot((x+.5)*TILE_SIZE-field.x,(y+.5)*TILE_SIZE-field.y)<=SPECIAL_SINGULARITY_RADIUS;
+  return isFloorTile(state.map,x,y)&&Math.hypot((x+.5)*TILE_SIZE-field.x,(y+.5)*TILE_SIZE-field.y)<=radius;
 }
 
 function updateSingularity(state: GameState) {
   const field=state.singularity;if(!field){stopSingularitySound();return;}
   if(--field.ticks<=0){state.singularity=null;stopSingularitySound();return;}
+  if (state.trial?.devourer) { swallowAtField(state); if ((state as GameState).gamePhase !== 'playing') return; } // its centre swallows bodies like a Maw
+  const radius = SPECIAL_SINGULARITY_RADIUS;
   updateSingularitySound(state);
   field.pullTimer--;field.damageTimer--;
   const targets=state.enemies.filter(e=>{
     const tx=Math.floor(e.x/TILE_SIZE),ty=Math.floor(e.y/TILE_SIZE);
-    return e.hp>0&&isFloorTile(state.map,tx,ty)&&Math.hypot((tx+.5)*TILE_SIZE-field.x,(ty+.5)*TILE_SIZE-field.y)<=SPECIAL_SINGULARITY_RADIUS;
+    return e.hp>0&&isFloorTile(state.map,tx,ty)&&Math.hypot((tx+.5)*TILE_SIZE-field.x,(ty+.5)*TILE_SIZE-field.y)<=radius;
   });
   if(field.pullTimer<=0){
-    field.pullTimer=15;const pullBoss=(field.maxTicks-field.ticks)%30===0;
+    // The Singularity challenge pulls every 10 ticks instead of 15, and Devourer bodies on five of every six pulses (~12 ticks).
+    const interval=state.trial?.devourer?SINGULARITY_CHALLENGE.fPullTicks:15;
+    field.pullTimer=interval;const pullBoss=(field.maxTicks-field.ticks)%30===0;
+    const pullBody=Math.round((field.maxTicks-field.ticks)/interval)%6!==5; // bodies on five of every six pulses
+    const pullFullBody=Math.round((field.maxTicks-field.ticks)/interval)%3!==2; // nearly full bodies on two of every three
     for(const enemy of targets){
-      if(enemy.type==='aegis_construct'||enemy.twin?.downedTicks||enemy.pushTiles>0||isBossType(enemy.type)&&!pullBoss)continue;
+      const strongBoss=!!state.trial?.devourer&&enemy.type==='devourer';
+      if(enemy.devourer?.merging||enemy.type==='aegis_construct'||enemy.twin?.downedTicks||enemy.pushTiles>0||isBossType(enemy.type)&&!(strongBoss?(nearlyFull(state,enemy)?pullFullBody:pullBody):pullBoss))continue; // small things every pulse, heavy bodies less often
       const tx=Math.floor(field.x/TILE_SIZE),ty=Math.floor(field.y/TILE_SIZE),dx=tx-enemy.tileX,dy=ty-enemy.tileY;
       if(!dx&&!dy)continue;
       const choices=Math.abs(dx)>=Math.abs(dy)?[[Math.sign(dx),0],[0,Math.sign(dy)]]:[[0,Math.sign(dy)],[Math.sign(dx),0]];
       const step=choices.find(([x,y])=>(x||y)&&isFloorTile(state.map,enemy.tileX+x,enemy.tileY+y));
-      if(step){enemy.pushDirX=step[0];enemy.pushDirY=step[1];enemy.pushTiles=1;}
+      if(step){
+        if(strongBoss){if(!enemy.singularityPull)enemy.singularityPull={started:false,dx:step[0],dy:step[1],speed:SINGULARITY_CHALLENGE.wellPullSpeed};}
+        else{enemy.pushDirX=step[0];enemy.pushDirY=step[1];enemy.pushTiles=1;}
+      }
     }
   }
   if(field.damageTimer<=0){
     field.damageTimer=60;
-    hitSupernova(state, (x, y) => Math.hypot(x - field.x, y - field.y) <= SPECIAL_SINGULARITY_RADIUS);
+    hitSupernova(state, (x, y) => Math.hypot(x - field.x, y - field.y) <= radius);
     for(const enemy of targets)damageEnemy(state,enemy,isBossType(enemy.type)?enemy.maxHp*SPECIAL_SINGULARITY_BOSS_DAMAGE:SPECIAL_SINGULARITY_NORMAL_DAMAGE*skillAlienScale(state),'special');
     for(const enemy of targets){const index=state.enemies.indexOf(enemy);if(index>=0&&enemy.hp<=0)killEnemy(state,index);}
   }
@@ -2780,7 +3067,7 @@ export function stormSlowMultiplier(state:GameState,e:Enemy,slowStrength=1):numb
   const skillSlow=e.stormSlowUntilTick!==undefined&&state.gameTick<=e.stormSlowUntilTick?1-(1-SPECIAL_REAPER_SLOW)*slowStrength:1;
   return Math.min(skillSlow,buildSlowMultiplier(state,e));
 }
-export function celestialMoveMultiplier(state: GameState, e: Enemy): number { return MOVE_SPEED_MULT * ((e.enchantedUntil ?? 0) > state.gameTick ? (isBossType(e.type) ? ENCHANTER.bossSpeedMult : ENCHANTER.speedMult) : 1) * (inCelestialField(state,e)?SPECIAL_WEAVER_SLOW:1) * Math.min((e.voltSlowTicks ?? 0)>0 ? JUPITER.wallSlow : 1,stormSlowMultiplier(state,e),buildSlowMultiplier(state,e)); }
+export function celestialMoveMultiplier(state: GameState, e: Enemy): number { return MOVE_SPEED_MULT * saturnEmpower(state, e, 'speed') * siriusEmpower(state, e, 'speed') * ((e.enchantedUntil ?? 0) > state.gameTick ? (isBossType(e.type) ? ENCHANTER.bossSpeedMult : ENCHANTER.speedMult) : 1) * (inCelestialField(state,e)?SPECIAL_WEAVER_SLOW:1) * Math.min((e.voltSlowTicks ?? 0)>0 ? JUPITER.wallSlow : 1,stormSlowMultiplier(state,e),buildSlowMultiplier(state,e)); }
 let gaiaFieldVoice: HTMLAudioElement | null = null;
 export function stopGaiaFieldSound() {
   if (!gaiaFieldVoice) return;
@@ -2876,7 +3163,14 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
   for (const e of [...state.enemies].reverse()) {
     if (!state.enemies.includes(e) || e.hp <= 0 || (e.twin?.downedTicks ?? 0) > 0) continue;
     if (only && !only(e)) continue;
-    if((e.buildStopUntil??0)>state.gameTick)continue;
+    if (e.singularityPull && moveSingularityBody(state, e)) {
+      // A bursting body's fuse keeps burning while it is pulled, towed or thrown, so it can burst mid-pull.
+      if (e.type === 'devourer' && e.devourer?.gorgeTicks !== undefined && --e.devourer.gorgeTicks <= 0) explodeDevourer(state, e);
+      continue;
+    }
+    if (e.type !== 'devourer' && state.trial?.devourer && singularityHeld(state,e)) continue;
+    if (e.type === 'reflector') checkReflectorControl(state, e); // before the stun skip, so stuns drop its mirror
+    if((e.buildStopUntil??0)>state.gameTick){if(e.type==='soulless'&&e.boneLunge){e.boneLunge=undefined;e.attackTimer=ENEMY_CONFIGS.soulless.attackCooldown;}if(e.type==='grappler'&&e.hook){e.hook=undefined;e.attackTimer=ENEMY_CONFIGS.grappler.attackCooldown;}continue;}
     if (e.type === 'moon_mimic' && updateMoonMimic(state, e)) continue; // disguised: stands still and never attacks
     if ((e.voltSlowTicks ?? 0) > 0) e.voltSlowTicks!--;
     if (state.jupiter?.bossId === e.id) {
@@ -2888,10 +3182,13 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
       if (e.flashTicks > 0) e.flashTicks--; if (e.shootTicks > 0) e.shootTicks--;
       e.pushTiles = 0; continue;
     }
-    if (saturnBlizzard(state) && e.icyShieldHP <= 0 && state.gameTick % 2 !== 0) continue;
+    if (saturnTimeStopped(state, e)) continue; // inside C's time-stop field
     if (e.flashTicks > 0) e.flashTicks--;
     if (e.healFlashTicks > 0) e.healFlashTicks--;
     if (e.shootTicks > 0) e.shootTicks--;
+    if (e.type === 'lost_soul') { e.pushTiles = 0; updateLostSoul(state, e); continue; }
+    if (e.type === 'sand_relic' || e.type === 'sand_core') { e.pushTiles = 0; continue; } // Venus: relics and his core lie still
+    if (duneWormHidden(e) || e.type === 'sand_scorpion') e.pushTiles = 0; // Venus: a Dune Worm under the sand, or a scorpion on its tile, cannot be pushed
     if (e.type === 'cinder_wisp' || (e.type === 'emberling' && e.extinguished) || (state.sun?.bossId === e.id && state.sun.quenchedTicks > 0)) { e.pushTiles = 0; continue; }
     // Slow all enemy AI together so movement, melee/ranged cooldowns, windups and
     // special attacks keep the same half-speed cadence throughout the cold window.
@@ -2917,36 +3214,45 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
 
     // Push (knockback)
     if (e.pushTiles > 0) {
-      const cfg = ENEMY_CONFIGS[e.type];
-      void Math.min(cfg.speed * 2, e.pushTiles * TILE_SIZE);
+      // An alien partway through a step can already occupy its next tile.
+      const currentX = Math.floor(e.x / TILE_SIZE);
+      const currentY = Math.floor(e.y / TILE_SIZE);
+      if (isFloorTile(state.map, currentX, currentY)) {
+        e.tileX = currentX; e.tileY = currentY;
+      }
       const nx = e.tileX + e.pushDirX;
       const ny = e.tileY + e.pushDirY;
-      if (isFloorTile(state.map, nx, ny)) {
+      if (isFloorTile(state.map, nx, ny) && hasLineOfSight(state.map, e.tileX, e.tileY, nx, ny)) {
         e.tileX = nx; e.tileY = ny;
-        e.x = nx * TILE_SIZE + TILE_SIZE / 2;
-        e.y = ny * TILE_SIZE + TILE_SIZE / 2;
+      } else {
+        e.pushTiles = 0;
+        if (e.buildWallDamage !== undefined) {
+          damageEnemy(state,e,e.buildWallDamage,'special');
+          state.build.impacts.push({x:e.x+e.pushDirX*20,y:e.y+e.pushDirY*20,kind:'slam',ticks:18});
+          if(e.slamStun)binaryWallStun(state,e,e.slamStun); // Binary Star: pushed or pulled into a wall
+        }
       }
-      else if(e.buildWallDamage!==undefined){
-        damageEnemy(state,e,e.buildWallDamage,'special');
-        state.build.impacts.push({x:e.x+e.pushDirX*20,y:e.y+e.pushDirY*20,kind:'slam',ticks:18});
-        e.pushTiles=0;e.buildWallDamage=undefined;
-      }
-      // Knockback overrides normal step interpolation — resync target/step state
-      // so the resumed movement (or charger's charge) doesn't lerp toward a
-      // stale pre-push tile (which visibly dragged the enemy across walls).
+      // Rebuild movement from the final tile. The old path can skip over walls from here.
+      e.x = (e.tileX + .5) * TILE_SIZE; e.y = (e.tileY + .5) * TILE_SIZE;
       e.targetTileX = e.tileX; e.targetTileY = e.tileY; e.stepProgress = 0;
-      if(state.saturn&&(e.type==='frost_raider'||e.type==='rime_brute')){e.windupTicks=0;e.frostRollLeft=0;e.attackTimer=120;}
-      if (e.type === 'charger') { e.chargeDirX = 0; e.chargeDirY = 0; e.chargeWindupTicks=0; e.chargeTilesLeft=0; }
+      e.path = []; e.pathTimer = 0;
+      if(state.saturn&&isSaturnAlien(e.type))interruptSaturnAlien(e);
+      if(state.sirius&&isSiriusAlien(e.type))interruptSiriusAlien(e);
+      if (e.type === 'charger' || e.type === 'lodestone') { e.chargeDirX = 0; e.chargeDirY = 0; e.chargeWindupTicks=0; e.chargeTilesLeft=0; }
+      if (e.type === 'dropper') e.dropAttack = undefined;
+      if (e.type === 'soulless' && e.boneLunge) { e.boneLunge=undefined; e.attackTimer=ENEMY_CONFIGS.soulless.attackCooldown; }
+      if (e.type === 'grappler' && e.hook) { e.hook = undefined; e.attackTimer = ENEMY_CONFIGS.grappler.attackCooldown; }
       if (e.type === 'lancer') { e.windupTicks = 0; e.lanceDirX = e.lanceDirY = undefined; }
       e.pushTiles = Math.max(0, e.pushTiles - 1);
-      if(e.pushTiles===0)e.buildWallDamage=undefined;
+      if(e.pushTiles===0){e.buildWallDamage=undefined;e.slamStun=undefined;}
       continue;
     }
 
-    if (state.saturn && e.type === 'frost_raider') { updateFrostRaider(state, e); continue; }
-    if (state.saturn && e.type === 'ice_caller') { updateIceCaller(state, e); continue; }
-    if (state.saturn && e.type === 'rime_brute') { updateRimeBrute(state, e); continue; }
+    if (state.saturn && isSaturnAlien(e.type)) { updateSaturnAlien(state, e); continue; }
+    if (state.sirius && isSiriusAlien(e.type)) { updateSiriusAlien(state, e); continue; }
+    if (state.venus && venusHoldsBoss(state, e)) { e.pushTiles = 0; continue; } // Venus: leaping, charging his lance or stunned
     if (e.type === 'astral_twins' && e.twin) { updateAstralTwin(state, e); continue; }
+    if (e.type === 'grounder' && state.binary) { updateGrounder(state, e); continue; } // Binary Star: escorts a twin, never attacks
     if (e.type === 'thorn_weaver') { updateThornWeaver(state, e); continue; }
     if (e.type === 'sea_chanter') {
       updateSeaChanter(state, e);
@@ -2955,7 +3261,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
 
     // Blind Prayer flees, with a telegraphed escape attack and occasional Ruby ritual.
     if (e.type === 'blind_prayer') {
-      updatePrayerAbilities(state, e);
+      if (!state.sirius) updatePrayerAbilities(state, e); // in Sirius he never attacks; the challenge runs his runes and ritual
       e.pathTimer--;
       if (e.pathTimer <= 0) {
         // Same escape range as Thorn Weaver: flee when the player is close, otherwise wander.
@@ -3038,7 +3344,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
         // Gradually speeds up the longer THIS king has been alive — resets to base speed
         // on every fresh spawn — capped at an absolute top speed.
         const kingAliveSec = e.phaseTimer / 60;
-        const kingSpeed = state.sun ? .8 + state.sun.rage * .035 : Math.min(KING_SPEED_CAP, bCfg.speed * (1 + kingAliveSec * KING_SPEED_RAMP_PER_SEC));
+        const kingSpeed = state.sun ? (.8 + state.sun.rage * .035) * ((state.sun.kingSlowTicks??0)>0 ? SUN.waveSlowMult : 1) : Math.min(KING_SPEED_CAP, bCfg.speed * (1 + kingAliveSec * KING_SPEED_RAMP_PER_SEC));
         e.stepProgress += kingSpeed * celestialMoveMultiplier(state, e);
         const bdx = e.targetTileX - e.tileX, bdy = e.targetTileY - e.tileY;
         e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + bdx * Math.min(e.stepProgress, TILE_SIZE);
@@ -3106,26 +3412,41 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
 
     // ── Devourer special logic ──────────────────────────────────────────
     if (e.type === 'devourer') {
+      if (e.devourer?.merging) continue;
       e.pushTiles = 0; // immune to push, like the other bosses
       if (e.attackTimer > 0) e.attackTimer--;
       // chargeDirX is unused for this type otherwise — reused as her absorb-stack counter (0..DEVOURER_MAX_STACKS).
       // windupTicks is unused otherwise — reused as her absorb cooldown countdown.
       const stacks = e.chargeDirX;
       const dCfg = ENEMY_CONFIGS.devourer;
+      if ((e.devourer?.mealSpeedTicks ?? 0) > 0) e.devourer!.mealSpeedTicks!--;
       // Newborn copies scatter: they flee the player at boosted speed and hold their bite.
       const newborn = (e.devourer?.newbornTicks ?? 0) > 0;
       if (newborn) e.devourer!.newbornTicks!--;
+      // Singularity: a full body swells in place and bursts when its fuse runs out, unless the Maw eats it first.
+      if (e.devourer?.gorgeTicks !== undefined) {
+        if ((e.devourer.stunTicks ?? 0) > 0) { e.devourer.stunTicks!--; continue; } // a stunned body's fuse waits until it recovers
+        const left = --e.devourer.gorgeTicks;
+        if (left % Math.max(6, Math.round(left / 5)) === 0) { e.flashTicks = 4; }
+        if (left <= 0) explodeDevourer(state, e);
+        continue;
+      }
+      if (state.trial?.devourer && singularityHeld(state, e)) continue; // Singularity: hooked, flung or stunned by a slam
+      if (state.trial?.devourer && bodyJump(state, e)) continue; // Singularity: now and then a copy blinks across the map
+      if (e.devourer?.gnasher) { gnasherBite(state, e); if (state.gamePhase !== 'playing') return; } // a Gnasher bites nearby bodies
       // Ignored too long, a body with a stack spends it to bud a copy on its own (counts toward the family cap).
       e.devourer ??= { generation: 0 };
       e.devourer.splitTicks = Math.min(DEVOURER_SELF_SPLIT_TICKS, (e.devourer.splitTicks ?? 0) + 1);
-      if (e.devourer.splitTicks >= DEVOURER_SELF_SPLIT_TICKS && e.chargeDirX > 0 && devourerFamilyRoom(state, e) > 1) {
+      if (!e.devourer.challenge && e.devourer.splitTicks >= DEVOURER_SELF_SPLIT_TICKS && e.chargeDirX > 0 && devourerFamilyRoom(state, e) > 1) { // the Singularity swarm only multiplies by bursting or dying
         spawnDevourerCopies(state, e, 1);
         e.chargeDirX--; e.devourer.splitTicks = 0; e.healFlashTicks = 26;
-        playSFX_devourerAbsorb();
+        playSFX_devourerAbsorb(state);
       }
 
-      // Targets whichever of player/ruby is closer, same split-attention as the King.
-      const dHasRuby = !state.enemyDecoyActive && state.rubyTileX !== -1;
+      // Targets whichever of player/ruby is closer for its bite, same split-attention as the King. In the Singularity a
+      // body you just hit (aggroTicks) ignores food and hunts you.
+      const aggro = (e.devourer?.aggroTicks ?? 0) > 0; if (aggro) e.devourer!.aggroTicks!--;
+      const dHasRuby = !aggro && !state.enemyDecoyActive && state.rubyTileX !== -1;
       const dDistPlayer = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY);
       const dDistRuby = dHasRuby ? tileEuclidDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) : Infinity;
       const dTargetIsPlayer = !dHasRuby || dDistPlayer <= dDistRuby;
@@ -3137,12 +3458,14 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
 
       // Short sound-wave bite; each stack adds damage.
       if (!newborn && e.attackTimer === 0 && dDist <= dAttackRange) {
-        playSFX_devourerBite();
+        playSFX_devourerBite(state);
         const dTgtX = dTargetIsPlayer ? state.playerX : state.rubyTileX * TILE_SIZE + TILE_SIZE / 2;
         const dTgtY = dTargetIsPlayer ? state.playerY : state.rubyTileY * TILE_SIZE + TILE_SIZE / 2;
-        const genDamage = Math.pow(DEVOURER_GEN_DAMAGE_MULT, e.devourer?.generation ?? 0); // each copy generation hits 10% softer
-        if (dTargetIsPlayer) damagePlayer(state, (dCfg.damageToPlayer + stacks * DEVOURER_STACK_DAMAGE) * genDamage, e);
-        else damageRuby(state, (dCfg.damageToRuby + stacks * DEVOURER_STACK_DAMAGE) * genDamage, e);
+        const familyScale = state.trial?.devourer ? SINGULARITY_CHALLENGE.biteDamage/Math.pow(Math.max(1,state.enemies.filter(other=>other.type==='devourer'&&other.hp>0&&(other.encounterId??other.id)===(e.encounterId??e.id)).length),SINGULARITY_CHALLENGE.biteFamilyExponent) : 1;
+        const genDamage = familyScale * Math.max(state.trial?.devourer ? SINGULARITY_CHALLENGE.minimumStats : 0,Math.pow(state.trial?.devourer ? SINGULARITY_CHALLENGE.generationDamage : DEVOURER_GEN_DAMAGE_MULT, devourerStatGeneration(e))); // generation weakening is gentler in the Singularity challenge
+        const endlessBonus = state.mode === 'endless' ? DEVOURER_ENDLESS_BITE_BONUS : 0;
+        if (dTargetIsPlayer) { damagePlayer(state, (dCfg.damageToPlayer + endlessBonus + stacks * DEVOURER_STACK_DAMAGE) * genDamage, e); if (Math.random() < DEVOURER_KNOCKBACK_CHANCE) shovePlayerFromEnemy(state, e, DEVOURER_KNOCKBACK_TILES); } // half its bites knock you back
+        else damageRuby(state, (dCfg.damageToRuby + endlessBonus + stacks * DEVOURER_STACK_DAMAGE) * genDamage, e);
         state.laserBeams.push({
           fromX: e.x, fromY: e.y,
           dirX: 0, dirY: 0,
@@ -3161,12 +3484,16 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
       if (e.windupTicks > 0) {
         e.windupTicks--;
       } else {
-        const nearest = nearestDevourerFood(state, e, DEVOURER_ABSORB_RANGE);
+        const nearest = nearestDevourerFood(state, e, state.trial?.devourer ? 0 : DEVOURER_ABSORB_RANGE); // Singularity: it must walk over the food
         if (nearest) {
           spawnAbsorbBurst(state, nearest.x, nearest.y, e.x, e.y);
           const idx2 = state.enemies.indexOf(nearest);
           if (idx2 !== -1) state.enemies.splice(idx2, 1);
-          if (stacks < DEVOURER_MAX_STACKS) {
+          const golden = !!nearest.goldenSoul; // Golden Soul: fills the body to full stacks at once
+          const cap = state.trial?.devourer ? singularityPhaseStacks(state.trial.devourer.phase) : DEVOURER_MAX_STACKS;
+          if (state.trial?.devourer) {
+            feedSingularityBody(state, e, golden ? bodyStackCap(state.trial.devourer.phase, e) : SINGULARITY_CHALLENGE.mealStacks); // Singularity: every meal adds a stack (a Golden Soul fills it); full bodies burst
+          } else if (stacks < cap) {
             const gained = Math.round(e.maxHp * DEVOURER_STACK_HP_PCT);
             e.maxHp += gained;
             e.hp = Math.min(e.maxHp, e.hp + gained);
@@ -3175,28 +3502,41 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
             e.hp = Math.min(e.maxHp, e.hp + e.maxHp * DEVOURER_FULL_HEAL_PCT); // unrounded: 1% of a small body is under 1 HP
           }
           e.healFlashTicks = 26; // drives the big shockwave-ring pulse in drawEnemy
-          playSFX_devourerAbsorb();
+          playSFX_devourerAbsorb(state);
           state.screenShakeTicks = Math.max(state.screenShakeTicks, 10);
           state.screenShakeAmt = Math.max(state.screenShakeAmt, 6);
-          e.windupTicks = devourerAbsorbCooldown(e); // the cooldown starts only after a real meal
+          e.windupTicks = devourerAbsorbCooldown(state, e); // the cooldown starts only after a real meal
         }
       }
 
       // BFS toward target — recalculate frequently so she tracks across chambers. While nearly
-      // empty (below DEVOURER_HUNGRY_BELOW stacks) she hunts the nearest alien to eat instead.
+      // empty she hunts food: below 3 stacks in Singularity, below 2 in the normal encounter.
       e.pathTimer--;
       if (e.pathTimer <= 0) {
-        const food = !newborn && e.chargeDirX < DEVOURER_HUNGRY_BELOW ? nearestDevourerFood(state, e, Infinity) : null;
-        e.path = newborn ? fleePath(state, e) : food ? bfs(state.map, e.targetTileX, e.targetTileY, food.tileX, food.tileY)
-          : bfs(state.map, e.targetTileX, e.targetTileY, dTgtTX, dTgtTY);
+        const trial = state.trial?.devourer;
+        const prey = !newborn && !aggro && e.devourer?.gnasher && (e.devourer.biteTicks ?? 0) <= 0 ? gnasherPrey(state, e) : undefined; // a ready Gnasher hunts a body
+        const food = newborn || aggro || prey ? null : trial
+          ? nearestDevourerFood(state, e, SINGULARITY_CHALLENGE.foodRadius)
+          : e.chargeDirX < DEVOURER_HUNGRY_BELOW ? nearestDevourerFood(state, e, Infinity) : null;
+        const avoid = trial ? mawAvoider(state, e) : undefined;
+        const foodPath = prey ? bfs(state.map, e.targetTileX, e.targetTileY, prey.tileX, prey.tileY) : food ? bfs(state.map, e.targetTileX, e.targetTileY, food.tileX, food.tileY) : [];
+        e.path = newborn ? (trial ? devourerScatterPath(state,e) : fleePath(state, e))
+          : foodPath.length ? foodPath
+          : trial ? singularityIdlePath(state, e, aggro, avoid) // the Singularity swarm hunts you only after you hit it; otherwise it flees or roams
+          : bfs(state.map, e.targetTileX, e.targetTileY, dTgtTX, dTgtTY, avoid, !!avoid);
         e.pathTimer = 8;
+      }
+      // Singularity: a body crowding another steps away from it instead of following its path (unless food is right there).
+      if (state.trial?.devourer && !newborn && !aggro && e.tileX === e.targetTileX && e.tileY === e.targetTileY && Math.random() < SINGULARITY_CHALLENGE.spreadChance) {
+        const step = bodySpreadStep(state, e);
+        if (step) { e.targetTileX = step[0]; e.targetTileY = step[1]; e.stepProgress = 0; e.path = []; e.pathTimer = 4; }
       }
       if (e.tileX === e.targetTileX && e.tileY === e.targetTileY && e.path.length > 0) {
         const [ntx, nty] = e.path.shift()!;
         if (isFloorTile(state.map, ntx, nty)) { e.targetTileX = ntx; e.targetTileY = nty; e.stepProgress = 0; }
       } else if (e.tileX !== e.targetTileX || e.tileY !== e.targetTileY) {
-        const genSpeed = Math.pow(DEVOURER_GEN_SPEED_MULT, e.devourer?.generation ?? 0); // each copy generation is a bit slower
-        e.stepProgress += dCfg.speed * genSpeed * (newborn ? DEVOURER_NEWBORN_SPEED_MULT : 1) * celestialMoveMultiplier(state, e);
+        const genSpeed = Math.max(state.trial?.devourer ? SINGULARITY_CHALLENGE.minimumStats : 0,Math.pow(state.trial?.devourer ? SINGULARITY_CHALLENGE.generationSpeed : DEVOURER_GEN_SPEED_MULT, devourerStatGeneration(e))); // each copy generation is a bit slower
+        e.stepProgress += dCfg.speed * (state.trial?.devourer ? SINGULARITY_CHALLENGE.bodySpeed * ((e.devourer?.mealSpeedTicks ?? 0) > 0 ? SINGULARITY_CHALLENGE.mealSpeed : 1) * (e.devourer?.gnasher ? SINGULARITY_CHALLENGE.gnasher.speed : 1) : 1) * genSpeed * (newborn ? (state.trial?.devourer ? SINGULARITY_CHALLENGE.newbornSpeed : DEVOURER_NEWBORN_SPEED_MULT) : 1) * celestialMoveMultiplier(state, e);
         const ddx = e.targetTileX - e.tileX, ddy = e.targetTileY - e.tileY;
         e.x = e.tileX * TILE_SIZE + TILE_SIZE / 2 + ddx * Math.min(e.stepProgress, TILE_SIZE);
         e.y = e.tileY * TILE_SIZE + TILE_SIZE / 2 + ddy * Math.min(e.stepProgress, TILE_SIZE);
@@ -3301,12 +3641,15 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
       continue;
     }
 
+    if (e.type === 'sand_scorpion') { updateSandScorpion(state, e); continue; } // Venus phase 3: never leaves its tile
+    if (e.type === 'dune_worm' && updateDuneWorm(state, e)) continue; // Venus: surfacing, up or digging back down
+
     // Sniper, Lancer, Healer, Charger, Ghost and Shielder have their own AI (aliens.ts)
     if (updateRegularAlien(state, e, playerCarrying)) continue;
 
     // Determine target
     const hasPlacedRuby = state.rubyTileX !== -1;
-    if (e.type === 'energy_leech' || playerCarrying || !hasPlacedRuby) {
+    if (e.type === 'energy_leech' || e.type === 'dune_worm' || playerCarrying || !hasPlacedRuby) {
       e.targeting = 'player';
     } else if (e.type === 'moon_shade') {
       e.targeting = 'ruby'; // Moon shades go for a placed Ruby wherever it is
@@ -3329,7 +3672,8 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
 
     // Move toward next path tile
     const cfg = ENEMY_CONFIGS[e.type];
-    const speed = e.aegis && !e.aegis.shielded ? AEGIS_EXPOSED_SPEED : cfg.speed;
+    const speed = state.venus && e.id === state.venus.bossId && (state.venus.leapSlow ?? 0) > 0 ? Math.min(VENUS.leapSlowSpeed, e.aegis && !e.aegis.shielded ? AEGIS_EXPOSED_SPEED * VENUS.exposedSpeedMult : VENUS.shieldedSpeed) // Venus: slow just after a leap
+      : e.aegis && !e.aegis.shielded ? AEGIS_EXPOSED_SPEED * (state.venus && e.id === state.venus.bossId ? VENUS.exposedSpeedMult : 1) : state.venus && e.id === state.venus.bossId ? VENUS.shieldedSpeed : cfg.speed; // Venus: slower while shielded than in endless
 
     if (e.tileX === e.targetTileX && e.tileY === e.targetTileY) {
       // Check attack adjacency
@@ -3353,8 +3697,8 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
           e.attackTimer = cfg.attackCooldown;
           e.shootTicks = 14;
         } else {
-          playSFX_enemyAttack(e);
-          damagePlayer(state, cfg.damageToPlayer, e);
+          if (!state.trial?.devourer || devourerSoundAllowed(state, 'alien')) playSFX_enemyAttack(e); // the Singularity's Soulless share one cooldown
+          damagePlayer(state, state.venus && e.id === state.venus.bossId ? VENUS.meleeDamage : cfg.damageToPlayer, e); // Venus: his melee is weaker
           if (e.type === 'stinger' && state.neptune) { state.neptune.poisonTicks = NEPTUNE_POISON_TICKS; state.neptune.poisonTimer ||= 60; }
           const knockback = ALIEN_KNOCKBACK[e.type];
           if (knockback) shovePlayerFromEnemy(state, e, knockback);
@@ -3369,7 +3713,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
         if (e.type === 'bomber') {
           e.exploding = true; e.explodeTick = 45;
         } else {
-          playSFX_enemyAttack(e);
+          if (!state.trial?.devourer || devourerSoundAllowed(state, 'alien')) playSFX_enemyAttack(e);
           damageRuby(state, cfg.damageToRuby, e);
           if (e.aegis) encounterEffect(state, 'sentinel-hit', e, (state.rubyTileX + .5) * TILE_SIZE, (state.rubyTileY + .5) * TILE_SIZE, 18, '#78dedf');
           e.attackTimer = cfg.attackCooldown;
@@ -3412,7 +3756,7 @@ function updateEnemies(state: GameState, only?: (e: Enemy) => boolean) {
 function triggerBomberExplosion(state: GameState, e: Enemy) {
   const RANGE = ENEMY_CONFIGS.bomber.bombExplodeRange;
   playSFX_bomb(ALIEN_ATTACK_SFX.bomber);
-  state.bombBlasts.push({ cx: e.x, cy: e.y, radius: 0, maxRadius: RANGE * TILE_SIZE, ticks: 25 });
+  state.bombBlasts.push({ cx: e.x, cy: e.y, radius: 0, maxRadius: RANGE * TILE_SIZE, ticks: 25, trap: true });
   // Damage player if in range
   if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= RANGE) {
     damagePlayer(state, 25);
@@ -3526,20 +3870,33 @@ export function healCore(state: GameState, amount: number) {
   if (state.rubyHP > before) showRewardEffect(state, 'ruby', 'heal');
 }
 
+/** Kill shields add to the pool, up to KILL_SHIELD_CAP; a pool already above the cap (from other sources) is kept. */
+function stackKillShield(current: number, amount: number) { return Math.max(current, Math.min(KILL_SHIELD_CAP, current + amount)); }
+
 /** suppressEnergy marks a Solar Flare kill: no energy, and regular aliens give no killing buff or kill heal (bosses keep every reward). */
 export function killEnemy(state: GameState, idx: number, fromMeteor = false, suppressEnergy = false) {
   const victim = state.enemies[idx];
-  if (!victim || (victim.twin?.downedTicks ?? 0) > 0) return;
+  if (!victim || victim.devourer?.merging || (victim.twin?.downedTicks ?? 0) > 0) return;
+  if(victim.type==='spook') {
+    state.spookFace={until:state.gameTick+SPOOK.faceTicks,id:victim.id};
+    playAudioOneShot('/sounds/deghost.wav',.28*ATTACK_SFX_VOLUME,1.4);
+    playAudioOneShot('/sounds/spook-bleh.mp3',1.75);
+  }
   if (victim.impostorExpired) { state.enemies.splice(idx, 1); return; } // an Impostor with no boss left to copy just vanishes
   if (state.rubyStolenBy === victim.id) { state.rubyStolenBy = undefined; state.rubyTileX = victim.tileX; state.rubyTileY = victim.tileY; } // Snatcher drops Ruby
   if (victim.type === 'bleeder') state.bleedingUntil = 0; // lift the curse first, so this kill's own healing works
   if (victim.type === 'sporeling') gaiaSporeCloud(state, victim);
   if (victim.type === 'jellyfish') neptuneRevealClone(state);
+  if (victim.type === 'pulsar' && state.binary) pulsarDied(state, victim); // Binary Star: its field takes hold, then explodes
   if (victim.type === 'pufferfish' && state.neptune) { // it bursts as it dies
     pufferBurst(state, victim);
     state.bombBlasts.push({ cx: victim.x, cy: victim.y, radius: 0, maxRadius: NEPTUNE_PUFF_RADIUS * TILE_SIZE, ticks: 28, water: true });
   }
   if (victim.type === 'moon_illusion' && !fromMeteor) moonShatter(state, victim);
+  if (victim.type === 'sand_core' && state.venus) { spawnDeathParticles(state, victim); venusCoreDestroyed(state, victim); return; } // Venus: his core breaks his shield
+  if (victim.type === 'sand_relic' && state.venus) { spawnDeathParticles(state, victim); venusRelicDestroyed(state, victim); return; } // Venus: a relic's effect
+  if (victim.type === 'toxic_soulless' && state.trial?.devourer) toxicSoullessCloud(state, victim); // it leaves a still gas cloud
+  if (victim.type === 'lost_soul' && state.trial?.devourer && !fromMeteor) { healPlayer(state, SINGULARITY_CHALLENGE.soulKillHeal); showRewardEffect(state, 'player', 'heal'); } // Singularity: killing a Lost Soul heals you a little
   if (isChallengeObject(victim.type)) {
     // Fish, water clones, water balls, pods and blossoms are objectives: no score, energy, healing or progress.
     spawnDeathParticles(state, victim);
@@ -3547,18 +3904,22 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
     if (victim.type === 'water_clone' || victim.type === 'water_bomb') playSFX_objectBreak('frost'); else playSFX_alienDeath();
     return;
   }
+  if (victim.venusOrder !== undefined && state.venus) { // Venus: a totem of the sequence
+    spawnDeathParticles(state, victim); venusTotemDestroyed(state, victim); playSFX_objectBreak('totem'); return;
+  }
   if (victim.type === 'aegis_construct') {
     spawnDeathParticles(state, victim);
     encounterEffect(state, 'construct-break', victim, victim.x, victim.y, 150, '#78dedf');
     state.enemies.splice(idx, 1);
     const owner = state.enemies.find(e => e.id === victim.constructOwnerId);
     if (owner) refreshAegisShield(state, owner);
-    playSFX_objectBreak('pylon');
+    playSFX_objectBreak('totem');
     return; // Objectives give no score, healing, energy, or stage progress.
   }
   if (victim.type === 'devourer') {
     if(state.mode==='endless')recordBoss('devourer',state);
-    spawnDevourerCopies(state, victim);
+    if (state.trial?.devourer) state.trial.devourer.defeatedMaxHp += victim.maxHp;
+    if (!victim.devourer?.consumed && !victim.devourer?.merging) spawnDevourerCopies(state, victim); // a small body the Maw swallows is gone for good; any other death splits it
     if (state.enemies.some(other => other !== victim && other.type === 'devourer' && (other.encounterId ?? other.id) === (victim.encounterId ?? victim.id) && other.hp > 0)) {
       // Not the last of the family: no boss reward yet, but each body killed heals the player a little.
       if (!fromMeteor) healPlayer(state, DEVOURER_BODY_KILL_HEAL + 2 * constellationBonus(state, 'killHealing'));
@@ -3567,6 +3928,19 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       playSFX_alienDeath();
       return;
     }
+  }
+  // A phase ends only after the last body and all its death-splits are gone.
+  if (victim.type === 'devourer' && state.trial?.devourer && state.trial.devourer.phase < 3) {
+    const trial = state.trial.devourer;
+    trial.phase = (trial.phase + 1) as 2 | 3;
+    spawnDeathParticles(state, victim);
+    state.enemies.splice(state.enemies.indexOf(victim), 1);
+    const next = createEncounterEnemy(state, 'devourer', victim.tileX, victim.tileY, singularityPhaseHP(trial.phase));
+    state.enemies.push(next); initializeNewEncounter(state, next);
+    state.bossSpawnName = `SOUL DEVOURER · PHASE ${trial.phase}`;
+    state.bossSpawnColor = ENEMY_CONFIGS.devourer.color; state.bossSpawnTicks = BOSS_ANNOUNCEMENT_TICKS;
+    playSFX_alienDeath();
+    return;
   }
   if (victim.twin) {
     const partner = state.enemies.find(e => e !== victim && e.twin?.pairId === victim.twin!.pairId);
@@ -3582,6 +3956,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       encounterEffect(state, 'fall', victim, victim.x, victim.y, 24, victim.twin.index === 1 ? '#83cfff' : '#f08062');
       return;
     }
+    if (binaryLoseLife(state, victim)) return; // Binary Star: the pair loses one of its three lives and rises again
     if (partner) {
       encounterEffect(state, 'fall', partner, partner.x, partner.y, 30, partner.twin!.index === 1 ? '#83cfff' : '#f08062');
       spawnDeathParticles(state, partner);
@@ -3602,21 +3977,13 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
 
   const skipRewards = fromMeteor, noBuff = suppressEnergy && !isBossType(e.type);
   const recoveredEnergy = e.type === 'energy_leech' ? (e.stolenEnergy ?? 0) : 0;
-  const wasMax = state.starEnergy >= STAR_ENERGY_MAX;
-  const energyGain = suppressEnergy ? 0 : (skipRewards ? 0 : (STAR_ENERGY_PER_KILL + (e.type === 'charger' ? 8 : 0)) * (1 + 0.2 * constellationBonus(state, 'energy'))) + recoveredEnergy;
+  const energyGain = suppressEnergy ? 0 : (skipRewards ? 0 : (STAR_ENERGY_PER_KILL + (e.type === 'charger' ? 15 : 0)) * (1 + 0.2 * constellationBonus(state, 'energy'))) + recoveredEnergy;
   addStarEnergy(state,Math.max(0,energyGain-(suppressEnergy?0:recoveredEnergy)));
   if(!suppressEnergy)addStarEnergy(state,recoveredEnergy,false);
-  if (!wasMax && state.starEnergy >= STAR_ENERGY_MAX && !isBossType(e.type)) playSFX_powerUp();
   // Stolen energy is returned even when a meteor defeats the Leech.
   if (recoveredEnergy > 0 && !suppressEnergy) state.runnerEnergyFlashTicks = 60;
   if (!skipRewards) {
     state.killScore += ENEMY_CONFIGS[e.type].scoreValue;
-    if (state.saturn && !isBossType(e.type)) {
-      grantSaturnShield(state, 'player', SATURN.killShield);
-      grantSaturnShield(state, 'ruby', SATURN.killShield);
-      showRewardEffect(state, 'player', 'shield');
-      showRewardEffect(state, 'ruby', 'shield');
-    }
 
     // Passive sustain — every kill heals a small flat amount, stacking on top of any
     // type-specific reward below (e.g. a healer kill grants this +24 more, not instead of).
@@ -3629,7 +3996,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       // Explode on death — damages nearby allies
       const RANGE = ENEMY_CONFIGS.bomber.bombExplodeRange;
       playSFX_bomb(ALIEN_ATTACK_SFX.bomber);
-      state.bombBlasts.push({ cx: e.x, cy: e.y, radius: 0, maxRadius: RANGE * TILE_SIZE, ticks: 25 });
+      state.bombBlasts.push({ cx: e.x, cy: e.y, radius: 0, maxRadius: RANGE * TILE_SIZE, ticks: 25, trap: true });
       if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= RANGE) damagePlayer(state, 25);
       if (state.rubyTileX !== -1 && tileEuclidDist(e.tileX, e.tileY, state.rubyTileX, state.rubyTileY) <= RANGE) damageRuby(state, 30);
       for (const ally of state.enemies) {
@@ -3645,8 +4012,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       showRewardEffect(state, 'player', 'speed');
       playSFX_speed();
     } else if (e.type === 'armored') {
-      if (state.saturn) {grantSaturnShield(state, 'player', KILL_SHIELD_HP);if(e.saturnSnowballKill)grantSaturnShield(state,'ruby',KILL_SHIELD_HP);}
-      else state.playerShieldHP = Math.max(state.playerShieldHP, KILL_SHIELD_HP);
+      state.playerShieldHP = stackKillShield(state.playerShieldHP, KILL_SHIELD_HP);
       showRewardEffect(state, 'player', 'shield');
       playSFX_rubyToggle();
     } else if (e.type === 'healer') {
@@ -3662,13 +4028,12 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
       }
       playSFX_teleport();
     } else if (e.type === 'shielder') {
-      if (state.saturn) grantSaturnShield(state, 'ruby', KILL_SHIELD_HP);
-      else state.rubyShieldHP = Math.max(state.rubyShieldHP, KILL_SHIELD_HP);
+      state.rubyShieldHP = stackKillShield(state.rubyShieldHP, KILL_SHIELD_HP);
       showRewardEffect(state, 'ruby', 'shield');
       playSFX_rubyToggle();
     } else if (e.type === 'bleeder') {
       // the curse was lifted at the start of killEnemy; now a short regeneration
-      state.regenUntil = state.gameTick + BLEEDER.regenTicks; showRewardEffect(state, 'player', 'heal'); playSFX_special('regen');
+      state.regenUntil = state.gameTick + BLEEDER.regenTicks; showRewardEffect(state, 'player', 'heal');
     } else if (e.type === 'shooter') {
       state.bulletStunUntil = state.gameTick + SHOOTER.rewardTicks; showRewardEffect(state, 'player', 'stun');
     } else if (e.type === 'impostor') {
@@ -3683,8 +4048,23 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
         state.build.decoy = { x: (e.tileX + .5) * TILE_SIZE, y: (e.tileY + .5) * TILE_SIZE, tileX: e.tileX, tileY: e.tileY, ticks: IMPOSTOR.rewardDecoyTicks, free: true };
         state.enemies.forEach(enemy => enemy.pathTimer = 0);
       }
+    } else if (e.type === 'reflector') {
+      state.rubyCopyUntil = state.gameTick + REFLECTOR.rewardTicks; showRewardEffect(state, 'ruby', 'stun'); playSFX_special('empower');
+    } else if (e.type === 'grappler') {
+      state.ccImmuneUntil=state.gameTick+GRAPPLER.rewardTicks;
+      state.playerKnockback=null;state.playerFrozenTicks=0;state.playerStunned=false;
+      if(state.gaia)state.gaia.snaredTicks=0;
+      showRewardEffect(state,'player','shield');playSFX_special('empower');
+    } else if (e.type === 'jammer') {
+      state.jammerWaveReady=true;
+      showRewardEffect(state,'player','stun');playSFX_special('empower');
+    } else if (e.type === 'dropper') {
+      state.heavyImpactUntil = state.gameTick + DROPPER.rewardTicks;
+      showRewardEffect(state, 'player', 'stun'); playSFX_special('empower');
+    } else if (e.type === 'trapper') {
+      state.explosiveBulletsUntil = state.gameTick + TRAPPER.rewardTicks; showRewardEffect(state, 'player', 'electric'); playSFX_special('empower');
     } else if (e.type === 'snatcher') {
-      state.rubyShieldHP = Math.max(state.rubyShieldHP, SNATCHER.rewardRubyShield); showRewardEffect(state, 'ruby', 'shield'); playSFX_special('rubyBack');
+      state.rubyShieldHP = stackKillShield(state.rubyShieldHP, SNATCHER.rewardRubyShield); showRewardEffect(state, 'ruby', 'shield'); playSFX_special('rubyBack');
     } else if (e.type === 'enchanter') {
       state.empoweredUntil = state.gameTick + ENCHANTER.rewardTicks; showRewardEffect(state, 'player', 'stun'); playSFX_special('empower');
     } else if (e.type === 'lancer') {
@@ -3722,6 +4102,8 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
     }
   }
 
+  if(e.type==='blinker'&&e.blinkOnDeath)warpPlayerFromBlinker(state);
+  if (e.type === 'trapper' && state.mines) state.mines = state.mines.filter(m => m.ownerId !== e.id); // its mines go with it
   buildDeathField(state,e);
   if(!fromMeteor)blessingDeath(state,e);
 
@@ -3730,7 +4112,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
   if (isBossType(e.type)) {
     state.bossesKilled++;
     recordBoss(e.type, state);
-    if (state.trial) { state.gamePhase = 'won'; clearSunEncounter(state); clearJupiterEncounter(state); clearSaturnEncounter(state); } // defeating the guardian clears the trial
+    if (state.trial) { state.gamePhase = 'won'; clearSunEncounter(state); clearJupiterEncounter(state); clearSaturnEncounter(state); clearBinaryEncounter(state); clearSiriusEncounter(state); clearSingularityMaws(state); clearVenusEncounter(state); } // defeating the guardian clears the trial
     offerConstellation(state);
     offerCelestialBlessing(state);
     if (state.bossesKilled === SPECIAL_UNLOCK_KILLS) announceAscension(state);
@@ -3743,7 +4125,7 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
     showRewardEffect(state, 'player', 'restore');
     showRewardEffect(state, 'ruby', 'restore');
     addStarEnergy(state,STAR_ENERGY_MAX,false);
-    if(state.bossesKilled>=SPECIAL_UNLOCK_KILLS)playCelestialSound('ready');else playSFX_powerUp();
+    if(state.bossesKilled>=SPECIAL_UNLOCK_KILLS)playCelestialSound('ready');
     if (e.type === 'splitter_queen') {
       clearMoonIllusions(state);
       // Killing the real Queen instantly dissolves any echoes she left behind
@@ -3775,10 +4157,36 @@ export function killEnemy(state: GameState, idx: number, fromMeteor = false, sup
   else playSFX_alienDeath();
 }
 
+/** Current phase health combines every living body; dead bodies retain their place in its capacity. */
+export function singularityTrialHealth(state: GameState) {
+  const trial = state.trial?.devourer;
+  const bodies = state.enemies.filter(e => e.type === 'devourer' && e.hp > 0 && (e.encounterId ?? e.id) === trial?.encounterId);
+  return { hp: bodies.reduce((n,e)=>n+e.hp,0), max: (trial?.defeatedMaxHp ?? 0) + bodies.reduce((n,e)=>n+e.maxHp,0), bodies: bodies.length };
+}
+
+function moveSingularityBody(state: GameState, e: Enemy): boolean {
+  const gravity = e.singularityPull!, dx=gravity.dx??-1,dy=gravity.dy??0;
+  // Finish the in-flight step first, so suction never snaps a body across cover.
+  if (e.tileX === e.targetTileX && e.tileY === e.targetTileY) {
+    if (gravity.started || !isFloorTile(state.map, e.tileX+dx, e.tileY+dy)) { e.singularityPull = undefined; return false; }
+    e.targetTileX = e.tileX+dx; e.targetTileY = e.tileY+dy; e.stepProgress = 0; gravity.started = true;
+  }
+  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + (gravity.speed??3) * MOVE_SPEED_MULT);
+  e.x = (e.tileX+.5)*TILE_SIZE + (e.targetTileX-e.tileX)*e.stepProgress;
+  e.y = (e.tileY+.5)*TILE_SIZE + (e.targetTileY-e.tileY)*e.stepProgress;
+  if (e.stepProgress >= TILE_SIZE) {
+    e.tileX=e.targetTileX;e.tileY=e.targetTileY;e.stepProgress=0;e.path=[];e.pathTimer=0;
+    if(gravity.started)e.singularityPull=undefined;
+  }
+  return true;
+}
+
 // ─── Player movement ──────────────────────────────────────────────────────────
 
 function updatePlayer(state: GameState) {
-  if (moveSaturnPlayer(state)) return;
+  const ccImmune=playerCCImmune(state);
+  if(ccImmune){state.playerKnockback=null;state.playerFrozenTicks=0;state.playerStunned=false;if(state.gaia)state.gaia.snaredTicks=0;}
+  const resistSlow=(mult:number)=>ccImmune&&mult<1?1:mult;
   // Frozen solid by a Frost Warden ice tile — no movement at all until it wears off
   if (state.playerFrozenTicks > 0 || (state.gaia?.snaredTicks ?? 0) > 0) { // frozen, or held by a Gaia root snare
     state.playerChamber = chamberOfTile(state.playerTileX, state.playerTileY);
@@ -3788,21 +4196,41 @@ function updatePlayer(state: GameState) {
   const chilled = isPlayerChilled(state);
   const boostMultiplier=state.jupiter?.stage==='escape'&&jupiterBoss(state)?JUPITER.raceSpeedBoost:SPEED_MULT;
   const speedMultiplier =
-    (state.speedActiveTicks > 0 ? boostMultiplier :
+    (state.speedActiveTicks > 0 ? boostMultiplier * (state.playerCarryingRuby ? CARRY_BOOST_SPEED_MULT : 1) :
     state.playerCarryingRuby ? PLAYER_CARRY_MULT : 1.0) *
-    (chilled ? (saturnShieldChilled(state) ? SATURN.shieldedChillMult : FROST_CHILL_SPEED_MULT) : 1) * (isPlayerInThorns(state) ? THORN_SLOW_MULT : 1);
+    (chilled ? FROST_CHILL_SPEED_MULT : 1) * (isPlayerInThorns(state) ? resistSlow(THORN_SLOW_MULT) : 1) *
+    ((state.empoweredUntil ?? 0) > state.gameTick ? ENCHANTER.rewardSpeedMult : 1) * // Enchanter kill: Empowered also quickens you
+    (state.trial?.devourer ? gasPlayerSlow(state) : 1); // Singularity: toxic gas slows you
+  if(state.playerKnockback?.hookOwnerId!==undefined) {
+    const owner=state.enemies.find(e=>e.id===state.playerKnockback!.hookOwnerId);
+    if(!owner||owner.hp<=0||owner.hook?.phase!=='pull'||owner.pushTiles>0||(owner.buildStopUntil??0)>state.gameTick)state.playerKnockback=null;
+  }
   const knockback = state.playerKnockback;
-  const baseSpeed = knockback?.started ? PRAYER_KNOCKBACK_SPEED : PLAYER_BASE_SPEED * speedMultiplier * (1 + 0.08 * constellationBonus(state, 'speed')) * neptuneTideSpeed(state) * gaiaPlayerSpeed(state) * jupiterPlayerSpeed(state) * blessingSpeedMultiplier(state);
+  const baseSpeed = knockback?.started ? PRAYER_KNOCKBACK_SPEED * (knockback.hookOwnerId!==undefined ? GRAPPLER.pullSpeedMult : 1) * (knockback.speedMult ?? 1) : PLAYER_BASE_SPEED * speedMultiplier * (1 + 0.08 * constellationBonus(state, 'speed')) * resistSlow(neptuneTideSpeed(state)) * resistSlow(gaiaPlayerSpeed(state)) * resistSlow(jupiterPlayerSpeed(state)) * resistSlow(blessingSpeedMultiplier(state)) * resistSlow(siriusPlayerSpeed(state)) * ((state.stormHasteTicks ?? 0) > 0 ? SPECIAL_REAPER_HASTE : 1);
 
   if (state.playerTileX === state.playerTargetX && state.playerTileY === state.playerTargetY) {
 
     if (knockback && !knockback.carryChecked) {
-      // Carrying Ruby halves every push. Whole tiles only, so the half tile carries over to the next push.
+      // Carrying Ruby halves every push, and Ursa Major halves it again (they stack). Whole tiles only, so the
+      // leftover fraction carries over to the next push (a halved 1-tile push lands every other time).
       knockback.carryChecked = true;
-      if (state.playerCarryingRuby) {
-        const half = (knockback.tilesLeft ?? 1) * CARRY_PUSH_MULT + (state.carryPushRemainder ?? 0), tiles = Math.floor(half + 1e-9);
+      const pushMult = (state.playerCarryingRuby ? CARRY_PUSH_MULT : 1) * (state.constellations.includes('steady') ? URSA_PUSH_MULT : 1);
+      if (pushMult < 1) {
+        const half = (knockback.tilesLeft ?? 1) * pushMult + (state.carryPushRemainder ?? 0), tiles = Math.floor(half + 1e-9);
         state.carryPushRemainder = half - tiles;
         if (tiles <= 0) state.playerKnockback = null; else knockback.tilesLeft = tiles;
+      }
+    }
+    if(knockback?.hookOwnerId!==undefined&&state.playerKnockback) {
+      const owner=state.enemies.find(e=>e.id===knockback.hookOwnerId)!;
+      const dx=owner.tileX-state.playerTileX,dy=owner.tileY-state.playerTileY;
+      if(Math.abs(dx)+Math.abs(dy)<=1)state.playerKnockback=null;
+      else {
+        // Pick adjacent floor steps closest to the locked ray; never use fractional tiles or cut corners.
+        const sx=Math.sign(dx),sy=Math.sign(dy),ray=owner.hook!;
+        const error=(x:number,y:number)=>Math.abs((x+.5-owner.x/TILE_SIZE)*ray.dy-(y+.5-owner.y/TILE_SIZE)*ray.dx);
+        const horizontal=sx!==0&&(sy===0||error(state.playerTileX+sx,state.playerTileY)<=error(state.playerTileX,state.playerTileY+sy));
+        knockback.dirX=horizontal?sx:0;knockback.dirY=horizontal?0:sy;
       }
     }
     if (knockback && state.playerKnockback) {
@@ -3831,7 +4259,7 @@ function updatePlayer(state: GameState) {
       if (qdx !== 0 || qdy !== 0) {
         const ntx = state.playerTileX + qdx;
         const nty = state.playerTileY + qdy;
-        if (isFloorTile(state.map, ntx, nty)) {
+        if (isFloorTile(state.map, ntx, nty) || siriusCanFloat(state, ntx, nty)) { // Sirius Halo: float over walls
           state.playerTargetX = ntx;
           state.playerTargetY = nty;
           state.playerDirX = qdx;
@@ -3844,7 +4272,7 @@ function updatePlayer(state: GameState) {
           state.playerStepProgress=0;state.playerDirX=qdx;state.playerDirY=qdy;
           state.speedActiveTicks=state.speedFlashTicks=0;state.build.wallStepReady=false;
           state.build.impacts.push({x:state.playerX,y:state.playerY,kind:'phase',ticks:18});
-          if(state.frostIceTiles.some(([tx,ty])=>tx===state.playerTileX&&ty===state.playerTileY)||saturnIceAt(state,state.playerTileX,state.playerTileY)){state.playerFrozenTicks=FROST_FREEZE_DURATION;if(state.saturn)freezeSaturnPlayer(state);state.playerQueuedDirX=state.playerQueuedDirY=0;playSFX_frostFreeze();}
+          if(!ccImmune&&(state.frostIceTiles.some(([tx,ty])=>tx===state.playerTileX&&ty===state.playerTileY)||saturnIceAt(state,state.playerTileX,state.playerTileY))){state.playerFrozenTicks=FROST_FREEZE_DURATION;if(state.saturn)freezeSaturnPlayer(state);state.playerQueuedDirX=state.playerQueuedDirY=0;playSFX_frostFreeze();}
         } else if(jupiterDash) state.jupiter!.playerBoost=0;
       }
     }
@@ -3866,7 +4294,7 @@ function updatePlayer(state: GameState) {
       }
 
       // Stepped onto an active Frost Warden ice tile — freeze in place
-      if (state.frostIceTiles.some(([tx, ty]) => tx === state.playerTileX && ty === state.playerTileY) || saturnIceAt(state,state.playerTileX,state.playerTileY)) {
+      if (!ccImmune&&(state.frostIceTiles.some(([tx, ty]) => tx === state.playerTileX && ty === state.playerTileY) || saturnIceAt(state,state.playerTileX,state.playerTileY))) {
         state.playerFrozenTicks = FROST_FREEZE_DURATION;
         if (state.saturn) freezeSaturnPlayer(state);
         state.playerQueuedDirX = 0; state.playerQueuedDirY = 0;
@@ -3883,25 +4311,15 @@ function updatePlayer(state: GameState) {
     const r = state.resources[i];
     if (r.tileX === state.playerTileX && r.tileY === state.playerTileY) {
       if (r.type === 'shield') {
-        if (state.saturn) {
-          grantSaturnShield(state, 'player', SATURN.shardShield);
-          grantSaturnShield(state, 'ruby', SATURN.shardShield);
-          showRewardEffect(state, 'player', 'shield');
-          showRewardEffect(state, 'ruby', 'shield');
-          playSFX_pickup();
-        }
         state.resources.splice(i, 1);
       } else if (r.type === 'health') {
         healPlayer(state, HEAL_AMOUNT);
         state.resources.splice(i, 1);
         playSFX_healPickup();
       } else {
-        const wasMax = state.starEnergy >= STAR_ENERGY_MAX;
-        addStarEnergy(state,ENERGY_AMOUNT*(1+0.2*constellationBonus(state,'energy')));
+        const filled = addStarEnergy(state, ENERGY_AMOUNT * (1 + 0.2 * constellationBonus(state, 'energy')));
         showRewardEffect(state, 'player', 'energy');
-        if (!wasMax && state.starEnergy >= STAR_ENERGY_MAX) {
-          playSFX_powerUp();
-        } else playSFX_pickup();
+        if (!filled) playSFX_pickup();
         grantInstantSpeedBoost(state, false);
         state.resources.splice(i, 1);
       }
@@ -3913,6 +4331,7 @@ function updatePlayer(state: GameState) {
 
 /** Comet and Shooter stun: reuses the freeze lock (no moving, attacking or casting). An ice freeze already running keeps its look. */
 export function stunPlayer(state: GameState, ticks: number) {
+  if(playerCCImmune(state))return;
   if (state.gamePhase !== 'playing') return;
   if (state.playerFrozenTicks <= 0) state.playerStunned = true;
   state.playerFrozenTicks = Math.max(state.playerFrozenTicks, ticks);
@@ -3922,11 +4341,37 @@ export function stunPlayer(state: GameState, ticks: number) {
 function updateEnemyShots(state: GameState) {
   const shots = state.enemyShots ??= [];
   for (let i = shots.length - 1; i >= 0; i--) {
-    const shot = shots[i];
+    const shot = shots[i], previousX=shot.x, previousY=shot.y;
     shot.x += shot.dx; shot.y += shot.dy; shot.ticks++;
     const tx = Math.floor(shot.x / TILE_SIZE), ty = Math.floor(shot.y / TILE_SIZE);
-    if (!isFloorTile(state.map, tx, ty)) { shots.splice(i, 1); continue; }
+    if (!isFloorTile(state.map, tx, ty)) { if(shot.flare)igniteSpitterTile(state,previousX,previousY);if(shot.spore)gaiaSporeImpact(state,previousX,previousY);shots.splice(i, 1); continue; }
     const owner = state.enemies.find(en => en.id === shot.ownerId && en.hp > 0), cfg = ENEMY_CONFIGS.shooter, reach = SHOOTER.hitRadius * TILE_SIZE;
+    if (shot.spore) {
+      const impact = () => { gaiaSporeImpact(state, shot.x, shot.y); shots.splice(i, 1); };
+      if (Math.hypot(shot.x-state.playerX,shot.y-state.playerY) <= TILE_SIZE*.3) {
+        damagePlayer(state, ENEMY_CONFIGS.sporeling.damageToPlayer, owner);
+        if (state.gaia && !state.enemyDecoyActive && !playerCCImmune(state)) state.gaia.sporeSlowTicks = Math.max(state.gaia.sporeSlowTicks ?? 0, GAIA_SPORE_SHOT.slowTicks);
+        impact(); continue;
+      }
+      if (state.rubyTileX !== -1 && !state.playerCarryingRuby && Math.hypot(shot.x-(state.rubyTileX+.5)*TILE_SIZE,shot.y-(state.rubyTileY+.5)*TILE_SIZE) <= TILE_SIZE*.3) {
+        damageRuby(state, ENEMY_CONFIGS.sporeling.damageToRuby, owner); impact(); continue;
+      }
+      if (shot.ticks >= GAIA_SPORE_SHOT.life) impact();
+      continue;
+    }
+    if (shot.flare) {
+      if (shot.ticks >= SUN.spitter.shotLife) { igniteSpitterTile(state,shot.x,shot.y);shots.splice(i,1); continue; }
+      if (Math.hypot(shot.x-state.playerX,shot.y-state.playerY)<=TILE_SIZE*.3) {
+        damagePlayer(state,ENEMY_CONFIGS.flare_spitter.damageToPlayer,owner);if(state.gamePhase==='playing')stunPlayer(state,SUN.spitter.hitStun);igniteSpitterTile(state,shot.x,shot.y);if(state.sun)(state.sun.spitterHits??=[]).push({x:state.playerX,y:state.playerY,ticks:24});shots.splice(i,1);continue;
+      }
+      if(state.rubyTileX!==-1&&!state.playerCarryingRuby&&Math.hypot(shot.x-(state.rubyTileX+.5)*TILE_SIZE,shot.y-(state.rubyTileY+.5)*TILE_SIZE)<=TILE_SIZE*.3){damageRuby(state,ENEMY_CONFIGS.flare_spitter.damageToRuby,owner);igniteSpitterTile(state,shot.x,shot.y);shots.splice(i,1);}
+      continue;
+    }
+    if (shot.mirror) { // a bullet bounced off a Reflector: hurts only you, no stun
+      if (Math.hypot(shot.x - state.playerX, shot.y - state.playerY) <= reach) { damagePlayer(state, REFLECTOR.bulletDamage, owner); playSFX_special('orbRuby'); shots.splice(i, 1); }
+      else if (shot.ticks > 240) shots.splice(i, 1);
+      continue;
+    }
     if (Math.hypot(shot.x - state.playerX, shot.y - state.playerY) <= reach) {
       damagePlayer(state, cfg.damageToPlayer, owner);
       if (!state.enemyDecoyActive) stunPlayer(state, SHOOTER.stunTicks);
@@ -3937,6 +4382,76 @@ function updateEnemyShots(state: GameState) {
       damageRuby(state, cfg.damageToRuby, owner); playSFX_special('orbRuby'); shots.splice(i, 1);
     }
   }
+}
+
+/** Trapper mines: arm, fuse when the player steps on one, then blast; they fade after TRAPPER.lifeTicks. */
+function updateMines(state: GameState) {
+  const mines = state.mines ??= [];
+  for (let i = mines.length - 1; i >= 0; i--) {
+    const m = mines[i], cx = (m.tileX + .5) * TILE_SIZE, cy = (m.tileY + .5) * TILE_SIZE;
+    m.ticks++;
+    if (m.fuse === undefined) {
+      if (m.ticks >= TRAPPER.lifeTicks) { mines.splice(i, 1); continue; }
+      if (m.ticks >= TRAPPER.armTicks && state.gamePhase === 'playing' && Math.hypot(state.playerX - cx, state.playerY - cy) <= TRAPPER.triggerRange * TILE_SIZE) {
+        m.fuse = TRAPPER.fuseTicks; playAudioOneShot('/sounds/bomb-ready.wav', .3, 1.4);
+      }
+      continue;
+    }
+    if (--m.fuse > 0) continue;
+    mines.splice(i, 1);
+    const owner = state.enemies.find(e => e.id === m.ownerId && e.hp > 0), r = TRAPPER.radius;
+    state.bombBlasts.push({ cx, cy, radius: 0, maxRadius: r * TILE_SIZE, ticks: 28, trap: true });
+    playAudioOneShot('/sounds/bombExplode.wav', .832 * ATTACK_SFX_VOLUME, 1.35); // your bomb's sound, pitched up
+    state.screenShakeTicks = Math.max(state.screenShakeTicks, 10); state.screenShakeAmt = Math.max(state.screenShakeAmt, 5);
+    if (Math.hypot(state.playerX - cx, state.playerY - cy) <= r * TILE_SIZE) damagePlayer(state, TRAPPER.damage, owner);
+    if (state.rubyTileX !== -1 && !state.playerCarryingRuby && tileEuclidDist(state.rubyTileX, state.rubyTileY, m.tileX, m.tileY) <= r) damageRuby(state, TRAPPER.rubyDamage, owner);
+    for (const e of [...state.enemies]) {
+      if (!state.enemies.includes(e) || isBossType(e.type) || e.hp <= 0 || tileEuclidDist(e.tileX, e.tileY, m.tileX, m.tileY) > r) continue;
+      damageEnemy(state, e, TRAPPER.alienDamage, 'enemy');
+      if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e));
+    }
+  }
+}
+
+/** Reflector mirrors: the first mirror the segment (x0,y0)->(x1,y1), in tile units, crosses from its front, with the
+ *  crossing point; null if none. Each mirror is a 3-tile plate across the Reflector's facing edge. */
+export function mirrorCrossing(state: GameState, x0: number, y0: number, x1: number, y1: number): { e: Enemy; x: number; y: number } | null {
+  let best: { e: Enemy; x: number; y: number } | null = null, bestT = Infinity;
+  for (const e of state.enemies) {
+    if (e.type !== 'reflector' || e.hp <= 0 || e.faceX === undefined || e.faceY === undefined || (e.mirrorDownUntil ?? 0) > state.gameTick) continue;
+    const fx = e.faceX, fy = e.faceY, mx = e.x / TILE_SIZE + fx * .5, my = e.y / TILE_SIZE + fy * .5;
+    const s0 = (x0 - mx) * fx + (y0 - my) * fy, s1 = (x1 - mx) * fx + (y1 - my) * fy;
+    if (!(s0 > 0 && s1 <= 0)) continue;
+    const t = s0 / (s0 - s1), cx = x0 + (x1 - x0) * t, cy = y0 + (y1 - y0) * t;
+    if (Math.abs((cx - mx) * -fy + (cy - my) * fx) > REFLECTOR.halfWidth || t >= bestT) continue;
+    bestT = t; best = { e, x: cx, y: cy };
+  }
+  return best;
+}
+
+/** A laser that hits a mirror leaves it bent REFLECTOR.bendDegrees to a random side; it hurts the player only if they
+ *  stand in that new path. */
+function bendReflectedLaser(state: GameState, m: Enemy, x: number, y: number, backX: number, backY: number, range: number) {
+  const a = (Math.random() < .5 ? -1 : 1) * REFLECTOR.bendDegrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const rx = backX * cos - backY * sin, ry = backX * sin + backY * cos;
+  let ex = x, ey = y;
+  for (let d = .2; d <= range + .0001; d += .2) { const px = x + rx * d, py = y + ry * d; if (!isFloorTile(state.map, Math.floor(px), Math.floor(py))) break; ex = px; ey = py; }
+  state.laserBeams.push({ fromX: x * TILE_SIZE, fromY: y * TILE_SIZE, dirX: rx, dirY: ry, endX: ex * TILE_SIZE, endY: ey * TILE_SIZE, ticks: 18, powered: false, color: '#dfe8f5' });
+  // Distance from the player to the bent beam's segment, in tiles
+  const px = state.playerX / TILE_SIZE - x, py = state.playerY / TILE_SIZE - y, len = Math.hypot(ex - x, ey - y) || 1;
+  const along = Math.max(0, Math.min(len, px * rx + py * ry)), off = Math.hypot(px - rx * along, py - ry * along);
+  if (off <= REFLECTOR.bendHitRadius) damagePlayer(state, REFLECTOR.laserDamage, m);
+}
+
+/** Any Wave hit, push, pull, stun or slow knocks a Reflector's mirror down for a while. */
+function checkReflectorControl(state: GameState, e: Enemy) {
+  const tick = state.gameTick, base = MOVE_SPEED_MULT * ((e.enchantedUntil ?? 0) > tick ? ENCHANTER.speedMult : 1);
+  const controlled = e.pushTiles > 0 || (e.buildStopUntil ?? 0) > tick || celestialMoveMultiplier(state, e) < base - 1e-6;
+  if (controlled) dropReflectorMirror(state, e);
+  e.mirrorDown = (e.mirrorDownUntil ?? 0) > tick; // for drawing
+}
+export function dropReflectorMirror(state: GameState, e: Enemy) {
+  if (e.type === 'reflector') e.mirrorDownUntil = Math.max(e.mirrorDownUntil ?? 0, state.gameTick + REFLECTOR.mirrorDownTicks);
 }
 
 function cometGap() { return COMET.minGap + Math.floor(Math.random() * (COMET.maxGap - COMET.minGap + 1)); }
@@ -4031,32 +4546,50 @@ function updateMeteorite(state: GameState) {
       playSFX_meteorite();
       // Kill all enemies in that chamber (boss only takes heavy damage)
       for (const e of [...state.enemies].reverse()) {
-        if (!state.enemies.includes(e) || (e.twin?.downedTicks ?? 0) > 0) continue;
+        if (!state.enemies.includes(e) || e.devourer?.merging || e.type === 'water_clone' || (e.twin?.downedTicks ?? 0) > 0) continue;
         if (chamberOfTile(e.tileX, e.tileY) === ch) {
           // An active Frost Warden shield blocks the meteor completely, without
           // draining its absorb pool. Break the shield with attacks first.
-          if (e.icyShieldHP > 0) continue;
+          if (e.icyShieldHP > 0 && !(state.saturn && e.id === state.saturn.bossId)) { // the Frost Warden herself is hit through her shield (below)
+            // Saturn: a meteor breaks her ice instead (it costs her like any broken ice); the alien itself survives.
+            if (state.saturn && !isBossType(e.type)) { const ice = e.icyShieldHP; e.icyShieldHP = 0; saturnShatter(state, ice, e); if (state.gamePhase !== 'playing') return; }
+            continue;
+          }
           if (state.neptune && e.id === state.neptune.bossId) {
             damageEnemy(state, e, NEPTUNE_PHASE_HPS[state.neptune.phase] * NEPTUNE_STRIKE_DAMAGE, 'meteor');
           } else if (state.gaia && e.id === state.gaia.bossId) {
             gaiaStrikeDamage(state, e, GAIA_STRIKE_DAMAGE);
           } else if (state.jupiter && e.id === state.jupiter.bossId) {
-            damageEnemy(state, e, JUPITER.phaseHP * JUPITER.meteorShare, 'meteor');
+            damageEnemy(state, e, JUPITER.phaseHP * JUPITER.meteorShare / jupiterDamageTaken(state, e), 'meteor'); // always 10% of a phase: it ignores his damage reduction
+            if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
+          } else if (state.binary && e.type === 'astral_twins') {
+            // Always 10% of a twin's HP: scaled up front past the bond's cut and the berserk survivor's reduction.
+            damageEnemy(state, e, BINARY.twinHP * BINARY.meteorShare / (binaryDamageTaken(state, e, 'meteor') * (e.twin?.partnerDownTicks ? TWIN_BERSERK_DAMAGE_TAKEN : 1)), 'meteor');
+            if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
+          } else if (state.sirius && e.id === state.sirius.bossId) {
+            damageEnemy(state, e, SIRIUS.phaseHP * SIRIUS.meteorShare, 'meteor'); // not the generic 75%: he is a three-phase guardian
             if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
           } else if (state.saturn && e.id === state.saturn.bossId) {
-            damageEnemy(state, e, e.maxHp / 3 * .1, 'meteor');
+            const ice = e.icyShieldHP; e.icyShieldHP = 0; // always 10% of a phase: her frost shield neither blocks nor absorbs it
+            damageEnemy(state, e, SATURN.phaseHP * SATURN.meteorShare, 'meteor'); e.icyShieldHP = ice;
             if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
           } else if (state.sun && e.id === state.sun.bossId) {
             damageEnemy(state, e, SUN.phaseHP * SUN.meteorShare, 'meteor');
             if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
+          } else if (state.venus && e.id === state.venus.bossId) {
+            // Always 10% of a phase: scaled up front past his shield's cut
+            damageEnemy(state, e, venusBand(state.venus.phase) * VENUS.meteorShare / (e.aegis?.shielded ? AEGIS_DAMAGE_MULT : 1), 'meteor');
+            if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
           } else if (isMoonBoss(state, e)) {
             damageEnemy(state, e, MOON_PHASE_HP * MOON_STRIKE_DAMAGE, 'meteor');
             if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
+          } else if (e.type === 'devourer' && state.trial?.devourer && (e.devourer?.generation ?? 0) === 0) {
+            // Singularity: each phase's original is untouchable by meteors; it always bursts.
           } else if (e.type === 'devourer') {
-            // Every body takes the boss meteor share of the ORIGINAL's max HP, so a meteor usually wipes copies.
-            const share = (state.bossesKilled >= SPECIAL_UNLOCK_KILLS ? BOSS_LATE_METEOR_DMG : BOSS_METEOR_DMG) / 100;
-            damageEnemy(state, e, (e.devourer?.originMaxHp ?? e.maxHp) * share, 'meteor');
-            if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
+            // The whole body is destroyed: no stacks survive to create offspring.
+            if (e.devourer) e.devourer.consumed = true;
+            e.hp = 0;
+            killEnemy(state, state.enemies.indexOf(e), true);
           } else if (e.type === 'aegis_construct') {
             damageEnemy(state, e, e.maxHp * 0.5, 'meteor');
             if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e), true);
@@ -4126,11 +4659,13 @@ export function getMirrorTwinTile(state: GameState): { tileX: number; tileY: num
 }
 
 // Runs an attack from the player and, while Binary Star is active, again from the twin at reduced damage.
+/** The Binary Star copy's damage share: full on the Binary Star map, SPECIAL_TWIN_DAMAGE_MULT elsewhere. */
+const twinDamageMult = (state: GameState) => state.binary ? 1 : SPECIAL_TWIN_DAMAGE_MULT;
 function withMirrorTwin(state: GameState, attack: (tileX: number, tileY: number, mult: number, secondary: boolean) => boolean): boolean {
   let hit = attack(state.playerTileX, state.playerTileY, 1,false);
   const twin = getMirrorTwinTile(state);
-  if (twin) hit = attack(twin.tileX, twin.tileY, SPECIAL_TWIN_DAMAGE_MULT,true) || hit;
-  const copy=rubyBlessingCopy(state);if(copy){const beams=state.laserBeams.length,waves=state.waveEffects.length;hit=attack(copy.tileX,copy.tileY,copy.mult,true)||hit;for(const beam of state.laserBeams.slice(beams))beam.opal=true;for(const wave of state.waveEffects.slice(waves))wave.opal=true;}
+  if (twin) hit = attack(twin.tileX, twin.tileY, twinDamageMult(state),true) || hit;
+  const copy=rubyBlessingCopy(state);if(copy){const beams=state.laserBeams.length,waves=state.waveEffects.length;hit=attack(copy.tileX,copy.tileY,copy.mult,true)||hit;for(const beam of state.laserBeams.slice(beams))beam.opal=copy.opal;for(const wave of state.waveEffects.slice(waves))wave.opal=copy.opal;}
   return hit;
 }
 
@@ -4151,7 +4686,6 @@ function pullLaserGroup(state: GameState, hitIds: Set<number>) {
 
 export function useLaser(state: GameState) {
   if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
-  if (cancelSnowball(state)) return;
   if (state.laserCooldown > 0) return;
   const refreshBefore=state.build.siriusRefreshSerial??0;
   blessingAttack(state,'laser');
@@ -4175,6 +4709,7 @@ export function useLaser(state: GameState) {
       for(let distance=.2;distance<=remaining+.0001;distance+=.2){
         const px=startX+rx*distance,py=startY+ry*distance,tx=Math.floor(px),ty=Math.floor(py);
         if(!isFloorTile(state.map,tx,ty))break;
+        if(mirrorCrossing(state,px-rx*.2,py-ry*.2,px,py))break; // a Reflector's mirror stops the ricochet
         endX=px;endY=py;
         const key=ty*MAP_COLS+tx;
         if(!tiles.has(key)){tiles.add(key);if(!mirror&&isMoonMirror(state,tx,ty)){moonReflect(state,tx,ty,damage);break;}gaiaClearTile(state,tx,ty,1);}
@@ -4198,6 +4733,15 @@ export function useLaser(state: GameState) {
           if(wide&&!pierced&&nx>0&&ny>0&&nx<MAP_COLS-1&&ny<MAP_ROWS-1&&state.map[ny]?.[nx]===T_WALL){pierced=true;tx=nx;ty=ny;continue;}
           if(!state.constellations.includes('ricochet')||bounced)break;
           finishSegment();bounced=true;reflect(tx+.5,ty+.5,dx,dy,range-r+2,dmg*.5);break;
+        }
+        const crossed=mirrorCrossing(state,tx+.5,ty+.5,nx+.5,ny+.5);
+        if(crossed){ // a Reflector's mirror stops the beam and sends it straight back
+          crossed.e.flashTicks=6;
+          const hitX=crossed.x*TILE_SIZE,hitY=crossed.y*TILE_SIZE;
+          state.laserBeams.push({fromX:segmentX,fromY:segmentY,dirX:dx,dirY:dy,endX:hitX,endY:hitY,ticks:18,powered,width:beamWidth,buildDamage:dmg});
+          if(!mirror)bendReflectedLaser(state,crossed.e,crossed.x,crossed.y,-dx,-dy,range);
+          playAudioOneShot('/sounds/laserBeam.mp3',.266,1.3);
+          bounced=true;break;
         }
         tx=nx;ty=ny;
         if(!mirror&&isMoonMirror(state,tx,ty)){moonReflect(state,tx,ty,dmg);break;}
@@ -4243,19 +4787,19 @@ export function pressCharge(state: GameState) {
 // Directly fire wave without charge count — used for hold-left-click and keyboard K
 export function activateWave(state: GameState) {
   if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
-  if (cancelSnowball(state)) return;
   if (state.waveCooldown > 0) return;
   fireWave(state);
 }
 
-function fireWave(state: GameState) {
+function fireWave(state: GameState, teleportBurst = false) {
   stopChargeSound();
   const refreshBefore=state.build.siriusRefreshSerial??0;
   blessingAttack(state,'wave');
-  const powered = checkAndConsumePower(state);
-  const radius = (powered ? WAVE_RADIUS_PWR : WAVE_RADIUS) + constellationBonus(state, 'waveReach');
-  const dmg = (powered ? WAVE_DMG_PWR : WAVE_DMG) * (1 + 0.25 * constellationBonus(state, 'wave'));
-  const push = (powered ? WAVE_PUSH_TILES_PWR : WAVE_PUSH_TILES) + constellationBonus(state, 'waveReach');
+  const powered = teleportBurst ? state.poweredTicks > 0 : checkAndConsumePower(state);
+  const heavyImpact=(state.heavyImpactUntil??0)>state.gameTick;
+  const radius = (powered ? WAVE_RADIUS_PWR : WAVE_RADIUS) + constellationBonus(state, 'waveReach') + (teleportBurst ? JAMMER.rewardRadius : 0) + (heavyImpact ? DROPPER.rewardRadius : 0);
+  const dmg = (powered ? WAVE_DMG_PWR : WAVE_DMG) * (1 + 0.25 * constellationBonus(state, 'wave')) * (heavyImpact?DROPPER.rewardWaveDamage:1) * (teleportBurst?JAMMER.rewardDamage:1);
+  const push = (powered ? WAVE_PUSH_TILES_PWR : WAVE_PUSH_TILES) + constellationBonus(state, 'waveReach') + (heavyImpact?DROPPER.rewardPush:0);
 
   const waveHit = withMirrorTwin(state, (originX, originY, mult, secondary) => {
     state.waveEffects.push({
@@ -4269,7 +4813,7 @@ function fireWave(state: GameState) {
       if (!state.enemies.includes(e) || (e.twin?.downedTicks ?? 0) > 0) continue;
       const dist = tileEuclidDist(e.tileX, e.tileY, originX, originY);
       if (dist <= radius) {
-        damageEnemy(state, e, dmg * mult,'player',!secondary?3:0); buildWaveHit(state,e,dmg*mult); hit = true;
+        damageEnemy(state, e, dmg * mult,'player',!secondary?3:0); buildWaveHit(state,e,dmg*mult); dropReflectorMirror(state, e); hit = true;
         chainElectric(state, e);
         const edx = e.tileX - originX;
         const edy = e.tileY - originY;
@@ -4287,9 +4831,11 @@ function fireWave(state: GameState) {
   if(state.constellations.includes('waveEcho'))state.build.echoes.push({x:state.playerX,y:state.playerY,radius,damage:dmg*.4,ticks:120}); // Eridanus: echo 2s later
   if(state.constellations.includes('rubyWave')&&state.rubyTileX>=0)emitBuildWave(state,(state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE,Math.max(1,radius*.6),dmg*.35);
   if(state.constellations.includes('waveLaser'))state.build.waveLaserReady=true;
-  state.chargeCount = 0;
-  state.build.quickWave=false;
-  state.waveCooldown = (state.build.siriusRefreshSerial??0)!==refreshBefore?0:WAVE_COOLDOWN * (state.constellations.includes('waveRate') ? 0.85 : 1);
+  if(!teleportBurst) {
+    state.chargeCount = 0;
+    state.build.quickWave=false;
+    state.waveCooldown = (state.build.siriusRefreshSerial??0)!==refreshBefore?0:WAVE_COOLDOWN * (state.constellations.includes('waveRate') ? 0.85 : 1);
+  }
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 8);
   state.screenShakeAmt = Math.max(state.screenShakeAmt, 3);
   playSFX_wave();
@@ -4314,7 +4860,6 @@ export function playSFX_placeBomb() { playAudioOneShot('/sounds/place_bomb.wav',
 
 export function useBomb(state: GameState) {
   if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
-  if (cancelSnowball(state)) return;
   if (state.bomb === null) {
     if (state.bombCooldown > 0) return; // still on cooldown from last explosion
     const powered = checkAndConsumePower(state);
@@ -4371,11 +4916,11 @@ function detonateBomb(state:GameState) {
     let bombHit = blastAt(bx, by, 1);
     // The twin answers the detonation with its own blast where it stands; it never hurts the player.
     const twin = getMirrorTwinTile(state);
-    if (twin) bombHit = blastAt(twin.tileX, twin.tileY, SPECIAL_TWIN_DAMAGE_MULT,true) || bombHit;
-    const copy=rubyBlessingCopy(state);if(copy){const first=state.bombBlasts.length;bombHit=blastAt(copy.tileX,copy.tileY,copy.mult,true)||bombHit;for(const blast of state.bombBlasts.slice(first))blast.opal=true;}
+    if (twin) bombHit = blastAt(twin.tileX, twin.tileY, twinDamageMult(state),true) || bombHit;
+    const copy=rubyBlessingCopy(state);if(copy){const first=state.bombBlasts.length;bombHit=blastAt(copy.tileX,copy.tileY,copy.mult,true)||bombHit;for(const blast of state.bombBlasts.slice(first))blast.opal=copy.opal;}
     if (bombHit) playSFX_alienHit();
-    // Damage player if in blast radius (own bomb hurts you)
-    if (tileEuclidDist(state.playerTileX, state.playerTileY, bx, by) <= radius) {
+    // Damage player if in blast radius (own bomb hurts you), unless Scutum is taken
+    if (!state.constellations.includes('bombSafe') && tileEuclidDist(state.playerTileX, state.playerTileY, bx, by) <= radius) {
       damagePlayer(state, Math.floor(dmg * 0.35));
     }
     state.bomb = null;
@@ -4408,12 +4953,29 @@ export function toggleCarryRuby(state: GameState) {
   }
 }
 
+/** A defeated Blinker displaces the player without triggering pad benefits or dropping carried Ruby. */
+function warpPlayerFromBlinker(state: GameState) {
+  if(playerCCImmune(state))return;
+  if(state.gamePhase!=='playing')return;
+  const tiles=[0,1,2,3].flatMap(room=>freeChamberTiles(state,room)).filter(([tx,ty])=>
+    (tx!==Math.floor(state.playerX/TILE_SIZE)||ty!==Math.floor(state.playerY/TILE_SIZE))
+    && !(tx===state.rubyTileX&&ty===state.rubyTileY)
+    && !state.enemies.some(e=>e.hp>0&&Math.floor(e.x/TILE_SIZE)===tx&&Math.floor(e.y/TILE_SIZE)===ty));
+  if(!tiles.length)return;
+  const [tx,ty]=tiles[Math.floor(Math.random()*tiles.length)],fromX=state.playerX,fromY=state.playerY;
+  state.playerTileX=state.playerTargetX=tx;state.playerTileY=state.playerTargetY=ty;
+  state.playerX=(tx+.5)*TILE_SIZE;state.playerY=(ty+.5)*TILE_SIZE;
+  state.playerStepProgress=0;state.playerKnockback=null;state.playerQueuedDirX=state.playerQueuedDirY=0;
+  state.playerChamber=chamberOfTile(tx,ty);
+  state.blinkerWarp={fromX,fromY,x:state.playerX,y:state.playerY,until:state.gameTick+BLINKER.warpTicks};
+  state.enemies.forEach(e=>e.pathTimer=0);
+  playSFX_teleport();
+}
+
 export function doTeleport(state: GameState, chamberIdx: number) {
   if (state.gamePhase !== 'teleporting') return;
   if (!state.teleportDestOptions.includes(chamberIdx)) return;
-  const [tx, ty] = [10, 39, 10, 39][chamberIdx] !== undefined
-    ? ([[10,10],[39,10],[10,39],[39,39]] as [number,number][])[chamberIdx]
-    : ([10, 10] as [number,number]);
+  const [tx, ty] = TELEPORT_PADS[chamberIdx] ?? TELEPORT_PADS[0]; // the active layout's pad for that chamber
 
   leaveQueenBlessingDecoy(state);
   if(state.constellations.includes('teleportDecoy')){
@@ -4429,7 +4991,7 @@ export function doTeleport(state: GameState, chamberIdx: number) {
   state.playerChamber = chamberIdx;
   state.gamePhase = 'playing';
   state.teleportDestOptions = [];
-  state.teleportCooldown = 0;
+  state.teleportCooldown = TELEPORT_COOLDOWN;
   playSFX_teleport();
 
   // Carrying the ruby through a teleport auto-places it on the destination pad.
@@ -4443,6 +5005,11 @@ export function doTeleport(state: GameState, chamberIdx: number) {
   // Every teleport grants a free speed burst (no cooldown interaction), not just ones
   // made while carrying the ruby.
   grantInstantSpeedBoost(state, false, false);
+  if(state.jammerWaveReady) {
+    state.jammerWaveReady=false;
+    fireWave(state,true);
+    state.teleportCooldown=0; // Jammer kill: the teleport is ready again at once
+  }
 }
 
 // A pad works from its own tile or any of the eight tiles around it.
@@ -4453,16 +5020,35 @@ export function isNearTeleportPad(state: GameState): boolean {
   return false;
 }
 
+/** Shared tile membership keeps the interference footprint and teleport rule identical. */
+export function jammerCoversTile(enemy:Enemy,tx:number,ty:number):boolean {
+  return enemy.type==='jammer'&&enemy.hp>0&&Math.hypot((tx+.5)*TILE_SIZE-enemy.x,(ty+.5)*TILE_SIZE-enemy.y)<=JAMMER.radius*TILE_SIZE;
+}
+export function teleportJammed(state:Readonly<GameState>):boolean {
+  if(playerCCImmune(state))return false;
+  const tx=Math.floor(state.playerX/TILE_SIZE),ty=Math.floor(state.playerY/TILE_SIZE);
+  return state.enemies.some(enemy=>jammerCoversTile(enemy,tx,ty));
+}
+
+function updateJammerEntry(state:GameState) {
+  const active=teleportJammed(state);
+  if(active&&!state.jammerWasActive) {
+    // The low buzz and detuned denial chirp belong to Effects, not the attack channel.
+    playTone(130,.2,.06,'sawtooth');
+    try{const sound=gameAudio('/sounds/celestial/empty-charge.wav','effects');sound.volume=.38;sound.playbackRate=.8;sound.preservesPitch=false;sound.play().catch(()=>{});}catch{}
+  }
+  state.jammerWasActive=active;
+}
+
 // Opens the teleport screen when the player is on or next to a pad.
 export function tryActivateTeleport(state: GameState): boolean {
   if (state.gamePhase !== 'playing') return false;
-  if (state.teleportCooldown > 0 || (state.saturn && state.playerFrozenTicks > 0)) return false;
+  if (state.teleportCooldown > 0 || teleportJammed(state) || (state.saturn && state.playerFrozenTicks > 0)) return false;
 
   if (!isNearTeleportPad(state)) return false;
   const chamberIdx = state.playerChamber;
-  const destinations = [0, 1, 2, 3].filter(c => c !== chamberIdx);
+  const destinations = CHAMBER_BOUNDS.map((_, c) => c).filter(c => c !== chamberIdx); // every chamber of the active layout
   state.teleportDestOptions = destinations;
-  cancelSnowball(state);
   state.gamePhase = 'teleporting';
   return true;
 }
@@ -4479,7 +5065,7 @@ export function canHealRuby(state: GameState): boolean {
     if (dist > RUBY_HEAL_RANGE) return false;
   }
   for (const e of state.enemies) {
-    if (e.type === 'fish_blue' || e.type === 'fish_red' || e.type === 'lifebloom' || e.type === 'cinder_wisp' || e.type === 'scorch_sapper' || (e.type === 'emberling' && e.extinguished)) continue; // fish, lifeblooms and sappers never stop healing
+    if (e.type === 'fish_blue' || e.type === 'fish_red' || e.type === 'lifebloom' || e.type === 'cinder_wisp' || e.type === 'scorch_sapper' || (e.type === 'emberling' && e.extinguished) || (e.type === 'sand_scorpion' && duneWormHidden(e))) continue; // fish, lifeblooms, sappers and buried Sand Scorpions never stop healing
     if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= RUBY_HEAL_CLEAR_RANGE) return false;
   }
   return true;
@@ -4504,7 +5090,6 @@ export function cancelTeleport(state: GameState) {
   if (state.gamePhase !== 'teleporting') return;
   state.gamePhase = 'playing';
   state.teleportDestOptions = [];
-  state.teleportCooldown = 0;
 }
 
 function takeNextNaturalBoss(state: GameState): BossType {
@@ -4565,7 +5150,7 @@ export function countBossEncounters(state:GameState,ignore?:Enemy):number {
 }
 
 export function tick(state: GameState) {
-  if (state.gamePhase !== 'playing') { if (state.saturn?.charging) cancelSnowball(state); if (state.sun) state.sun.charging = false; pauseAmbientEventSounds(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); return; }
+  if (state.gamePhase !== 'playing') { if (state.sun) state.sun.charging = false; pauseAmbientEventSounds(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); return; }
 
   prepareBlessingChoice(state);
   if(state.gamePhase!=='playing'){pauseAmbientEventSounds();stopChargeSound();stopPoisonSound();stopSingularitySound();stopGaiaFieldSound();return;}
@@ -4618,11 +5203,12 @@ export function tick(state: GameState) {
   const chilledNow = isPlayerChilled(state);
   if (chilledNow && !state.playerChilledPrev) playSFX_frostFieldEnter();
   state.playerChilledPrev = chilledNow;
-  const chillRate = chilledNow ? (saturnShieldChilled(state) ? SATURN.shieldedChillMult : FROST_CHILL_TICK_RATE) : 1;
+  const chillRate = chilledNow ? FROST_CHILL_TICK_RATE : 1;
   if (state.laserCooldown > 0) state.laserCooldown -= chillRate;
   if (state.bulletCooldown > 0) state.bulletCooldown -= chillRate;
-  if (state.waveCooldown > 0) state.waveCooldown -= chillRate;
+  if (state.waveCooldown > 0) state.waveCooldown = Math.max(0, state.waveCooldown - chillRate / ((state.heavyImpactUntil ?? 0) > state.gameTick ? DROPPER.rewardCooldownMult : 1));
   if (state.speedCooldown > 0) state.speedCooldown--;
+  if ((state.stormHasteTicks ?? 0) > 0) state.stormHasteTicks!--;
   if (state.bombCooldown > 0 && --state.bombCooldown === 0) playUiSfx('bombReady'); // the bomb is ready again
   if (state.speedActiveTicks > 0) {
     state.speedActiveTicks--;
@@ -4734,8 +5320,9 @@ export function tick(state: GameState) {
     }
   }
 
+  if (state.trial?.devourer) { updateSingularityMaws(state); if ((state as GameState).gamePhase !== 'playing') return; }
   // Minor events use the real player position before any Lunar AI substitution.
-  const ambientResult = state.trial?.mapOnly || state.saturn ? false : updateAmbientEvents(state);
+  const ambientResult = state.trial || state.mode === 'gambit' ? false : updateAmbientEvents(state); // no space events (black hole, shooting star, eclipse, Supernova) on any challenge map
   if (ambientResult === 'supernova') detonateSupernova(state);
   if ((state as GameState).gamePhase === 'lost') return;
   if (ambientResult === true) {
@@ -4744,17 +5331,17 @@ export function tick(state: GameState) {
     state.stellarPowerBonusTicks = Math.max(state.stellarPowerBonusTicks, 120);
     grantInstantSpeedBoost(state, false);
     showRewardEffect(state, 'player', 'energy');
-    playSFX_powerUp();
   }
 
   // Player movement + resource pickup
   updatePlayer(state);
 
   // Enemy spawning
-  const spawnRegularAliens = !state.noMobs && !state.jupiter && !state.saturn;
+  const spawnRegularAliens = !state.noMobs && !state.jupiter && !state.saturn && !state.sirius && !state.trial?.devourer; // the Singularity has only Lost Souls
   if (spawnRegularAliens) state.spawnTimer++;
   const tier = DIFFICULTY_TIERS[Math.min(state.difficultyLevel, DIFFICULTY_TIERS.length - 1)];
-  if (spawnRegularAliens && state.spawnTimer >= tier.spawnInterval * (state.gaia ? GAIA_SPAWN_RATE : 1)) {
+  const alienSpawnInterval = tier.spawnInterval * (state.gaia ? GAIA_SPAWN_RATE : state.sun ? 1 / SUN.alienSpawnRate : 1);
+  if (spawnRegularAliens && state.spawnTimer >= alienSpawnInterval) {
     state.spawnTimer = 0;
     spawnEnemy(state);
   }
@@ -4770,7 +5357,8 @@ export function tick(state: GameState) {
   } else stopPoisonSound();
 
   // Meteorite
-  if (!state.trial?.mapOnly) updateMeteorite(state);
+  if (!state.trial?.mapOnly && state.mode !== 'gambit') updateMeteorite(state);
+  if (state.gambit) updateGambit(state);
   if (state.craterField) { // Crater: heal the player standing in the struck room, in short pulses
     if (--state.craterField.ticks <= 0 || !state.constellations.includes('meteorHeal')) state.craterField = null;
     else if (state.gameTick % CRATER.pulseTicks === 0) {
@@ -4790,6 +5378,7 @@ export function tick(state: GameState) {
   }
 
   updateEnemyShots(state);
+  updateMines(state);
 
   // Update bullets
   for (let i = state.laserBullets.length - 1; i >= 0; i--) {
@@ -4802,10 +5391,19 @@ export function tick(state: GameState) {
       state.laserBullets.splice(i, 1);
       continue;
     }
-    const dmg = b.blessingDamage ?? (b.powered ? BULLET_DMG_PWR : BULLET_DMG) * (1 + 0.25 * constellationBonus(state, 'bullets')) * (b.mirror ? SPECIAL_TWIN_DAMAGE_MULT : 1) * (b.damageScale??1) * ((state.bulletStunUntil ?? 0) > state.gameTick ? SHOOTER.rewardBulletMult : 1);
+    const dmg = b.blessingDamage ?? (b.powered ? BULLET_DMG_PWR : BULLET_DMG) * (1 + 0.25 * constellationBonus(state, 'bullets')) * (b.mirror ? twinDamageMult(state) : 1) * (b.damageScale??1) * ((state.bulletStunUntil ?? 0) > state.gameTick ? SHOOTER.rewardBulletMult : 1);
     const btx = Math.floor(b.x), bty = Math.floor(b.y);
     if (!b.mirror && isMoonMirror(state, btx, bty) && (btx !== state.playerTileX || bty !== state.playerTileY)) {
       moonReflect(state, btx, bty, dmg); state.laserBullets.splice(i, 1); continue; // bounced back into you
+    }
+    const crossed = mirrorCrossing(state, b.x - b.dx, b.y - b.dy, b.x, b.y);
+    if (crossed) { // a Reflector's mirror bounces it back (decoy shots just stop)
+      const m = crossed.e, len = Math.hypot(b.dx, b.dy) || 1, vx = b.dx / len, vy = b.dy / len, dot = vx * m.faceX! + vy * m.faceY!;
+      if (!b.blessingDecoy) {
+        (state.enemyShots ??= []).push({ x: crossed.x * TILE_SIZE, y: crossed.y * TILE_SIZE, dx: (vx - 2 * dot * m.faceX!) * REFLECTOR.shotSpeed, dy: (vy - 2 * dot * m.faceY!) * REFLECTOR.shotSpeed, ownerId: m.id, ticks: 0, mirror: true });
+        playAudioOneShot('/sounds/shield.mp3', .3, 1.8);
+      }
+      state.laserBullets.splice(i, 1); continue;
     }
     let hit = false;
     for (let j = state.enemies.length - 1; j >= 0; j--) {
@@ -4819,12 +5417,15 @@ export function tick(state: GameState) {
         damageEnemy(state, e, hitDmg,b.blessingDecoy?'summon':'player',!b.blessingDecoy&&!b.mirror&&!b.blessingCopy?.5:0);
         if(!b.blessingDecoy){buildBulletHit(state,e,hitDmg);chainElectric(state,e);}
         if(!b.blessingDecoy&&(state.bulletStunUntil??0)>state.gameTick&&e.hp>0)e.buildStopUntil=Math.max(e.buildStopUntil??0,state.gameTick+(isBossType(e.type)?SHOOTER.rewardBossStunTicks:SHOOTER.rewardStunTicks)); // Shooter reward
-        if (heavy && e.hp > 0 && !isBossType(e.type)) {
+        // A Charger or Lancer mid-attack (winding up or rushing) keeps its attack: no push.
+        const attacking = (e.type === 'charger' && ((e.chargeWindupTicks ?? 0) > 0 || e.chargeDirX !== 0 || e.chargeDirY !== 0)) || (e.type === 'lancer' && e.windupTicks > 0) || (e.type === 'grappler' && e.hook !== undefined && e.hook.phase !== 'retract');
+        if (heavy && e.hp > 0 && !isBossType(e.type) && !attacking) {
           const horizontal = Math.abs(b.dx) >= Math.abs(b.dy);
           e.pushDirX = horizontal ? Math.sign(b.dx) || 1 : 0; e.pushDirY = horizontal ? 0 : Math.sign(b.dy) || 1;
           e.pushTiles = Math.max(e.pushTiles, BULLET_HEAVY_PUSH);
         }
         if (heavy) { state.build.impacts.push({ x: e.x, y: e.y, kind: 'slam', ticks: 18 }); playAudioOneShot('/sounds/hitHurt.wav', .45 * ATTACK_SFX_VOLUME, .8); }
+        if (!b.blessingDecoy && (state.explosiveBulletsUntil ?? 0) > state.gameTick) explodeBullet(state, e, hitDmg); // Trapper reward
         hit = true;
         if (e.hp <= 0) killEnemy(state, j);
         break; // no piercing
@@ -4856,6 +5457,7 @@ export function tick(state: GameState) {
   for (let i = state.enemies.length - 1; i >= 0; i--) {
     if (state.enemies[i]?.hp <= 0) killEnemy(state, i);
   }
+  if (state.gamePhase === 'playing') updateJammerEntry(state);
   if (state.tutorial) updateTutorial(state);
   if (state.trial) updateTrialSkill(state);
   if (state.neptune) updateNeptune(state);
@@ -4864,14 +5466,18 @@ export function tick(state: GameState) {
   if (state.sun) updateSun(state);
   if (state.jupiter) updateJupiter(state);
   if (state.saturn) updateSaturn(state);
+  if (state.binary) updateBinary(state);
+  if (state.sirius) updateSirius(state);
+  if (state.venus) updateVenus(state);
 }
 
 // Challenge objectives (fish, water clones and balls, pods, blossoms, illusions): no score, energy or kill rewards.
-export function isChallengeObject(type: EnemyType) { return type === 'cinder_wisp' || isNeptuneObject(type) || isGaiaObject(type) || isMoonObject(type); }
+export function isChallengeObject(type: EnemyType) { return type === 'cinder_wisp' || type === 'lost_soul' || type === 'sand_relic' || type === 'sand_core' || isNeptuneObject(type) || isGaiaObject(type) || isMoonObject(type); }
 
 // Room picker shared by full-charge room strikes (Neptune's Trident, Gaia's full Sunfire).
 export function chooseSkyLaser(state: GameState, chamber: number): boolean {
   if (state.gamePhase !== 'laserTarget' || chamber < 0 || chamber > 3) return false;
+  if (state.sirius?.ritual) return guessSiriusRitual(state, chamber); // Sirius: the picker is your guess of Ruby's destination
   if (state.gaia) { // full Sunfire: the chosen room winds up, then burns
     state.gaia.sunfire = { chamber, ticks: GAIA_SUN_WARNING }; state.gaia.sunCharge = 0; state.gamePhase = 'playing';
     playCelestialSound('ready');
@@ -4884,6 +5490,7 @@ export function chooseSkyLaser(state: GameState, chamber: number): boolean {
   return true;
 }
 export function cancelSkyLaser(state: GameState) {
+  if (state.gamePhase === 'laserTarget' && state.sirius?.ritual) state.sirius.ritual.guess = -2; // skipped: no guess this time
   if (state.gamePhase === 'laserTarget') state.gamePhase = 'playing';
 }
 
@@ -4892,7 +5499,7 @@ function updateTrialSkill(state: GameState) {
   const trial = state.trial!;
   if (state.specialSkill) return;
   if (trial.cooldown === 0) trial.cooldown = trialSkillCooldown(trial.skill);
-  else if (--trial.cooldown === 0) { state.specialSkill = trial.skill; playCelestialSound('ready'); }
+  else if (--trial.cooldown === 0) { state.specialSkill = trial.skill; playUiSfx('celestialReady'); } // the same cue as the god Skill Ready button
 }
 
 // ─── Tutorial ─────────────────────────────────────────────────────────────────
@@ -4978,7 +5585,7 @@ function updateTutorial(state: GameState) {
 export function godSetNoBossSpawns(state: GameState, enabled: boolean) {
   state.noBossSpawns=enabled;
   if(enabled){
-    clearSunEncounter(state); clearJupiterEncounter(state); clearSaturnEncounter(state);
+    clearSunEncounter(state); clearJupiterEncounter(state); clearSaturnEncounter(state); clearBinaryEncounter(state); clearSiriusEncounter(state); clearVenusEncounter(state);
     state.encounterEffects = [];
     state.enemies=state.enemies.filter(e=>!isBossType(e.type)&&e.type!=='queen_echo'&&e.type!=='moon_illusion'&&e.type!=='aegis_construct');
     clearThornHazards(state);stopSeaSounds();state.seaSongWaves=[];state.seaSongBursts=[];
@@ -4994,6 +5601,7 @@ export function godSetNoBossSpawns(state: GameState, enabled: boolean) {
 export function godSetNoMobs(state: GameState, enabled: boolean) {
   state.noMobs = enabled;
   state.spawnTimer = 0;
+  if (enabled && state.trial?.devourer) state.trial.devourer.soulSigns = [];
   if (enabled) state.enemies = state.enemies.filter(e => isBossType(e.type) || e.type === 'queen_echo' || e.type === 'moon_illusion' || e.type === 'aegis_construct' || e.type === 'cinder_wisp');
 }
 
@@ -5027,7 +5635,21 @@ export function godEnterAscension(state: GameState) {
   if (firstUnlock) announceAscension(state);
 }
 
-export function godSpawnBoss(state: GameState, bossType: BossType) {
+/** God control: restart the Singularity at a phase: the swarm is cleared and that phase's full original spawns, fuse lit. */
+/** God panel: jumping to phase 2 or 3 also brings the clock (TIME and the spawn timer) up to at least 60 seconds. */
+export function godPhaseClock(state: GameState, phase: 1 | 2 | 3) {
+  if (phase < 2) return;
+  state.score = Math.max(state.score, 60); state.difficultyTimer = Math.max(state.difficultyTimer, 3600);
+}
+export function godSetSingularityPhase(state: GameState, phase: 1 | 2 | 3) {
+  godPhaseClock(state, phase);
+  const trial = state.trial?.devourer; if (!trial || state.gamePhase !== 'playing') return;
+  state.enemies = state.enemies.filter(e => e.type !== 'devourer');
+  Object.assign(trial, { phase, maws: [], swallows: [], bursts: [], hook: undefined, hookCooldown: 0, flings: [], hookFx: [], feast: undefined, jaw: undefined, jawTimer: undefined, gas: [] });
+  godSpawnBoss(state, 'devourer');
+  state.bossSpawnName = `SOUL DEVOURER · PHASE ${phase}`; state.bossSpawnColor = ENEMY_CONFIGS.devourer.color; state.bossSpawnTicks = BOSS_ANNOUNCEMENT_TICKS;
+}
+export function godSpawnBoss(state: GameState, bossType: BossType, { playArrivalSound = true } = {}) {
   state.encounterEffects = [];
   state.noBossSpawns=false; // Explicit manual spawn exits No Boss mode.
   clearThornHazards(state);
@@ -5071,7 +5693,7 @@ export function godSpawnBoss(state: GameState, bossType: BossType) {
   if (bossType === 'fiery_king') state.enemies[state.enemies.length - 1].king = { untouchedTicks: 0, arenaWindupTicks: 0 };
   if (bossType === 'sea_chanter') state.enemies[state.enemies.length - 1].sea = createSeaChanterAbilities();
   if (bossType === 'thorn_weaver') state.enemies[state.enemies.length - 1].thorn = createThornAbilities();
-  initializeNewEncounter(state, state.enemies[state.enemies.length - 1]);
+  initializeNewEncounter(state, state.enemies[state.enemies.length - 1], playArrivalSound);
   state.bossWarningTicks = 0;
   state.bossSpawnName = BOSS_NAMES[bossType];
   state.bossSpawnColor = cfg.color;
@@ -5086,7 +5708,7 @@ export function useSpecialSkill(state: GameState): boolean {
   const kind = state.specialSkill;
   if(kind !== 'devourer') playCelestialSound(kind);
   if(kind === 'fiery_king') playCelestialSound('solar_swoosh');
-  if(kind === 'storm_reaper') playCelestialSound('jupiter_shot');
+  if(kind === 'storm_reaper') { playCelestialSound('jupiter_shot'); state.stormHasteTicks = SPECIAL_REAPER_HASTE_TICKS; } // it also hastes you briefly
   if(kind === 'storm_reaper') {
     try {const sound=gameAudio('/sounds/bossQueenAttack1.mp3', 'attack');sound.volume=.55*ATTACK_SFX_VOLUME;sound.loop=false;sound.play().catch(()=>{});} catch {}
   }
@@ -5099,8 +5721,9 @@ export function useSpecialSkill(state: GameState): boolean {
   state.playerCastTicks = 24; state.playerCastKind = kind;
   state.specialEffects.push({ kind, x: state.playerX, y: state.playerY, ticks: kind==='splitter_queen'?54:kind==='fiery_king'?48:36 });
   if(kind==='devourer'){
-    const ticks=SPECIAL_SINGULARITY_TICKS;
-    state.singularity={x:(Math.floor(state.playerX/TILE_SIZE)+.5)*TILE_SIZE,y:(Math.floor(state.playerY/TILE_SIZE)+.5)*TILE_SIZE,ticks,maxTicks:ticks,pullTimer:15,damageTimer:60};updateSingularitySound(state);return true;
+    const ticks=state.trial?.devourer?SINGULARITY_CHALLENGE.fTicks:SPECIAL_SINGULARITY_TICKS; // half as long in the Singularity challenge
+    state.singularity={x:(Math.floor(state.playerX/TILE_SIZE)+.5)*TILE_SIZE,y:(Math.floor(state.playerY/TILE_SIZE)+.5)*TILE_SIZE,ticks,maxTicks:ticks,pullTimer:15,damageTimer:60};
+    updateSingularitySound(state);return true;
   }
   if(kind==='thorn_weaver'){
     state.celestialField={x:Math.floor(state.playerX/TILE_SIZE)*TILE_SIZE,y:Math.floor(state.playerY/TILE_SIZE)*TILE_SIZE,ticks:SPECIAL_WEAVER_DURATION,damageTimer:60};
@@ -5125,6 +5748,7 @@ export function useSpecialSkill(state: GameState): boolean {
   }
   if (kind === 'blind_prayer') {
     playSFX_powerUp();
+    if(state.sirius)state.sirius.holy=Math.min(100,state.sirius.holy+STAR_ENERGY_MAX*SIRIUS_HOLY_PER_ENERGY); // Sirius: Surge counts as a full bar of energy for Holy Light
     state.starEnergy=0;state.stellarPowerBonusTicks=0;state.poweredTicks=Math.max(state.poweredTicks,SPECIAL_PRAYER_DURATION+60*constellationBonus(state,'power')+(hasBlessing(state,'blind_prayer')?BLESSING.amberPowerTicks:0));
     state.laserCooldown=0;state.bulletCooldown=0;state.waveCooldown=0;
     state.bombCooldown=0;state.speedCooldown=0;
@@ -5143,8 +5767,8 @@ export function useSpecialSkill(state: GameState): boolean {
   }
   if (kind === 'frost_warden') {
     const shield = sustainSkillAmount(state, SPECIAL_WARDEN_SHIELD);
-    if (state.saturn) { grantSaturnShield(state, 'player', shield); grantSaturnShield(state, 'ruby', shield); }
-    else { state.playerShieldHP = Math.max(state.playerShieldHP, shield); state.rubyShieldHP = Math.max(state.rubyShieldHP, shield); }
+    // Shields stack: each cast adds its amount, up to twice one cast (a bigger pool from elsewhere is kept).
+    state.playerShieldHP = Math.max(state.playerShieldHP, Math.min(shield * 2, state.playerShieldHP + shield)); state.rubyShieldHP = Math.max(state.rubyShieldHP, Math.min(shield * 2, state.rubyShieldHP + shield));
     state.playerSaturnShield=true;state.rubySaturnShield=true;
     showRewardEffect(state, 'player', 'shield'); showRewardEffect(state, 'ruby', 'shield');
     return true;
@@ -5226,9 +5850,19 @@ function fireBulletFrom(state: GameState, tileX: number, tileY: number, x: numbe
   } else state.laserBullets.push({ x, y, dx, dy, powered, ticks: 0, mirror });
 }
 
+/** Trapper reward: the bullet bursts on hit, hurting other aliens near the one it hit. */
+function explodeBullet(state: GameState, hitEnemy: Enemy, damage: number) {
+  const cx = hitEnemy.x, cy = hitEnemy.y, r = TRAPPER.rewardRadius;
+  state.bombBlasts.push({ cx, cy, radius: 0, maxRadius: r * TILE_SIZE, ticks: 18 });
+  for (const e of [...state.enemies]) {
+    if (e === hitEnemy || !state.enemies.includes(e) || e.hp <= 0 || e.twin?.downedTicks || Math.hypot(e.x - cx, e.y - cy) > r * TILE_SIZE) continue;
+    damageEnemy(state, e, damage * TRAPPER.rewardSplash, 'player');
+    if (e.hp <= 0) killEnemy(state, state.enemies.indexOf(e));
+  }
+}
+
 export function useBullet(state: GameState) {
   if (state.gamePhase !== 'playing' || state.playerFrozenTicks > 0) return;
-  if (cancelSnowball(state)) return;
   if (state.bulletCooldown > 0) return;
   const firstBullet=state.laserBullets.length;
   blessingAttack(state,'bullet');
@@ -5245,7 +5879,7 @@ export function useBullet(state: GameState) {
   const twin = getMirrorTwinTile(state);
   if (twin) fireBulletFrom(state, twin.tileX, twin.tileY, twin.tileX + .5, twin.tileY + .5, powered, true);
   const copy=rubyBlessingCopy(state);
-  if(copy){const first=state.laserBullets.length;fireBulletFrom(state,copy.tileX,copy.tileY,copy.tileX+.5,copy.tileY+.5,powered,false);for(const bullet of state.laserBullets.slice(first)){bullet.damageScale=(bullet.damageScale??1)*copy.mult;bullet.blessingCopy=true;}}
+  if(copy){const first=state.laserBullets.length;fireBulletFrom(state,copy.tileX,copy.tileY,copy.tileX+.5,copy.tileY+.5,powered,false);for(const bullet of state.laserBullets.slice(first)){bullet.damageScale=(bullet.damageScale??1)*copy.mult;bullet.blessingCopy=true;bullet.plainCopy=!copy.opal;}}
   for(const bullet of state.laserBullets.slice(firstBullet))bullet.solar=solarBlessingReady(state);
   state.bulletCooldown = BULLET_COOLDOWN;
   playSFX_laserBullet();

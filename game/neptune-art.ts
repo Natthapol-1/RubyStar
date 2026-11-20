@@ -1,5 +1,6 @@
+import { drawPrimalAftershock } from './primal-impact-art';
 import { drawEnemyHealthBar } from './enemy-health-art';
-import { TILE_SIZE, CHAMBER_BOUNDS, T_WALL, chamberOfTile, ENEMY_CONFIGS, NEPTUNE_PUFF_TICKS, NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_RADIUS, NEPTUNE_LASER_WARNING } from './constants';
+import { TILE_SIZE, CHAMBER_BOUNDS, MAP_COLS, MAP_ROWS, T_WALL, T_FLOOR, chamberOfTile, ENEMY_CONFIGS, NEPTUNE_PUFF_TICKS, NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_RADIUS, NEPTUNE_LASER_WARNING, NEPTUNE_CLONE_HEAL_FX_TICKS } from './constants';
 import type { Enemy, GameState } from './engine';
 
 // Blocky neon-vector art for the Neptune challenge: fish, stingers, water clones, water balls,
@@ -16,34 +17,215 @@ const isCover = (state: Readonly<GameState>, tx: number, ty: number) => {
   const [t, l, b, r] = CHAMBER_BOUNDS[ch]; return tx > l && tx < r && ty > t && ty < b;
 };
 
-// A cover block as reef rock, kept simple: two blue-teal slabs with wide crevices, a light top bevel and shaded lower
-// edge, a pale barnacle cluster on some blocks, and on fewer a small stepped branching coral (pink, orange or violet). The rim in the room colour shows only
-// where the block meets open floor; the swaying kelp is drawn over it separately.
+// Joined reef limestone: broad eroded faces cross tile boundaries, with natural shaded
+// outer edges instead of a neon room-colour frame. Kelp remains a separate ambience pass.
 export function drawNeptuneRock(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, tx: number, ty: number, x: number, y: number, color: string) {
   const s = TILE_SIZE, h = (k: number) => rockHash(tx, ty, k);
+  const top = !isCover(state, tx, ty - 1), bottom = !isCover(state, tx, ty + 1);
+  const left = !isCover(state, tx - 1, ty), right = !isCover(state, tx + 1, ty);
+  const face = (points: number[][], fill: string) => {
+    ctx.fillStyle = fill; ctx.beginPath();
+    points.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.fill();
+  };
+  ctx.save(); ctx.shadowBlur = 0; ctx.beginPath(); ctx.rect(x, y, s, s); ctx.clip();
+  block(ctx, x, y, s, s, '#204c5d');
+  const wx = tx * s, wy = ty * s;
+  ctx.save(); ctx.translate(x - wx, y - wy);
+  // Broad irregular limestone shelves, independent of the collision tile grid.
+  for (let row = Math.floor(wy / 83) - 1; row <= Math.floor((wy + s) / 83); row++) {
+    for (let col = Math.floor(wx / 127) - 1; col <= Math.floor((wx + s) / 127); col++) {
+      const px = col * 127 + (row % 2) * 39, py = row * 83;
+      const wear = rockHash(col, row, 31), lip = 8 + wear * 12;
+      face([[px - 22, py + lip], [px + 43, py + 3], [px + 99, py + 9], [px + 127, py + 31], [px + 113, py + 66], [px + 50, py + 78], [px - 22, py + 65]], wear > .5 ? '#306577' : '#2b5c6f');
+      face([[px - 22, py + lip], [px + 43, py + 3], [px + 99, py + 9], [px + 108, py + 18], [px + 40, py + 13], [px - 22, py + lip + 8]], '#487e89');
+      face([[px - 22, py + 57], [px + 49, py + 67], [px + 113, py + 56], [px + 113, py + 66], [px + 50, py + 78], [px - 22, py + 65]], '#183e50');
+      if (wear > .55) {
+        ctx.strokeStyle = '#153a49'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(px + 86, py + 12); ctx.lineTo(px + 73, py + 27); ctx.lineTo(px + 78, py + 38); ctx.lineTo(px + 63, py + 51); ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+  // Continuous exposed rims: pale sediment above, shaded weight below. Opaque edge
+  // fills avoid doubled bright corner pixels and never create seams between joined tiles.
+  if (top) { block(ctx, x, y, s, 3, '#719ca4'); block(ctx, x, y + 3, s, 3, '#4a7d8a'); }
+  if (left) block(ctx, x, y + (top ? 3 : 0), 2, s - (top ? 3 : 0), '#51828f');
+  if (right) block(ctx, x + s - 3, y + (top ? 3 : 0), 3, s - (top ? 3 : 0), '#173c4c');
+  if (bottom) { block(ctx, x, y + s - 4, s, 4, '#103343'); block(ctx, x + 2, y + s - 5, s - 4, 1, '#3b6977'); }
+  ctx.globalAlpha = .035; block(ctx, x, y, s, s, color); ctx.globalAlpha = 1;
+  if (top && h(35) > .45) { block(ctx, x + 8, y + 2, 11, 2, '#a0b7af'); block(ctx, x + 19, y + 3, 6, 2, '#6d9296'); }
+  if (h(10) > .65) {
+    const bx = x + 7 + Math.floor(h(13) * (s - 18)), by = y + 9 + Math.floor(h(16) * (s - 22));
+    block(ctx, bx, by, 4, 4, '#bad4d1'); block(ctx, bx + 1, by + 1, 2, 2, '#49747f');
+    block(ctx, bx + 5, by + 2, 3, 3, '#99bec3'); block(ctx, bx + 6, by + 3, 1, 1, '#49747f');
+  }
+  ctx.restore(); // Stone clips to its footprint; growth may extend above exposed tops.
+  if (h(20) > .8) {
+    const [body, shade] = [['#d68ba0', '#a6657c'], ['#dba374', '#a37755'], ['#ad97cc', '#7f719e']][Math.floor(h(21) * 3)];
+    const onTop = top && h(23) > .5, cx = x + 12 + Math.floor(h(22) * (s - 28));
+    const base = onTop ? y + 3 : y + s - 5;
+    const size = 1.1 + h(25) * .5, centreHeight = 12 + Math.floor(h(24) * 10);
+    const leftHeight = 14 + Math.floor(h(26) * 9), rightHeight = 12 + Math.floor(h(27) * 10);
+    ctx.save(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    ctx.translate(cx, base); ctx.scale(size, size); ctx.translate(-cx, -base);
+    // A solid stepped branch silhouette, with broad shaded bases and no white tip specks.
+    block(ctx, cx - 2, base - centreHeight, 6, centreHeight, body);
+    block(ctx, cx - 9, base - 11, 10, 5, body); block(ctx, cx - 9, base - leftHeight, 5, leftHeight - 8, body);
+    block(ctx, cx + 3, base - 9, 10, 5, body); block(ctx, cx + 8, base - rightHeight, 5, rightHeight - 6, body);
+    block(ctx, cx - 2, base - 4, 6, 4, shade);
+    block(ctx, cx - 9, base - 9, 7, 3, shade); block(ctx, cx + 4, base - 6, 9, 2, shade);
+    ctx.restore();
+  }
+}
+
+// Rooted blocky kelp: a few filled rectangles make each frond. The whole frond
+// tilts with the water, preserving a simple solid silhouette with no fine leaf veins.
+export function drawNeptuneKelp(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, tx: number, ty: number, x: number, y: number, tick: number) {
+  if (!isCover(state, tx, ty) || rockHash(tx, ty, 49) < .36) return;
+  const onTop = !isCover(state, tx, ty - 1) && rockHash(tx, ty, 55) > .5;
+  if (!onTop && isCover(state, tx, ty + 1)) return;
+  ctx.save(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  const seed = rockHash(tx, ty, 50), variant = Math.floor(rockHash(tx, ty, 52) * 3);
+  const count = variant === 1 ? 3 : 2;
+  const stem = variant === 0 ? 2 : variant === 1 ? 5 : 4;
+  const bladeWidth = variant === 0 ? 5 : variant === 1 ? 10 : 7;
+  const bladeHeight = variant === 0 ? 3 : variant === 1 ? 5 : 4;
+  // Colour varies independently of size: deep forest, muted jade and fresh green.
+  const palette = [
+    ['#286345', '#377957', '#4d9268'],
+    ['#397a59', '#4b956e', '#67ac80'],
+    ['#40946d', '#64b58a', '#82c395'],
+  ][Math.floor(rockHash(tx, ty, 53) * 3)];
+  const baseX = x + 18 + seed * 10, baseY = onTop ? y + 3 : y + TILE_SIZE - 6;
+  const tall = variant === 2 && rockHash(tx, ty, 54) > .5;
+  for (let frond = 0; frond < count; frond++) {
+    const height = tall ? Math.round(72 + rockHash(tx + frond, ty, 51) * 24)
+      : Math.round((variant === 2 ? 28 : variant === 1 ? 21 : 23) + rockHash(tx + frond, ty, 51) * (variant === 2 ? 14 : 12));
+    const spread = frond - (count - 1) / 2;
+    const sway = Math.sin(tick * .018 + tx * .8 + ty * .5 + frond * .9) * .08;
+    ctx.save(); ctx.translate(Math.round(baseX + spread * (variant === 0 ? 5 : 7)), Math.round(baseY)); ctx.rotate(spread * .16 + sway);
+    const body = palette[0], leaf = palette[frond % 2 ? 2 : 1];
+    block(ctx, -stem / 2, -height, stem, height, body);
+    // Three broad stepped blades, with alternating sides and no miniature detailing.
+    for (let blade = 0; blade < 3; blade++) {
+      const side = (blade + frond) % 2 ? 1 : -1, yy = -Math.round(height * (.28 + blade * .23));
+      const start = side > 0 ? 0 : -bladeWidth;
+      block(ctx, start, yy, bladeWidth, bladeHeight, leaf);
+      block(ctx, side > 0 ? bladeWidth - 3 : -bladeWidth, yy - bladeHeight + 1, variant === 0 ? 2 : 3, bladeHeight, leaf);
+    }
+    block(ctx, -stem / 2, -height - 3, stem, 5, leaf);
+    ctx.restore();
+  }
+  block(ctx, baseX - 6, baseY - 1, 12, 3, '#356b56');
+  ctx.restore();
+}
+
+const seabedDetailCache = new WeakMap<GameState['map'], Map<number, number>>();
+function seabedDetails(state: Readonly<GameState>) {
+  const cached = seabedDetailCache.get(state.map); if (cached) return cached;
+  const details = new Map<number, number>();
+  for (const [top, left, bottom, right] of CHAMBER_BOUNDS) {
+    const placed: number[][] = [], cx = (left + right) / 2, cy = (top + bottom) / 2;
+    // One of each decoration per chamber, spaced apart, instead of a rare random
+    // scatter that can accidentally omit starfish from whole rooms.
+    for (let kind = 0; kind < 3; kind++) {
+      let best = -Infinity, chosen: number[] | null = null;
+      for (let ty = top + 2; ty < bottom - 1; ty++) for (let tx = left + 2; tx < right - 1; tx++) {
+        if (state.map[ty]?.[tx] !== T_FLOOR || Math.hypot(tx - cx, ty - cy) < 2.5) continue;
+        if (placed.some(([px, py]) => Math.hypot(tx - px, ty - py) < 4)) continue;
+        const score = rockHash(tx, ty, 81 + kind * 7) - Math.hypot(tx - cx, ty - cy) * .025;
+        if (score > best) { best = score; chosen = [tx, ty]; }
+      }
+      if (chosen) { placed.push(chosen); details.set(chosen[1] * MAP_COLS + chosen[0], kind); }
+    }
+  }
+  seabedDetailCache.set(state.map, details); return details;
+}
+
+export function drawNeptuneAmbience(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, x0: number, y0: number, x1: number, y1: number, tick: number) {
   ctx.save(); ctx.shadowBlur = 0;
-  block(ctx, x, y, s, s, '#07202c'); // crevices
-  const split = 18 + Math.floor(h(1) * 14), across = h(2) > .5;
-  const slabs = across ? [[2, 2, s - 4, split - 4], [2, split + 2, s - 4, s - split - 4]] : [[2, 2, split - 4, s - 4], [split + 2, 2, s - split - 4, s - 4]]; // wider crevices
-  slabs.forEach(([sx, sy, w, ht], i) => {
-    block(ctx, x + sx, y + sy, w, ht, h(3 + i) > .5 ? '#1b4a5c' : '#163f50');
-    block(ctx, x + sx, y + sy, w, 3, '#2f6f82'); block(ctx, x + sx, y + sy + ht - 3, w, 3, '#0c2a38'); // bevel and shade
-  });
-  for (let k = 0; k < 1; k++) if (h(10 + k) > .5) { // one barnacle cluster on about half the blocks
-    const bx = x + 7 + Math.floor(h(13 + k) * (s - 18)), by = y + 7 + Math.floor(h(16 + k) * (s - 18));
-    block(ctx, bx, by, 4, 4, '#bfe3e8'); block(ctx, bx + 1, by + 1, 2, 2, '#3a6676');
-    block(ctx, bx + 5, by + 2, 3, 3, '#a8d4dc'); block(ctx, bx + 6, by + 3, 1, 1, '#3a6676');
+  const floorDetails = seabedDetails(state);
+  // Preserve the original floor's glowing tile caustics and sandy specks.
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+    if (state.map[ty]?.[tx] !== T_FLOOR) continue;
+    const x = tx * TILE_SIZE - camX, y = ty * TILE_SIZE - camY;
+    const wave = Math.sin(tx * .55 + ty * .35 + tick * .025) + Math.sin(tx * .21 - ty * .47 + tick * .018);
+    if (wave > 1.1) { ctx.globalAlpha = Math.min(.12, (wave - 1.1) * .14); block(ctx, x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8, '#9fe8ff'); }
+    if (rockHash(tx, ty, 1) > .82) {
+      ctx.globalAlpha = .28;
+      block(ctx, x + Math.floor(rockHash(tx, ty, 2) * 36) + 4, y + Math.floor(rockHash(tx, ty, 3) * 36) + 4, 3, 3, '#7fa8c4');
+    }
+    // Settled seabed details stay flat, muted and sparse, unlike floating pickups.
+    if (floorDetails.has(ty * MAP_COLS + tx)) {
+      const px = x + 10 + Math.floor(rockHash(tx, ty, 82) * 25), py = y + 12 + Math.floor(rockHash(tx, ty, 83) * 23);
+      const kind = floorDetails.get(ty * MAP_COLS + tx)!;
+      ctx.save(); ctx.translate(px, py); ctx.scale(2.6, 2.6); ctx.translate(-px, -py);
+      ctx.globalAlpha = kind === 1 ? .42 : .36;
+      if (kind === 0) {
+        // Broad scallop fan: wide stepped crown, bold grooves and a narrow hinge.
+        block(ctx, px - 4, py - 5, 8, 2, '#bdc6b3');
+        block(ctx, px - 6, py - 3, 12, 3, '#a5b5aa');
+        block(ctx, px - 4, py, 8, 3, '#91a69f');
+        block(ctx, px - 2, py + 3, 4, 2, '#607b7e');
+        block(ctx, px - 3, py - 2, 2, 3, '#647f7d');
+        block(ctx, px + 1, py - 2, 2, 3, '#647f7d');
+      } else if (kind === 1) {
+        // Five chunky stepped arms, with no sloping star outline or thin points.
+        block(ctx, px - 2, py - 2, 5, 5, '#b79282');
+        block(ctx, px - 1, py - 6, 3, 5, '#b79282');
+        block(ctx, px - 6, py - 1, 5, 3, '#b79282');
+        block(ctx, px + 2, py - 1, 5, 3, '#b79282');
+        block(ctx, px - 4, py + 2, 3, 4, '#9a786f');
+        block(ctx, px + 2, py + 2, 3, 4, '#9a786f');
+        block(ctx, px - 1, py - 4, 2, 3, '#cfad91');
+      } else {
+        // A low, broken coral sprig embedded in the silt, with no glow or pale tips.
+        block(ctx, px - 1, py - 4, 3, 8, '#84969d'); block(ctx, px - 4, py - 1, 5, 3, '#84969d');
+        block(ctx, px - 4, py - 4, 3, 4, '#84969d'); block(ctx, px + 1, py + 1, 5, 3, '#84969d');
+        block(ctx, px + 4, py - 2, 3, 5, '#84969d');
+      }
+      ctx.restore();
+    }
   }
-  if (h(20) > .72) { // a small branching coral growing from the lower edge
-    const c = ['#ff7aa8', '#ff9a5a', '#b88cff'][Math.floor(h(21) * 3)], cx = x + 10 + Math.floor(h(22) * (s - 22)), base = y + s - 4;
-    block(ctx, cx, base - 14, 4, 14, c); block(ctx, cx - 6, base - 10, 6, 3, c); block(ctx, cx - 6, base - 16, 3, 7, c);
-    block(ctx, cx + 4, base - 8, 6, 3, c); block(ctx, cx + 7, base - 14, 3, 7, c);
-    block(ctx, cx + 1, base - 16, 2, 2, '#ffe6f0'); block(ctx, cx - 6, base - 18, 2, 2, '#ffe6f0'); block(ctx, cx + 7, base - 16, 2, 2, '#ffe6f0');
+  // Water light flows over connected floor areas, never as inset square tile flashes.
+  ctx.save(); ctx.beginPath();
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++)
+    if (state.map[ty]?.[tx] === T_FLOOR) ctx.rect(tx * TILE_SIZE - camX, ty * TILE_SIZE - camY, TILE_SIZE, TILE_SIZE);
+  ctx.clip();
+  for (let axis = 0; axis < 2; axis++) {
+    const start = axis ? x0 * TILE_SIZE : y0 * TILE_SIZE, end = axis ? (x1 + 1) * TILE_SIZE : (y1 + 1) * TILE_SIZE;
+    const alongStart = axis ? y0 * TILE_SIZE : x0 * TILE_SIZE, alongEnd = axis ? (y1 + 1) * TILE_SIZE : (x1 + 1) * TILE_SIZE;
+    for (let band = Math.floor(start / 150) - 1; band <= Math.ceil(end / 150) + 1; band++) {
+      ctx.beginPath();
+      for (let at = Math.floor(alongStart / 48) * 48 - 48; at <= alongEnd + 48; at += 48) {
+        const across = band * 150 + Math.sin(at * .009 + tick * .012 + band * 2.1) * 26 + Math.cos(at * .017 - tick * .008 + band) * 12;
+        const px = (axis ? across : at) - camX, py = (axis ? at : across) - camY;
+        at === Math.floor(alongStart / 48) * 48 - 48 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = '#9fe9e3'; ctx.globalAlpha = axis ? .009 : .012; ctx.lineWidth = 14; ctx.stroke();
+      ctx.globalAlpha = axis ? .033 : .047; ctx.lineWidth = 1.2; ctx.stroke();
+    }
   }
-  const open = (dx: number, dy: number) => !isCover(state, tx + dx, ty + dy);
-  ctx.globalAlpha = .65;
-  if (open(0, -1)) block(ctx, x, y, s, 3, color); if (open(-1, 0)) block(ctx, x, y, 3, s, color);
-  if (open(1, 0)) block(ctx, x + s - 3, y, 3, s, color); if (open(0, 1)) block(ctx, x, y + s - 3, s, 3, color);
+  // Marine snow moves gently in world space and fades before each short drift resets.
+  for (let i = 0; i < 160; i++) {
+    const life = ((tick * .0014 + rockHash(i, 1, 65)) % 1 + 1) % 1;
+    const x = rockHash(i, 2, 65) * MAP_COLS * TILE_SIZE + life * 18 - camX;
+    const y = rockHash(i, 3, 65) * MAP_ROWS * TILE_SIZE + life * 32 - camY;
+    if (x < x0 * TILE_SIZE - camX || x > (x1 + 1) * TILE_SIZE - camX || y < y0 * TILE_SIZE - camY || y > (y1 + 1) * TILE_SIZE - camY) continue;
+    ctx.globalAlpha = Math.sin(life * Math.PI) * .32; block(ctx, x, y, i % 4 ? 1 : 2, 2, '#c2e3df');
+  }
+  ctx.restore();
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+    const x = tx * TILE_SIZE - camX, y = ty * TILE_SIZE - camY;
+    if (state.map[ty]?.[tx] === T_WALL) { drawNeptuneKelp(ctx, state, tx, ty, x, y, tick); continue; }
+    if (state.map[ty]?.[tx] !== T_FLOOR || rockHash(tx, ty, 4) <= .93) continue;
+    // Keep Neptune's original plentiful square bubbles, vent positions and motion.
+    const rise = ((tick + Math.floor(rockHash(tx, ty, 5) * 240)) % 240) / 240;
+    const bx = x + 12 + Math.round(Math.sin(tick * .05 + tx) * 4) + Math.floor(rockHash(tx, ty, 6) * 20);
+    const by = y + TILE_SIZE - rise * TILE_SIZE * 2.4;
+    ctx.globalAlpha = .5 * (1 - rise); ctx.strokeStyle = '#c9f2ff'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, by, 6, 6); block(ctx, bx + 1, by + 1, 2, 2, '#ffffff');
+  }
   ctx.restore();
 }
 
@@ -166,6 +348,19 @@ function drawPufferfish(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick:
   }
 }
 
+export function drawNeptuneShark(ctx:CanvasRenderingContext2D,x:number,y:number,angle=0) {
+      ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(angle);
+      ctx.globalAlpha = .35; ctx.fillStyle = '#9fd8ff'; for (let k = 1; k <= 3; k++) ctx.fillRect(-30 - k * 14, -6 + (k % 2) * 4, 10, 4); // wake
+      ctx.globalAlpha = 1; ctx.shadowColor = '#7fa8c8'; ctx.shadowBlur = 4;
+      block(ctx, -34, -12, 56, 24, '#5f7e98'); ctx.shadowBlur = 0;
+      block(ctx, -34, 4, 56, 8, '#3d566c'); block(ctx, -28, -12, 44, 4, '#9fb8cc');
+      block(ctx, 22, -8, 10, 16, '#5f7e98'); block(ctx, 30, -4, 6, 8, '#5f7e98'); // snout
+      block(ctx, -46, -16, 12, 10, '#5f7e98'); block(ctx, -46, 6, 12, 10, '#5f7e98'); // tail
+      block(ctx, -8, -24, 14, 12, '#4a667e'); block(ctx, -4, -28, 8, 4, '#4a667e'); // dorsal fin
+      block(ctx, 18, -6, 4, 4, '#0b1020'); block(ctx, 22, 4, 10, 3, '#e8f4ff'); // eye, teeth
+      ctx.restore();
+}
+
 export function drawNeptuneUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number): boolean {
   if (e.type !== 'fish_blue' && e.type !== 'fish_red' && e.type !== 'stinger' && e.type !== 'water_clone' && e.type !== 'water_bomb' && e.type !== 'jellyfish' && e.type !== 'pufferfish') return false;
   ctx.save(); ctx.translate(Math.round(sx), Math.round(sy));
@@ -206,8 +401,8 @@ export function drawNeptuneOverlay(ctx: CanvasRenderingContext2D, state: Readonl
     ctx.globalAlpha = .6; ctx.strokeStyle = '#7fc7ff'; ctx.lineWidth = 2; ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
   }
   // Shark: a striped warning lane across the chamber, then the shark charges through and out of the wall.
-  const shark = neptune.shark;
-  if (shark) {
+  for (const shark of [neptune.shark,neptune.sharkFollowup,neptune.sharkThird]) {
+    if(!shark)continue;
     const [r1, c1, r2, c2] = CHAMBER_BOUNDS[shark.chamber];
     const lo = shark.vertical ? r1 : c1, hi = shark.vertical ? r2 : c2;
     for (let k = lo; k <= hi; k++) {
@@ -224,16 +419,7 @@ export function drawNeptuneOverlay(ctx: CanvasRenderingContext2D, state: Readonl
     }
     if (shark.warning <= 0) {
       const px = ((shark.vertical ? shark.line : shark.pos) + .5) * TILE_SIZE - camX, py = ((shark.vertical ? shark.pos : shark.line) + .5) * TILE_SIZE - camY;
-      ctx.save(); ctx.translate(Math.round(px), Math.round(py)); ctx.rotate(Math.atan2(shark.vertical ? shark.dir : 0, shark.vertical ? 0 : shark.dir));
-      ctx.globalAlpha = .35; ctx.fillStyle = '#9fd8ff'; for (let k = 1; k <= 3; k++) ctx.fillRect(-30 - k * 14, -6 + (k % 2) * 4, 10, 4); // wake
-      ctx.globalAlpha = 1; ctx.shadowColor = '#7fa8c8'; ctx.shadowBlur = 4;
-      block(ctx, -34, -12, 56, 24, '#5f7e98'); ctx.shadowBlur = 0;
-      block(ctx, -34, 4, 56, 8, '#3d566c'); block(ctx, -28, -12, 44, 4, '#9fb8cc');
-      block(ctx, 22, -8, 10, 16, '#5f7e98'); block(ctx, 30, -4, 6, 8, '#5f7e98'); // snout
-      block(ctx, -46, -16, 12, 10, '#5f7e98'); block(ctx, -46, 6, 12, 10, '#5f7e98'); // tail
-      block(ctx, -8, -24, 14, 12, '#4a667e'); block(ctx, -4, -28, 8, 4, '#4a667e'); // dorsal fin
-      block(ctx, 18, -6, 4, 4, '#0b1020'); block(ctx, 22, 4, 10, 3, '#e8f4ff'); // eye, teeth
-      ctx.restore();
+      drawNeptuneShark(ctx,px,py,Math.atan2(shark.vertical?shark.dir:0,shark.vertical?0:shark.dir));
     }
     ctx.globalAlpha = 1;
   }
@@ -302,10 +488,11 @@ export function drawWaterBurst(ctx: CanvasRenderingContext2D, x: number, y: numb
 export function drawSkyLaserImpact(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
   const impact = state.neptune?.laserImpact;
   if (!impact) return;
-  const total = 70, age = total - impact.ticks, progress = age / total;
+  const total = 120, age = total - impact.ticks, progress = age / total;
   const [r1, c1, r2, c2] = CHAMBER_BOUNDS[impact.chamber];
   const left = c1 * TILE_SIZE - camX, top = r1 * TILE_SIZE - camY, width = (c2 - c1 + 1) * TILE_SIZE, height = (r2 - r1 + 1) * TILE_SIZE;
   const cx = left + width / 2, cy = top + height / 2;
+  drawPrimalAftershock(ctx,state,camX,camY,impact.chamber,age,'#59c8ff','#e8fbff');
   ctx.save();
   // Room-wide flash.
   ctx.globalAlpha = Math.max(0, 1 - age / 12) * .55; ctx.fillStyle = '#e8fbff'; ctx.fillRect(left, top, width, height);
@@ -326,12 +513,85 @@ export function drawSkyLaserImpact(ctx: CanvasRenderingContext2D, state: Readonl
     ctx.strokeRect(cx - half, cy - half, half * 2, half * 2); ctx.shadowBlur = 0;
   }
   // Splash: blocky droplets thrown outward and upward, falling back with gravity.
-  for (let i = 0; i < 48; i++) {
+  for (let i = 0; i < 72; i++) {
     const angle = i * 2.39996, speed = 3 + (i % 6), lift = 5 + (i % 4) * 2;
     const x = cx + Math.cos(angle) * speed * age, y = cy + Math.sin(angle) * speed * age * .55 - lift * age + .18 * age * age;
     ctx.globalAlpha = (1 - progress) * (i % 3 ? .85 : .55);
     ctx.fillStyle = i % 4 ? '#9fe4ff' : '#ffffff';
-    const size = 3 + (i % 3) * 2; ctx.fillRect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, size, size + 2);
+    const size = 5 + (i % 3) * 3; ctx.fillRect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, size, size + 2);
+  }
+  ctx.restore();
+}
+
+/** A screen-wide tide flowing toward the Sea Chanter when surviving clones heal her. */
+export function drawNeptuneCloneHeal(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, width: number, height: number, camX: number, camY: number, zoom: number) {
+  const remaining = state.neptune?.cloneHealTicks ?? 0;
+  if (remaining <= 0) return;
+  const boss = state.enemies.find(enemy => enemy.id === state.neptune?.bossId && enemy.hp > 0);
+  if (!boss) return;
+
+  const age = NEPTUNE_CLONE_HEAL_FX_TICKS - remaining;
+  const fade = remaining / NEPTUNE_CLONE_HEAL_FX_TICKS;
+  const bossX = (boss.x - camX) * zoom, bossY = (boss.y - camY) * zoom;
+  const x = Math.max(24, Math.min(width - 24, bossX)), y = Math.max(24, Math.min(height - 24, bossY));
+  const span = Math.hypot(width, height);
+
+  ctx.save();
+  ctx.globalAlpha = fade * .09 + Math.max(0, 1 - age / 12) * .22;
+  block(ctx, 0, 0, width, height, '#65def4');
+
+  for (let i = 0; i < 3; i++) {
+    const travel = (age - i * 9) / 49;
+    if (travel < 0 || travel >= 1) continue;
+    const radius = 30 + span * .78 * (1 - travel) ** 1.3;
+    const half = radius * .53;
+    ctx.beginPath();
+    ctx.moveTo(x - half, y - radius);
+    ctx.lineTo(x + half, y - radius);
+    ctx.lineTo(x + half, y - half);
+    ctx.lineTo(x + radius, y - half);
+    ctx.lineTo(x + radius, y + half);
+    ctx.lineTo(x + half, y + half);
+    ctx.lineTo(x + half, y + radius);
+    ctx.lineTo(x - half, y + radius);
+    ctx.lineTo(x - half, y + half);
+    ctx.lineTo(x - radius, y + half);
+    ctx.lineTo(x - radius, y - half);
+    ctx.lineTo(x - half, y - half);
+    ctx.closePath();
+    ctx.globalAlpha = fade * .14;
+    ctx.strokeStyle = '#38b8e2';
+    ctx.lineWidth = 22;
+    ctx.stroke();
+    ctx.globalAlpha = fade * .65;
+    ctx.strokeStyle = i ? '#67d8f0' : '#bcfff3';
+    ctx.lineWidth = i ? 3 : 6;
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 54; i++) {
+    const travel = (age - i % 9 * 2) / (44 + i % 5 * 4);
+    if (travel <= 0 || travel >= 1) continue;
+    const angle = i * 2.39996 + travel * .48;
+    const distance = 26 + span * (.42 + i % 5 * .055) * (1 - travel) ** 1.35;
+    ctx.save();
+    ctx.translate(x + Math.cos(angle) * distance, y + Math.sin(angle) * distance);
+    ctx.rotate(angle);
+    ctx.globalAlpha = Math.sin(travel * Math.PI) * fade * .85;
+    block(ctx, 0, -2, 10 + i % 5 * 8, 3 + i % 3, i % 4 ? '#68cfe9' : '#e4fffb');
+    block(ctx, -7, 3, 4, 4, '#b7faef');
+    ctx.restore();
+  }
+
+  if (bossX === x && bossY === y && age >= 28) {
+    const life = (age - 28) / (NEPTUNE_CLONE_HEAL_FX_TICKS - 28);
+    for (let i = 0; i < 6; i++) {
+      const px = x + (i - 2.5) * 17;
+      const py = y - 22 - i % 2 * 15 - life * (40 + i % 3 * 11);
+      ctx.globalAlpha = Math.sin(life * Math.PI) * .85;
+      block(ctx, px - 6, py - 2, 12, 4, '#b8ffdf');
+      block(ctx, px - 2, py - 6, 4, 12, '#dcfff3');
+    }
   }
   ctx.restore();
 }

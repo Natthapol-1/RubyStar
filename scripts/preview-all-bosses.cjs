@@ -8,6 +8,6 @@ for(const [i,type] of types.entries()){
  const s=engine.createInitialState();engine.godSpawnBoss(s,type==='aegis_construct'?'aegis_sentinel':type);
  const bodies=type==='astral_twins'?s.enemies:[s.enemies[type==='aegis_construct'?1:0]];
  bodies.forEach((boss,index)=>{boss.visualSpawnTicks=0;boss.flashTicks=0;boss.shootTicks=0;boss.attackTimer=200;ctx.save();ctx.translate(left+(bodies.length===2?100+index*110:150),top+225);ctx.scale(bodies.length===2?1.5:2,bodies.length===2?1.5:2);m.exports.drawEnemy(ctx,boss,0,0,40);ctx.restore();});
- ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.fillStyle=c.ENEMY_CONFIGS[type].color;ctx.font='18px monospace';ctx.textAlign='center';ctx.fillText(c.BOSS_NAMES[type]||'SEAL PYLON',left+150,top+43);
+ ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.fillStyle=c.ENEMY_CONFIGS[type].color;ctx.font='18px monospace';ctx.textAlign='center';ctx.fillText(c.BOSS_NAMES[type]||'SEAL TOTEM',left+150,top+43);
 }
 fs.writeFileSync(process.argv[2] || 'all-boss-designs.png',canvas.toBuffer('image/png'));

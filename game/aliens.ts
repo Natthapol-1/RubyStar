@@ -3,13 +3,13 @@
 // still use the shared chase in engine.ts. The engine calls in through updateRegularAlien; like the
 // challenge modules, this file imports engine helpers and must only use them inside functions.
 import {
-  ALIEN_KNOCKBACK, CHARGER_CHARGE_SPEED, CHARGER_KNOCKBACK, CHARGER_CHARGE_TILES, CHARGER_SIGHT_RANGE, CHARGER_STUN_TICKS, CHARGER_WINDUP_TICKS,
-  ENCHANTER, IMPOSTOR, SHOOTER, SNATCHER, ENEMY_CONFIGS, HEALER_HEAL_AMOUNT, HEALER_HEAL_INTERVAL, HEALER_HEAL_RADIUS, LANCER, MAP_COLS, MAP_ROWS,
-  SHIELDER_SHIELD_RANGE, SNIPER_ATTACK_RANGE, SNIPER_WINDUP_TICKS, TILE_SIZE, T_WALL, isBossType,
+  ALIEN_KNOCKBACK, CHARGER_CHARGE_SPEED, CHARGER_KNOCKBACK, CHARGER_CHARGE_TILES, CHARGER_SIGHT_RANGE, CHARGER_STUN_TICKS, CHARGER_WINDUP_TICKS, LODESTONE_SNAP,
+  GAIA_SPORE_SHOT, SUN, DROPPER, JAMMER, GRAPPLER, SOULLESS_LUNGE, ENCHANTER, IMPOSTOR, REFLECTOR, SHOOTER, SNATCHER, TRAPPER, ENEMY_CONFIGS, HEALER_HEAL_AMOUNT, HEALER_HEAL_INTERVAL, HEALER_HEAL_RADIUS, LANCER, MAP_COLS, MAP_ROWS,
+  chamberOfTile, SHIELDER_SHIELD_RANGE, SNIPER_ATTACK_RANGE, SNIPER_WINDUP_TICKS, TILE_SIZE, T_WALL, isBossType,
 } from './constants';
 import {
   ALIEN_ATTACK_SFX, ATTACK_SFX_VOLUME, bfs, playSFX_special, celestialMoveMultiplier, damagePlayer, damageRuby, hasLineOfSight, isFloorTile, playAudioOneShot,
-  playSFX_alienShoot, playSFX_chargerImpact, playSFX_enemyAttack, playSFX_laser, playSFX_placeBomb, shovePlayerFromEnemy,
+  playSFX_alienShoot, playSFX_chargerImpact, playSFX_enemyAttack, playSFX_laser, playSFX_placeBomb, playThornFall, shovePlayerFromEnemy, playerCCImmune,
   tileDist, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
 import { gameAudio } from './audio-settings';
@@ -48,6 +48,7 @@ function pickTarget(state: GameState, e: Enemy, playerCarrying: boolean) {
 /** Runs the alien's own AI and returns true, or returns false for aliens that use the shared chase. */
 export function updateRegularAlien(state: GameState, e: Enemy, playerCarrying: boolean) {
   switch (e.type) {
+    case 'flare_spitter': updateFlareSpitter(state,e); return true;
     case 'sniper': updateSniper(state, e, playerCarrying); return true;
     case 'lancer': updateLancer(state, e, playerCarrying); return true;
     case 'healer': updateHealer(state, e); return true;
@@ -57,7 +58,14 @@ export function updateRegularAlien(state: GameState, e: Enemy, playerCarrying: b
     case 'enchanter': updateEnchanter(state, e); return true;
     case 'snatcher': updateSnatcher(state, e); return true;
     case 'impostor': updateImpostor(state, e); return true;
-    case 'shooter': updateShooter(state, e); return true;
+    case 'soulless': case 'toxic_soulless': updateSoulless(state,e,playerCarrying); return true; // the toxic variant fights the same way
+    case 'grappler': updateGrappler(state,e); return true;
+    case 'jammer': updateJammer(state,e); return true;
+    case 'dropper': updateDropper(state, e, playerCarrying); return true;
+    case 'trapper': updateTrapper(state, e); return true;
+    case 'reflector': turnReflector(state, e); return false; // then the shared melee chase
+    case 'shooter': case 'sporeling': updateShooter(state, e); return true;
+    case 'lodestone': return updateLodestoneSnap(state, e); // the snap, or false for the shared melee chase
     default: return false;
   }
 }
@@ -135,8 +143,8 @@ function updateLancer(state: GameState, e: Enemy, playerCarrying: boolean) {
     const ax = aimX - e.x / TILE_SIZE, ay = aimY - e.y / TILE_SIZE, len = Math.hypot(ax, ay) || 1;
     e.lanceDirX = ax / len; e.lanceDirY = ay / len;
     e.windupTicks = LANCER.windupTicks;
-    // charging.wav (0.59s) pitched to 0.6x spans the 1s windup; distant Lancers stay quiet.
-    if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playAudioOneShot('/sounds/charging.wav', ALIEN_ATTACK_SFX.lancerCharge, .6);
+    // charging.wav (0.59s) pitched to 0.84x spans the 0.7s windup; distant Lancers stay quiet.
+    if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playAudioOneShot('/sounds/charging.wav', ALIEN_ATTACK_SFX.lancerCharge, .84);
     return;
   }
   if (!inRange) walkPath(state, e, tx, ty, cfg.speed);
@@ -198,7 +206,7 @@ function updateCharger(state: GameState, e: Enemy) {
         playSFX_chargerImpact();
         if (hitPlayer) {
           damagePlayer(state, cfg.damageToPlayer, e);
-          if (state.gamePhase !== 'lost' && !state.enemyDecoyActive && !state.playerKnockback && !state.saturn?.roll) {
+          if (state.gamePhase !== 'lost' && !state.enemyDecoyActive && !state.playerKnockback) {
             state.playerKnockback = { dirX: e.chargeDirX, dirY: e.chargeDirY, started: false, tilesLeft: CHARGER_KNOCKBACK };
           }
         } else damageRuby(state, cfg.damageToRuby, e);
@@ -217,6 +225,46 @@ function updateCharger(state: GameState, e: Enemy) {
     e.chargeWindupTicks = CHARGER_WINDUP_TICKS; e.chargeTilesLeft = CHARGER_CHARGE_TILES; e.path = [];
     if (heard) playAudioOneShot('/sounds/place_bomb.wav', ALIEN_ATTACK_SFX.chargerLock);
   } else walkPath(state, e, state.playerTileX, state.playerTileY, cfg.speed, 35, 20);
+}
+
+// ── Lodestone Magnet Snap: locks a lane toward you, warns, then lunges a few tiles; otherwise the shared melee chase ──
+function updateLodestoneSnap(state: GameState, e: Enemy): boolean {
+  const L = LODESTONE_SNAP, heard = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16;
+  if ((e.snapCooldown ?? 0) > 0) e.snapCooldown!--;
+  if ((e.snapRecover ?? 0) > 0) { e.snapRecover!--; return true; }
+  if (e.pushTiles > 0) { e.chargeDirX = e.chargeDirY = 0; e.chargeWindupTicks = 0; return false; } // a magnet moved it: no snap
+  if ((e.chargeWindupTicks ?? 0) > 0) { if (--e.chargeWindupTicks! === 0 && heard) playSFX_alienShoot(ALIEN_ATTACK_SFX.shot, 1.5); return true; }
+  const recover = () => { e.chargeDirX = 0; e.chargeDirY = 0; e.chargeTilesLeft = 0; e.snapRecover = L.recover; e.snapCooldown = L.cooldown; e.path = []; e.pathTimer = 0; };
+  if (e.chargeDirX !== 0 || e.chargeDirY !== 0) {
+    if (e.tileX === e.targetTileX && e.tileY === e.targetTileY) {
+      const nx = e.tileX + e.chargeDirX, ny = e.tileY + e.chargeDirY;
+      if (!isFloorTile(state.map, nx, ny) || (e.chargeTilesLeft ?? 0) <= 0) recover();
+      else { e.targetTileX = nx; e.targetTileY = ny; e.stepProgress = 0; }
+    } else if (stepEnemy(state, e, L.speed)) {
+      e.chargeTilesLeft = (e.chargeTilesLeft ?? L.tiles) - 1;
+      const hitPlayer = e.tileX === state.playerTileX && e.tileY === state.playerTileY;
+      const hitRuby = !state.enemyDecoyActive && state.rubyTileX !== -1 && e.tileX === state.rubyTileX && e.tileY === state.rubyTileY;
+      if (hitPlayer || hitRuby) {
+        playSFX_chargerImpact();
+        if (hitPlayer) {
+          damagePlayer(state, L.damage, e);
+          if (state.gamePhase !== 'lost' && !state.enemyDecoyActive && !state.playerKnockback) state.playerKnockback = { dirX: e.chargeDirX, dirY: e.chargeDirY, started: false, tilesLeft: L.knockback };
+        } else damageRuby(state, L.rubyDamage, e);
+        e.shootTicks = 14; recover();
+      }
+    }
+    return true;
+  }
+  const dist = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY);
+  if ((e.snapCooldown ?? 0) <= 0 && dist >= 2 && dist <= L.range && e.tileX === e.targetTileX && e.tileY === e.targetTileY
+    && hasLineOfSight(state.map, e.tileX, e.tileY, state.playerTileX, state.playerTileY)) {
+    const ddx = state.playerTileX - e.tileX, ddy = state.playerTileY - e.tileY;
+    if (Math.abs(ddx) >= Math.abs(ddy)) { e.chargeDirX = ddx > 0 ? 1 : -1; e.chargeDirY = 0; } else { e.chargeDirX = 0; e.chargeDirY = ddy > 0 ? 1 : -1; }
+    e.chargeWindupTicks = L.windup; e.chargeTilesLeft = L.tiles; e.path = [];
+    if (heard) playAudioOneShot('/sounds/place_bomb.wav', ALIEN_ATTACK_SFX.chargerLock);
+    return true;
+  }
+  return false;
 }
 
 // ── Ghost: moves straight through walls toward the player, or a placed Ruby that is clearly closer ──
@@ -326,12 +374,13 @@ function updateImpostor(state: GameState, e: Enemy) {
 
 // ── Shooter: stops in range with a clear line, glows briefly, then fires a slow stunning orb at the player ──
 function updateShooter(state: GameState, e: Enemy) {
-  const cfg = ENEMY_CONFIGS.shooter;
+  const spore = e.type === 'sporeling', cfg = ENEMY_CONFIGS[spore ? 'sporeling' : 'shooter'];
   e.targeting = 'player';
   if (e.windupTicks > 0) {
     if (--e.windupTicks === 0) {
       const dx = state.playerX - e.x, dy = state.playerY - e.y, len = Math.hypot(dx, dy) || 1;
-      (state.enemyShots ??= []).push({ x: e.x, y: e.y, dx: dx / len * SHOOTER.shotSpeed, dy: dy / len * SHOOTER.shotSpeed, ownerId: e.id, ticks: 0 });
+      const speed = spore ? GAIA_SPORE_SHOT.speed : SHOOTER.shotSpeed;
+      (state.enemyShots ??= []).push({ x: e.x, y: e.y, dx: dx / len * speed, dy: dy / len * speed, ownerId: e.id, ticks: 0, ...(spore ? { spore: true } : {}) });
       e.attackTimer = cfg.attackCooldown; e.shootTicks = 14;
       if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playSFX_alienShoot(ALIEN_ATTACK_SFX.shot, .8);
     }
@@ -340,7 +389,197 @@ function updateShooter(state: GameState, e: Enemy) {
   if (e.attackTimer > 0) e.attackTimer--;
   const settled = e.tileX === e.targetTileX && e.tileY === e.targetTileY;
   const inRange = tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= cfg.attackRange && hasLineOfSight(state.map, e.tileX, e.tileY, state.playerTileX, state.playerTileY);
-  if (inRange && settled && e.attackTimer === 0) { e.windupTicks = SHOOTER.windupTicks; return; }
+  if (inRange && settled && e.attackTimer === 0) { e.windupTicks = spore ? GAIA_SPORE_SHOT.windup : SHOOTER.windupTicks; return; }
   if (!inRange) walkPath(state, e, state.playerTileX, state.playerTileY, cfg.speed);
   else if (!settled) stepEnemy(state, e, cfg.speed);
+}
+
+// ── Reflector: its mirrored front turns to the player's side (cardinal) after a short delay ──
+function turnReflector(state: GameState, e: Enemy) {
+  const dx = state.playerTileX - e.tileX, dy = state.playerTileY - e.tileY;
+  const [wx, wy] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
+  if (e.faceX === undefined) { e.faceX = wx; e.faceY = wy; e.turnTimer = 0; return; }
+  if (e.faceX === wx && e.faceY === wy) { e.turnTimer = 0; return; }
+  if ((e.turnTimer = (e.turnTimer ?? 0) + 1) >= REFLECTOR.turnTicks) { e.faceX = wx; e.faceY = wy; e.turnTimer = 0; }
+}
+
+// ── Trapper: hangs back from the player and plants mines on its path ──
+function updateTrapper(state: GameState, e: Enemy) {
+  const speed = ENEMY_CONFIGS.trapper.speed, mines = state.mines ??= [];
+  e.mineTimer ??= TRAPPER.dropTicks;
+  const settled = e.tileX === e.targetTileX && e.tileY === e.targetTileY;
+  if (--e.mineTimer <= 0 && settled) {
+    e.mineTimer = TRAPPER.dropTicks;
+    const free = !mines.some(m => m.tileX === e.tileX && m.tileY === e.tileY) && !(e.tileX === state.rubyTileX && e.tileY === state.rubyTileY);
+    if (free && mines.filter(m => m.ownerId === e.id).length < TRAPPER.maxMines) {
+      mines.push({ tileX: e.tileX, tileY: e.tileY, ownerId: e.id, ticks: 0 });
+      e.shootTicks = 14;
+      if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) <= 16) playAudioOneShot('/sounds/place_bomb.wav', ALIEN_ATTACK_SFX.chargerLock);
+    }
+  }
+  if (tileEuclidDist(e.tileX, e.tileY, state.playerTileX, state.playerTileY) > TRAPPER.keepAway) walkPath(state, e, state.playerTileX, state.playerTileY, speed);
+  else if (!settled) stepEnemy(state, e, speed);
+}
+
+// Dropper locks a 2x2 floor area in sight, then drops a short-lived weight onto it. No ground hazard remains.
+function updateDropper(state: GameState, e: Enemy, playerCarrying: boolean) {
+  const cfg = ENEMY_CONFIGS.dropper;
+  if (e.dropAttack) {
+    if (--e.dropAttack.ticks > 0) return;
+    const { tileX, tileY } = e.dropAttack;
+    e.dropAttack = undefined; e.attackTimer = cfg.attackCooldown;
+    const inside=(x:number,y:number)=>x>=tileX&&x<tileX+DROPPER.tiles&&y>=tileY&&y<tileY+DROPPER.tiles&&isFloorTile(state.map,x,y);
+    e.dropImpact = { tileX, tileY, until: state.gameTick + DROPPER.impactTicks };
+    e.shootTicks = 12;
+    if (inside(Math.floor(state.playerX / TILE_SIZE), Math.floor(state.playerY / TILE_SIZE))) {
+      damagePlayer(state, cfg.damageToPlayer, e);
+      shovePlayerFromEnemy(state, e, DROPPER.knockback);
+    }
+    if (!playerCarrying && inside(state.rubyTileX,state.rubyTileY)) damageRuby(state, cfg.damageToRuby, e);
+    playSFX_chargerImpact();
+    return;
+  }
+  if (e.attackTimer > 0) e.attackTimer--;
+  const canTarget=(tx:number,ty:number)=>tileEuclidDist(e.tileX,e.tileY,tx,ty)<=cfg.attackRange;
+  const playerInRange=canTarget(state.playerTileX,state.playerTileY);
+  const rubyInRange=!playerCarrying&&state.rubyTileX!==-1&&canTarget(state.rubyTileX,state.rubyTileY);
+  const room=chamberOfTile(e.tileX,e.tileY);
+  const preferPlayer=tileEuclidDist(e.tileX,e.tileY,state.playerTileX,state.playerTileY)<=DROPPER.chaseRange
+    || room>=0&&room===chamberOfTile(state.playerTileX,state.playerTileY);
+  e.targeting=preferPlayer||playerCarrying||state.rubyTileX===-1?'player':'ruby';
+  const tx=e.targeting==='player'?state.playerTileX:state.rubyTileX;
+  const ty=e.targeting==='player'?state.playerTileY:state.rubyTileY;
+  const inRange=e.targeting==='player'?playerInRange:rubyInRange;
+  const settled = e.tileX === e.targetTileX && e.tileY === e.targetTileY;
+  if (e.attackTimer === 0 && inRange && settled) {
+    const tileX = e.targeting === 'player' ? Math.floor(state.playerX / TILE_SIZE) : tx;
+    const tileY = e.targeting === 'player' ? Math.floor(state.playerY / TILE_SIZE) : ty;
+    if (isFloorTile(state.map, tileX, tileY)) {
+      e.dropAttack = { tileX, tileY, ticks: DROPPER.warningTicks };
+      playThornFall();
+    }
+    return;
+  }
+  if (!inRange) walkPath(state, e, tx, ty, cfg.speed);
+  else if (!settled) stepEnemy(state, e, cfg.speed);
+}
+
+function updateJammer(state:GameState,e:Enemy) {
+  const cfg=ENEMY_CONFIGS.jammer,dist=tileEuclidDist(e.tileX,e.tileY,state.playerTileX,state.playerTileY);
+  e.targeting='player';
+  if(e.attackTimer>0)e.attackTimer--;
+  if(dist<=cfg.attackRange&&e.attackTimer===0) {
+    damagePlayer(state,cfg.damageToPlayer,e);e.attackTimer=cfg.attackCooldown;e.shootTicks=12;
+    playSFX_enemyAttack();
+  }
+  if(dist>JAMMER.keepAway)walkPath(state,e,state.playerTileX,state.playerTileY,cfg.speed);
+  else if(e.tileX!==e.targetTileX||e.tileY!==e.targetTileY)stepEnemy(state,e,cfg.speed);
+}
+
+// Grappler locks its aim at any angle, then fires a travelling, wall-blocked hook.
+function updateGrappler(state:GameState,e:Enemy) {
+  const cfg=ENEMY_CONFIGS.grappler;e.targeting='player';
+  const finish=()=>{if(e.hook){e.hook.phase='retract';e.hook.ticks=GRAPPLER.retractTicks;}e.attackTimer=cfg.attackCooldown;};
+  const hook=e.hook;
+  if(hook) {
+    if(hook.phase==='pull') {
+      if(state.playerKnockback?.hookOwnerId!==e.id)finish();
+      return;
+    }
+    if(hook.phase==='retract'){if(--hook.ticks<=0)e.hook=undefined;return;}
+    if(hook.phase==='warning') {
+      if(--hook.ticks<=0){hook.phase='flying';playSFX_laser(ALIEN_ATTACK_SFX.laser);}
+      return;
+    }
+    for(let moved=0;moved<GRAPPLER.shotSpeed;moved+=3) {
+      hook.x+=hook.dx*3;hook.y+=hook.dy*3;hook.travel+=3;
+      if(!isFloorTile(state.map,Math.floor(hook.x/TILE_SIZE),Math.floor(hook.y/TILE_SIZE))||hook.travel>cfg.attackRange*TILE_SIZE){finish();return;}
+      if(Math.hypot(hook.x-state.playerX,hook.y-state.playerY)<=GRAPPLER.hitRadius*TILE_SIZE) {
+        damagePlayer(state,cfg.damageToPlayer,e);playSFX_chargerImpact();
+        const dx=e.tileX-state.playerTargetX,dy=e.tileY-state.playerTargetY;
+        const tiles=Math.max(0,Math.abs(dx)+Math.abs(dy)-1);
+        if(state.gamePhase==='playing'&&!state.enemyDecoyActive&&!state.playerKnockback&&!playerCCImmune(state)&&tiles>0) {
+          state.playerKnockback={dirX:Math.abs(dx)>=Math.abs(dy)?Math.sign(dx):0,dirY:Math.abs(dy)>Math.abs(dx)?Math.sign(dy):0,started:false,tilesLeft:tiles,hookOwnerId:e.id};
+          hook.phase='pull';e.attackTimer=cfg.attackCooldown;
+        } else finish();
+        return;
+      }
+    }
+    return;
+  }
+  if(e.attackTimer>0)e.attackTimer--;
+  const dx=state.playerX-e.x,dy=state.playerY-e.y,dist=Math.hypot(dx,dy)/TILE_SIZE;
+  if(dist<=1.1&&e.attackTimer===0){damagePlayer(state,cfg.damageToPlayer,e);e.attackTimer=cfg.attackCooldown;playSFX_enemyAttack();return;}
+  const settled=e.tileX===e.targetTileX&&e.tileY===e.targetTileY;
+  if(e.attackTimer===0&&settled&&dist>1.1&&dist<=cfg.attackRange&&hasLineOfSight(state.map,e.tileX,e.tileY,Math.floor(state.playerX/TILE_SIZE),Math.floor(state.playerY/TILE_SIZE))) {
+    e.hook={phase:'warning',dx:dx/(dist*TILE_SIZE),dy:dy/(dist*TILE_SIZE),x:e.x,y:e.y,ticks:GRAPPLER.warningTicks,travel:0};
+    playAudioOneShot('/sounds/charging.wav',ALIEN_ATTACK_SFX.lancerCharge,.84);return;
+  }
+  if(dist>1.1)walkPath(state,e,state.playerTileX,state.playerTileY,cfg.speed);
+  else if(!settled)stepEnemy(state,e,cfg.speed);
+}
+
+// Soulless braces, commits to six cardinal tiles, then swipes once and recovers.
+function updateSoulless(state:GameState,e:Enemy,playerCarrying:boolean) {
+  const cfg=ENEMY_CONFIGS.soulless,L=SOULLESS_LUNGE,a=e.boneLunge;
+  if(e.attackTimer>0)e.attackTimer--;
+  const swipe=()=>{
+    const lunge=e.boneLunge!;
+    const hits=(x:number,y:number)=>Math.hypot(x-e.x,y-e.y)<=L.swipeRadius*TILE_SIZE&&(x-e.x)*lunge.dx+(y-e.y)*lunge.dy>=-TILE_SIZE*.25&&hasLineOfSight(state.map,Math.floor(e.x/TILE_SIZE),Math.floor(e.y/TILE_SIZE),Math.floor(x/TILE_SIZE),Math.floor(y/TILE_SIZE));
+    let hit=false;
+    if(hits(state.playerX,state.playerY)){damagePlayer(state,cfg.damageToPlayer,e);shovePlayerFromEnemy(state,e,L.knockback);hit=true;}
+    if(!playerCarrying&&!state.enemyDecoyActive&&state.rubyTileX!==-1&&hits((state.rubyTileX+.5)*TILE_SIZE,(state.rubyTileY+.5)*TILE_SIZE)){damageRuby(state,cfg.damageToRuby,e);hit=true;}
+    if(hit)playSFX_chargerImpact();
+    lunge.phase='recover';lunge.ticks=L.recoverTicks;lunge.left=0;e.attackTimer=cfg.attackCooldown;e.shootTicks=0;e.path=[];e.pathTimer=0;
+  };
+  if(a){
+    if(a.phase==='warning'){
+      if(--a.ticks<=0){a.phase='dash';playAudioOneShot('/sounds/slash.mp3',.25*ATTACK_SFX_VOLUME,1.2);}
+      return;
+    }
+    if(a.phase==='recover'){
+      if(e.tileX!==e.targetTileX||e.tileY!==e.targetTileY)stepEnemy(state,e,L.speed);
+      if(--a.ticks<=0)e.boneLunge=undefined;
+      return;
+    }
+    if(e.tileX===e.targetTileX&&e.tileY===e.targetTileY){
+      const nx=e.tileX+a.dx,ny=e.tileY+a.dy;
+      if(a.left<=0||!isFloorTile(state.map,nx,ny)){swipe();return;}
+      e.targetTileX=nx;e.targetTileY=ny;e.stepProgress=0;
+    }
+    const arrived=stepEnemy(state,e,L.speed);
+    if(arrived)a.left--;
+    const contact=Math.hypot(state.playerX-e.x,state.playerY-e.y)<=TILE_SIZE*.65||!playerCarrying&&state.rubyTileX!==-1&&Math.hypot((state.rubyTileX+.5)*TILE_SIZE-e.x,(state.rubyTileY+.5)*TILE_SIZE-e.y)<=TILE_SIZE*.65;
+    if(contact||arrived&&a.left===0)swipe();
+    return;
+  }
+  const {tx,ty}=pickTarget(state,e,playerCarrying),dist=tileEuclidDist(e.tileX,e.tileY,tx,ty),settled=e.tileX===e.targetTileX&&e.tileY===e.targetTileY;
+  if(e.attackTimer===0&&settled&&dist<=L.range&&hasLineOfSight(state.map,e.tileX,e.tileY,tx,ty)){
+    const dx=tx-e.tileX,dy=ty-e.tileY,horizontal=Math.abs(dx)>=Math.abs(dy);
+    e.boneLunge={phase:'warning',dx:horizontal?(Math.sign(dx)||1):0,dy:horizontal?0:Math.sign(dy),ticks:L.warningTicks,left:L.tiles};
+    e.path=[];playAudioOneShot('/sounds/strike-charged.wav',.12*ATTACK_SFX_VOLUME,.8);return;
+  }
+  walkPath(state,e,tx,ty,cfg.speed);
+}
+
+
+function updateFlareSpitter(state:GameState,e:Enemy) {
+  const cfg=ENEMY_CONFIGS.flare_spitter,F=SUN.spitter;
+  if(e.attackTimer>0)e.attackTimer--;
+  if(e.spit){
+    if(--e.spit.ticks<=0){
+      const angle=Math.atan2(e.spit.dy,e.spit.dx);
+      for(const offset of [-F.spread,0,F.spread]){const a=angle+offset;(state.enemyShots??=[]).push({x:e.x,y:e.y,dx:Math.cos(a)*F.shotSpeed,dy:Math.sin(a)*F.shotSpeed,ownerId:e.id,ticks:0,flare:true});}
+      e.spit=undefined;e.shootTicks=16;playAudioOneShot('/sounds/kingFireSpell.mp3',.4,1.3);playAudioOneShot('/sounds/kingFireSpread.wav',.22,1.5);
+    }
+    return;
+  }
+  const dx=state.playerX-e.x,dy=state.playerY-e.y,d=Math.hypot(dx,dy),settled=e.tileX===e.targetTileX&&e.tileY===e.targetTileY;
+  const inRange=d<=cfg.attackRange*TILE_SIZE&&hasLineOfSight(state.map,e.tileX,e.tileY,state.playerTileX,state.playerTileY);
+  if(inRange&&settled&&e.attackTimer===0){
+    e.spit={dx:d?dx/d:1,dy:d?dy/d:0,ticks:F.warningTicks};e.attackTimer=cfg.attackCooldown;e.path=[];
+    playAudioOneShot('/sounds/kingFireWarning.wav',.14,1.6);return;
+  }
+  if(!inRange)walkPath(state,e,state.playerTileX,state.playerTileY,cfg.speed);
+  else if(!settled)stepEnemy(state,e,cfg.speed);
 }

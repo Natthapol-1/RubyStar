@@ -11,11 +11,11 @@ export const CELESTIAL_BLESSINGS = {
   frost_warden: { name: 'Diamond', celestial: 'Saturn', cut: 'diamond', description: 'Healing grants shield; harder incoming hits grant more.', color: '#39cde0' },
   fiery_king: { name: 'Ruby', celestial: 'Sun', cut: 'cushion', description: 'Stay unharmed to move faster and strike with stronger red attacks. Taking damage removes the buff.', color: '#f52b50' },
   storm_reaper: { name: 'Emerald', celestial: 'Jupiter', cut: 'emerald', description: 'Attacking builds speed and damage. Your hits stack a slowing charge on enemies.', color: '#1dd5a0' },
-  splitter_queen: { name: 'Amethyst', celestial: 'Moon', cut: 'crystal', description: 'Speed bursts leave up to four shooting decoys. Enemies can destroy them.', color: '#a56af0' },
-  devourer: { name: 'Obsidian', celestial: 'Singularity', cut: 'shard', description: 'Defeated enemies can leave larger gravity wells that pull, damage and slow.', color: '#75618e' },
-  astral_twins: { name: 'Opal', celestial: 'Binary Star', cut: 'twin', description: 'Ruby often copies your Laser, Wave, bullets or bomb.', color: '#82baff' },
+  splitter_queen: { name: 'Amethyst', celestial: 'Moon', cut: 'crystal', description: 'Speed bursts leave up to four shooting decoys.', color: '#a56af0' },
+  devourer: { name: 'Obsidian', celestial: 'Singularity', cut: 'shard', description: 'Defeated enemies can leave larger gravity fields that pull, damage and slow.', color: '#75618e' },
+  astral_twins: { name: 'Opal', celestial: 'Binary Star', cut: 'twin', description: 'Ruby copies your Laser, Wave, bullets or bomb.', color: '#82baff' },
   sea_chanter: { name: 'Sapphire', celestial: 'Neptune', cut: 'sapphire', description: 'Your attacks leech health and briefly weaken enemies.', color: '#288ef0' },
-  thorn_weaver: { name: 'Peridot', celestial: 'Gaia', cut: 'hexagon', description: 'Walking leaves wider, lingering fields that hurt and slow enemies.', color: '#87bf3b' },
+  thorn_weaver: { name: 'Peridot', celestial: 'Gaia', cut: 'hexagon', description: 'Walking leaves lingering fields that hurt and slow enemies.', color: '#87bf3b' },
   aegis_sentinel: { name: 'Pearl', celestial: 'Venus', cut: 'pearl', description: 'Take 25% less damage and reflect hits before this reduction.', color: '#e8ccd3' },
 } as const;
 export type CelestialBlessing = keyof typeof CELESTIAL_BLESSINGS;
@@ -83,7 +83,7 @@ export function buildBulletHit(state:GameState,enemy:Enemy,damage:number) {
   }
   if(state.constellations.includes('bulletBurst')&&state.gameTick>=state.build.bulletBurstReadyAt){
     state.build.bulletBurstReadyAt=state.gameTick+90;
-    const radius=1.5*TILE_SIZE;
+    const radius=2.25*TILE_SIZE;
     state.bombBlasts.push({cx:enemy.x,cy:enemy.y,radius:0,maxRadius:radius,ticks:24});
     for(const target of [...state.enemies])if(target.hp>0&&!target.twin?.downedTicks&&Math.hypot(target.x-enemy.x,target.y-enemy.y)<=radius)extraHit(state,target,damage);
   }

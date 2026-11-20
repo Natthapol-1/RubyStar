@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import RubyStarGame from '@/game/RubyStarGame';
+import ChallengeEntry from '@/game/ChallengeEntry';
 import { TRIALS, findTrial } from '@/game/trials';
 
 export function generateStaticParams() { return TRIALS.map(trial => ({ body: trial.id })); }
@@ -10,5 +10,5 @@ export default async function CelestialTrialPage({ params }: { params: Promise<{
   const trial = findTrial(body);
   if (!trial) notFound();
   if (!trial.ready) redirect('/challenge');
-  return <RubyStarGame mode="trial" trialId={trial.id} />;
+  return <ChallengeEntry key={trial.id} trial={trial} />;
 }

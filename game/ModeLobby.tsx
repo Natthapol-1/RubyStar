@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PixelArrow from '@/components/PixelArrow';
-import { canEnter, getProfile, highestStage, isDesktop } from './profile';
+import { canEnter, getProfile, highestStage, introSeen, isDesktop, markIntroSeen } from './profile';
+import IntroCutscene from './IntroCutscene';
 import RulesModal from '@/components/RulesModal';
 import RubyStarGuide from './RubyStarGuide';
 import MenuButton from './MenuButton';
@@ -29,9 +30,15 @@ const MODES: ModeCard[] = [
     description: 'Travel to a world and face its guardian in an epic multi-phase boss battle with its own rules.',
   },
   {
-    id: 'ascension', title: 'ENDLESS SPACE', tag: 'ASCENSION', color: '#c99bff', sound: 'ascension', path: '/ascension',
-    description: 'Skip to stage 10 with celestial powers awakened and test your skill against the fiercest waves.',
+    id: 'gambit', title: 'STAR GAMBIT', tag: 'IN DEVELOPMENT', color: '#ffd27a', sound: 'confirm', path: '/gambit',
+    description: 'Build your run: pick a rule, fill three weapon slots and hold the bazaar.',
   },
+];
+
+// The Endless Space card asks Endless or Ascension once Ascension is unlocked.
+const ENDLESS_STARTS: ModeCard[] = [
+  { id: 'endless', title: 'ENDLESS', color: '#ff4f8b', sound: 'endless', path: '/endless', description: 'Start from stage 0.' },
+  { id: 'ascension', title: 'ASCENSION', color: '#c99bff', sound: 'ascension', path: '/ascension', description: 'Start at stage 10 with celestial powers awakened.' },
 ];
 
 // Square pixel emblems for each mode, drawn with CSS blocks.
@@ -46,6 +53,10 @@ function Emblem({ id }: { id: string }) {
     </span>
     <span className="rs-tp-moon" /><span className="rs-tp-spark rs-tp-spark-a" /><span className="rs-tp-spark rs-tp-spark-b" />
   </div>;
+  if (id === 'gambit') return <div className="rs-emblem"><span className="rs-gambit">
+    <span className="rs-gambit-card rs-gambit-card-a"><span className="rs-glint" /></span><span className="rs-gambit-card rs-gambit-card-b"><span className="rs-glint" /></span>
+  </span><span className="rs-tp-spark rs-gambit-spark" />
+  </div>;
   return <div className="rs-emblem">
     {id === 'ascension' && <><span className="rs-ray rs-ray-a" /><span className="rs-ray rs-ray-b" /><span className="rs-crown" /></>}
     <span className={id === 'ascension' ? 'rs-gem rs-gem-ascended' : 'rs-gem'} />
@@ -57,6 +68,8 @@ export default function RubyStarLobby() {
   const [terminal,setTerminal]=useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [rulesOpen,setRulesOpen]=useState(false);
+  const [intro,setIntro]=useState<null|'first'|'replay'>(null); // the opening cutscene: on first launch (then the tutorial), or replayed
+  useEffect(()=>{if(!introSeen()&&!(isDesktop()&&getProfile().tutorialCompleted))setIntro('first');},[]); // new players only; anyone can replay it
   const [query, setQuery] = useState('');
   const [, refreshProfile] = useState(0);
   useEffect(() => { const refresh=()=>refreshProfile(value=>value+1);window.addEventListener('ruby-profile',refresh);return ()=>window.removeEventListener('ruby-profile',refresh); }, []);
@@ -69,22 +82,32 @@ export default function RubyStarLobby() {
     setIndex(i => (i + step + MODES.length) % MODES.length);
   }, []);
 
-  const choose = useCallback((mode: ModeCard) => {
-    if(!canEnter(mode.id)){playUiSfx('locked');return;}
+  const [startPick,setStartPick]=useState(false); // Normal / Ascension choice for Endless Space
+  const launch = useCallback((mode: ModeCard) => {
     playUiSfx(mode.sound);
     if (mode.path) setTimeout(() => router.push(mode.path + query), 180);
   }, [router, query]);
+  const choose = useCallback((mode: ModeCard) => {
+    if(!canEnter(mode.id)){playUiSfx('locked');return;}
+    if(mode.id==='endless'&&canEnter('ascension')){playUiSfx('page');setStartPick(true);return;}
+    launch(mode);
+  }, [launch]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if(terminal||settingsOpen||rulesOpen)return;
+      if(startPick){
+        if(event.key==='Escape'){event.preventDefault();playUiSfx('back');setStartPick(false);}
+        else if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();const options=[...document.querySelectorAll<HTMLButtonElement>('.rs-start-option')],at=options.indexOf(document.activeElement as HTMLButtonElement);options[(at+(event.key==='ArrowRight'?1:options.length-1))%options.length]?.focus();}
+        return;
+      }
       if (event.key === 'ArrowLeft') { event.preventDefault(); rotate(-1); }
       else if (event.key === 'ArrowRight') { event.preventDefault(); rotate(1); }
       else if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) choose(MODES[index]);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rotate, choose, index, terminal, settingsOpen, rulesOpen]);
+  }, [rotate, choose, index, terminal, settingsOpen, rulesOpen, startPick]);
 
   return (
     <main className="ruby-star-ui rs-lobby">
@@ -168,19 +191,53 @@ export default function RubyStarLobby() {
           .rs-card-name { font-size:1.15rem; margin-top:12px; }.rs-card-desc { font-size:.72rem; margin-top:8px; }
           .rs-card[data-slot="-1"] { transform:translateX(-310px) scale(.68); }.rs-card[data-slot="1"] { transform:translateX(310px) scale(.68); }
         }
+        /* a hand of two solid bevelled cards fanned from the bottom, each with a pale glint; the hand floats and glows as one */
+        .rs-gambit { position:absolute; inset:0; filter:drop-shadow(0 0 14px #ffb84d); animation:rsGemFloat 2.6s ease-in-out infinite; }
+        .rs-gambit-card { position:absolute; width:52px; height:72px; background:#ffd27a; display:grid; place-items:center;
+          box-shadow:inset -8px -8px 0 #b8862e, inset 6px 6px 0 #fff0b8; }
+        .rs-gambit-card-a { left:32px; top:30px; transform-origin:50% 110%; transform:rotate(-16deg); background:#e0ad4e; box-shadow:inset -8px -8px 0 #8f6420, inset 6px 6px 0 #ffdf94; }
+        .rs-gambit-card-b { left:56px; top:28px; transform-origin:50% 110%; transform:rotate(9deg); }
+        /* Glint: a flat stepped pale-yellow crystal */
+        .rs-glint { width:20px; height:28px; background:#fff3c8; clip-path:polygon(30% 0,70% 0,70% 14%,100% 14%,100% 86%,70% 86%,70% 100%,30% 100%,30% 86%,0 86%,0 14%,30% 14%); }
+        .rs-gambit-spark { left:110px; top:16px; }
+        .rs-start { position:fixed; inset:0; z-index:20; display:grid; place-items:center; background:#05060ccc; }
+        .rs-start-panel { display:flex; flex-direction:column; align-items:center; gap:28px; padding:44px 52px 52px; background:#10131ff7; border:3px solid #ff4f8b; box-shadow:inset 0 0 0 3px #1c1222,0 0 24px #ff2f6f44; }
+        .rs-start-title { font-family:var(--font-pixel); font-size:1.1rem; letter-spacing:.1em; color:#ff6f9f; text-shadow:0 0 14px #ff2f6f66; }
+        .rs-start-options { display:flex; gap:18px; }
+        .rs-start-option { width:260px; padding:30px 24px; display:flex; flex-direction:column; align-items:center; text-align:center; background:#141a2b; color:inherit; font:inherit; cursor:pointer;
+          border:3px solid var(--mode); box-shadow:0 0 12px color-mix(in srgb,var(--mode) 25%,transparent); transition:box-shadow 150ms; }
+        .rs-start-option:hover, .rs-start-option:focus-visible { outline:none; box-shadow:0 0 30px color-mix(in srgb,var(--mode) 70%,transparent); }
+        .rs-start-option .rs-emblem { transform:scale(.8); margin:-12px 0 -10px; }
         @keyframes rsTwinkle { 0%, 100% { opacity: .25; transform: scale(.6); } 50% { opacity: 1; transform: scale(1); } }
         @keyframes rsGemFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
       `}</style>
       <CelestialBackdrop/>
-      {isDesktop()&&<MenuButton sound="back" className="btn" style={{position:'fixed',left:24,top:18,zIndex:10,minHeight:44,padding:'8px 16px'}} onClick={()=>void window.rubyDesktop?.quit()}>QUIT</MenuButton>}
+      {isDesktop()&&<MenuButton sound="back" aria-label="Quit" style={{position:'fixed',left:24,top:18,zIndex:10,height:44,padding:'0 16px',display:'grid',placeItems:'center',background:'#10192be8',border:'1px solid #b07b7b',color:'#ffd6d6',fontFamily:'var(--font-pixel)',fontSize:12,letterSpacing:'.08em',cursor:'pointer',boxShadow:'inset 0 0 0 3px #2a1820,0 0 12px #e38f8f1c'}} onClick={()=>void window.rubyDesktop?.quit()}>QUIT</MenuButton>}
       <div style={{position:'fixed',top:18,right:24,zIndex:10,display:'flex',gap:12}}>
+       <MenuButton sound="page" aria-label="Replay intro" title="Replay intro" onClick={()=>setIntro('replay')} style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid #b07ba0',cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a,0 0 12px #e38fc91c'}}>
+        <svg viewBox="0 0 16 16" width={22} height={22} shapeRendering="crispEdges" aria-hidden="true"><rect x="1" y="3" width="14" height="10" fill="#2a1830" stroke="#ff8ac8" strokeWidth="1"/><rect x="1" y="3" width="2" height="2" fill="#ff8ac8"/><rect x="1" y="11" width="2" height="2" fill="#ff8ac8"/><rect x="13" y="3" width="2" height="2" fill="#ff8ac8"/><rect x="13" y="11" width="2" height="2" fill="#ff8ac8"/><rect x="6" y="5" width="2" height="6" fill="#ffd6ec"/><rect x="8" y="6" width="2" height="4" fill="#ffd6ec"/><rect x="10" y="7" width="1" height="2" fill="#ffd6ec"/></svg>
+       </MenuButton>
        <MenuButton sound="page" aria-label="Rules" title="Rules" onClick={()=>setRulesOpen(true)} style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid #778cae',color:'#c7ddec',fontFamily:'var(--font-pixel)',fontSize:18,cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a'}}>?</MenuButton>
        {(['book','settings'] as const).map(kind=><MenuButton key={kind} sound="page" aria-label={kind==='book'?'Exploration terminal':'Settings'} title={kind==='book'?'Exploration terminal · Guidebook':'Settings'} onClick={()=>{if(kind==='book')setTerminal(true);else setSettingsOpen(true);}}
         style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid '+(kind==='book'?'#827bb1':'#639d9a'),cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c'}}><LobbyUtilityIcon kind={kind}/></MenuButton>)}
       </div>
       <RulesModal isOpen={rulesOpen} onClose={()=>setRulesOpen(false)} title=":: ENDLESS SPACE" playSound={kind=>playUiSfx(kind)}><RubyStarGuide showEnemyGuide={false} endlessOnly/></RulesModal>
       {settingsOpen&&<GameSettings onClose={()=>setSettingsOpen(false)}/>}
+      {intro&&<IntroCutscene onDone={()=>{const first=intro==='first';setIntro(null);if(first){markIntroSeen();router.push('/tutorial'+query);}}}/>}
       {terminal&&<ExplorationTerminal onClose={()=>setTerminal(false)}/>}
+      {startPick&&<div className="rs-start" role="dialog" aria-modal="true" aria-label="Choose an Endless Space start" onClick={e=>{if(e.target===e.currentTarget){playUiSfx('back');setStartPick(false);}}}>
+        <div className="rs-start-panel">
+          <span className="rs-start-title">ENDLESS SPACE</span>
+          <div className="rs-start-options">{ENDLESS_STARTS.map((start,i)=>
+            <button key={start.id} type="button" className="rs-start-option" autoFocus={i===0} style={{['--mode' as string]:start.color}}
+              aria-label={start.title} onMouseEnter={()=>playUiSfx('hover')} onClick={()=>launch(start)}>
+              <Emblem id={start.id}/>
+              <span className="rs-card-name" style={{marginTop:0}}>{start.title}</span>
+              <span className="rs-card-desc">{start.description}</span>
+            </button>)}
+          </div>
+        </div>
+      </div>}
       <div className="rs-lobby-inner">
         <h1 className="rs-lobby-title">RUBY STAR</h1>
         <p className="rs-lobby-sub">SELECT MODE</p>

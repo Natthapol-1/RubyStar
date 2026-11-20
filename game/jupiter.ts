@@ -1,5 +1,5 @@
 import { CHAMBER_BOUNDS, ENEMY_CONFIGS, MOVE_SPEED_MULT, JUPITER, PLAYER_BASE_SPEED, SPECIAL_REAPER_SLOW, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, chamberOfTile } from './constants';
-import { ATTACK_SFX_VOLUME, bfs, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, stormSlowMultiplier, playSFX_pickup, isFloorTile, killEnemy, playSFX_reaperStrike, playAudioOneShot, tryReaperHallwaySeal, type Enemy, type GameState } from './engine';
+import { godPhaseClock, ATTACK_SFX_VOLUME, bfs, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, stormSlowMultiplier, playSFX_pickup, isFloorTile, killEnemy, playSFX_reaperStrike, playAudioOneShot, tryReaperHallwaySeal, type Enemy, type GameState } from './engine';
 import { playUiSfx } from './ui-sfx';
 import { playJupiterAmbientSound, stopJupiterAmbientSound, playJupiterChargeSound, stopJupiterChargeSound } from './event-audio';
 
@@ -17,6 +17,7 @@ export interface JupiterState {
   shockTiles: ChargedTile[]; tileBursts: {x:number;y:number;ticks:number}[];
   fragments: PursuitFragment[]; fragmentOverdrive: boolean; overdriveCharge: number; overdriveBurstTicks: number;
   miniStorms: MiniStorm[]; miniStormHitCooldown: number;
+  dashTiles?: { x:number; y:number; ticks:number; dx:number; dy:number }[]; dashLastX?:number; dashLastY?:number; // cosmetic dash footprints
   walls: VoltWall[]; bursts: { x: number; y: number; ticks: number; vertical: boolean; half: number; negative?: number; positive?: number }[];
 }
 
@@ -49,6 +50,7 @@ export function clearJupiterEncounter(state: GameState) {
   state.jupiter.fragments=[];state.jupiter.fragmentOverdrive=false;state.jupiter.overdriveCharge=0;state.jupiter.overdriveBurstTicks=0;state.jupiter.miniStorms=[];
   state.jupiter.slowTicks=0;state.jupiter.chargeRoom=-1;state.jupiter.blast=null;state.jupiter.tileBursts=[];
   state.jupiter.guardTicks = state.jupiter.bossBoost = state.jupiter.playerBoost = 0;
+  state.jupiter.dashTiles=[];state.jupiter.dashLastX=state.jupiter.dashLastY=undefined;
 }
 export function jupiterDashMultiplier(left: number, duration: number, peak: number) { return left > 0 ? 1+(peak-1)*Math.pow(Math.min(1,left/duration),2) : 1; }
 export function jupiterPlayerSpeed(state: GameState) {
@@ -99,9 +101,29 @@ export function useVoltFence(state: GameState): boolean {
   j.walls.push({x:(x+.5)*TILE_SIZE,y:(y+.5)*TILE_SIZE,vertical,half:Math.max(negative,positive),negative,positive,age:0});
   j.playerDashX=state.playerDirX||(!state.playerDirY?1:0);j.playerDashY=state.playerDirY;
   j.guardTicks = JUPITER.fenceGuardTicks; j.wallCooldown = JUPITER.wallCooldown; j.playerBoost = JUPITER.playerBoostTicks;
+  j.dashLastX=state.playerX;j.dashLastY=state.playerY;recordVoltDashTiles(state);
+  state.screenShakeTicks=Math.max(state.screenShakeTicks,8);state.screenShakeAmt=Math.max(state.screenShakeAmt,3);
   state.speedFlashTicks = 20;
   playAudioOneShot('/sounds/jupiter-fence-cast.wav', .85);
   return true;
+}
+
+// Sample the actual travelled segment, so a fast dash leaves no missing floor tiles.
+function recordVoltDashTiles(state:GameState) {
+  const j=state.jupiter!;j.dashTiles??=[];
+  const previousX=j.dashLastX??state.playerX,previousY=j.dashLastY??state.playerY;
+  // Teleports do not paint a line through the rooms between their endpoints.
+  const jumped=Math.hypot(state.playerX-previousX,state.playerY-previousY)>TILE_SIZE*2;
+  const ox=jumped?state.playerX:previousX,oy=jumped?state.playerY:previousY;
+  const steps=Math.max(1,Math.ceil(Math.hypot(state.playerX-ox,state.playerY-oy)/12));
+  for(let i=0;i<=steps;i++) {
+    const x=Math.floor((ox+(state.playerX-ox)*i/steps)/TILE_SIZE),y=Math.floor((oy+(state.playerY-oy)*i/steps)/TILE_SIZE);
+    if(!isFloorTile(state.map,x,y))continue;
+    const tile=j.dashTiles.find(tile=>tile.x===x&&tile.y===y);
+    if(tile)tile.ticks=36;else j.dashTiles.push({x,y,ticks:36,dx:j.playerDashX,dy:j.playerDashY});
+  }
+  if(j.playerBoost>0){j.dashLastX=state.playerX;j.dashLastY=state.playerY;}
+  else{j.dashLastX=undefined;j.dashLastY=undefined;}
 }
 
 function nearestRoom(x:number,y:number) {
@@ -159,7 +181,7 @@ function startPursuit(state: GameState) {
   j.fragments=[];j.fragmentOverdrive=false;j.overdriveCharge=0;j.overdriveBurstTicks=0;
   updatePursuitFragments(state,boss);
   updateMiniStorms(state);
-  state.screenShakeTicks=Math.max(state.screenShakeTicks,22);state.screenShakeAmt=Math.max(state.screenShakeAmt,10);
+  state.screenShakeTicks=Math.max(state.screenShakeTicks,36);state.screenShakeAmt=Math.max(state.screenShakeAmt,17);
   state.bossSpawnName=j.round===2?'OVERCHARGED PURSUIT':'STORM PURSUIT';state.bossSpawnTicks=120;
   stopJupiterChargeSound();
   playAudioOneShot('/sounds/jupiter-pursuit-thunder.mp3', .85);
@@ -238,6 +260,7 @@ function updateStormShards(state:GameState,boss:Enemy) {
       boss.healFlashTicks=18;playSFX_pickup();
     } else {
       damageEnemy(state,boss,JUPITER.phaseHP*JUPITER.shardShare,'special');
+      healPlayer(state,JUPITER.shardHeal); // each shard you collect heals you a little
       j.phase=Math.max(j.phase,Math.min(3,4-Math.ceil(boss.hp/JUPITER.phaseHP))) as 1|2|3;
       playAudioOneShot('/sounds/jupiter-fence-hit.mp3',.7);
       if(boss.hp<=0){const index=state.enemies.indexOf(boss);if(index>=0)killEnemy(state,index);return;}
@@ -287,7 +310,7 @@ function updatePursuitFragments(state:GameState,boss:Enemy) {
     j.fragmentOverdrive=false;j.overdriveCharge=0;j.overdriveBurstTicks=0;j.bossBoost=0;boss.pathTimer=0;
     // One pickup resets the shared pursuit overdrive bar.
   } else if(j.overdriveCharge>=JUPITER.fragmentChargeTicks&&!j.fragmentOverdrive) {
-    j.fragmentOverdrive=true;j.overdriveBurstTicks=30;playAudioOneShot('/sounds/aegis-attack.mp3',.8*ATTACK_SFX_VOLUME);playAudioOneShot('/sounds/jupiter-reaper-boost.mp3',.85);
+    j.fragmentOverdrive=true;j.overdriveBurstTicks=30;playAudioOneShot('/sounds/aegis-attack.mp3',1.6*ATTACK_SFX_VOLUME);playAudioOneShot('/sounds/jupiter-reaper-boost.mp3',1.7); // twice the old level, so full overdrive is hard to miss
   }
   j.shardPlayerX=state.playerX;j.shardPlayerY=state.playerY;
 }
@@ -372,6 +395,8 @@ export function updateJupiter(state: GameState) {
   state.ambientEvents.timer = Math.max(state.ambientEvents.timer, 3600);
   if (j.wallCooldown > 0 && --j.wallCooldown === 0) playUiSfx('fenceReady');
   if ((j.guardTicks ?? 0) > 0) j.guardTicks--;
+  j.dashTiles=(j.dashTiles??[]).filter(tile=>--tile.ticks>0);
+  if(j.playerBoost>0||j.dashLastX!==undefined)recordVoltDashTiles(state);
   if (j.playerBoost > 0) j.playerBoost--;
   if((j.overdriveBurstTicks??0)>0)j.overdriveBurstTicks--;
   j.shardEffects=(j.shardEffects??[]).filter(effect=>--effect.ticks>0);
@@ -449,6 +474,7 @@ export function updateJupiter(state: GameState) {
 }
 
 export function godSetJupiterPhase(state: GameState, phase: 1|2|3) {
+  godPhaseClock(state, phase); // phase 2+ starts at least a minute in
   if(!state.jupiter||state.gamePhase!=='playing')return;
   state.noBossSpawns=false;
   const existing=jupiterBoss(state);

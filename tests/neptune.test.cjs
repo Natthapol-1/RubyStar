@@ -39,6 +39,7 @@ test('crossing a dive point dives; destroying every clone snaps HP down to the p
   assert.equal(s.neptune.dive, null); assert.ok(!e.isSeaChanterDiving(boss));
   assert.ok(Math.abs(boss.hp - (F1 + .75 * HP[1])) < .5, 'snapped to 75%: ' + boss.hp);
   assert.ok(boss.sea.resurfaceTicks > 0, 'she resurfaces as soon as the last clone is gone');
+  assert.ok(!s.neptune.cloneHealTicks, 'clearing all clones does not trigger a heal animation');
 });
 
 test('surviving clones each restore 10% of the phase when time runs out, never past the phase top', () => {
@@ -50,6 +51,7 @@ test('surviving clones each restore 10% of the phase when time runs out, never p
   for (let i = 0; i < c.NEPTUNE_DIVE_TICKS[1] && s.neptune.dive; i++) e.tick(s);
   assert.equal(s.neptune.dive, null);
   assert.ok(Math.abs(boss.hp - (before + 2 * c.NEPTUNE_CLONE_HEAL * HP[1])) < 1, 'healed by two clones: ' + boss.hp);
+  assert.equal(s.neptune.cloneHealTicks, c.NEPTUNE_CLONE_HEAL_FX_TICKS);
   boss.hp = TOTAL + 50; e.tick(s); assert.equal(boss.hp, TOTAL, 'capped at the phase top');
 });
 
@@ -123,14 +125,31 @@ test('fish: blue heals you (or her while she dives), red costs you HP on a direc
 test('healing charges the sky laser; it strikes the chosen room like a meteor for a share of phase HP', () => {
   const { s, boss } = fresh(); s.godMode = false; s.playerHP = 10;
   assert.equal(nep.openSkyLaser(s), false);
-  for (let i = 0; i < 20; i++) { s.playerHP = 10; api.healPlayer(s, 10); }
+  for (let i = 0; i < 20; i++) { s.playerHP = 10; api.healPlayer(s, 10); if(i===0)assert.ok(Math.abs(s.neptune.healCharge-9.3)<1e-9,'healing charges Trident at 93% rate'); }
   assert.equal(s.neptune.healCharge, c.NEPTUNE_HEAL_CHARGE_MAX);
   assert.ok(nep.openSkyLaser(s)); assert.equal(s.gamePhase, 'laserTarget');
   const room = c.chamberOfTile(boss.tileX, boss.tileY);
   assert.ok(e.chooseSkyLaser(s, room)); assert.equal(s.neptune.healCharge, 0);
   const hp = boss.hp; boss.path = []; boss.pathTimer = 100000; boss.stepProgress = 0; boss.targetTileX = boss.tileX; boss.targetTileY = boss.tileY;
   for (let i = 0; i < c.NEPTUNE_LASER_WARNING + 1; i++) e.tick(s);
-  assert.ok(Math.abs(hp - boss.hp - c.NEPTUNE_STRIKE_DAMAGE * HP[1]) < 1, 'strike damage ' + (hp - boss.hp));
+  assert.ok(Math.abs(hp - boss.hp - .10 * HP[1]) < 1, 'phase 1 Trident damage ' + (hp - boss.hp));
+});
+
+test('meteors spare water clones in the struck chamber', () => {
+  const { s, boss } = fresh();
+  boss.hp = F1 + .75 * HP[1] - 1;
+  e.tick(s);
+  dropAllClones(s);
+  const clone = clones(s)[0];
+  const hp = clone.hp;
+  const alien = e.createEncounterEnemy(s, 'normal', clone.tileX, clone.tileY, 10);
+  s.enemies.push(alien);
+  s.meteoriteWarning = c.chamberOfTile(clone.tileX, clone.tileY);
+  s.meteoriteStrikeIn = 1;
+  e.tick(s);
+  assert.ok(s.enemies.includes(clone));
+  assert.equal(clone.hp, hp);
+  assert.ok(!s.enemies.includes(alien));
 });
 
 test('phase 3 hits steal life; meteors deal a share of phase HP; tides speed movement with the flow', () => {
@@ -222,7 +241,7 @@ test('a shark warns its lane, then hits you once, knocks you off the lane and bi
   boss.attackTimer = boss.sea.songCooldown = 100000; boss.path = []; boss.pathTimer = 100000;
   const hp = s.playerHP, bossHP = boss.hp;
   for (let i = 0; i < 160 && s.neptune.shark; i++) { e.tick(s); boss.tileX = boss.targetTileX; boss.tileY = boss.targetTileY; }
-  assert.equal(hp - s.playerHP, c.NEPTUNE_SHARK_DAMAGE);
+  assert.ok(Math.abs(hp - s.playerHP - c.NEPTUNE_SHARK_DAMAGE) < 1e-9, `${hp - s.playerHP}`);
   assert.ok(bossHP - boss.hp >= c.NEPTUNE_SHARK_BOSS_DAMAGE * HP[1] - 1, 'bit her: ' + (bossHP - boss.hp));
   assert.equal(s.neptune.shark, null, 'it swims away');
 });
@@ -253,4 +272,49 @@ test('a pufferfish also bursts when it dies', () => {
   const hp = s.playerHP; api.damageEnemy(s, puff, 100); api.killEnemy(s, s.enemies.indexOf(puff), true); // no kill reward, to read the burst alone
   assert.equal(hp - s.playerHP, c.NEPTUNE_PUFF_DAMAGE);
   assert.ok(s.playerKnockback, 'knocked back');
+});
+
+
+test('a shark can warn a single follow-up that launches exactly one second later; it pauses with gameplay',()=>{
+ const {s}=fresh();s.neptune.sharkTimer=1;e.tick(s);
+ const first=s.neptune.shark;first.warning=1;
+ const random=Math.random;
+ try{
+  Math.random=()=>.1;e.tick(s);
+  const second=s.neptune.sharkFollowup;assert.ok(second);assert.equal(second.warning,60);
+  assert.equal(second.vertical,!first.vertical);assert.equal(second.hitPlayer,false);
+  const pos=second.pos;s.gamePhase='paused';for(let i=0;i<80;i++)e.tick(s);assert.equal(second.warning,60);
+  s.gamePhase='playing';for(let i=0;i<59;i++)e.tick(s);
+  assert.equal(second.warning,1);assert.equal(second.pos,pos,'warning only');
+  e.tick(s);assert.equal(second.warning,0);assert.equal(s.neptune.sharkFollowup,second,'follow-up cannot create another');
+  e.tick(s);assert.notEqual(second.pos,pos,'second shark charges');
+  for(let i=0;i<80;i++)e.tick(s);
+  assert.equal(s.neptune.shark,null);assert.equal(s.neptune.sharkFollowup,null);
+ }finally{Math.random=random;}
+});
+
+test('ordinary shark charges do not always produce a follow-up',()=>{
+ const {s}=fresh();s.neptune.sharkTimer=1;e.tick(s);s.neptune.shark.warning=1;
+ const random=Math.random;try{Math.random=()=>.9;e.tick(s);assert.equal(s.neptune.sharkFollowup,undefined);}finally{Math.random=random;}
+});
+
+
+test('double-shark chance increases from 35% to 43% and 50% across phases',()=>{
+ for(const [phase,roll,expected] of [[1,.349,true],[1,.35,false],[2,.429,true],[2,.43,false],[3,.499,true],[3,.5,false]]){
+  const{s}=fresh();s.neptune.sharkTimer=1;e.tick(s);s.neptune.phase=phase;s.neptune.shark.warning=1;
+  const random=Math.random;
+  try{Math.random=()=>roll;e.tick(s);assert.equal(!!s.neptune.sharkFollowup,expected,`phase ${phase}, roll ${roll}`);}finally{Math.random=random;}
+ }
+});
+
+test('phase 3: a triple shark sends a follow-up and then a third charge', () => {
+  const { s } = fresh(); s.neptune.phase = 3;
+  const random = Math.random; Math.random = () => .05; // below the 10% triple chance
+  try {
+    s.neptune.sharkTimer = 1; e.tick(s); assert.ok(s.neptune.shark && s.neptune.sharkTriple);
+    for (let i = 0; i < c.NEPTUNE_SHARK_WARNING; i++) e.tick(s);
+    assert.ok(s.neptune.sharkFollowup, 'the follow-up always comes');
+    for (let i = 0; i < c.NEPTUNE_SHARK_FOLLOWUP_DELAY; i++) e.tick(s);
+    assert.ok(s.neptune.sharkThird, 'and a third shark after it');
+  } finally { Math.random = random; }
 });

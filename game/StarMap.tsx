@@ -1,19 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { canEnter, getProfile, isDesktop } from './profile';
+import { canEnter, challengeCleared, isDesktop } from './profile';
 import CelestialBackdrop from './CelestialBackdrop';
 import CelestialBody from './CelestialBody';
 import BlessingGem from './BlessingGem';
+import LobbyUtilityIcon from './LobbyUtilityIcon';
 import { CELESTIAL_BLESSINGS } from './endless-builds';
 import BackButton from '@/components/BackButton';
 import PixelArrow from '@/components/PixelArrow';
 import { playUiSfx } from './ui-sfx';
-import { TRIALS, Trial, trialBossName, trialSkill } from './trials';
+import { TRIALS, trialBossName, trialSkill, type TrialBody } from './trials';
 
-export default function CelestialTrialsMap() {
+type WorldLore = { world: string; title: string; chapters: { title: string; paragraphs: string[] }[] };
+
+export default function CelestialTrialsMap({ loreByWorld }: { loreByWorld: Partial<Record<TrialBody, WorldLore>> }) {
   const router = useRouter();
+  const loreDialog = useRef<HTMLDialogElement>(null);
+  const loreBody = useRef<HTMLElement>(null);
   const [query, setQuery] = useState('');
   const [, refreshProfile] = useState(0);
   useEffect(() => { const refresh = () => refreshProfile(value => value + 1); window.addEventListener('ruby-profile', refresh); return () => window.removeEventListener('ruby-profile', refresh); }, []);
@@ -23,7 +28,9 @@ export default function CelestialTrialsMap() {
   const ready = TRIALS.map((t, i) => t.ready ? i : -1).filter(i => i >= 0);
   useEffect(() => { setQuery(window.location.search);if(!canEnter('trials'))router.replace('/'); }, []);
   const trial = TRIALS[selected], skill = trialSkill(trial);
+  const lore = loreByWorld[trial.id];
   const gem = CELESTIAL_BLESSINGS[trial.boss];
+  const cleared = challengeCleared(trial.boss);
 
   const select = useCallback((index: number) => {
     if (!TRIALS[index].ready) { playUiSfx('locked'); setNotReady({ name: TRIALS[index].name, key: Date.now() }); return; }
@@ -38,6 +45,7 @@ export default function CelestialTrialsMap() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (loreDialog.current?.open) return;
       const at = ready.indexOf(selected);
       if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); select(ready[(at + 1) % ready.length]); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); select(ready[(at - 1 + ready.length) % ready.length]); }
@@ -45,7 +53,7 @@ export default function CelestialTrialsMap() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selected, select, begin, ready]);
+  }, [selected, select, ready]);
 
   return (
     <main className="ruby-star-ui sm-page">
@@ -101,9 +109,42 @@ export default function CelestialTrialsMap() {
         .sm-gem-reward small { display:block; margin-bottom:5px; color:#a2abc6; font-family:var(--font-mono); font-size:.65rem; letter-spacing:.12em; }
         .sm-gem-reward strong { display:block; font-family:var(--font-pixel); font-size:.7rem; text-shadow:0 0 8px color-mix(in srgb,var(--gem) 35%,transparent); }
         .sm-panel-note { margin-top: 6px; font-family: var(--font-mono); font-size: .75rem; color: #7d84a3; }
-        .sm-begin { margin-left: auto; padding: 14px 20px; font-family: var(--font-pixel); font-size: .8rem; cursor: pointer; white-space: nowrap;
+        .sm-begin { flex-shrink:0; padding: 14px 20px; font-family: var(--font-pixel); font-size: .8rem; cursor: pointer; white-space: nowrap;
           color: #0b0c14; background: var(--glow); border: 2px solid #ffffffaa; box-shadow: 0 0 14px color-mix(in srgb, var(--glow) 50%, transparent); }
         .sm-begin:hover, .sm-begin:focus-visible { outline: none; filter: brightness(1.12); box-shadow: 0 0 22px var(--glow); }
+        .sm-actions { display:flex; align-items:stretch; gap:10px; flex-shrink:0; }
+        .sm-lore-button, .sm-lore-close { display:inline-grid; place-items:center; padding:6px 9px; cursor:pointer; color:#e6e4ff; background:#17182b;
+          border:1px solid #827bb1; box-shadow:inset 0 0 0 3px #22253d; }
+        .sm-lore-button:hover, .sm-lore-button:focus-visible, .sm-lore-close:hover, .sm-lore-close:focus-visible { background:#272342; border-color:#c6b5ff; }
+        .sm-lore { --lore-light:#ffc491; --lore-rim:#b27b58; --lore-edge:#654739; --lore-dark:#181520; --lore-panel:#1c1825; --lore-hover:#e5ac80;
+          inset:0; margin:auto; width:min(760px, calc(100vw - 48px)); height:min(760px, calc(100dvh - 48px)); box-sizing:border-box; padding:0; overflow:hidden;
+          color:#f0e9e3; background:#111321; border:2px solid var(--lore-rim); box-shadow:0 0 24px color-mix(in srgb, var(--lore-light) 20%, transparent); }
+        .sm-lore[data-world="moon"] { --lore-light:#e1c8ff; --lore-rim:#9b74cf; --lore-edge:#4e3d69; --lore-dark:#161426; --lore-panel:#201a32; --lore-hover:#c6a0f7; color:#ece7f5; }
+        .sm-lore[data-world="saturn"] { --lore-light:#c9f4ff; --lore-rim:#71b5cf; --lore-edge:#355769; --lore-dark:#111c2b; --lore-panel:#18283a; --lore-hover:#9eddf2; color:#e6f0f5; }
+        .sm-lore[data-world="gaia"] { --lore-light:#d6f5ab; --lore-rim:#91b85a; --lore-edge:#455d36; --lore-dark:#151f1c; --lore-panel:#1b2b22; --lore-hover:#b7db86; color:#eef2e5; }
+        .sm-lore[data-world="venus"] { --lore-light:#ffe2d1; --lore-rim:#c79b8a; --lore-edge:#674b45; --lore-dark:#221923; --lore-panel:#2a2028; --lore-hover:#e6bbaa; color:#f4ebe7; }
+        .sm-lore[data-world="binary"] { --lore-light:#e9f6ff; --lore-rim:#83b6eb; --lore-edge:#504d68; --lore-dark:#172034; --lore-panel:linear-gradient(90deg,#32222c,#1a2b43); --lore-hover:#afd8ff;
+          color:#edf1fa; border-top-color:#ff8f7a; border-left-color:#ff8f7a; }
+        .sm-lore[data-world="neptune"] { --lore-light:#c7e2ff; --lore-rim:#648bec; --lore-edge:#354b79; --lore-dark:#101a30; --lore-panel:#142840; --lore-hover:#91b7ff; color:#e8effb; }
+        .sm-lore[data-world="sirius"] { --lore-light:#fff0bb; --lore-rim:#d3b568; --lore-edge:#655735; --lore-dark:#211e26; --lore-panel:#2d2830; --lore-hover:#ecd88b; color:#f6f1e5; }
+        .sm-lore[data-world="singularity"] { --lore-light:#e7def4; --lore-rim:#9a8caa; --lore-edge:#4c405b; --lore-dark:#171520; --lore-panel:#211b2c; --lore-hover:#c3b6d3; color:#ece8f3; }
+        .sm-lore[data-world="jupiter"] { --lore-light:#c1f7e7; --lore-rim:#69bda8; --lore-edge:#355b59; --lore-dark:#121f27; --lore-panel:#1a2b30; --lore-hover:#9ae6d0; color:#e7f2ef; }
+        .sm-lore[open] { display:flex; flex-direction:column; }
+        .sm-lore::backdrop { background:#06070de0; }
+        .sm-lore-header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 24px; border-bottom:1px solid var(--lore-edge); background:var(--lore-panel); }
+        .sm-lore-header h2 { margin:0; color:var(--lore-light); font-family:var(--font-pixel); font-size:1rem; line-height:1.6; }
+        .sm-lore-close { font-family:var(--font-pixel); font-size:.6875rem; min-height:40px; padding-inline:12px; }
+        .sm-lore-body { flex:1; min-height:0; overflow:auto; padding:24px clamp(24px, 6vw, 64px) 32px; font:1.125rem/1.65 var(--font-mono); }
+        .sm-lore-body::-webkit-scrollbar { width:16px; }
+        .sm-lore-body::-webkit-scrollbar-track { background:var(--lore-dark); border-left-color:var(--lore-edge); }
+        .sm-lore-body::-webkit-scrollbar-thumb { background:var(--lore-rim); border-color:var(--lore-dark); }
+        .sm-lore-body::-webkit-scrollbar-thumb:hover { background:var(--lore-hover); }
+        .sm-lore-body::-webkit-scrollbar-thumb:active { background:var(--lore-light); }
+        @supports (-moz-appearance:none) { .sm-lore-body { scrollbar-width:auto; scrollbar-color:var(--lore-rim) var(--lore-dark); } }
+        .sm-lore-body:focus { outline:none; }
+        .sm-lore-body section + section { margin-top:28px; padding-top:24px; border-top:1px solid var(--lore-edge); }
+        .sm-lore-body h3 { margin:0 0 14px; color:var(--lore-light); font-family:var(--font-pixel); font-size:.75rem; line-height:1.6; }
+        .sm-lore-body p { margin:0 0 .9em; }
         /* EXIT stands out against the dark map: brighter frame, panel fill and a soft glow (overrides the shared button's inline style). */
         .sm-exit button { padding: 12px 22px !important; font-size: 1rem !important; gap: 10px !important; color: #e7e9f6 !important; background: #161b36 !important;
           border: 2px solid #7f8cff !important; border-radius: 0 !important; box-shadow: 0 0 12px #7f8cff55; }
@@ -139,7 +180,7 @@ export default function CelestialTrialsMap() {
             <span key={'spark' + i} className="sm-spark" aria-hidden="true" style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${-i * .53}s` }} />)}
           {TRIALS.map((body, i) => {
             const glow = trialSkill(body).color === '#303036' ? '#bcbccd' : trialSkill(body).color;
-            const cleared = isDesktop() && getProfile().completed.includes(body.boss);
+            const cleared = challengeCleared(body.boss);
             return (
               <button key={body.id} type="button" className={'sm-node' + (cleared ? ' sm-cleared' : '') + (body.ready && canEnter('trial',body.boss) ? '' : ' sm-locked')} aria-pressed={i === selected} aria-label={`Challenge: ${body.name}${body.ready ? '' : ' (not ready)'}${cleared ? ' (cleared)' : ''}`}
                 style={{ left: `${body.x}%`, top: `${body.y}%`, ['--glow' as string]: glow, ['--s' as string]: `${body.size}px`, ['--delay' as string]: `${-i * .37}s` }}
@@ -150,7 +191,7 @@ export default function CelestialTrialsMap() {
                 {cleared && <span className="sm-clear-badge" aria-hidden="true"><svg viewBox="0 0 20 20" shapeRendering="crispEdges"><path d="M2 8H6V12H9V8H12V4H16V11H13V14H10V17H6V14H2Z" fill="currentColor" /></svg></span>}
                 {(!body.ready||!canEnter('trial',body.boss)) && <span className="sm-lock" aria-hidden="true" />}
                 {i === selected && <span className="sm-select" aria-hidden="true" />}
-                <span className="sm-label" style={{ top: `calc(100% + ${body.id === 'sun' || body.id === 'sirius' ? Math.round(body.size * .3) + 10 : 18}px)` }}>{body.name}{cleared?' · CLEARED':''}</span>
+                <span className="sm-label" style={{ top: `calc(100% + ${body.id === 'sun' || body.id === 'sirius' ? Math.round(body.size * .3) + 10 : 18}px)` }}>{body.name}</span>
               </button>
             );
           })}
@@ -158,16 +199,37 @@ export default function CelestialTrialsMap() {
         </div>
         <section className="sm-panel" aria-live="polite" style={{ ['--glow' as string]: skill.color === '#303036' ? '#bcbccd' : skill.color }}>
           <div className="sm-panel-info">
-            <div className="sm-panel-note">{!canEnter('trial',trial.boss)?'Defeat this guardian in Endless Space to unlock.':isDesktop()&&getProfile().completed.includes(trial.boss)?'CLEARED · GEMSTONE ACQUIRED':'UNCLEARED'}</div><div className="sm-panel-name">CHALLENGE: {trial.name}</div>
+            <div className="sm-panel-note">{!canEnter('trial',trial.boss)?'Defeat this guardian in Endless Space to unlock.':cleared?(isDesktop()?'CLEARED · GEMSTONE ACQUIRED':'CLEARED'):'UNCLEARED'}</div><div className="sm-panel-name">CHALLENGE: {trial.name}</div>
             <div className="sm-panel-row">Guardian: <strong>{trialBossName(trial)}</strong> · Celestial skill: <strong>{skill.name}</strong></div>
           </div>
           <div className="sm-gem-reward" aria-label={`Gemstone: ${gem.name}`} style={{ ['--gem' as string]: gem.color }}>
             <span className="sm-gem-art"><BlessingGem kind={trial.boss} /></span>
             <span><small>GEMSTONE</small><strong>{gem.name.toUpperCase()}</strong></span>
           </div>
-          <button type="button" className="sm-begin" onMouseEnter={() => playUiSfx('hover')} onClick={begin}>{(trial.id === 'singularity') ? 'EXPLORE MAP ▶' : 'BEGIN CHALLENGE ▶'}</button>
+          <div className="sm-actions">
+            {lore && <button type="button" className="sm-lore-button" aria-label={`Read ${lore.world} lore`} aria-haspopup="dialog" title={`Read ${lore.world} lore`}
+              onMouseEnter={() => playUiSfx('hover')} onClick={() => {
+                playUiSfx('page');
+                loreDialog.current?.showModal();
+                loreBody.current?.focus();
+              }}><LobbyUtilityIcon kind="book" /></button>}
+            <button type="button" className="sm-begin" onMouseEnter={() => playUiSfx('hover')} onClick={begin}>BEGIN CHALLENGE ▶</button>
+          </div>
         </section>
       </div>
+      {lore && <dialog key={trial.id} ref={loreDialog} className="sm-lore" data-world={trial.id} aria-labelledby="world-lore-title" onClose={() => playUiSfx('back')}
+        onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
+        <header className="sm-lore-header">
+          <h2 id="world-lore-title">{lore.title}</h2>
+          <button type="button" className="sm-lore-close" onClick={() => loreDialog.current?.close()}>CLOSE</button>
+        </header>
+        <article ref={loreBody} className="sm-lore-body" tabIndex={0}>
+          {lore.chapters.map(chapter => <section key={chapter.title}>
+            <h3>{chapter.title}</h3>
+            {chapter.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+          </section>)}
+        </article>
+      </dialog>}
     </main>
   );
 }

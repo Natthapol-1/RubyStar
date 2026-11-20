@@ -23,8 +23,8 @@ test('King special hits the entire arena for ten percent boss HP and twenty-five
  s.specialSkill='fiery_king';assert.equal(engine.useSpecialSkill(s),true);close(e.hp,360);assert.equal(near.hp,75);assert.equal(far.hp,75);
  assert.equal(s.specialSkill,null);assert.equal(engine.useSpecialSkill(s),false);assert.equal(s.playerHP,100);assert.equal(s.rubyHP,100);
 });
-test('Reaper special has limited range and scales against bosses',()=>{
- const s=fresh(),e=boss(s,'fiery_king',15,10);e.hp=e.maxHp=400;const near=grunt(s,e,12,10),far=grunt(s,e,17,10);
+test('Jupiter Storm hits the seven-tile boundary and misses beyond it',()=>{
+ const s=fresh(),e=boss(s,'fiery_king',15,10);e.hp=e.maxHp=400;const near=grunt(s,e,17,10),far=grunt(s,e,18,10);
  s.specialSkill='storm_reaper';engine.useSpecialSkill(s);close(e.hp,300);assert.equal(near.hp,40);assert.equal(far.hp,100);
 });
 test('Warden shields player and Ruby, cannot stack, and shields absorb damage',()=>{

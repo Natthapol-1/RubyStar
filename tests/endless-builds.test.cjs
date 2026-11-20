@@ -143,7 +143,7 @@ test('Caelum cannot cross thick walls, chamber boundaries or use free passive bo
  const edge=fresh(['wallStep']);edge.playerTileX=edge.playerTargetX=19;edge.playerX=19.5*c.TILE_SIZE;edge.map[10][20]=c.T_WALL;e.useSpeedBoost(edge);edge.playerQueuedDirX=1;e.tick(edge);assert.equal(edge.playerTileX,19);
 });
 test('Ara explodes on lethal bullet hits, shares its cooldown across shots and cannot chain itself',()=>{
- const s=fresh(['bulletBurst']),a=mob(s,11,10),nearby=mob(s,12,10),far=mob(s,14,10);a.hp=0;b.buildBulletHit(s,a,c.BULLET_DMG);near(nearby.hp,1000-c.BULLET_DMG);near(far.hp,1000);assert.equal(s.build.bulletBurstReadyAt,90);assert.equal(s.bombBlasts.length,1);b.buildBulletHit(s,nearby,c.BULLET_DMG);assert.equal(s.bombBlasts.length,1);
+ const s=fresh(['bulletBurst']),a=mob(s,11,10),nearby=mob(s,13,10),far=mob(s,14,10);a.hp=0;b.buildBulletHit(s,a,c.BULLET_DMG);near(nearby.hp,1000-c.BULLET_DMG);near(far.hp,1000);assert.equal(s.build.bulletBurstReadyAt,90);assert.equal(s.bombBlasts.length,1);near(s.bombBlasts[0].maxRadius,2.25*c.TILE_SIZE);b.buildBulletHit(s,nearby,c.BULLET_DMG);assert.equal(s.bombBlasts.length,1);
  s.gameTick=180;b.buildBulletHit(s,nearby,c.BULLET_DMG);assert.equal(s.bombBlasts.length,2);near(nearby.hp,1000-c.BULLET_DMG*2);
 });
 

@@ -26,5 +26,14 @@ test('Enchanter and Bleeder kill rewards: Empowered damage and regeneration',()=
   const s=fresh(),en=e.createEncounterEnemy(s,'enchanter',30,30,1);s.enemies.push(en);en.hp=0;e.killEnemy(s,s.enemies.indexOf(en));
   const target=e.createEncounterEnemy(s,'normal',12,10,1000);s.enemies.push(target);e.useLaser(s);assert.ok(Math.abs(1000-target.hp-c.LASER_DMG*c.ENCHANTER.rewardDamageMult)<1e-9);
   const r=fresh(),bl=e.createEncounterEnemy(r,'bleeder',30,30,1);r.enemies.push(bl);r.bleedingUntil=r.gameTick+100;r.playerHP=50;bl.hp=0;e.killEnemy(r,r.enemies.indexOf(bl));
-  assert.ok(r.playerHP>50,'the kill heal works because the curse lifts first');const after=r.playerHP;for(let i=0;i<c.BLEEDER.regenTicks;i++)e.tick(r);assert.ok(Math.abs(r.playerHP-after-15)<=1,`regenerated ${r.playerHP-after}`);
+  assert.ok(r.playerHP>50,'the kill heal works because the curse lifts first');const after=r.playerHP;for(let i=0;i<c.BLEEDER.regenTicks;i++)e.tick(r);assert.ok(Math.abs(r.playerHP-after-c.BLEEDER.regenTicks/c.BLEEDER.regenEvery)<=1,`regenerated ${r.playerHP-after}`); // 5 HP/s for 5s
+});
+
+test('kill shields stack up to their cap; Charger pays extra energy; Enchanter empowers you',()=>{
+  const s=fresh(),kill=type=>{const a=e.createEncounterEnemy(s,type,30,30,1);s.enemies.push(a);a.hp=0;e.killEnemy(s,s.enemies.indexOf(a));};
+  kill('armored');kill('armored');assert.equal(s.playerShieldHP,2*c.KILL_SHIELD_HP,'armored shields stack');
+  for(let i=0;i<10;i++)kill('armored');assert.equal(s.playerShieldHP,c.KILL_SHIELD_CAP,'up to the cap');
+  kill('shielder');kill('shielder');assert.equal(s.rubyShieldHP,2*c.KILL_SHIELD_HP,'Ruby shields stack too');
+  const before=s.starEnergy;kill('charger');assert.equal(s.starEnergy-before,c.STAR_ENERGY_PER_KILL+15);
+  kill('enchanter');assert.ok(s.empoweredUntil>s.gameTick);assert.equal(c.ENCHANTER.rewardSpeedMult,1.15);
 });

@@ -1,23 +1,21 @@
-import { gameAudio, channelVolume } from './audio-settings';
+import { gameAudio, channelVolume, playReversed, preloadReversed } from './audio-settings';
 import {
   CHAMBER_BOUNDS, ENEMY_CONFIGS, MAP_COLS, MAP_ROWS, METEORITE_PLAYER_DMG, METEORITE_RUBY_DMG, NEPTUNE_BOMB_DAMAGE,
-  NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_INTERVAL, NEPTUNE_BOMB_RADIUS, NEPTUNE_CLONES, NEPTUNE_CLONE_HEAL, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_TICKS,
-  NEPTUNE_FISH_BOSS_HEAL, NEPTUNE_FISH_CAP, NEPTUNE_FISH_HEAL, NEPTUNE_FISH_RED_CHANCE, NEPTUNE_FISH_SPAWN_GAP, NEPTUNE_HEAL_CHARGE_MAX,
+  NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_INTERVAL, NEPTUNE_BOMB_RADIUS, NEPTUNE_CLONES, NEPTUNE_CLONE_HEAL, NEPTUNE_CLONE_HEAL_FX_TICKS, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_TICKS,
+  NEPTUNE_FISH_BOSS_HEAL, NEPTUNE_FISH_CAP, NEPTUNE_FISH_HEAL, NEPTUNE_FISH_RED_CHANCE, NEPTUNE_FISH_SPAWN_GAP, NEPTUNE_HEAL_CHARGE_MAX, NEPTUNE_HEAL_CHARGE_RATE,
   NEPTUNE_JELLY_CAP, NEPTUNE_JELLY_DIVE_CHANCE, NEPTUNE_JELLY_DIVE_DELAY, NEPTUNE_JELLY_GAP, NEPTUNE_PHASE_HPS,
   NEPTUNE_POISON_DAMAGE, NEPTUNE_PUFF_DAMAGE, NEPTUNE_PUFF_KNOCKBACK, NEPTUNE_PUFF_RADIUS, NEPTUNE_PUFF_TICKS, NEPTUNE_REVEAL_TICKS,
-  NEPTUNE_SHARK_BOSS_DAMAGE, NEPTUNE_SHARK_DAMAGE, NEPTUNE_SHARK_GAP, NEPTUNE_SHARK_KNOCKBACK, NEPTUNE_SHARK_SPEED, NEPTUNE_SHARK_WARNING,
-  NEPTUNE_STRIKE_DAMAGE, NEPTUNE_TIDE_AGAINST, NEPTUNE_TIDE_GAP, NEPTUNE_TIDE_PUSH_GAP, NEPTUNE_TIDE_ROTATE, NEPTUNE_TIDE_TICKS, NEPTUNE_TIDE_WITH,
+  NEPTUNE_SHARK_BOSS_DAMAGE, NEPTUNE_SHARK_DAMAGE, NEPTUNE_CLONE_PHASE3_SPEED, NEPTUNE_SHARK_GAP, NEPTUNE_SHARK_KNOCKBACK, NEPTUNE_SHARK_SPEED, NEPTUNE_SHARK_WARNING, NEPTUNE_SHARK_FOLLOWUP_CHANCE, NEPTUNE_SHARK_TRIPLE_CHANCE, NEPTUNE_SHARK_FOLLOWUP_DELAY,
+  NEPTUNE_TRIDENT_DAMAGE, NEPTUNE_TIDE_AGAINST, NEPTUNE_TIDE_GAP, NEPTUNE_TIDE_PUSH_GAP, NEPTUNE_TIDE_ROTATE, NEPTUNE_TIDE_TICKS, NEPTUNE_TIDE_WITH,
   SEA_ALLY_HEAL_INTERVAL, SEA_SONG_FIRST_DELAY, TILE_SIZE, T_FLOOR, chamberOfTile, isBossType, neptunePhaseCeilHP, neptunePhaseFloorHP, type EnemyType,
   MOVE_SPEED_MULT,
 } from './constants';
-import {
+import { godPhaseClock,
   stormSlowMultiplier, createEncounterEnemy, createSeaChanterAbilities, damageEnemy, damagePlayer, damageRuby, freeChamberTiles, godSpawnBoss, healPlayer, isFloorTile,
-  isSeaChanterDiving, killEnemy, playCelestialSound, playSFX_bomb, playSFX_meteorite, playSeaHealing, playSeaSound, roamPath, stopSeaSound,
+  ATTACK_SFX_VOLUME, isSeaChanterDiving, killEnemy, playCelestialSound, playSFX_bomb, playSFX_meteorite, playSeaHealing, playSeaSound, roamPath, stopSeaSound,
   tileEuclidDist, type Enemy, type GameState,
 } from './engine';
-import {
-  playStrikeCharged,
-} from './gaia';
+import { playStrikeCharged } from './gaia';
 
 // Neptune challenge (Sea Chanter): phases, dives and clones, fish, jellyfish, sharks, pufferfish, tides and the Trident.
 // The core engine calls in through updateNeptune and the exported helpers; this module uses engine helpers in turn.
@@ -30,8 +28,10 @@ export interface NeptuneState {
   reveal: { cloneId: number; ticks: number } | null; // a killed jellyfish marks one clone
   // Shark mini-event: a telegraphed lane across one chamber, then a shark charges along it and leaves.
   shark: { chamber: number; vertical: boolean; line: number; dir: 1 | -1; from: number; to: number; pos: number; warning: number; hitPlayer: boolean; hitRuby: boolean; hitBoss: boolean } | null;
+  sharkFollowup?: NeptuneState['shark']; sharkThird?: NeptuneState['shark']; sharkTriple?: boolean; // phase 3: a third charge after the follow-up
   sharkTimer: number; jellyTimer: number;
   healCharge: number;
+  cloneHealTicks?: number; // screen current after surviving clones restore health
   laser: { chamber: number; ticks: number } | null;
   laserImpact: { chamber: number; ticks: number } | null; // the strike's visual, separate from meteor impacts
   bombTimer: number; fishTimer: number; poisonTicks: number; poisonTimer: number;
@@ -60,7 +60,7 @@ export function healNeptune(state: GameState, boss: Enemy, amount: number) {
 export function chargeNeptuneHealing(state: GameState, healed: number) {
   if (!state.neptune || healed <= 0) return;
   const before = state.neptune.healCharge;
-  state.neptune.healCharge = Math.min(NEPTUNE_HEAL_CHARGE_MAX, state.neptune.healCharge + healed);
+  state.neptune.healCharge = Math.min(NEPTUNE_HEAL_CHARGE_MAX, state.neptune.healCharge + healed * NEPTUNE_HEAL_CHARGE_RATE);
   if (before < NEPTUNE_HEAL_CHARGE_MAX && state.neptune.healCharge >= NEPTUNE_HEAL_CHARGE_MAX) playStrikeCharged(); // the Trident is ready
 }
 
@@ -77,7 +77,8 @@ export function updateFish(state: GameState, e: Enemy) {
     if (next && isFloorTile(state.map, next[0], next[1])) { [e.targetTileX, e.targetTileY] = next; e.stepProgress = 0; }
     return;
   }
-  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS[e.type].speed * MOVE_SPEED_MULT * stormSlowMultiplier(state,e));
+  const phase3Clone = e.type === 'water_clone' && state.neptune?.phase === 3 ? NEPTUNE_CLONE_PHASE3_SPEED : 1; // phase 3: clones swim faster
+  e.stepProgress = Math.min(TILE_SIZE, e.stepProgress + ENEMY_CONFIGS[e.type].speed * phase3Clone * MOVE_SPEED_MULT * stormSlowMultiplier(state,e));
   e.x = (e.tileX + .5) * TILE_SIZE + (e.targetTileX - e.tileX) * e.stepProgress;
   e.y = (e.tileY + .5) * TILE_SIZE + (e.targetTileY - e.tileY) * e.stepProgress;
   if (e.stepProgress === TILE_SIZE) { e.tileX = e.targetTileX; e.tileY = e.targetTileY; e.stepProgress = 0; }
@@ -149,6 +150,7 @@ function startNeptuneDive(state: GameState, boss: Enemy, point: number) {
   const neptune = state.neptune!, sea = boss.sea ??= createSeaChanterAbilities();
   neptune.dive = { point, ticks: NEPTUNE_DIVE_TICKS[neptune.phase], dropsLeft: NEPTUNE_CLONES[neptune.phase], dropTimer: 1, cloneIds: [],
     jellyTimer: Math.random() < NEPTUNE_JELLY_DIVE_CHANCE ? NEPTUNE_JELLY_DIVE_DELAY : -1 };
+  preloadReversed('/sounds/seaSong.mp3'); // ready for the resurface
   sea.mode = 'diving'; sea.diveElapsedTicks = 0; sea.diveFleeing = false; sea.songWindupTicks = 0; sea.resurfaceTicks = 0;
   boss.pathTimer = 0; boss.path = [];
   playSeaSound('dive'); playSeaSound('diveSinging');
@@ -162,6 +164,7 @@ function endNeptuneDive(state: GameState, boss: Enemy) {
   sea.resurfaceTicks = 36; sea.resurfaceX = boss.x; sea.resurfaceY = boss.y; sea.songWindupTicks = 0;
   boss.pathTimer = 0; boss.path = [];
   stopSeaSound('diveSinging');
+  playReversed('/sounds/seaSong.mp3', .3 * ATTACK_SFX_VOLUME, 1.25); // the charge cue played backwards, raised
 }
 
 function advanceNeptunePhase(state: GameState, boss: Enemy) {
@@ -177,6 +180,7 @@ function advanceNeptunePhase(state: GameState, boss: Enemy) {
 
 // God panel: jump straight to a phase at full phase HP (summoning her first if she has not arrived).
 export function godSetNeptunePhase(state: GameState, phase: 1 | 2 | 3) {
+  godPhaseClock(state, phase); // phase 2+ starts at least a minute in
   const neptune = state.neptune;
   if (!neptune || state.gamePhase !== 'playing') return;
   let boss = state.enemies.find(b => b.id === neptune.bossId && b.hp > 0);
@@ -184,7 +188,7 @@ export function godSetNeptunePhase(state: GameState, phase: 1 | 2 | 3) {
   if (!boss) return;
   if (neptune.dive) endNeptuneDive(state, boss);
   state.enemies = state.enemies.filter(e => e.type !== 'water_clone' && e.type !== 'water_bomb');
-  neptune.phase = phase; neptune.exposed = false;
+  neptune.phase = phase; neptune.exposed = false; neptune.cloneHealTicks = 0;
   neptune.armed = NEPTUNE_DIVE_POINTS[phase].map(() => true);
   neptune.bombTimer = NEPTUNE_BOMB_INTERVAL; neptune.tides = [];
   boss.hp = neptunePhaseCeil(neptune) - .01; boss.healFlashTicks = 30;
@@ -193,6 +197,7 @@ export function godSetNeptunePhase(state: GameState, phase: 1 | 2 | 3) {
 
 export function updateNeptune(state: GameState) {
   const neptune = state.neptune!;
+  if (neptune.cloneHealTicks) neptune.cloneHealTicks--;
   state.ambientEvents.timer = Math.max(state.ambientEvents.timer, 3600); // no space events on this world
   // Stinger poison.
   if (neptune.poisonTicks > 0) {
@@ -273,7 +278,9 @@ export function updateNeptune(state: GameState) {
     return;
   }
   if (--dive.ticks <= 0) {
-    healNeptune(state, boss, alive * NEPTUNE_CLONE_HEAL * NEPTUNE_PHASE_HPS[neptune.phase]); // each clone you missed restores her
+    const previousHp = boss.hp;
+    healNeptune(state, boss, alive * NEPTUNE_CLONE_HEAL * NEPTUNE_PHASE_HPS[neptune.phase]);
+    if (boss.hp > previousHp) neptune.cloneHealTicks = NEPTUNE_CLONE_HEAL_FX_TICKS;
     playSeaHealing(boss);
     endNeptuneDive(state, boss);
   }
@@ -325,49 +332,66 @@ export function neptuneRevealClone(state: GameState) {
   if (clones[0]) { neptune.reveal = { cloneId: clones[0].id, ticks: NEPTUNE_REVEAL_TICKS }; playCelestialSound('ready', .6); }
 }
 
-// Shark: every 30–45s a lane through your chamber (along your row or column) is marked, then a shark charges
-// in from one wall and out through the other. A hit costs HP and knocks you one tile off the lane; it bites her too.
+// A possible follow-up is warned as the first charge launches, then charges one second later.
+function createShark(state:GameState,warning:number,verticalOverride?:boolean): NeptuneState['shark'] {
+    const chamber = chamberOfTile(state.playerTileX, state.playerTileY);
+    if (chamber < 0) { return null; } // try again soon once you are in a chamber
+    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[chamber], vertical = verticalOverride ?? Math.random() < .5, dir: 1 | -1 = Math.random() < .5 ? 1 : -1;
+    const [lo, hi] = vertical ? [r1, r2] : [c1, c2];
+    return { chamber, vertical, line: vertical ? state.playerTileX : state.playerTileY, dir, from: dir > 0 ? lo : hi, to: dir > 0 ? hi : lo,
+      pos: dir > 0 ? lo - 1 : hi + 1, warning, hitPlayer: false, hitRuby: false, hitBoss: false };
+
+}
 function updateNeptuneShark(state: GameState) {
   const neptune = state.neptune!;
-  const shark = neptune.shark;
-  if (!shark) {
+  if (!neptune.shark && !neptune.sharkFollowup && !neptune.sharkThird) {
     if (--neptune.sharkTimer > 0) return;
     neptune.sharkTimer = NEPTUNE_SHARK_GAP[0] + Math.floor(Math.random() * (NEPTUNE_SHARK_GAP[1] - NEPTUNE_SHARK_GAP[0]));
-    const chamber = chamberOfTile(state.playerTileX, state.playerTileY);
-    if (chamber < 0) { neptune.sharkTimer = 120; return; } // try again soon once you are in a chamber
-    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[chamber], vertical = Math.random() < .5, dir: 1 | -1 = Math.random() < .5 ? 1 : -1;
-    const [lo, hi] = vertical ? [r1, r2] : [c1, c2];
-    neptune.shark = { chamber, vertical, line: vertical ? state.playerTileX : state.playerTileY, dir, from: dir > 0 ? lo : hi, to: dir > 0 ? hi : lo,
-      pos: dir > 0 ? lo - 1 : hi + 1, warning: NEPTUNE_SHARK_WARNING, hitPlayer: false, hitRuby: false, hitBoss: false };
+    neptune.shark=createShark(state,NEPTUNE_SHARK_WARNING); neptune.sharkTriple = neptune.phase === 3 && Math.random() < NEPTUNE_SHARK_TRIPLE_CHANCE;
+    if(!neptune.shark)neptune.sharkTimer=120;
     return;
   }
-  if (shark.warning > 0) { if (--shark.warning === 0) playSeaSound('attack'); return; }
-  shark.pos += shark.dir * NEPTUNE_SHARK_SPEED;
-  const along = (x: number, y: number) => shark.vertical ? x === shark.line && Math.abs(y - shark.pos) < .8 : y === shark.line && Math.abs(x - shark.pos) < .8;
-  if (!shark.hitPlayer && along(state.playerTileX, state.playerTileY)) {
-    shark.hitPlayer = true;
-    damagePlayer(state, NEPTUNE_SHARK_DAMAGE);
-    // Thrown sideways off the lane (the other side if a wall is there).
-    const [sx, sy] = shark.vertical ? [1, 0] : [0, 1], side = Math.random() < .5 ? 1 : -1;
-    for (const k of [side, -side]) if (isFloorTile(state.map, state.playerTargetX + sx * k, state.playerTargetY + sy * k)) { state.playerKnockback = { dirX: sx * k, dirY: sy * k, started: false, tilesLeft: NEPTUNE_SHARK_KNOCKBACK }; break; }
-    state.screenShakeTicks = Math.max(state.screenShakeTicks, 10); state.screenShakeAmt = Math.max(state.screenShakeAmt, 5);
+  const active=(['shark','sharkFollowup','sharkThird'] as const).map(key=>({key,shark:neptune[key]}));
+  for(const {key,shark} of active) {
+    if(!shark)continue;
+    if (shark.warning > 0) {
+      if (--shark.warning === 0) {
+        playSeaSound('attack');
+        if(key==='shark'&&(neptune.sharkTriple||Math.random()<NEPTUNE_SHARK_FOLLOWUP_CHANCE[neptune.phase]))
+          neptune.sharkFollowup=createShark(state,NEPTUNE_SHARK_FOLLOWUP_DELAY,!shark.vertical);
+        if(key==='sharkFollowup'&&neptune.sharkTriple){ // a triple: one more charge, across the follow-up's lane
+          neptune.sharkThird=createShark(state,NEPTUNE_SHARK_FOLLOWUP_DELAY,!shark.vertical); neptune.sharkTriple=false;
+        }
+      }
+      continue;
+    }
+    shark.pos += shark.dir * NEPTUNE_SHARK_SPEED;
+    const along = (x: number, y: number) => shark.vertical ? x === shark.line && Math.abs(y - shark.pos) < .8 : y === shark.line && Math.abs(x - shark.pos) < .8;
+    if (!shark.hitPlayer && along(state.playerTileX, state.playerTileY)) {
+      shark.hitPlayer = true;
+      damagePlayer(state, NEPTUNE_SHARK_DAMAGE);
+      // Thrown sideways off the lane (the other side if a wall is there).
+      const [sx, sy] = shark.vertical ? [1, 0] : [0, 1], side = Math.random() < .5 ? 1 : -1;
+      for (const k of [side, -side]) if (isFloorTile(state.map, state.playerTargetX + sx * k, state.playerTargetY + sy * k)) { state.playerKnockback = { dirX: sx * k, dirY: sy * k, started: false, tilesLeft: NEPTUNE_SHARK_KNOCKBACK }; break; }
+      state.screenShakeTicks = Math.max(state.screenShakeTicks, 10); state.screenShakeAmt = Math.max(state.screenShakeAmt, 5);
+    }
+    if (!shark.hitRuby && state.rubyTileX !== -1 && along(state.rubyTileX, state.rubyTileY)) { shark.hitRuby = true; damageRuby(state, NEPTUNE_SHARK_DAMAGE); }
+    const boss = state.enemies.find(b => b.id === neptune.bossId && b.hp > 0);
+    if (boss && !shark.hitBoss && along(boss.tileX, boss.tileY)) { shark.hitBoss = true; damageEnemy(state, boss, NEPTUNE_PHASE_HPS[neptune.phase] * NEPTUNE_SHARK_BOSS_DAMAGE, 'meteor'); }
+    if ((shark.dir > 0 && shark.pos > shark.to + 2) || (shark.dir < 0 && shark.pos < shark.to - 2)) neptune[key] = null;
   }
-  if (!shark.hitRuby && state.rubyTileX !== -1 && along(state.rubyTileX, state.rubyTileY)) { shark.hitRuby = true; damageRuby(state, NEPTUNE_SHARK_DAMAGE); }
-  const boss = state.enemies.find(b => b.id === neptune.bossId && b.hp > 0);
-  if (boss && !shark.hitBoss && along(boss.tileX, boss.tileY)) { shark.hitBoss = true; damageEnemy(state, boss, NEPTUNE_PHASE_HPS[neptune.phase] * NEPTUNE_SHARK_BOSS_DAMAGE, 'meteor'); }
-  if ((shark.dir > 0 && shark.pos > shark.to + 2) || (shark.dir < 0 && shark.pos < shark.to - 2)) neptune.shark = null;
 }
 
 // Meteor-like strike on a whole room: aliens and water objects there are destroyed, she takes a share of
 // phase HP, and the player and Ruby are hit like a meteor if they are inside.
 function neptuneStrike(state: GameState, chamber: number) {
   const neptune = state.neptune!;
-  neptune.laserImpact = { chamber, ticks: 70 };
+  neptune.laserImpact = { chamber, ticks: 120 };
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 22); state.screenShakeAmt = Math.max(state.screenShakeAmt, 12);
   playSFX_meteorite();
   for (const target of [...state.enemies].reverse()) {
     if (!state.enemies.includes(target) || chamberOfTile(target.tileX, target.tileY) !== chamber) continue;
-    if (target.id === neptune.bossId) damageEnemy(state, target, NEPTUNE_PHASE_HPS[neptune.phase] * NEPTUNE_STRIKE_DAMAGE, 'meteor');
+    if (target.id === neptune.bossId) damageEnemy(state, target, NEPTUNE_PHASE_HPS[neptune.phase] * NEPTUNE_TRIDENT_DAMAGE[neptune.phase], 'meteor');
     else if (!isBossType(target.type)) { damageEnemy(state, target, target.hp + 1, 'meteor'); const i = state.enemies.indexOf(target); if (i >= 0) killEnemy(state, i, true); }
   }
   if (chamberOfTile(state.playerTileX, state.playerTileY) === chamber) damagePlayer(state, METEORITE_PLAYER_DMG);

@@ -10,7 +10,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),path
  await page.getByLabel('Highest run',{exact:true}).waitFor();await page.evaluate(()=>document.fonts.ready);
  assert.equal(await page.locator('.rs-run-record').count(),0);assert.match(await page.getByLabel('Highest run',{exact:true}).innerText(),/ENDLESS.*STAGE 35/);assert.doesNotMatch(await page.getByLabel('Highest run',{exact:true}).innerText(),/ASCENSION/);
  await page.screenshot({path:path.resolve('docs/ruby-star/visual-reference/desktop-highest-run.png')});
- await page.getByRole('button',{name:'Show ENDLESS SPACE ASCENSION',exact:true}).click();
+ await page.getByRole('button',{name:'Show CELESTIAL CHALLENGE',exact:true}).click();
  assert.equal(await page.locator('.rs-run-record').count(),0);
  await page.setViewportSize({width:1024,height:600});await page.waitForTimeout(350);assert.equal(await page.getByLabel('Highest run',{exact:true}).evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true);
  assert.equal(await page.locator('.rs-run-record').count(),0);

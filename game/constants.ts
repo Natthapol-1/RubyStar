@@ -1,8 +1,9 @@
 // ─── Map ─────────────────────────────────────────────────────────────────────
 
 export const TILE_SIZE = 48;
-export const MAP_COLS = 51;
-export const MAP_ROWS = 51;
+// The map size follows the chamber layout (51×51 for the standard station, larger for Star Gambit's Bazaar).
+export let MAP_COLS = 51;
+export let MAP_ROWS = 51;
 
 // Tile types
 export const T_WALL = 0;
@@ -15,43 +16,57 @@ export const CH_BETA = 1; // top-right
 export const CH_GAMMA = 3; // bottom-right
 export const CH_DELTA = 2; // bottom-left
 
-// Chamber boundaries [row1, col1, row2, col2] inclusive (outer walls)
-export const CHAMBER_BOUNDS = [
-  [1, 1, 20, 20],   // ALPHA (TL)
-  [1, 30, 20, 49],  // BETA  (TR)
-  [30, 1, 49, 20],  // DELTA (BL)
-  [30, 30, 49, 49], // GAMMA (BR)
-] as const;
-
-export const CHAMBER_LABELS = ['ALPHA', 'BETA', 'DELTA', 'GAMMA'];
-export const CHAMBER_COLORS = ['#00d4ff', '#ff6b6b', '#00ff88', '#ffaa00'];
-
-// Teleport pads (tileX=col, tileY=row)
-export const TELEPORT_PADS: readonly [number, number][] = [
-  [10, 10], // ALPHA
-  [39, 10], // BETA
-  [10, 39], // DELTA
-  [39, 39], // GAMMA
-];
+// The chamber layout is data: every mode uses the standard four chambers except Star Gambit's seven-room Bazaar.
+// These arrays keep their names (and identity) everywhere; applyChamberLayout swaps their contents when a mode starts.
+type Bounds = [number, number, number, number]; // [row1, col1, row2, col2] inclusive (outer walls)
+const STANDARD_LAYOUT = {
+  bounds: [[1, 1, 20, 20], [1, 30, 20, 49], [30, 1, 49, 20], [30, 30, 49, 49]] as Bounds[], // ALPHA TL, BETA TR, DELTA BL, GAMMA BR
+  labels: ['ALPHA', 'BETA', 'DELTA', 'GAMMA'],
+  colors: ['#00d4ff', '#ff6b6b', '#00ff88', '#ffaa00'],
+  pads: [[10, 10], [39, 10], [10, 39], [39, 39]] as [number, number][], // tileX, tileY
+  // Spawn points per chamber: floor tiles on the perimeter, away from the hallway openings.
+  spawns: [
+    [[2, 2], [10, 2], [18, 2], [2, 10], [2, 18], [19, 5], [19, 15], [7, 19], [15, 19]],
+    [[31, 2], [39, 2], [47, 2], [31, 7], [31, 15], [47, 10], [35, 19], [46, 19]],
+    [[7, 31], [15, 31], [2, 31], [2, 39], [2, 47], [19, 32], [19, 45], [7, 48], [15, 48]],
+    [[35, 31], [46, 31], [31, 35], [31, 45], [47, 39], [48, 46], [35, 48], [46, 48]],
+  ] as [number, number][][],
+};
+// Star Gambit's Bazaar (63×63): six stalls on the corners of a hexagon (clockwise from the top) around a central plaza
+// chamber, with corridors of several tiles between them.
+const BAZAAR_SIZE = 63;
+const BAZAAR_ROOMS: Bounds[] = [[1, 24, 15, 38], [14, 42, 28, 56], [34, 42, 48, 56], [47, 24, 61, 38], [34, 6, 48, 20], [14, 6, 28, 20], [24, 24, 38, 38]];
+function perimeterSpawns([r1, c1, r2, c2]: Bounds): [number, number][] {
+  const out: [number, number][] = [], ir1 = r1 + 1, ic1 = c1 + 1, ir2 = r2 - 1, ic2 = c2 - 1, midR = (ir1 + ir2) / 2, midC = (ic1 + ic2) / 2;
+  for (let c = ic1; c <= ic2; c += 3) for (const r of [ir1, ir2]) if (Math.abs(c - midC) > 2) out.push([c, r]); // skip the openings at the middle of each side
+  for (let r = ir1 + 3; r <= ir2 - 3; r += 3) for (const c of [ic1, ic2]) if (Math.abs(r - midR) > 2) out.push([c, r]);
+  return out;
+}
+const BAZAAR_LAYOUT = {
+  bounds: BAZAAR_ROOMS,
+  labels: ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON', 'ZETA', 'PLAZA'], // clockwise from the top stall
+  colors: ['#ffd27a', '#ff8fb1', '#7fe8ff', '#9dff8a', '#c9a8ff', '#ffb070', '#e9f2ff'],
+  pads: BAZAAR_ROOMS.map(([r1, c1, r2, c2]) => [(c1 + c2) / 2, (r1 + r2) / 2] as [number, number]),
+  spawns: BAZAAR_ROOMS.slice(0, 6).map(perimeterSpawns).concat([[]]), // nothing enters through the plaza
+};
+export const CHAMBER_BOUNDS: Bounds[] = STANDARD_LAYOUT.bounds.map(b => [...b] as Bounds);
+export const CHAMBER_LABELS: string[] = [...STANDARD_LAYOUT.labels];
+export const CHAMBER_COLORS: string[] = [...STANDARD_LAYOUT.colors];
+export const TELEPORT_PADS: [number, number][] = STANDARD_LAYOUT.pads.map(p => [...p] as [number, number]);
+export const CHAMBER_SPAWN_TILES: [number, number][][] = STANDARD_LAYOUT.spawns.map(l => l.map(p => [...p] as [number, number]));
+export type ChamberLayout = 'standard' | 'bazaar';
+/** Swap the chamber layout in place (bounds, labels, colours, pads, spawn tiles). Call before building the map. */
+export function applyChamberLayout(kind: ChamberLayout) {
+  const L = kind === 'bazaar' ? BAZAAR_LAYOUT : STANDARD_LAYOUT;
+  MAP_COLS = MAP_ROWS = kind === 'bazaar' ? BAZAAR_SIZE : 51;
+  const put = <T,>(target: T[], source: T[]) => { target.length = 0; target.push(...source); };
+  put(CHAMBER_BOUNDS, L.bounds.map(b => [...b] as Bounds)); put(CHAMBER_LABELS, [...L.labels]); put(CHAMBER_COLORS, [...L.colors]);
+  put(TELEPORT_PADS, L.pads.map(p => [...p] as [number, number])); put(CHAMBER_SPAWN_TILES, L.spawns.map(l => l.map(p => [...p] as [number, number])));
+}
+export const TELEPORT_COOLDOWN = 2 * 60; // ticks after arrival
 
 // Player starting tile
 export const PLAYER_START: [number, number] = [10, 10]; // [tileX, tileY] in ALPHA
-
-// Spawn points per chamber — floor tiles on perimeter (excluding hallway openings)
-// Hallway openings: TL right col=20 rows 9-11, TL bottom row=20 cols 9-11
-//                  TR left  col=30 rows 9-11, TR bottom row=20 cols 38-40
-//                  BL right col=20 rows 38-40, BL top row=30 cols 9-11
-//                  BR left  col=30 rows 38-40, BR top row=30 cols 38-40
-export const CHAMBER_SPAWN_TILES: readonly (readonly [number, number][])[] = [
-  // ALPHA - interior rows 2-19, cols 2-19
-  [[2, 2], [10, 2], [18, 2], [2, 10], [2, 18], [19, 5], [19, 15], [7, 19], [15, 19]],
-  // BETA - interior rows 2-19, cols 31-48
-  [[31, 2], [39, 2], [47, 2], [31, 7], [31, 15], [47, 10], [35, 19], [46, 19]],
-  // DELTA - interior rows 31-48, cols 2-19
-  [[7, 31], [15, 31], [2, 31], [2, 39], [2, 47], [19, 32], [19, 45], [7, 48], [15, 48]],
-  // GAMMA - interior rows 31-48, cols 31-48
-  [[35, 31], [46, 31], [31, 35], [31, 45], [47, 39], [48, 46], [35, 48], [46, 48]],
-];
 
 // ─── Map generator ────────────────────────────────────────────────────────────
 
@@ -171,6 +186,45 @@ export function generateMap(): number[][] {
   return map;
 }
 
+/**
+ * Star Gambit's Bazaar (call after applyChamberLayout('bazaar')): six market stalls on the corners of a hexagon around a
+ * central plaza chamber, joined by 3-wide corridors. The ring: the top stall reaches each upper stall along a bent
+ * corridor, each side has a corridor down from upper to lower stall, and the bottom stall reaches each lower stall the
+ * same way. The hub: the top and bottom stalls have spokes into the plaza, and each side stall has a straight corridor
+ * across into it.
+ */
+export function generateBazaarMap(): number[][] {
+  const map: number[][] = Array.from({ length: MAP_ROWS }, () => new Array(MAP_COLS).fill(T_WALL));
+  const fill = (r1: number, c1: number, r2: number, c2: number, t = T_FLOOR) => { for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) map[r][c] = t; };
+  for (const [r1, c1, r2, c2] of CHAMBER_BOUNDS) fill(r1 + 1, c1 + 1, r2 - 1, c2 - 1);
+  // The ring.
+  fill(6, 12, 8, 24); fill(6, 12, 14, 14);   // top ↔ upper-left
+  fill(6, 38, 8, 50); fill(6, 48, 14, 50);   // top ↔ upper-right
+  fill(28, 12, 34, 14); fill(28, 48, 34, 50); // upper ↔ lower, each side
+  fill(54, 12, 56, 24); fill(48, 12, 56, 14); // bottom ↔ lower-left
+  fill(54, 38, 56, 50); fill(48, 48, 56, 50); // bottom ↔ lower-right
+  // The hub.
+  fill(15, 30, 24, 32); fill(38, 30, 47, 32); // spokes from the top and bottom stalls
+  fill(25, 20, 27, 24); fill(35, 20, 37, 24); // upper-left and lower-left across into the plaza
+  fill(25, 38, 27, 42); fill(35, 38, 37, 42); // upper-right and lower-right across into the plaza
+  for (const [tx, ty] of TELEPORT_PADS) map[ty][tx] = T_TELEPORT;
+  // Each stall has its own crate pattern (local row, col 0–12 from its top-left interior tile; pad at 6,6, edges kept clear).
+  const bars = (r: number, c: number, len: number, down = false) => Array.from({ length: len }, (_, i) => down ? [r + i, c] : [r, c + i]);
+  const STALL_CRATES: number[][][] = [
+    [[2, 2], [2, 3], [3, 2], [2, 10], [2, 9], [3, 10], [10, 2], [9, 2], [10, 3], [10, 10], [10, 9], [9, 10]],          // ALPHA: corner brackets
+    [...bars(3, 3, 3, true), ...bars(7, 3, 3, true), ...bars(3, 9, 3, true), ...bars(7, 9, 3, true)],                    // BETA: two broken shelves
+    [...bars(3, 5, 3), ...bars(9, 5, 3), ...bars(5, 3, 3, true), ...bars(5, 9, 3, true)],                                // GAMMA: a broken ring round the pad
+    [[2, 4], [3, 9], [5, 2], [4, 6], [6, 10], [8, 8], [9, 3], [10, 7]],                                                  // DELTA: scattered crates
+    [[2, 2], [3, 3], [4, 4], [2, 10], [3, 9], [4, 8], [8, 4], [9, 3], [10, 2], [8, 8], [9, 9], [10, 10]],                // EPSILON: diagonal arms
+    [...bars(3, 2, 3), ...bars(3, 8, 3), ...bars(9, 2, 3), ...bars(9, 8, 3)],                                            // ZETA: four counters
+  ];
+  CHAMBER_BOUNDS.slice(0, 6).forEach(([r1, c1], i) => { for (const [r, c] of STALL_CRATES[i]) map[r1 + 1 + r][c1 + 1 + c] = T_WALL; });
+  // The plaza (local 0–12; pad at 6,6): four 2×2 pillars between the entrances.
+  const [pr, pc] = CHAMBER_BOUNDS[6];
+  for (const [r, c] of [[3, 3], [3, 8], [8, 3], [8, 8]]) fill(pr + 1 + r, pc + 1 + c, pr + 2 + r, pc + 2 + c, T_WALL);
+  return map;
+}
+
 // Returns which chamber index a tile belongs to (-1 if none / hallway)
 export function chamberOfTile(tileX: number, tileY: number): number {
   for (let i = 0; i < CHAMBER_BOUNDS.length; i++) {
@@ -200,12 +254,12 @@ export function hallwayOfTile(tileX: number, tileY: number): number {
 
 // ─── Enemy types ─────────────────────────────────────────────────────────────
 
-export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'lancer' | 'enchanter' | 'bleeder' | 'snatcher' | 'impostor' | 'shooter' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
+export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'lancer' | 'enchanter' | 'bleeder' | 'snatcher' | 'impostor' | 'shooter' | 'reflector' | 'trapper' | 'dropper' | 'blinker' | 'jammer' | 'spook' | 'grappler' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
   | 'fish_blue' | 'fish_red' | 'stinger' | 'water_clone' | 'water_bomb' | 'jellyfish' | 'pufferfish'
   | 'seed_pod' | 'blossom' | 'sporeling' | 'vine_crawler' | 'angry_mushroom' | 'lifebloom'
-  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_mimic' | 'cinder_wisp' | 'emberling' | 'scorch_sapper' | 'frost_raider' | 'ice_caller' | 'rime_brute';
+  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_mimic' | 'cinder_wisp' | 'lost_soul' | 'soulless' | 'toxic_soulless' | 'sand_relic' | 'sand_core' | 'sand_scarab' | 'sand_scorpion' | 'dune_worm' | 'emberling' | 'scorch_sapper' | 'flare_spitter' | 'frostbiter' | 'sleet_mortar' | 'glacier_hulk' | 'lodestone' | 'grounder' | 'pulsar' | 'zealot' | 'bellringer' | 'mason' | 'penitent';
 
-export const ENERGY_LEECH_DRAIN = 20;
+export const ENERGY_LEECH_DRAIN = 30;
 
 export interface EnemyConfig {
   maxHp: number;
@@ -232,7 +286,7 @@ export const JUPITER = {
   stormGrace: 90, stormInterval: 30, stormDamage: 14, stormRubyDamage: 7,
   shockTileCount: 20, shockTileRespawn: 180, shockSlowTicks: 120, shockSlow: .55, shockEnergy: 12,
   chargeBlastDamage: 60, chargeBlastTicks: 42,
-  shardCount: 32, shardShare: .01, shardReach: .55,
+  shardCount: 32, shardShare: .01, shardReach: .55, shardHeal: 3,
   fragmentCount: 2, fragmentChargeTicks: 480, fragmentBoost: 1.35,
   miniStormsPerRoom: 2, miniStormSpeed: 2.8, miniStormChaseSpeed: 4.6, miniStormChaseRange: 6,
   miniStormDamage: 12, miniStormHitCooldown: 60,
@@ -240,26 +294,32 @@ export const JUPITER = {
 } as const;
 
 export const SUN = {
-  phaseHP: 3000, meteorShare: .1, solarShare: .02, stations: 6, stationReach: 1.6, stationBossReach: 2.5, // solarShare: Solar Flare (F) hits the King for this share of a phase
-  stationChargeTicks: 300, stationTrickle: .6, stationCooling: 13, stationHealing: 25,
-  waveRadius: 8, waveCooldown: 420, waveDamage: 1, waveCooling: 2, waveStationCharge: 45,
+  phaseHP: 3000, meteorShare: .1, solarShare: .04, stations: 5, stationReach: 1.6, stationBossReach: 2.5, // solarShare: Solar Flare (F) hits the King for this share of a phase
+  stationChargeTicks: 300, stationTrickle: .6, stationCooling: 11.96, stationHealing: 25, stationRubyHealing: 25,
+  waveRadius: 8, waveCooldown: 330, waveDamage: 1, waveCooling: 2, waveStationCharge: 45, waveSlowTicks: 90, waveSlowMult: .5,
   rapidCooldown: 12, afterQuenchCooldown: 120, // afterQuenchCooldown: C returns as an ordinary wave 2s after the extinguished window ends
-  empoweredDamage: .03, empoweredNormalDamage: 10, quenchTicks: 600, quenchDelayTicks: 120,
+  empoweredDamage: .045, empoweredNormalDamage: 10, quenchTicks: 600, quenchDelayTicks: 120,
   quenchEnemyTickInterval: 2, // zero temperature: enemy movement, windups and attacks run at half speed
   wispHP: 3, initialWisps: 12, wispCap: 80, wispBatch: 4, wispGap: 240,
   bossWispGap: 360, arenaWisps: 18, heatPerWisp: .06,
-  ragePerSecond: 1.4, lateRagePerSecond: 1.6, rageCooling: 15, rageOnHit: .1, eruptionDamage: 75, // rageOnHit: rage removed per HP the King loses
+  ragePerSecond: 1.75, lateRagePerSecond: 2.6, phase3RageMult: 1.05, rageCalmTicks: 600, rageCalmMult: .8 * .65, lateRageCalmMult: .65 / 1.3, rageCooling: 20, rageOnHit: .1, eruptionDamage: 75, // rageOnHit: rage removed per HP the King loses
   // Phase 2+: above trailRage the King sets the tiles he walks on burning for trailTicks. Standing on one costs trailDamage
   // (Ruby trailRubyDamage) and adds trailHeat every trailGap ticks. Water puts them out.
   trailRage: 20, trailRadius: 1, trailTicks: 600, trailCap: 80, trailGap: 30, trailDamage: 3, trailRubyDamage: 2, trailHeat: .5,
   // Phase 3: every flareGap ticks a room is marked for flareWarning ticks, then flares (+flareHeat). Water landing in that
   // room, a station burst there, or Solar Flare defuses it (-flareDefuseCool heat instead).
-  flareGap: [720, 1020] as const, flareWarning: 480, flareHeat: 25, flareDefuseCool: 10, flareDamage: 25, // flareWarning: 8s; flareDamage: to you and placed Ruby inside the room
-  // Phase 2+: Scorch Sappers arrive every sapperGap ticks (at most sapperCap), walk to the nearest cooling station and drain
-  // sapperDrain % of its charge and sapperHeat heat per second while beside it. Water destroys them.
-  sapperGap: 480, sapperCap: 2, sapperHP: 3, sapperDrain: 12, sapperHeat: .5,
-  emberlingSpawnChance: .35, emberlingArmor: .1, emberlingKnockback: 2,
+  flareGap: [600, 840] as const, flareWarning: 480, flareHeat: 25, flareDefuseCool: 5, flareDamage: 25, // flareWarning: 8s; flareDamage: to you and placed Ruby inside the room
+  // Phase 3: Scorch Sappers arrive every sapperGap ticks (at most sapperCap), walk to the nearest cooling station and drain
+  // sapperDrain % of its charge and sapperHeat heat per second while beside it. Water deals its normal damage.
+  sapperFromPhase: 3, sapperGap: 480, sapperCap: 2, sapperHP: 10, sapperSoundGap: 60, sapperDrain: 12, sapperHeat: .5,
+  spitter: { fromPhase: 2, chance: .35, cap: 3, warningTicks: 42, shotSpeed: 7.2, shotLife: 83, fireTicks: 180, spread: .24, hitStun: 48, armor: .1 }, // armor: like the Emberling, it takes this share of damage until water douses it // hitStun: a fireball that hits you stuns you this long
+  alienSpawnRate: 1, // regular alien spawn frequency multiplier on Sun
+  extraPlainChance: .06, // phase 2+: chance each regular spawn brings one extra ordinary (shared-pool) alien, within the cap
+  emberlingSpawnChance: .4, emberlingArmor: .1, emberlingKnockback: 2,
 } as const;
+
+// Shared timed expansion for ordinary slots on eight challenges; Saturn/Sirius apply it to their Normal slots.
+export const CHALLENGE_EXTRA_POOL = { afterTicks: 3600, commonWeight: 4, normalWeight: 4, shooterWeight: 1 } as const; // after 60s Normal loses its double weight (normalWeight, like the rest)
 
 // Tiles a regular alien's hit on the player pushes them away (Bomber: its explosion).
 export const CHARGER_KNOCKBACK = 3; // tiles a Charger's rush pushes the player along its lane
@@ -271,28 +331,82 @@ export const KNOCKBACK_SHAKE_TICKS = 12;
 export const KNOCKBACK_SHAKE_AMOUNT = 6;
 
 export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
-  ice_caller: {
-    maxHp: 12, speed: 0, color: '#b8cffb', shieldColor: '#e4ffff', bodyFraction: .7, scoreValue: 20,
-    damageToPlayer: 12, damageToRuby: 12, attackCooldown: 480, attackRange: 8, bombExplodeRange: 0,
+  // Saturn aliens: their attacks live in saturn.ts (SATURN.frostbiter / mortar / hulk); damage values here are for reference.
+  frostbiter: { // pounces onto the tile you stood on and strips your shield
+    maxHp: 12, speed: 1.4, color: '#8fe3ff', shieldColor: '#e4ffff', bodyFraction: .66, scoreValue: 20,
+    damageToPlayer: 14, damageToRuby: 10, attackCooldown: 120, attackRange: 4, bombExplodeRange: 0,
   },
-  rime_brute: {
-    maxHp: 30, speed: 3.2, color: '#94b9e9', shieldColor: '#e4ffff', bodyFraction: .9, scoreValue: 30,
-    damageToPlayer: 12, damageToRuby: 12, attackCooldown: 180, attackRange: 0, bombExplodeRange: 0,
+  sleet_mortar: { // Hailer: keeps away and shells your tile and either side, freezing where shells land
+    maxHp: 12, speed: .55, color: '#a7c4ff', shieldColor: '#e4ffff', bodyFraction: .72, scoreValue: 22,
+    damageToPlayer: 10, damageToRuby: 7, attackCooldown: 240, attackRange: 9, bombExplodeRange: 0,
   },
-  frost_raider: {
-    maxHp: 18, speed: 1.5, color: '#91dff5', shieldColor: '#e4ffff', bodyFraction: .7, scoreValue: 25,
-    damageToPlayer: 10, damageToRuby: 10, attackCooldown: 180, attackRange: 0, bombExplodeRange: 0,
+  glacier_hulk: { // slow and tough, the Warden's favourite; slams the 5×5 area around it
+    maxHp: 40, speed: 1.3, color: '#7fb3e6', shieldColor: '#e4ffff', bodyFraction: .92, scoreValue: 32,
+    damageToPlayer: 18, damageToRuby: 12, attackCooldown: 210, attackRange: 2, bombExplodeRange: 0,
+  },
+  // Sirius aliens: their attacks live in sirius.ts (SIRIUS.zealot / bellringer); damage values here are for reference.
+  zealot: { // braces, then dashes straight through you, knocking you far back
+    maxHp: 22, speed: 1.9, color: '#f2e6c8', shieldColor: '#ff6a4d', bodyFraction: .7, scoreValue: 22,
+    damageToPlayer: 12, damageToRuby: 9, attackCooldown: 150, attackRange: 5, bombExplodeRange: 0,
+  },
+  bellringer: { // rings its bell: a pulse that hurts and pushes you away
+    maxHp: 28, speed: 1.1, color: '#e9c98a', shieldColor: '#fff2c4', bodyFraction: .78, scoreValue: 24,
+    damageToPlayer: 8, damageToRuby: 6, attackCooldown: 240, attackRange: 3, bombExplodeRange: 0,
+  },
+  penitent: { // Sirius phase 3: walks your trail and erases it
+    maxHp: 22, speed: 2.3, color: '#5a5262', shieldColor: '#d8cfc0', bodyFraction: .75, scoreValue: 26,
+    damageToPlayer: 0, damageToRuby: 0, attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
+  },
+  mason: { // Sirius phase 2+: raises a short temporary wall of holy stone ahead of you
+    maxHp: 24, speed: 1.0, color: '#9a94ad', shieldColor: '#ffe27a', bodyFraction: .8, scoreValue: 26,
+    damageToPlayer: 0, damageToRuby: 0, attackCooldown: 240, attackRange: 7, bombExplodeRange: 0,
+  },
+  soulless: { // Singularity: a soulless skeleton that hunts you; the swarm will not eat it (spawned by singularity-maw.ts)
+    maxHp: 30, speed: 4, color: '#c5bcae', shieldColor: '#eee4d2', bodyFraction: .9, scoreValue: 15,
+    damageToPlayer: 12, damageToRuby: 8, attackCooldown: 80, attackRange: 6, bombExplodeRange: 0,
+  },
+  toxic_soulless: { // Singularity phase 2+: a Soulless full of gas; dying, it leaves a still, larger gas cloud
+    maxHp: 30, speed: 0.9, color: '#7dff8a', shieldColor: '#c6ffb0', bodyFraction: .6, scoreValue: 15,
+    damageToPlayer: 8, damageToRuby: 5, attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
+  },
+  lost_soul: { // Singularity: a harmless wanderer the swarm eats to grow; one hit kills it
+    maxHp: 1, speed: 0, color: '#d8fff0', shieldColor: '#9dff8a', bodyFraction: .5, scoreValue: 0,
+    damageToPlayer: 0, damageToRuby: 0, attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
+  },
+  sand_core: { // Venus phase 3: his core, buried in the sand; it can only be destroyed once every totem is gone
+    maxHp: 45, speed: 0, color: '#78dedf', shieldColor: '#ffd27a', bodyFraction: .7, scoreValue: 0,
+    damageToPlayer: 0, damageToRuby: 0, attackCooldown: 999, attackRange: 0, bombExplodeRange: 0,
+  },
+  sand_scorpion: { // Venus phase 3: lies hidden under the sand on one tile; bursts up beside you with a hard, knockback sting
+    maxHp: 40, speed: 0, color: '#9a6a2c', shieldColor: '#e3c08a', bodyFraction: .7, scoreValue: 25,
+    damageToPlayer: 7, damageToRuby: 5, attackCooldown: 70, attackRange: 1, bombExplodeRange: 0,
+  },
+  dune_worm: { // Venus alien: tunnels under the sand, bursts up beside you with a knockback bite, then digs back down
+    maxHp: 9, speed: 2.8, color: '#a8743a', shieldColor: '#e3c08a', bodyFraction: .6, scoreValue: 15,
+    damageToPlayer: 7, damageToRuby: 6, attackCooldown: 90, attackRange: 1, bombExplodeRange: 0,
+  },
+  sand_scarab: { // Venus: a desert beetle that bursts out of a buried nest when a Sand Swirl uncovers it
+    maxHp: 8, speed: 2.6, color: '#b0763a', shieldColor: '#e3c08a', bodyFraction: .55, scoreValue: 8,
+    damageToPlayer: 4, damageToRuby: 3, attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
+  },
+  sand_relic: { // Venus: a relic buried in the sand; one hit breaks it for a helpful effect
+    maxHp: 1, speed: 0, color: '#e3c08a', shieldColor: '#fff1d0', bodyFraction: .5, scoreValue: 0,
+    damageToPlayer: 0, damageToRuby: 0, attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
   cinder_wisp: {
     maxHp: 3, speed: 0, color: '#ff9c42', shieldColor: '#ffe3a0', bodyFraction: .5, scoreValue: 0,
     damageToPlayer: 0, damageToRuby: 0, attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
-  scorch_sapper: { // Sun phase 2+: ignores you and Ruby and drains cooling stations
-    maxHp: 3, speed: 1.6, color: '#ffb347', shieldColor: '#ffe0a0', bodyFraction: .55, scoreValue: 15,
+  scorch_sapper: { // Sun phase 3: ignores you and Ruby and drains cooling stations
+    maxHp: 10, speed: 2.9, color: '#ffb347', shieldColor: '#ffe0a0', bodyFraction: .55, scoreValue: 15,
     damageToPlayer: 0, damageToRuby: 0, attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
+  flare_spitter: {
+    maxHp: 4, speed: 1.625, color: '#e88836', shieldColor: '#ffe2a1', bodyFraction: .8, scoreValue: 20,
+    damageToPlayer: 6, damageToRuby: 6, attackCooldown: 90, attackRange: 10, bombExplodeRange: 0,
+  },
   emberling: {
-    maxHp: 4, speed: 2.5, color: '#ff6540', shieldColor: '#ffd88a', bodyFraction: 0.72, scoreValue: 15,
+    maxHp: 4, speed: 2.65, color: '#ff6540', shieldColor: '#ffd88a', bodyFraction: 0.72, scoreValue: 15,
     damageToPlayer: 9, damageToRuby: 7, attackCooldown: 70, attackRange: 1, bombExplodeRange: 0,
   },
   // Neptune challenge units. Fish and water objects never attack; stingers poison on hit.
@@ -322,7 +436,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     attackCooldown: 150, attackRange: 0, bombExplodeRange: 0,
   },
   water_clone: {
-    maxHp: 8, speed: 1.3, color: '#6fc7ff', shieldColor: '#d8f2ff',
+    maxHp: 8, speed: 1.45, color: '#6fc7ff', shieldColor: '#d8f2ff',
     bodyFraction: 0.9, scoreValue: 0, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
@@ -348,6 +462,21 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     bodyFraction: 0.80, scoreValue: 0, damageToPlayer: 3, damageToRuby: 2,
     attackCooldown: 70, attackRange: 8, bombExplodeRange: 0,
   },
+  grounder: { // Binary Star alien (phase 2+): a heavy anchor that escorts a twin; twins near it ignore magnetic fields
+    maxHp: 30, speed: 0.6, color: '#9aa3b5', shieldColor: '#e2e6ee',
+    bodyFraction: 0.78, scoreValue: 20, damageToPlayer: 0, damageToRuby: 0,
+    attackCooldown: 999, attackRange: 0, bombExplodeRange: 0,
+  },
+  pulsar: { // Binary Star alien: a polarized chaser whose death leaves a strong magnetic field that then explodes
+    maxHp: 12, speed: 0.9, color: '#e7b3ff', shieldColor: '#f6e8ff',
+    bodyFraction: 0.66, scoreValue: 15, damageToPlayer: 6, damageToRuby: 4,
+    attackCooldown: 70, attackRange: 1, bombExplodeRange: 0,
+  },
+  lodestone: { // Binary Star alien: a slow chaser carrying a north or south pole; it pushes or pulls you like a magnet
+    maxHp: 10, speed: 0.8, color: '#c9b8ff', shieldColor: '#f1ecff',
+    bodyFraction: 0.7, scoreValue: 15, damageToPlayer: 8, damageToRuby: 5,
+    attackCooldown: 55, attackRange: 1, bombExplodeRange: 0, // plus the Magnet Snap (LODESTONE_SNAP)
+  },
   mirror_mite: { // Moon alien: fragile and quick; killing one heals you a lot
     maxHp: 1, speed: 1.1, color: '#c6b8ff', shieldColor: '#efe8ff',
     bodyFraction: 0.55, scoreValue: 10, damageToPlayer: 4, damageToRuby: 3,
@@ -369,12 +498,12 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
   sporeling: {
-    maxHp: 5, speed: 0.55, color: '#b9a8ff', shieldColor: '#e2d9ff',
+    maxHp: 5, speed: 0.9, color: '#b9a8ff', shieldColor: '#e2d9ff',
     bodyFraction: 0.66, scoreValue: 15, damageToPlayer: 5, damageToRuby: 4,
-    attackCooldown: 70, attackRange: 1, bombExplodeRange: 0,
+    attackCooldown: 120, attackRange: 8, bombExplodeRange: 0,
   },
   angry_mushroom: { // fast melee; its hit knocks you back two tiles, and it leaves vines where it runs
-    maxHp: 8, speed: 3, color: '#ff5a4a', shieldColor: '#ffc2b8',
+    maxHp: 14, speed: 3, color: '#ff5a4a', shieldColor: '#ffc2b8',
     bodyFraction: 0.7, scoreValue: 20, damageToPlayer: 3, damageToRuby: 2,
     attackCooldown: 80, attackRange: 1, bombExplodeRange: 0,
   },
@@ -441,7 +570,42 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   shooter: {
     maxHp: 8, speed: 0.55, color: '#8fa83a', shieldColor: '#e4f0a8',
     bodyFraction: 0.68, scoreValue: 22, damageToPlayer: 8, damageToRuby: 5,
-    attackCooldown: 150, attackRange: 9, bombExplodeRange: 0,
+    attackCooldown: 120, attackRange: 9, bombExplodeRange: 0,
+  },
+  reflector: {
+    maxHp: 12, speed: 0.55, color: '#a8c8ff', shieldColor: '#ffffff', // a cool periwinkle neon, like the other aliens
+    bodyFraction: 0.8, scoreValue: 22, damageToPlayer: 9, damageToRuby: 6,
+    attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
+  },
+  grappler: {
+    maxHp: 14, speed: 0.85, color: '#42b9a9', shieldColor: '#ccfff2',
+    bodyFraction: 0.8, scoreValue: 28, damageToPlayer: 6, damageToRuby: 0,
+    attackCooldown: 150, attackRange: 10, bombExplodeRange: 0,
+  },
+  spook: {
+    maxHp: 1, speed: 1.05, color: '#b8c4a7', shieldColor: '#f0f4df',
+    bodyFraction: 0.65, scoreValue: 16, damageToPlayer: 4, damageToRuby: 2,
+    attackCooldown: 90, attackRange: 1, bombExplodeRange: 0,
+  },
+  jammer: {
+    maxHp: 8, speed: 1.10, color: '#ba6c99', shieldColor: '#f5c4df',
+    bodyFraction: 0.72, scoreValue: 24, damageToPlayer: 5, damageToRuby: 0,
+    attackCooldown: 90, attackRange: 1, bombExplodeRange: 0,
+  },
+  blinker: {
+    maxHp: 3, speed: 1.25, color: '#454b56', shieldColor: '#bcc6d4',
+    bodyFraction: 0.58, scoreValue: 16, damageToPlayer: 5, damageToRuby: 3,
+    attackCooldown: 75, attackRange: 1, bombExplodeRange: 0,
+  },
+  dropper: {
+    maxHp: 10, speed: 0.7, color: '#dca34f', shieldColor: '#fff0be',
+    bodyFraction: 0.76, scoreValue: 22, damageToPlayer: 12, damageToRuby: 8,
+    attackCooldown: 90, attackRange: 12, bombExplodeRange: 0,
+  },
+  trapper: {
+    maxHp: 7, speed: 0.9, color: '#a0705a', shieldColor: '#e8c4a8',
+    bodyFraction: 0.72, scoreValue: 20, damageToPlayer: 0, damageToRuby: 0,
+    attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
   impostor: {
     maxHp: 10, speed: 1.0, color: '#9a9a9a', shieldColor: '#dddddd',
@@ -493,6 +657,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     bodyFraction: 1.1, scoreValue: 450, damageToPlayer: 20, damageToRuby: 0,
     attackCooldown: 24, attackRange: 1, bombExplodeRange: 0, // 40 / 1.7 ≈ 24 — attacks 1.7x faster
   },
+
   devourer: {
     maxHp: 35, speed: 3.4, color: '#6b2fa8', shieldColor: '#b088e0',
     bodyFraction: 0.95, scoreValue: 480, damageToPlayer: 6, damageToRuby: 2,
@@ -505,7 +670,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   },
   sea_chanter: {
     maxHp: 90, speed: 3.8, color: '#3998d6', shieldColor: '#c7e9ff',
-    bodyFraction: 1.05, scoreValue: 470, damageToPlayer: 10, damageToRuby: 0,
+    bodyFraction: 1.05, scoreValue: 470, damageToPlayer: 10, damageToRuby: 7,
     attackCooldown: 210, attackRange: 12, bombExplodeRange: 0,
   },
   thorn_weaver: {
@@ -560,11 +725,11 @@ export function isBossType(type: EnemyType): type is BossType {
 export const AEGIS_DAMAGE_MULT = 0.05;
 export const AEGIS_REFLECT_RATIO = 1; // Return 100% of incoming damage before Aegis reduction.
 export const AEGIS_EXPOSE_TICKS = 1200;
-export const AEGIS_RESHIELD_WARNING_TICKS = 180; // 3s warning before a fresh pylon pair restores the shield
+export const AEGIS_RESHIELD_WARNING_TICKS = 180; // 3s warning before a fresh totem pair restores the shield
 export const AEGIS_EXPOSED_SPEED = 1.19; // core exposed: slow, open to attack
-export const PYLON_LIFETIME_TICKS = 1200;
-export const PYLON_OVERLOAD_WINDUP = 180;
-export const PYLON_OVERLOAD_DAMAGE = 80;
+export const TOTEM_LIFETIME_TICKS = 1200;
+export const TOTEM_OVERLOAD_WINDUP = 180;
+export const TOTEM_OVERLOAD_DAMAGE = 80;
 export const TWIN_REVIVE_TICKS = 720;
 export const TWIN_REVIVE_HP_RATIO = 0.6;
 export const TWIN_REVIVE_HASTE_TICKS = 300; // 5s speed burst after reviving
@@ -669,18 +834,18 @@ export const LATE_ENEMY_DAMAGE_STAGE = 15, LATE_ENEMY_DAMAGE_EVERY = 5, LATE_ENE
 export function lateEnemyDamageMult(stage: number) {
   return stage < LATE_ENEMY_DAMAGE_STAGE ? 1 : 1 + LATE_ENEMY_DAMAGE_STEP * (Math.floor((stage - LATE_ENEMY_DAMAGE_STAGE) / LATE_ENEMY_DAMAGE_EVERY) + 1);
 }
-// Enchanter (Endless, stage 20+): every pulseTicks it gives aliens within radius tiles (not itself) speedMult speed and
+// Enchanter (Endless, stage 18+): every pulseTicks it gives aliens within radius tiles (not itself) speedMult speed and
 // damageMult damage for buffTicks; bosses get the smaller bossSpeedMult / bossDamageMult. Joins the spawn pool from fromStage, at most maxAlive at once.
-export const ENCHANTER = { fromStage: 20, maxAlive: 2, pulseTicks: 360, radius: 9, buffTicks: 240,
+export const ENCHANTER = { fromStage: 18, maxAlive: 2, pulseTicks: 360, radius: 9, buffTicks: 240,
   speedMult: 1.3, damageMult: 1.3, bossSpeedMult: 1.15, bossDamageMult: 1.15,
-  rewardTicks: 300, rewardDamageMult: 1.2 } as const; // kill reward: Empowered, +20% player attack damage for 5s
-// Bleeder (Endless, stage 20+): its hit curses the player for curseTicks: no healing from any source, and the shield
+  rewardTicks: 300, rewardDamageMult: 1.25, rewardSpeedMult: 1.15 } as const; // kill reward: Empowered, +25% player attack damage and +15% move speed for 5s
+// Bleeder (Endless, stage 18+): its hit curses the player for curseTicks: no healing from any source, and the shield
 // drains shieldDrainPerSecond. Killing a Bleeder lifts the curse. Joins the spawn pool from fromStage, at most maxAlive.
-export const BLEEDER = { fromStage: 20, maxAlive: 3, curseTicks: 180, shieldDrainPerSecond: 5,
-  regenTicks: 300, regenEvery: 20 } as const; // kill reward: heal 1 HP every regenEvery ticks for regenTicks (3 HP/s for 5s)
-// Snatcher (Endless, stage 20+): ignores the player and grabs a placed Ruby, then carries her away from the player at
+export const BLEEDER = { fromStage: 18, maxAlive: 3, curseTicks: 180, shieldDrainPerSecond: 5,
+  regenTicks: 300, regenEvery: 12 } as const; // kill reward: heal 1 HP every regenEvery ticks for regenTicks (5 HP/s for 5s)
+// Snatcher (Endless, stage 15+): ignores the player and grabs a placed Ruby, then carries her away from the player at
 // fleeSpeedMult of its speed while she loses rubyDrainPerSecond. Killing it drops her. Shadows a player who carries her.
-export const SNATCHER = { fromStage: 20, maxAlive: 1, fleeSpeedMult: .6, rubyDrainPerSecond: 2, rewardRubyShield: 20 } as const;
+export const SNATCHER = { fromStage: 15, maxAlive: 1, fleeSpeedMult: .6, rubyDrainPerSecond: 2, rewardRubyShield: 20 } as const;
 // Impostor (Endless, stage 20+, only while a boss is alive): looks like a living boss (model, HP bar, minimap marker)
 // but never attacks; keeps keepAway tiles from the player. Gone when no boss is left. Kill reward: a decoy.
 export const IMPOSTOR = { fromStage: 20, maxAlive: 1, keepAway: 5, disguiseDelay: 120, rewardDecoyTicks: 360 } as const; // disguiseDelay: plain look for 2s after spawning // kill reward: a 6s fragile decoy
@@ -688,7 +853,29 @@ export const IMPOSTOR = { fromStage: 20, maxAlive: 1, keepAway: 5, disguiseDelay
 // slow shot (shotSpeed px/tick) at the player's position that flies until a wall; a hit stuns the player for stunTicks.
 // Kill reward: for rewardTicks, bullets deal rewardBulletMult damage and each hit stops an alien for rewardStunTicks
 // (bosses rewardBossStunTicks).
-export const SHOOTER = { fromStage: 10, maxAlive: 3, windupTicks: 24, shotSpeed: 3.5, hitRadius: .45, stunTicks: 30,
+// Reflector (Endless, stage 10+): a 3-tile mirror (halfWidth each side of its centre) on one cardinal side, turning toward
+// the player after turnTicks. Bullets and lasers crossing the mirror from the front bounce back: bullets as shots that hit
+// only the player; lasers leave bent bendDegrees to a random side, hitting the player for laserDamage only in that path. Allies behind the mirror are covered too. Any Wave hit, push,
+// pull, stun or slow drops the mirror for mirrorDownTicks. Kill reward: Ruby copies your attacks at rubyCopyMult for rewardTicks.
+export const REFLECTOR = { fromStage: 10, maxAlive: 2, turnTicks: 90, halfWidth: 1.5, bulletDamage: 6, laserDamage: 8, bendDegrees: 30, bendHitRadius: .7, shotSpeed: 5,
+  mirrorDownTicks: 180, rewardTicks: 300, rubyCopyMult: .5 } as const;
+// Trapper (Endless, stage 15+): keeps keepAway tiles from the player and drops a mine every dropTicks (up to maxMines).
+// A mine arms after armTicks; when the player steps onto it, it fuses for fuseTicks then blasts radius tiles
+// (damage to player, placed Ruby and other aliens). Mines fade after lifeTicks.
+// Kill reward: for rewardTicks your bullets explode on hit, dealing rewardSplash of their damage within rewardRadius.
+// Jammer hunts the player and projects a five-tile teleport interference field.
+export const SOULLESS_LUNGE = { warningTicks: 24, tiles: 6, range: 6, speed: 13, recoverTicks: 25, swipeTicks: 12, swipeRadius: 1.15, knockback: 2 } as const;
+export const GRAPPLER = { fromStage: 22, maxAlive: 2, warningTicks: 42, shotSpeed: 12, hitRadius: .42, retractTicks: 18, rewardTicks: 300, pullSpeedMult: 1.2 } as const;
+export const SPOOK = { fromStage: 22, maxAlive: 1, faceTicks: 102 } as const;
+export const JAMMER = { fromStage: 20, maxAlive: 1, radius: 5, keepAway: 3, rewardRadius: 4, rewardDamage: 1.75 } as const;
+// Blinker: a fragile melee alien whose defeat displaces the player.
+export const BLINKER = { fromStage: 20, maxAlive: 2, warpTicks: 30 } as const;
+// Dropper: ranged 2x2 overhead slam. A locked amber warning precedes each impact.
+export const DROPPER = { chaseRange: 20, tiles: 2, fromStage: 5, maxAlive: 2, warningTicks: 33, knockback: 3, impactTicks: 20, rewardTicks: 300, rewardWaveDamage: 1.3, rewardPush: 1, rewardRadius: 2, rewardCooldownMult: .8 } as const;
+export const TRAPPER = { fromStage: 15, maxAlive: 2, keepAway: 4, dropTicks: 200, maxMines: 5, armTicks: 60, fuseTicks: 18,
+  lifeTicks: 1500, radius: 1.5, damage: 14, rubyDamage: 6, alienDamage: 10, triggerRange: .7,
+  rewardTicks: 300, rewardRadius: 3, rewardSplash: .5 } as const;
+export const SHOOTER = { fromStage: 10, maxAlive: 3, windupTicks: 24, shotSpeed: 4, hitRadius: .45, stunTicks: 30,
   rewardTicks: 300, rewardBulletMult: 1.3, rewardStunTicks: 8, rewardBossStunTicks: 3 } as const;
 // Triangulum constellation: Laser-hit aliens within radius tiles of another hit alien are pulled pullTiles toward their group.
 export const TRIANGULUM = { radius: 3, pullTiles: 1 } as const;
@@ -712,16 +899,21 @@ export const BLESSING = {
 } as const;
 // Reticulum constellation: a Laser hit stops an ordinary alien for stunTicks, then that alien is immune for recoverTicks. Bosses are immune.
 export const RETICULUM = { stunTicks: 24, recoverTicks: 120 } as const;
-export const LANCER = { windupTicks: 60, hitRadius: .55, beamTicks: 18, rewardTicks: 300, stunTicks: 30, bossStunTicks: 12 } as const;
+export const LANCER = { windupTicks: 42, hitRadius: .55, beamTicks: 18, rewardTicks: 300, stunTicks: 30, bossStunTicks: 12 } as const;
 
 export const CHARGER_CHARGE_SPEED = 7.5; // px/tick during the committed rush
-export const CHARGER_WINDUP_TICKS = 30; // half-second locked-lane warning
+export const CHARGER_WINDUP_TICKS = 24; // 0.4s locked-lane warning
 export const CHARGER_CHARGE_TILES = 8; // recover after a missed rush instead of charging forever
 export const CHARGER_SIGHT_RANGE = 7;   // tiles — triggers charge when player in LoS
 export const CHARGER_STUN_TICKS = 55;  // ticks stunned after hitting wall
+// Lodestone Magnet Snap: a short Charger-style lunge. Within range and in sight it locks a lane toward you, warns, then
+// snaps up to `tiles` along it; touching you deals `damage` and knocks you back. It rests `recover` ticks after, and
+// snaps again no sooner than `cooldown`. The passive field leaves it alone; a swap shove cancels it.
+export const LODESTONE_SNAP = { range: 4, windup: 36, tiles: 4, speed: 6.5, damage: 10, rubyDamage: 6, knockback: 1, recover: 40, cooldown: 150 } as const;
 
 export const SHIELDER_SHIELD_RANGE = 8;  // tiles — shields allies within 8 tiles
-export const KILL_SHIELD_HP = 10; // Armored/Shielder kill reward — refills a non-stacking damage absorb pool
+export const KILL_SHIELD_HP = 10; // Armored/Shielder kill reward — added to the absorb pool
+export const KILL_SHIELD_CAP = 40; // kill shields (Armored, Shielder, Snatcher) stack up to this; a bigger pool from elsewhere is kept
 
 export const SNIPER_CHAIN_RANGE = 4;  // tiles — chain lightning radius on sniper kill
 export const SNIPER_CHAIN_DMG = 8;  // damage per chain hit
@@ -752,14 +944,88 @@ export const DEVOURER_ABSORB_COOLDOWN_GEN_STEP = 60;  // ... and each later gene
 export const DEVOURER_COPY_FIRST_MEAL = 180; // ticks (3s) before a newborn copy can eat
 export const DEVOURER_STACK_HP_PCT = 0.05; // fraction of max HP gained (and healed) per stack
 export const DEVOURER_STACK_DAMAGE = 0.5; // extra player/Ruby damage per stack
+export const DEVOURER_ENDLESS_BITE_BONUS = 1; // endless mode: +1 bite damage to the player and Ruby
+export const DEVOURER_KNOCKBACK_CHANCE = .3, DEVOURER_KNOCKBACK_TILES = 2; // 30% of its bites on you also shove you 2 tiles
 export const DEVOURER_HUNGRY_BELOW = 2;    // at 0–1 stacks she hunts aliens to eat before the player
 export const DEVOURER_FULL_HEAL_PCT = 0.01; // eating at the stack cap heals this much instead
 export const DEVOURER_COPY_HP_RATIO = 0.5; // each copy's max HP, as a share of its parent's max HP at death
 export const DEVOURER_COPY_SCALE = 0.9;   // body size per generation
 export const DEVOURER_NEWBORN_TICKS = 120;   // 2s: a fresh copy flees from the player at boosted speed
-export const DEVOURER_NEWBORN_SPEED_MULT = 1.5;
+export const DEVOURER_NEWBORN_SPEED_MULT = 2.2; // newborn copies sprint away at 2.2x speed for their first 2s
 export const DEVOURER_GEN_SPEED_MULT = 0.9; // speed multiplier per copy generation (10% slower each)
 export const DEVOURER_GEN_DAMAGE_MULT = 0.8; // bite damage multiplier per copy generation (20% less each)
+// Singularity challenge: the normal family loop, with stronger later generations.
+// Singularity challenge: hook bodies and fling them into the Maws while they open (singularity-maw.ts). Per-phase values are [phase 1, 2, 3].
+export const SINGULARITY_CHALLENGE = {
+  // Each original spawns with maxStacks and bursts after gorgeTicks into one copy per stack. Copies start empty at copyHP;
+  // each meal adds a stack (+stackHP). A copy at full stacks bursts after gorgeTicks into one copy per stack; killed by
+  // hand it leaves one per two stacks; a Maw swallows it whole. A copy is full at bodyStacks; only the original carries
+  // the phase's maxStacks.
+  // mealStacks: stacks each Lost Soul gives; a copy is full at bodyStacks
+  phaseHP: [150, 150, 150], copyHP: [130, 130, 130], stackHP: 25, bodyStacks: 3, mealStacks: 1, maxStacks: [9, 10, 10], gorgeTicks: 180, familyCap: [40, 48, 56], stacksPerCopy: 2, // familyCap: most bodies alive per phase
+  // The full burst, within 3 tiles: 20 and a 2-tile shove to you, 10 to a placed Ruby, 30 to other enemies (Lost Souls are spared).
+  burst: { radius: 6, damage: 18, rubyDamage: 7, enemyDamage: 30, knock: 3 },
+  // A body leaving in a random jump (or flung by gas) blasts where it was: smaller than a burst.
+  jumpBlast: { radius: 4, damage: 6, rubyDamage: 3, knock: 2 },
+  soulKillHeal: 2, // killing a Lost Soul yourself heals you 3 (meteors give nothing)
+  // bodySpeed: bodies walk 65% faster than the normal Devourer.
+  newbornSpeed: 3, bodySpeed: 1.65, weakestGeneration: 2, generationSpeed: .97, generationDamage: .97, generationScale: .98, minimumScale: .7, minimumStats: .6,
+  convergence: { everyTicks: 1680, gatherTicks: 120, bodyTicks: 6, chargeTicks: 0, blastTicks: 180, maxDamage: 30, rubyShare: .5 },
+  mealSpeed: 1.4, mealSpeedTicks: 180, // eating refreshes a three-second movement boost; does not stack
+  biteDamage: .9, biteFamilyExponent: .65, mealCooldown: 20, mealMaxCooldown: 70, mealPenalty: .35, firstMeal: 12,
+  // Bodies hunt nearby food, then the player or Ruby.
+  wellPullSpeed: 6,                                  // forced step speed for every pull (Maw and F)
+  // Each Maw idles small (mawRadius), warns, then opens wide (mawOpenRadius, faster pulls) on a repeating cycle; the
+  // two Maws are half a cycle apart. You are pulled only while a Maw is open.
+  mawCycle: { closed: 960, warn: 90, open: 210 }, mawOpenRadius: 5, mawOpenPulse: 6,
+  mawRadius: 2, mawSwellRadius: 5, mawPulse: 14, mawSwellPulse: 6, mawInnerRadius: 2, mawInnerMult: 4, mawInnerHeavyMult: 5, heavyPulseMult: 18 / 14, fullPullMult: 1.35, // a body one stack from full (or bursting) is pulled 35% less often // tiles; ticks between pulls
+  playerRadius: 1.5, playerSwellRadius: 5, playerPulse: 100, playerSwellPulse: 30, playerInnerMult: 2, // a resting Maw pulls you only from the tiles around its centre
+  horizonDamage: 30, horizonFling: 3, horizonCooldown: 60,
+  mawCount: [2, 2, 2], mawMoveTicks: [2100, 2100, 2100], mawPreview: 300,
+  swallowHeal: 6, swallowEnergy: 4, bodySwallowHeal: 8,
+  // Feast: swallowing bodies within feastWindow of each other builds a chain; each heals and energises more (up to feastMax).
+  feastWindow: 240, feastStep: .5, feastMax: 4, feastEnergy: 4,
+  // Gravity Hook (C): hold to latch the nearest body within hookRange tiles in sight and tow it; release (or after
+  // hookMaxTicks) flings it hookFling tiles the way you face. A fling swallows it on reaching a Maw's inner tiles, slams
+  // it into another enemy (both stunned, no damage) or a wall. There is no release cooldown. aimCone: the throw bends
+  // toward a Maw (preferred) or body within this many degrees of your facing and within reach.
+  hook: { range: 8, maxTicks: 180, cooldown: 0, towGap: 1.6, towSpeed: 7, fling: 7, aimCone: 30, flingSpeed: 11, slamDamage: 0, slamStun: 180, wallDamage: 0, wallStun: 60, endStun: 30 },
+  foodRadius: 12,
+  // Gnasher (phase 3): a new copy is one with chance (at most max alive). It walks speed× faster, jumps on everyTicks, and
+  // every biteTicks bites another body within reach tiles (hunting one within seek tiles): with stacks the victim bursts
+  // at once with twice its stacks; with none it splits into two.
+  gnasher: { fromPhase: 3, chance: .25, max: 3, speed: 1.4, everyTicks: [240, 420], biteTicks: 240, reach: 1.5, seek: 8 },
+  loneBodyTicks: 1800, // in a phase's first 30s, a lone body (not already bursting) bursts at once with the phase's full stacks
+  spreadChance: .6, // a body on or next to another body steps away from it this often instead of following its path
+  aggroTicks: 60, // a body you hit ignores food and hunts you for this long (each hit restarts it)
+  fleeRadius: 6, // with no food to chase, a body runs from you within this many tiles, and otherwise roams away from you
+  // Toxic gas (from phase 2): count clouds of radius tiles drift at speed px/tick, each living lifeTicks (a range) with
+  // fade-in and fade-out, then re-forming elsewhere. Inside one you move at slow speed and your view hazes over. A
+  // Devourer that touches one bursts at once: with stacks, into its copies; without, it is flung across the map.
+  gas: { fromPhase: 2, count: 5, radius: 1.8, lifeTicks: [900, 1200], fade: 90, speed: .35, slow: .6, minFromYou: 4 }, // slows and obscures vision without dealing damage
+  // Each copy jumps to a random open tile anywhere on the map (at least minFromYou tiles from you) every everyTicks (a
+  // range), flickering for warn ticks first.
+  bodyJump: { everyTicks: [480, 840], warn: 30, minFromYou: 4, toFoodChance: .6 }, // toFoodChance: with no food in range, how often a jump lands beside a Lost Soul
+  // The Jaw: firstTicks into a phase, then every everyTicks (a range), a 3×3 area (radius 1) under you is marked for warn
+  // ticks, then closes on its centre for snap ticks. Caught, you take damage, are thrown knock tiles to the far side of
+  // its centre (along the axis you are further off it on), and are stunned for stun ticks once you land.
+  jaw: { firstTicks: 300, everyTicks: [240, 360], everyTicksLate: [240, 360], // same attack frequency in every phase
+    warn: 48, snap: 30, radius: 1, damage: 15, knock: 6, knockSpeedMult: 2.4 },
+  // Limited food gives the swarm chances to multiply while leaving time to fight and set traps.
+  soulCap: 16, soulStart: 4, soulWarnTicks: 90,
+  soulSpawnTicks: 45, soulWander: 45, soulSpeed: 1.2, soulHP: 1,
+  // Soulless: a soulless skeleton that hunts you (ordinary melee chase), announced by a grey sign; one more every everyTicks up
+  // to the phase's cap. The swarm never eats it; a Maw or F swallows it like any alien.
+  soulless: { everyTicks: 240, cap: [3, 4, 5], hp: 30, toxicFromPhase: 2, toxicChance: .35, cloudRadius: 2.6, cloudTicks: 480 }, // from phase 2 some are Contaminated Soulless: dying, each leaves a still gas cloud of cloudRadius tiles for cloudTicks
+  soulFleeRadius: 3, soulFleeSpeed: 2.6, goldenFleeSpeed: 4.2, // goldenFleeSpeed: a Golden Soul runs from you faster // a soul runs from you (not the swarm) within soulFleeRadius tiles
+  // Golden Souls from phase 2: a quarter of new souls; a Devourer that eats one is filled to full stacks at once.
+  goldenFromPhase: 2, goldenChance: .25,
+  soundGap: 60, eatSoundGap: 150, // eatSoundGap: the swarm eats constantly, so meals play at most every 2.5s // ticks: each repeatable Singularity sound (bites, meals, bursts, swallows, hook hits...) plays at most this often
+  fTicks: 540, // the F Singularity lasts 9s in the challenge (18s elsewhere)
+  fPullTicks: 10, // the F Singularity pulls every 10 ticks here (15 elsewhere); Devourer bodies on two of every three pulses
+} as const;
+
+
 
 export const FROST_CHILL_SPEED_MULT = 0.65; // player move-speed multiplier while sharing her chamber
 export const FROST_CHILL_TICK_RATE = 0.5;  // LASER/BULLET/WAVE cooldowns tick down at this rate while chilled (half attack speed)
@@ -802,6 +1068,8 @@ export const RUBY_MAX_HP = 100;
 export const PLAYER_BASE_SPEED = 4.5;  // px/tick  (scaled with TILE_SIZE 48)
 export const CARRY_DAMAGE_MULT = 0.9; // the player takes 10% less damage while carrying Ruby
 export const CARRY_BOOST_MULT = 0.7; // speed boosts last 30% shorter while carrying Ruby
+export const CARRY_BOOST_SPEED_MULT = 0.85; // boosted movement speed while carrying Ruby
+export const URSA_PUSH_MULT = 0.5; // Ursa Major constellation: every push moves you half as far (stacks with carrying)
 export const CARRY_PUSH_MULT = 0.5; // knockbacks, tides and pulls move a player carrying Ruby half as far
 export const PLAYER_CARRY_MULT = 0.5; // 50% of normal speed while carrying Ruby
 
@@ -894,7 +1162,7 @@ export const TUTORIAL_STEP_PAUSE = 75; // ticks of "done" feedback before the ne
 export const TRIAL_BOSS_DELAY = 300;        // ticks (5s) before the guardian's arrival warning starts
 export const SPECIAL_RECAST_LOCK = 90; // endless: 1.5s after a cast before F works again, so a skill earned by that cast isn't wasted
 export const TRIAL_SKILL_COOLDOWN = 1200;   // ticks (20s) after casting before the skill returns
-export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2400, splitter_queen: 900, fiery_king: 1620, storm_reaper: 840 }; // Gaia's Roots: 40s; Lunar Echo: 15s; Solar Flare: 27s; Jupiter Storm: 14s
+export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2400, splitter_queen: 900, fiery_king: 1620, storm_reaper: 840, devourer: 720 }; // Gaia's Roots: 40s; Lunar Echo: 15s; Solar Flare: 27s; Jupiter Storm: 14s; Singularity: 12s
 export function trialSkillCooldown(skill: SpecialSkill) { return TRIAL_SKILL_COOLDOWNS[skill] ?? TRIAL_SKILL_COOLDOWN; }
 
 // Neptune challenge (Sea Chanter): three phases with their own HP (NEPTUNE_PHASE_HPS). Healing can never lift her into a
@@ -910,6 +1178,8 @@ export function neptunePhaseCeilHP(phase: 1 | 2 | 3) { return neptunePhaseFloorH
 export const NEPTUNE_DIVE_POINTS: Record<1 | 2 | 3, number[]> = { 1: [.75, .5, .25, 0], 2: [.66, .33, 0], 3: [.66, .33, 0] };
 export const NEPTUNE_CLONES: Record<1 | 2 | 3, number> = { 1: 3, 2: 3, 3: 4 };
 export const NEPTUNE_DIVE_TICKS: Record<1 | 2 | 3, number> = { 1: 1200, 2: 1200, 3: 960 }; // 20s, 20s, 16s
+export const NEPTUNE_CLONE_HEAL_FX_TICKS = 72;
+export const NEPTUNE_BOSS_SPEED_MULT = 1.07;
 export const NEPTUNE_CLONE_HEAL = .1;       // share of phase HP per surviving clone
 export const NEPTUNE_CLONE_HEAL_BLOCK = 240; // hitting a clone stops her ally-feeding heal for 4s
 export const NEPTUNE_DIVE_SPEED = 12; // very fast: on this map you hunt her clones, not her
@@ -921,8 +1191,10 @@ export const NEPTUNE_BOMB_DAMAGE = 25;      // to player and Ruby inside the bur
 export const NEPTUNE_BOMB_SELF_DAMAGE = .03; // share of phase HP she takes when you pop it first
 export const NEPTUNE_ATTACK_MULT: Record<1 | 2 | 3, number> = { 1: 1, 2: 1.5, 3: 1.5 };
 export const NEPTUNE_LIFESTEAL = 1;         // phase 3: her hits heal her for the damage dealt
-export const NEPTUNE_STRIKE_DAMAGE = .07;   // meteors and the sky laser deal this share of phase HP
-export const NEPTUNE_HEAL_CHARGE_MAX = 120;  // healing received to charge the sky laser
+export const NEPTUNE_STRIKE_DAMAGE = .07;   // meteors deal this share of phase HP
+export const NEPTUNE_TRIDENT_DAMAGE: Record<1 | 2 | 3, number> = { 1: .10, 2: .07, 3: .07 }; // share of phase HP
+export const NEPTUNE_HEAL_CHARGE_MAX = 120;  // sky laser charge capacity
+export const NEPTUNE_HEAL_CHARGE_RATE = .93; // charge per HP actually healed
 export const NEPTUNE_LASER_WARNING = 180;   // 3s from choosing a room to the strike
 export const NEPTUNE_FISH_CAP = 12;
 export const NEPTUNE_FISH_RED_CHANCE = .35;
@@ -935,8 +1207,8 @@ export const NEPTUNE_PUFFER_CHANCE = .2;    // ...and then by pufferfish
 export const NEPTUNE_PUFF_TICKS = 36, NEPTUNE_PUFF_RADIUS = 2.5, NEPTUNE_PUFF_DAMAGE = 7, NEPTUNE_PUFF_KNOCKBACK = 2;
 export const NEPTUNE_POISON_TICKS = 240;    // stinger poison: 2 damage per second for 4s
 export const NEPTUNE_POISON_DAMAGE = 2;
-export const NEPTUNE_TIDE_TICKS = 600;      // phases 1–2: one 10s tide every 40–60s
-export const NEPTUNE_TIDE_GAP: [number, number] = [2400, 3600];
+export const NEPTUNE_TIDE_TICKS = 600;      // phases 1–2: one 10s tide every 20–30s
+export const NEPTUNE_TIDE_GAP: [number, number] = [1200, 1800];
 export const NEPTUNE_TIDE_ROTATE = 900;     // phase 3: two tides always flowing, moving every 15s
 export const NEPTUNE_TIDE_WITH = 1.4, NEPTUNE_TIDE_AGAINST = .7;
 export const NEPTUNE_TIDE_PUSH_GAP = 50;    // ticks between one-tile pushes when not swimming with the flow
@@ -945,10 +1217,14 @@ export const NEPTUNE_JELLY_CAP = 2;         // ...with at most two around
 export const NEPTUNE_JELLY_DIVE_CHANCE = .5; // each dive also has this chance to bring one 4s in, even at the cap
 export const NEPTUNE_JELLY_DIVE_DELAY = 240;
 export const NEPTUNE_REVEAL_TICKS = 240;    // killing one during a dive marks a clone for 4s
-export const NEPTUNE_SHARK_GAP: [number, number] = [900, 1500];  // a shark every 15–25s
+export const NEPTUNE_SHARK_GAP: [number, number] = [450, 750];  // a shark every 7.5–12.5s
+export const NEPTUNE_SHARK_FOLLOWUP_CHANCE: Record<1 | 2 | 3, number> = { 1: .35, 2: .43, 3: .5 };
+export const NEPTUNE_SHARK_FOLLOWUP_DELAY = 60; // second charge begins 1s after the first
+export const NEPTUNE_SHARK_TRIPLE_CHANCE = .1; // phase 3: a 10% chance that a shark brings two more, each 1s after the last
 export const NEPTUNE_SHARK_WARNING = 72;    // lane warning before it charges
 export const NEPTUNE_SHARK_SPEED = .5;      // tiles per tick
-export const NEPTUNE_SHARK_DAMAGE = 18;
+export const NEPTUNE_SHARK_DAMAGE = 19.8; // to you and to a placed Ruby
+export const NEPTUNE_CLONE_PHASE3_SPEED = 1.1; // phase 3: water clones swim 10% faster
 export const NEPTUNE_SHARK_KNOCKBACK = 3;   // tiles you are thrown sideways off its lane
 export const NEPTUNE_SHARK_BOSS_DAMAGE = .05; // share of phase HP when she is caught in its lane
 
@@ -958,6 +1234,13 @@ export const MOON_PHASE_HP = 2000;           // per phase; she has three
 export const MOON_FIRST_CLONES = 4;          // illusions on her first jump...
 export const MOON_CLONES_PER_JUMP = 2;       // ...and on every jump after
 export const MOON_CLONE_CAPS: Record<1 | 2 | 3, number> = { 1: 6, 2: 8, 3: 8 }; // the oldest fades when a new one would pass this
+/** Sirius: each point of energy you gain also fills this much Holy Light (out of 100). A traced rune and Sirius Surge (F)
+ * each count as exactly one full bar (100 points) however full your gauge was. */
+export const SIRIUS_HOLY_PER_ENERGY = .15;
+/** The Singularity backdrop's gravity gulp repeats this often (45s); its suck sound plays at the start of each. */
+export const SINGULARITY_GULP_TICKS = 2700;
+/** The gulp's own animation is timed against this span (10s), so a longer gap only adds quiet time between gulps. */
+export const SINGULARITY_GULP_SHAPE = 600;
 export const MOON_REVEAL_TICKS = 90;         // she shows her true self for the last 1.5s before a jump
 export const MOON_REVEAL_DAMAGE_MULT = 2.5;  // and takes this much more damage then
 export const MOON_QUEEN_DAMAGE_MULT = .4;    // her own hits are softer here (there are many shooters)
@@ -969,8 +1252,13 @@ export const MOON_SHARD_RUBY_DAMAGE = 4;     // to a placed Ruby
 export const MOON_SHARD_HIT_RADIUS = .45;    // tiles
 export const MOON_STRIKE_DAMAGE = .1;        // meteors deal this share of the phase to her
 export const MOON_MITE_CHANCE = .6;          // share of the regular spawns left after the shade roll that are mirror mites (~53%)
+// Phase 3: this share of regular alien spawns are Blinkers (a kill teleports you), at most MOON_BLINKER_MAX alive; rolled first.
+export const MOON_BLINKER_CHANCE = .15;
+export const MOON_BLINKER_MAX = 2;
 export const MOON_SHADE_CHANCE = .12;        // share of regular alien spawns that are shades (Ruby hunters), rolled first
-export const MOON_DARK_SHIFT = 600;          // phase 3: one room is dark; every 10s the dark moves to another room
+export const MOON_DARK_SHIFT = 600;          // phase 3: darkness moves every 10s
+export const MOON_DOUBLE_DARK_CHANCE = .35;
+export const MOON_DARK_OVERLAY_TICKS = 24;  // screen haze fades on entering or leaving darkness
 export const MOON_DARK_FADE = 30;            // visual: the dark fades across over 0.5s
 export const MOON_SEEN_TICKS = 45;           // anything hit inside the dark shows itself for 0.75s
 export const MOON_MIMIC_GAP = 360;           // phase 2+: a mimic arrives every 6s on its own timer (never replacing other spawns)...
@@ -1004,7 +1292,7 @@ export const GAIA_MOSS_CHANCE = .08;             // ...moss next to vines -> vin
 export const GAIA_CREEP_CAP = 120;               // at most this many upgrades per creep pass
 export const GAIA_VINE_SLOW = .6, GAIA_THICKET_SLOW = .45;
 export const GAIA_THICKET_DAMAGE = 1;            // per second while standing in thicket
-export const GAIA_VINE_HEAL = .005, GAIA_THICKET_HEAL = .01; // share of phase HP per second she heals on vines / thicket
+export const GAIA_VINE_HEAL = .010546875, GAIA_THICKET_HEAL = .02109375; // share of phase HP per second she heals on vines / thicket
 export const GAIA_THICKET_ARMOR = .75;           // damage she takes while standing in thicket
 export const GAIA_SCORCH_TICKS = 600;            // scorched tiles cannot regrow for 10s
 export const GAIA_WARD_RADIUS = 2;               // placed Ruby keeps ground clean within this Chebyshev radius
@@ -1015,8 +1303,8 @@ export const GAIA_RING_DAMAGE = 3;               // per second while the ring is
 // its reach and damage growing with the charge. A full charge picks a room, winds up, then burns the whole room:
 // it costs you HP, and hits her hard if she is in that chamber.
 export const GAIA_SUN_MAX = 100;
-export const GAIA_SUN_CHARGE_RATE = 1.2;         // Sunfire charge per growth level you clear
-export const GAIA_POD_CHARGE = 10;               // breaking a seed pod adds this much
+export const GAIA_SUN_CHARGE_RATE = .8262;        // Sunfire charge per growth level you clear
+export const GAIA_POD_CHARGE = 6.885;                // breaking a seed pod adds this much
 export const GAIA_SUN_MIN = 10;                  // smallest charge you can fire
 export const GAIA_SUN_RADIUS: [number, number] = [2, 7]; // partial burst radius in tiles, from minimum to almost full
 export const GAIA_SUN_WARNING = 180;             // full charge: 3s wind-up before the chamber burns
@@ -1025,7 +1313,8 @@ export const GAIA_SUN_WARNING = 180;             // full charge: 3s wind-up befo
 export const GAIA_STRIKE_DAMAGE = .1;
 export const GAIA_SUN_SELF_DAMAGE = 50;          // full charge burns you and placed Ruby for this if inside the room (dodge it)
 export const GAIA_STONE_COUNT = 8;
-export const GAIA_STONE_SELF_DAMAGE = .05;       // a field burned by a Sunstone costs her this share of phase HP
+export const GAIA_STONE_HEAL = .015;             // share of player / Ruby max HP per successful Sunstone burn
+export const GAIA_STONE_SELF_DAMAGE = .043;      // a field burned by a Sunstone costs her this share of phase HP
 export const GAIA_STONE_TRAVEL = 60, GAIA_STONE_RELIGHT = 60;
 // Phase 3: each aimed cast adds a second field one field-width from you toward your nearest lit Sunstone, and lit
 // stones hop 2 tiles in a random direction every 4s.
@@ -1044,13 +1333,15 @@ export const GAIA_BLOSSOM_SELF_DAMAGE = .08;     // breaking a blossom costs her
 export const GAIA_BLOSSOM_HEAL = .005;           // share of phase HP per second, per blossom
 export const GAIA_BLOSSOM_SHOT_GAP = 180, GAIA_BLOSSOM_SHOT_RANGE = 7, GAIA_BLOSSOM_SHOT_DAMAGE = 4;
 export const GAIA_POLLEN_SLOW_TICKS = 60, GAIA_POLLEN_SLOW = .7;
-export const GAIA_SNARE_GAP = 360, GAIA_SNARE_WARNING = 60, GAIA_SNARE_DAMAGE = 6, GAIA_SNARE_ROOT = 90;
+export const GAIA_SNARE_GAP = 330, GAIA_SNARE_WARNING = 60, GAIA_SNARE_DAMAGE = 6, GAIA_SNARE_ROOT = 90;
 export const GAIA_SPAWN_RATE = .6, GAIA_EXTRA_ENEMIES = 3; // aliens spawn 1.7× as often here, with 3 more allowed at once
 export const GAIA_ALIEN_CHANCE = .5;             // share of natural alien spawns replaced by Gaia aliens: 40% Ragecaps,
                                                  // 30% each sporelings and vine crawlers
 export const GAIA_MUSHROOM_KNOCKBACK = 2;        // tiles a Ragecap's hit pushes you
-export const GAIA_SPORE_TICKS = 240, GAIA_SPORE_RADIUS = 2, GAIA_SPORE_SLOW = .7;
-export const GAIA_POLLEN_GAP = 2700, GAIA_POLLEN_TICKS = 480, GAIA_POLLEN_LASER = .5, GAIA_POLLEN_DRIFT_SLOW = .75; // inside the haze
+// A Sporeling's death cloud: slows you, poisons you (GAIA_SPORE_DAMAGE every GAIA_SPORE_EVERY ticks) and grows vines.
+export const GAIA_SPORE_SHOT = { windup: 36, speed: 4.5, life: 112, radius: 1.5, slowTicks: 90, slow: .5 };
+export const GAIA_SPORE_TICKS = 240, GAIA_SPORE_RADIUS = 2, GAIA_SPORE_SLOW = .7, GAIA_SPORE_DAMAGE = 2, GAIA_SPORE_EVERY = 30, GAIA_SPORE_GROWTH = 2;
+export const GAIA_POLLEN_GAP = 1800, GAIA_POLLEN_TICKS = 480, GAIA_POLLEN_LASER = .5, GAIA_POLLEN_DRIFT_SLOW = .75; // inside the haze
 
 export const METEORITE_CYCLE = 1800; // ticks (~30s) until next strike is chosen
 export const METEORITE_WARNING = 300;  // ticks of warning (5s)
@@ -1075,9 +1366,11 @@ export const SPECIAL_SKILLS = {
   aegis_sentinel: { name: 'VENUS VEIL', color: '#f5dcc8', bossDamage: 0, normalDamage: 0 },
   astral_twins: { name: 'BINARY STAR', color: '#ff8f7a', bossDamage: 0, normalDamage: 0 },
 } as const;
-export const SPECIAL_REAPER_RADIUS = TILE_SIZE * 6;
+export const SPECIAL_REAPER_RADIUS = TILE_SIZE * 7;
 export const SPECIAL_REAPER_SLOW = .5;
 export const SPECIAL_REAPER_SLOW_TICKS = 60;
+// Jupiter Storm also hastes you: +30% movement speed for 1.5s after each cast, in every mode.
+export const SPECIAL_REAPER_HASTE_TICKS = 90, SPECIAL_REAPER_HASTE = 1.3;
 export const BOSS_SKILL_REWARDS: Record<BossType, SpecialSkill> = {
   fiery_king: 'fiery_king', splitter_queen: 'splitter_queen', storm_reaper: 'storm_reaper',
   devourer: 'devourer', frost_warden: 'frost_warden', blind_prayer: 'blind_prayer',

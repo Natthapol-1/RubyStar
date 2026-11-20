@@ -16,7 +16,7 @@ const {chromium}=require('playwright');
    assert.equal(await modal.evaluate(el=>el.scrollWidth>el.clientWidth),false,'Modal overflows horizontally');
    await page.screenshot({path:path.join(output,`ruby-rules-${name}.png`)});
    await guide.getByRole('button',{name:'ALIENS & BOSSES',exact:true}).click();
-   assert.equal(await guide.locator('article').count(),29);
+   assert.equal(await guide.locator('article').count(),31);
    assert.equal(await guide.getByText('Leech',{exact:true}).count(),1);
    assert.equal(await guide.locator('.rs-guide-skill').count(),10);
    for(const skill of ['SOLAR FLARE','LUNAR ECHO','JUPITER STORM','SINGULARITY','SATURN GUARD','SIRIUS SURGE',"NEPTUNE'S TIDE","GAIA'S ROOTS",'VENUS VEIL','BINARY STAR']){assert.equal(await guide.getByText('Celestial skill: '+skill,{exact:true}).count(),1);}

@@ -6,6 +6,14 @@ Constellations are one-time run choices. Their comparison target is about 15–2
 
 Celestial blessings target roughly two constellation choices in overall value. Healing, shielding, movement and crowd control are assessed alongside damage rather than converted into a misleading single DPS percentage. No blessing should grant unlimited stacking, recursive attacks, repeated full-bar refreshes or overlapping field damage. Combined builds retain independent caps.
 
+## Temporary Wave rewards
+
+Heavy Impact lasts five seconds, refreshes without stacking and grants +30% Wave damage, +2 radius tiles, +1 push tile and 20% shorter recharge while active. With uninterrupted uptime this is +62.5% potential Wave damage throughput before charging time; actual value depends on kills, charging and targets. The short duration limits its larger crowd-control footprint. Centaurus stacks multiplicatively (2s base recharge becomes 1.6s with Heavy Impact, about 1.36s with both); frost retains its normal slowdown. Gaining or losing the buff changes recharge rate without resetting progress.
+
+Jammer stores only one teleport Wave: +75% damage and +4 radius tiles, stacking with Heavy Impact and constellations. It requires a completed pad teleport, spends no energy, and neither resets nor consumes the regular Wave cooldown or charge; the teleport itself is ready again at once. Its large burst is limited by the kill and teleport requirements rather than providing another permanent attack loop. Meteor and Solar Flare kills grant neither reward.
+
+Grappler’s kill reward grants five seconds of full crowd-control immunity, refreshing rather than stacking. It prevents disabling effects and clears existing ones, but gives no damage reduction or extra damage; direct attacks, hazards and healing curses still matter. Its Stage 22 unlock and two-alive cap limit availability. Carrying Ruby’s normal speed penalty and map rules remain unchanged.
+
 ## Constellation comparison
 
 | Constellation | Value and tradeoff |
@@ -18,6 +26,8 @@ Celestial blessings target roughly two constellation choices in overall value. H
 | Centaurus | Shorter Wave cooldown; benefits damage, push and readiness, but the one-second charge still costs time |
 | Eridanus | +40% Wave damage on whatever is around you 2s after the cast; no extra push |
 | Scorpius | +25% bomb damage, matching the other damage constellations; also raises self-blast damage |
+| Ursa Major | Halves every push: keeps you in position against Armored, Runner, Ghost, Bomber, Charger and Lancer (3-tile shoves become 1–2) and bosses' blasts. Worth more late, when knockback aliens and overlapping bosses pile up; no damage or healing value |
+| Scutum | Removes self-blast: 15 HP per normal bomb and 31 per powered bomb (more with Scorpius) out of 100. About one constellation of effective HP for bomb users, and it allows point-blank bombs when surrounded; nothing for players who never stand in their blast |
 | Cepheus | 20% shorter bomb cooldown =25% more potential detonations; requires more placements and escapes |
 | Perseus | +1 bomb-radius tile; more coverage with a larger self-danger area |
 | Cygnus | +1 Wave reach/push tile; more control/coverage rather than free single-target damage |

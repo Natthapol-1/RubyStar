@@ -1,4 +1,4 @@
-import { TILE_SIZE, AEGIS_RESHIELD_WARNING_TICKS, TWIN_RANGED_WINDUP, TWIN_REVIVE_TICKS, CHAMBER_BOUNDS, chamberOfTile, PYLON_OVERLOAD_WINDUP, TWIN_TRANSFER_FX_TICKS } from './constants';
+import { TILE_SIZE, AEGIS_RESHIELD_WARNING_TICKS, TWIN_RANGED_WINDUP, TWIN_REVIVE_TICKS, CHAMBER_BOUNDS, chamberOfTile, TOTEM_OVERLOAD_WINDUP, TWIN_TRANSFER_FX_TICKS } from './constants';
 import type { Enemy, GameState } from './engine';
 import { drawEnemyHealthBar } from './enemy-health-art';
 
@@ -8,8 +8,11 @@ const C = {gold:'#c5a35d',bronze:'#493a29',cyan:'#78dedf',pale:'#e3ffff',coral:'
 const impact=e.shootTicks>0?Math.sin((1-Math.min(1,e.shootTicks/14))*Math.PI):0;
 const charge=e.twin?.index===1&&e.windupTicks>0?1-e.windupTicks/TWIN_RANGED_WINDUP:0;
 const bladeCharge=e.twin?.index===0&&e.windupTicks>0?1-e.windupTicks/12:0;
-const overload=e.pylon?.overloadTicks??0;
-const heat=overload?1-overload/PYLON_OVERLOAD_WINDUP:0;
+// Binary Star phase 3: a twin whose pole has reversed keeps its body colours but takes the other pole's eye (visor) shades.
+const eyeReversed=e.type==='astral_twins'&&!!e.pole&&e.pole!==(e.twin?.index===1?'south':'north');
+const EYE={coral:{frame:'#a26069',core:'#ffe5c5'},blue:{frame:'#497ba9',core:'#e5faff'}};
+const overload=e.totem?.overloadTicks??0;
+const heat=overload?1-overload/TOTEM_OVERLOAD_WINDUP:0;
 const revival=1-(e.twin?.downedTicks??TWIN_REVIVE_TICKS)/TWIN_REVIVE_TICKS;
 const reassemblyGap=(e.twin?.reviveTicks??0)>0&&!e.twin?.downedTicks?Math.round(Math.pow((e.twin?.reviveTicks??0)/48,2)*12):0;
 function rect(x: number,y: number,w: number,h: number,color: string,glow=0){
@@ -72,7 +75,7 @@ function aegis(exposed=false){
     const cracked=(e.aegis?.constructsLeft??2)<2;
     if(e.aegis?.brokenOnce||cracked){
       const rim=(e.aegis!.reflectTicks??0)>0?C.pale:C.cyan;
-      // One pylon down: stepped fractures run in from two corners, loose shards drift and the shell flickers.
+      // One totem down: stepped fractures run in from two corners, loose shards drift and the shell flickers.
       if(cracked){
         if(Math.floor(tick/5)%9===0)ctx.globalAlpha=.55;
         rect(-38,-30,7,2,rim,3);rect(-33,-28,2,7,rim,3);rect(-33,-22,8,2,rim,3);rect(-27,-21,2,6,rim,3);rect(-27,-16,5,2,rim,3);
@@ -129,13 +132,15 @@ function dawn(){
     rect(33,-22,4,34,'#ffd0a6',3);rect(25,-8,3,4,'#ffe6cd');rect(25,6,3,4,'#ffe6cd');
     if(attackPulse||bladeCharge){rect(33,-22,4,26,'#fff3d4',6+attackPulse*8);rect(27,-16,3,17,'#ffb17d',3);}
     rect(22,-1,3,2,'#ce8b94');ctx.restore();}
-  // Matching binary-star shell and aperture; Dawn carries blade pods instead of focusing blocks.
-  rect(-21,-23,42,46,C.coral,5);rect(-17,-19,34,38,'#3d2c45');
-  rect(-17,-19,34,4,'#7d4357');rect(-17,14,34,5,'#61394e');
-  rect(-10,-8,20,10,'#a26069');rect(-7,-5,14,4,'#ffe5c5',5);
+  // Dawn: a broad, squat shell with raised shoulder plates and a horseshoe magnet on its head, prongs up; blade pods
+  // instead of focusing blocks.
+  rect(-24,-20,48,42,C.coral,5);rect(-20,-16,40,34,'#3d2c45');
+  rect(-20,-16,40,4,'#7d4357');rect(-20,13,40,5,'#61394e');
+  rect(-24,-27,13,7,C.coral,3);rect(11,-27,13,7,C.coral,3);rect(-22,-25,9,3,'#ffd0a6');rect(13,-25,9,3,'#ffd0a6');
+  const dawnEye=eyeReversed?EYE.blue:EYE.coral;rect(-12,-7,24,11,dawnEye.frame);rect(-9,-4,18,5,dawnEye.core,5);
   starHalf(0,10,(e.twin?.partnerDownTicks??0)>0?'#ffffff':'#ffe5c5',false);
   starHalf(2,10,'#614054',true);
-  rect(-3,-30,6,7,C.coral);rect(-1,-35,2,5,'#ffe3c4',3);
+  rect(-8,-26,16,6,C.coral,3);rect(-8,-37,5,11,C.coral,3);rect(3,-37,5,11,C.coral,3);rect(-6,-24,12,2,'#7d4357');rect(-8,-40,5,3,'#ffe3c4',3);rect(3,-40,5,3,'#ffe3c4',3);
   rect(-30,23,3,4,'#df9b8d');spark(30,-28,'#bf7f83');
   if(attackPulse>.4)rect(-9,-6,18,5,'#fff4df',8);
   ctx.restore();
@@ -167,15 +172,16 @@ function dusk(downed=false){
     }
     ctx.restore();return;
   }
-  // Slim shooter body and detached, rectangular focusing blocks.
-  rect(-19,-23,38,46,C.blue,5);rect(-15,-19,30,38,C.navy);
-  rect(-15,-19,30,4,'#41679a');rect(-15,14,30,5,'#315581');
+  // Dusk: a tall, slim shell standing on a horseshoe magnet, prongs down like legs, with detached rectangular focusing
+  // blocks.
+  rect(-16,-27,32,52,C.blue,5);rect(-12,-23,24,44,C.navy);
+  rect(-12,-23,24,4,'#41679a');rect(-12,16,24,5,'#315581');
   for(const s of [-1,1]){ctx.save();ctx.scale(s,1);ctx.translate(-Math.round(charge*5)+Math.round(impact*10),Math.round(Math.sin(tick*.05)));
-    rect(26,-12,8,24,C.blue,4);rect(28,-9,4,18,'#35587d');
-    if(charge||impact){rect(26,-12,3,24,'#dbf7ff',4+charge*7+impact*5);rect(31,-7,3,14,'#a4dfff',5);}
-    rect(24,-8,3,4,'#dcf7ff');rect(24,5,3,4,'#dcf7ff');
-    rect(21,-1,3,2,'#a2d5ed');ctx.restore();}
-  rect(-10,-8,20,10,'#497ba9');rect(-7-Math.round(charge*2),-5,14+Math.round(charge*4),4,'#e5faff',5+charge*8);
+    rect(23,-14,8,28,C.blue,4);rect(25,-11,4,22,'#35587d');
+    if(charge||impact){rect(23,-14,3,28,'#dbf7ff',4+charge*7+impact*5);rect(28,-9,3,18,'#a4dfff',5);}
+    rect(21,-9,3,4,'#dcf7ff');rect(21,6,3,4,'#dcf7ff');
+    rect(18,-1,3,2,'#a2d5ed');ctx.restore();}
+  const duskEye=eyeReversed?EYE.coral:EYE.blue;rect(-8,-11,16,10,duskEye.frame);rect(-5-Math.round(charge*2),-8,10+Math.round(charge*4),4,duskEye.core,5+charge*8);
   if(charge>0){
     const d=15-Math.round(charge*5);line(-d,-d,d*2,d*2,'#83cfff',2,charge*5);
     for(let i=0;i<8;i++){
@@ -187,7 +193,8 @@ function dusk(downed=false){
     rect(-7,-8,14,10,'#f4ffff',12*impact);
     for(let i=0;i<4;i++){const a=i*Math.PI/2,d=14+impact*13;rect(Math.cos(a)*d-2,Math.sin(a)*d-2,i%2?4:9,i%2?9:4,'#c9edff',6);}
   }
-  rect(-3,-30,6,7,C.blue);rect(-1,-35,2,5,'#d8f8ff',3);
+  // the magnet legs: a bridge under the shell and two prongs pointing down, with pale tips
+  rect(-8,25,16,5,C.blue,3);rect(-8,30,5,10,C.blue,3);rect(3,30,5,10,C.blue,3);rect(-6,26,12,2,'#315581');rect(-8,40,5,3,'#d8f8ff',3);rect(3,40,5,3,'#d8f8ff',3);
   starHalf(0,10,'#335070',false);starHalf(2,10,(e.twin?.partnerDownTicks??0)>0?'#ffffff':'#d8f5ff',true);
   rect(-30,23,3,4,'#91bfda');spark(30,-28,'#79a9ce');
 }
@@ -288,11 +295,11 @@ export function drawEncounterEnemy(ctx: CanvasRenderingContext2D, e: Readonly<En
 export function drawEncounterTelegraphs(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
   ctx.save();
   for (const e of state.enemies) {
-    if (e.pylon?.overloadTicks) {
+    if (e.totem?.overloadTicks) {
       const chamber = chamberOfTile(e.tileX, e.tileY);
       if (chamber >= 0) {
         const [r1, c1, r2, c2] = CHAMBER_BOUNDS[chamber];
-        const progress = 1 - e.pylon.overloadTicks / PYLON_OVERLOAD_WINDUP;
+        const progress = 1 - e.totem.overloadTicks / TOTEM_OVERLOAD_WINDUP;
         const pulse = Math.abs(Math.sin(state.gameTick * .2));
         const x = c1 * TILE_SIZE - camX, y = r1 * TILE_SIZE - camY, w = (c2 - c1 + 1) * TILE_SIZE, h = (r2 - r1 + 1) * TILE_SIZE;
         ctx.globalAlpha = .025 + pulse * (.035 + progress * .04); ctx.fillStyle = '#ffbd75'; ctx.fillRect(x, y, w, h);
@@ -326,7 +333,7 @@ export function drawEncounterEffects(ctx: CanvasRenderingContext2D, state: Reado
     const p = 1 - fx.ticks / fx.maxTicks, fade = 1 - p;
     ctx.shadowColor = fx.color; ctx.shadowBlur = 5; ctx.fillStyle = fx.color; ctx.globalAlpha = fade;
     const block = (bx: number, by: number, w = 4, h = w) => ctx.fillRect(Math.round(bx), Math.round(by), w, h);
-    if (fx.kind === 'pylon-overload') {
+    if (fx.kind === 'totem-overload') {
       const chamber = chamberOfTile(Math.floor(fx.x / TILE_SIZE), Math.floor(fx.y / TILE_SIZE));
       if (chamber >= 0) {
         const [r1, c1, r2, c2] = CHAMBER_BOUNDS[chamber];

@@ -7,6 +7,9 @@ const stage=fs.mkdtempSync(path.join(scratch,'desktop-build-'));
 if(path.dirname(stage)!==path.join(root,'.tmp'))throw Error('Invalid staging directory');
 fs.mkdirSync(stage,{recursive:true});
 for(const name of ['app','components','game','public']){const destination=path.join(stage,name);fs.rmSync(destination,{recursive:true,force:true});fs.cpSync(path.join(root,name),destination,{recursive:true});}
+const loreDirectory=path.join('docs','ruby-star');
+fs.mkdirSync(path.join(stage,loreDirectory),{recursive:true});
+for(const file of ['SUN-LORE.md','MOON-LORE.md','SATURN-LORE.md','GAIA-LORE.md','VENUS-LORE.md','BINARY-LORE.md','NEPTUNE-LORE.md','SIRIUS-LORE.md','SINGULARITY-LORE.md','JUPITER-LORE.md'])fs.copyFileSync(path.join(root,loreDirectory,file),path.join(stage,loreDirectory,file));
 for(const name of ['next.config.ts','tsconfig.json','package.json','package-lock.json','next-env.d.ts'])if(fs.existsSync(path.join(root,name)))fs.copyFileSync(path.join(root,name),path.join(stage,name));
 const result=spawnSync(process.execPath,[require.resolve('next/dist/bin/next'),'build',stage],{cwd:stage,stdio:'inherit',env:{...process.env,RUBY_DESKTOP:'1'}});
 if(result.status!==0)process.exit(result.status??1);

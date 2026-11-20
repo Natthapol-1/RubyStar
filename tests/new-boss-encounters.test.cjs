@@ -105,7 +105,7 @@ test('twins hunt on independent paths with no leash between them', () => {
 });
 
 test('the survivor keeps chasing while its fallen partner is reviving', () => {
-  const s = fresh('astral_twins'), [a, b] = s.enemies;
+  const s = fresh('astral_twins'), [a, b] = s.enemies; s.rubyTileX = -1; // these check the chase on you, with no Ruby placed
   s.map = s.map.map(row => row.map(() => c.T_FLOOR));
   position(a, 16, 10); position(b, 6, 10); movePlayer(s, 30, 10);
   hit(s, b, 100); a.attackTimer = 1000; a.pathTimer = 0;
@@ -114,7 +114,7 @@ test('the survivor keeps chasing while its fallen partner is reviving', () => {
 
 
 test('ranged twin takes its own off-line firing position while melee twin pressures the player', () => {
-  const s = fresh('astral_twins'), [a, b] = s.enemies;
+  const s = fresh('astral_twins'), [a, b] = s.enemies; s.rubyTileX = -1; // these check the chase on you, with no Ruby placed
   s.map = s.map.map(row => row.map(() => c.T_FLOOR));
   position(a, 11, 10); position(b, 12, 10); movePlayer(s, 10, 10);
   a.pathTimer = b.pathTimer = a.attackTimer = b.attackTimer = 0;
@@ -138,7 +138,7 @@ test('Dusk tracks a moving player through cover, warns for 0.6 seconds and hits 
 });
 
 test('Dusk cancels tracking when player leaves range or chamber, like the Queen', () => {
-  const s = fresh('astral_twins'), [a, b] = s.enemies; s.godMode = false;
+  const s = fresh('astral_twins'), [a, b] = s.enemies; s.godMode = false; s.rubyTileX = -1; // these check the chase on you, with no Ruby placed
   s.map = s.map.map(row => row.map(() => c.T_FLOOR));
   position(a, 11, 10); position(b, 18, 12); b.attackTimer = 0;
   e.tick(s); assert.equal(b.windupTicks, 36); movePlayer(s, 10, 18); e.tick(s); assert.equal(b.windupTicks, 0);
@@ -282,46 +282,46 @@ test('both new encounters initialize correctly through natural spawning too', ()
   }
 });
 
-test('surviving pylon warns for three seconds, hits only player in its chamber for eighty, and relocates at full HP', () => {
-  const s = fresh('aegis_sentinel'), [boss, pylon, other] = s.enemies; freeze(s); s.godMode = false;
-  position(boss, 40, 10); position(pylon, 2, 2); position(other, 40, 40); other.pylon.ageTicks = -100000;
+test('surviving totem warns for three seconds, hits only player in its chamber for eighty, and relocates at full HP', () => {
+  const s = fresh('aegis_sentinel'), [boss, totem, other] = s.enemies; freeze(s); s.godMode = false;
+  position(boss, 40, 10); position(totem, 2, 2); position(other, 40, 40); other.totem.ageTicks = -100000;
   const grunt = { ...boss, aegis: undefined, type: 'normal', id: s.nextEnemyId++, hp: 10, maxHp: 10 }; position(grunt, 3, 2); s.enemies.push(grunt);
-  pylon.hp = pylon.maxHp / 2;
-  ticks(s, c.PYLON_LIFETIME_TICKS - 1); assert.equal(pylon.pylon.overloadTicks, 0); assert.equal(s.playerHP, 100);
-  e.tick(s); assert.equal(pylon.pylon.overloadTicks, 180); ticks(s, 179); assert.equal(s.playerHP, 100);
+  totem.hp = totem.maxHp / 2;
+  ticks(s, c.TOTEM_LIFETIME_TICKS - 1); assert.equal(totem.totem.overloadTicks, 0); assert.equal(s.playerHP, 100);
+  e.tick(s); assert.equal(totem.totem.overloadTicks, 180); ticks(s, 179); assert.equal(s.playerHP, 100);
   e.tick(s); assert.equal(s.playerHP, 20); assert.equal(s.rubyHP, 100); assert.equal(grunt.hp, 10); assert.equal(boss.hp, boss.maxHp);
-  const destination = c.chamberOfTile(pylon.tileX, pylon.tileY); assert.ok(destination !== 0 && destination !== 3);
-  assert.equal(pylon.hp, pylon.maxHp); assert.equal(pylon.pylon.ageTicks, 0); assert.equal(pylon.pylon.overloadTicks, 0);
+  const destination = c.chamberOfTile(totem.tileX, totem.tileY); assert.ok(destination !== 0 && destination !== 3);
+  assert.equal(totem.hp, totem.maxHp); assert.equal(totem.totem.ageTicks, 0); assert.equal(totem.totem.overloadTicks, 0);
   assert.equal(boss.aegis.constructsLeft, 2); assert.equal(s.bossesKilled, 0); assert.equal(s.killScore, 0);
-  assert.ok(s.encounterEffects.some(fx => fx.kind === 'pylon-overload' && fx.x === 2.5 * c.TILE_SIZE));
+  assert.ok(s.encounterEffects.some(fx => fx.kind === 'totem-overload' && fx.x === 2.5 * c.TILE_SIZE));
 });
 
-test('damage never resets pylon lifetime or cancels overload; only destruction prevents the blast', () => {
-  const s = fresh('aegis_sentinel'), pylon = s.enemies[1];
-  pylon.pylon = { ageTicks: 1200, overloadTicks: 2 }; pylon.icyShieldHP = 1;
-  hit(s, pylon, 1); assert.equal(pylon.pylon.overloadTicks, 2);
-  hit(s, pylon, .35); assert.equal(pylon.pylon.overloadTicks, 2); assert.equal(pylon.pylon.ageTicks, 1200);
-  hit(s, pylon, pylon.maxHp * .5, 'meteor');
-  assert.equal(pylon.pylon.overloadTicks, 2); assert.equal(pylon.pylon.ageTicks, 1200);
-  hit(s, pylon, 100); assert.equal(s.enemies.includes(pylon), false); e.tick(s);
-  assert.equal(s.encounterEffects.some(fx => fx.kind === 'pylon-overload' && fx.ownerId === pylon.id), false);
+test('damage never resets totem lifetime or cancels overload; only destruction prevents the blast', () => {
+  const s = fresh('aegis_sentinel'), totem = s.enemies[1];
+  totem.totem = { ageTicks: 1200, overloadTicks: 2 }; totem.icyShieldHP = 1;
+  hit(s, totem, 1); assert.equal(totem.totem.overloadTicks, 2);
+  hit(s, totem, .35); assert.equal(totem.totem.overloadTicks, 2); assert.equal(totem.totem.ageTicks, 1200);
+  hit(s, totem, totem.maxHp * .5, 'meteor');
+  assert.equal(totem.totem.overloadTicks, 2); assert.equal(totem.totem.ageTicks, 1200);
+  hit(s, totem, 100); assert.equal(s.enemies.includes(totem), false); e.tick(s);
+  assert.equal(s.encounterEffects.some(fx => fx.kind === 'totem-overload' && fx.ownerId === totem.id), false);
 });
 
-test('pylon countdown pauses in menus and Eclipse; other chambers and normal protection remain safe', () => {
-  const s = fresh('aegis_sentinel'), [boss, pylon, other] = s.enemies; freeze(s);
-  position(boss, 40, 40); position(pylon, 2, 2); position(other, 40, 38); pylon.pylon.overloadTicks = 20;
-  s.gamePhase = 'teleporting'; ticks(s, 80); assert.equal(pylon.pylon.overloadTicks, 20);
+test('totem countdown pauses in menus and Eclipse; other chambers and normal protection remain safe', () => {
+  const s = fresh('aegis_sentinel'), [boss, totem, other] = s.enemies; freeze(s);
+  position(boss, 40, 40); position(totem, 2, 2); position(other, 40, 38); totem.totem.overloadTicks = 20;
+  s.gamePhase = 'teleporting'; ticks(s, 80); assert.equal(totem.totem.overloadTicks, 20);
   s.gamePhase = 'playing'; s.ambientEvents.active = { kind: 'eclipse', ticks: 100, maxTicks: 100, age: 0, points: [], pullTimer: 0 };
-  ticks(s, 40); assert.equal(pylon.pylon.overloadTicks, 20); s.ambientEvents.active = null;
+  ticks(s, 40); assert.equal(totem.totem.overloadTicks, 20); s.ambientEvents.active = null;
   s.godMode = false; s.playerShieldHP = 30; ticks(s, 20); assert.equal(s.playerHP, 50); assert.equal(s.playerShieldHP, 0);
-  position(pylon, 40, 10); pylon.pylon.overloadTicks = 1; e.tick(s); assert.equal(s.playerHP, 50);
+  position(totem, 40, 10); totem.totem.overloadTicks = 1; e.tick(s); assert.equal(s.playerHP, 50);
 });
 
 test('shield opening and cosmetic effects pause, expire, and clear on debug replacement', () => {
   const s = fresh('aegis_sentinel'), boss = s.enemies[0]; freeze(s);
   for (let i = 0; i < 10; i++) hit(s, boss, .35);
   assert.equal(s.encounterEffects.filter(fx => fx.kind === 'reflect').length, 1);
-  for (const pylon of s.enemies.slice(1)) hit(s, pylon, 100);
+  for (const totem of s.enemies.slice(1)) hit(s, totem, 100);
   ticks(s, 12); close(boss.aegis.openAmount, .5); const effects = JSON.stringify(s.encounterEffects);
   s.gamePhase = 'constellation'; ticks(s, 100); close(boss.aegis.openAmount, .5); assert.equal(JSON.stringify(s.encounterEffects), effects);
   s.gamePhase = 'playing'; ticks(s, 12); close(boss.aegis.openAmount, 1);
@@ -333,16 +333,16 @@ test('shield opening and cosmetic effects pause, expire, and clear on debug repl
   e.godSetNoBossSpawns(s, true); assert.equal(s.encounterEffects.length, 0); assert.equal(s.enemies.length, 0);
 });
 
-test('supplied break sounds play once for the matching shield or pylon transition', () => {
+test('supplied break sounds play once for the matching shield or totem transition', () => {
   const previousAudio = global.Audio, played = [];
   global.Audio = class { constructor(src) { this.src = src; } play() { played.push(this.src); return Promise.resolve(); } pause() {} };
   try {
-    const s = fresh('aegis_sentinel'), boss = s.enemies[0], pylons = s.enemies.slice(1);
-    hit(s, pylons[0], 100);
-    assert.equal(played.filter(src => src === '/sounds/pylon-break.wav').length, 1);
+    const s = fresh('aegis_sentinel'), boss = s.enemies[0], totems = s.enemies.slice(1);
+    hit(s, totems[0], 100);
+    assert.equal(played.filter(src => src === '/sounds/totem-break.wav').length, 1);
     assert.equal(played.filter(src => src === '/sounds/aegis-shield-break.wav').length, 0);
-    hit(s, pylons[1], 100); ticks(s, 2);
-    assert.equal(played.filter(src => src === '/sounds/pylon-break.wav').length, 2);
+    hit(s, totems[1], 100); ticks(s, 2);
+    assert.equal(played.filter(src => src === '/sounds/totem-break.wav').length, 2);
     assert.equal(played.filter(src => src === '/sounds/aegis-shield-break.wav').length, 1);
     const grunt = { ...boss, aegis: undefined, type: 'normal', hp: 20, maxHp: 20, icyShieldHP: 4, id: s.nextEnemyId++ };
     position(grunt, 11, 10); s.enemies.push(grunt);
@@ -398,4 +398,13 @@ test('meteors hit a twin for the normal boss share', () => {
   const s = fresh('astral_twins'), [a, b] = s.enemies; position(a, 2, 2); position(b, 30, 30);
   s.meteoriteWarning = c.chamberOfTile(2, 2); s.meteoriteStrikeIn = 1; e.tick(s);
   close(a.hp, a.maxHp * .25); assert.equal(b.hp, b.maxHp);
+});
+
+test('each twin goes for whichever is closer: you or a placed Ruby', () => {
+  const s = fresh('astral_twins'), [a, b] = s.enemies; s.godMode = false;
+  s.map = s.map.map(row => row.map(() => c.T_FLOOR));
+  movePlayer(s, 30, 30); s.rubyTileX = 11; s.rubyTileY = 10; s.playerCarryingRuby = false;
+  position(a, 10, 10); position(b, 40, 40); a.attackTimer = 0; const ruby = s.rubyHP;
+  e.tick(s);
+  assert.equal(a.targeting, 'ruby'); assert.ok(s.rubyHP < ruby, 'Dawn strikes the closer Ruby'); assert.equal(b.targeting, 'player');
 });

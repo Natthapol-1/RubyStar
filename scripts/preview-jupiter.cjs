@@ -2,11 +2,12 @@
 const fs = require('fs'), path = require('path'), Module = require('module'), ts = require('typescript');
 const compile = src => ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, jsx: ts.JsxEmit.React } }).outputText;
 require.extensions['.ts'] = (m, f) => m._compile(compile(fs.readFileSync(f, 'utf8')), f);
+require.extensions['.tsx'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, jsx: ts.JsxEmit.ReactJSX } }).outputText, f);
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const c = require('../game/constants.ts'), engine = require('../game/engine.ts');
 const source = fs.readFileSync('game/RubyStarGame.tsx', 'utf8');
 // Local art modules keep their real imports; React/UI imports are dropped since only canvas drawing runs.
-const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(field-art|blessing-art|blessing-effects|endless-build-art|warning-art|singularity-art|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun)';/gm)]
+const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
   .map(m => `const ${m[1].replace(/\btype\s+/g, '')}=require('./${m[2]}.ts');`).join('');
 const code = 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
   + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;exports.drawMinimap=drawMinimap;exports.drawGuideCelestial=drawGuideCelestial;';
@@ -57,7 +58,13 @@ for(let i=0;i<4;i++) {
  const st=engine.createModeState('trial','storm_reaper');engine.godSpawnBoss(st,'storm_reaper');st.godMode=true;st.resources=[];
  const boss=jupiter.jupiterBoss(st);Object.assign(boss,{tileX:14,targetTileX:14,tileY:10,targetTileY:10,x:14.5*48,y:10.5*48,stepProgress:0});
  jupiter.godSetJupiterStage(st,'charging');st.jupiter.energy=80;st.jupiter.stageTicks=48;st.gameTick=40;
- if(i>0){st.jupiter.stageTicks=1;jupiter.updateJupiter(st);st.jupiter.blast.ticks=[0,38,24,12][i];st.jupiter.stormBlend=1;}
+ if(i===0) {
+  const [r1,c1,r2,c2]=c.CHAMBER_BOUNDS[st.jupiter.chargeRoom];
+  const x=Math.floor((c1+c2+1)/2),y=Math.floor(r1+1+(r2-r1-1)*.23);
+  st.jupiter.shockTiles.push({id:999,room:st.jupiter.chargeRoom,x,y,cooldown:0});
+  st.jupiter.tileBursts.push({x,y,ticks:25});
+ }
+ if(i>0){st.jupiter.stageTicks=1;jupiter.updateJupiter(st);st.jupiter.blast.ticks=[0,38,24,12][i];st.jupiter.stormAge=c.JUPITER.chargeBlastTicks-st.jupiter.blast.ticks;st.jupiter.stormBlend=Math.min(1,st.jupiter.stormAge/30);}
  if(i===3){st.jupiter.slowTicks=100;st.jupiter.tileBursts.push({x:10,y:10,ticks:22});}
  const cv=createCanvas(1280,720);renderer.exports.drawGame(cv.getContext('2d'),st,1280,720,40,0,false);hz.drawImage(cv,(i%2)*640,Math.floor(i/2)*360,640,360);
 }
@@ -103,3 +110,37 @@ for(let row=0;row<2;row++)for(let i=0;i<4;i++){
  vc.save();vc.translate(50+i*150,12+row*120);vc.scale(2,2);art.drawJupiterTile(vc,st,4+i,4,0,0,true);vc.restore();
 }
 fs.writeFileSync(path.join(out,'jupiter-wall-variants.png'),variants.toBuffer('image/png'));
+
+// Volt Fence ignition, using the real simulation and painter at four cast ages.
+{
+ const st=engine.createModeState('trial','storm_reaper');st.noMobs=true;st.noBossSpawns=true;st.meteoriteTimer=100000;st.immortal=true;st.resources=[];
+ st.playerDirX=1;st.playerDirY=0;jupiter.useVoltFence(st);
+ const w=720,h=460,sheet=createCanvas(w*2,h*2),ctx=sheet.getContext('2d');let age=0;
+ for(const [i,target] of [0,5,12,24].entries()) {
+  while(age<target){engine.tick(st);age++;}
+  const frame=createCanvas(w,h),before=JSON.stringify(st);renderer.exports.drawGame(frame.getContext('2d'),st,w,h,st.gameTick,0,false);
+  if(before!==JSON.stringify(st))throw Error('Volt Fence cast art mutated simulation');
+  ctx.drawImage(frame,(i%2)*w,Math.floor(i/2)*h);
+ }
+ fs.writeFileSync(path.join(out,'jupiter-fence-cast.png'),sheet.toBuffer('image/png'));
+}
+
+// Charge completion uses the actual transition, then samples its release, forks and wind tail.
+const releaseSheet=createCanvas(1280,720),releaseCtx=releaseSheet.getContext('2d');
+for(const [i,age] of [-5,3,16,38].entries()) {
+ const st=engine.createModeState('trial','storm_reaper');engine.godSpawnBoss(st,'storm_reaper');
+ st.noMobs=true;st.godMode=true;st.resources=[];
+ const boss=st.enemies.find(e=>e.id===st.jupiter.bossId);
+ Object.assign(boss,{tileX:14,targetTileX:14,tileY:10,targetTileY:10,x:14.5*c.TILE_SIZE,y:10.5*c.TILE_SIZE});
+ st.jupiter.chargeRoom=0;st.jupiter.stageTicks=age<0?-age:1;
+ st.jupiter.energy=97;
+ if(age>=0){
+  jupiter.updateJupiter(st);
+  for(let frame=0;frame<age;frame++){st.gameTick++;jupiter.updateJupiter(st);}
+ }
+ const cv=createCanvas(1280,720),before=JSON.stringify(st);
+ renderer.exports.drawGame(cv.getContext('2d'),st,1280,720,age,0,false);
+ if(before!==JSON.stringify(st))throw Error('Pursuit transition rendering mutated state');
+ releaseCtx.drawImage(cv,(i%2)*640,Math.floor(i/2)*360,640,360);
+}
+fs.writeFileSync(path.join(out,'jupiter-pursuit-release.png'),releaseSheet.toBuffer('image/png'));

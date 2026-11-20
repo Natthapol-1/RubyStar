@@ -16,7 +16,7 @@ const controls = () => [
   [bindingLabel('boost'), 'Speed burst'],
   [bindingLabel('bomb'), 'Place bomb · press again to explode'],
   [bindingLabel('ruby'), 'Carry or place Ruby'],
-  [bindingLabel('heal'), 'Heal, including on a pad'],
+  [bindingLabel('heal'), 'Heal when near Ruby'],
   [bindingLabel('teleport'), 'Teleport on or next to a pad'],
   [bindingLabel('celestial'), 'Use your celestial skill'],
 ];
@@ -52,14 +52,13 @@ export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{s
 
       <div className="rs-guide-grid">
         <section className="rs-guide-section"><h4>RUBY & HEALING</h4>
-          <p>Carrying Ruby slows you and shortens speed boosts, but you take 10% less damage and get pushed half as far. With no enemies near, use {bindingLabel('heal')} by Ruby to heal both.</p>
+          <p>Carrying Ruby slows you, but you take 10% less damage and get pushed half as far. With no enemies near, use {bindingLabel('heal')} by Ruby to heal both.</p>
         </section>
         <section className="rs-guide-section"><h4>METEORS</h4>
           <p>Meteors move clockwise and hit everything in the chamber. Get Ruby out of the flashing one.</p>
-          <p>From stage 3, comets hit a small marked area near you and briefly stun you. Step out before they land.</p>
         </section>
         <section className="rs-guide-section"><h4>TELEPORT</h4>
-          <p>Use {bindingLabel('teleport')} at a pad to pick a chamber. Carried Ruby comes along.</p>
+          <p>Use {bindingLabel('teleport')} at a pad to pick a chamber and bring along any carried Ruby. Teleport recharges in 2 seconds.</p>
         </section>
         <section className="rs-guide-section"><h4>STAR ENERGY</h4>
           <p>Kills and blue shards fill energy. When full, your next ability is boosted. Red shards heal.</p>
@@ -70,7 +69,7 @@ export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{s
         <p><strong>Black Hole:</strong> Pulls everything in.</p>
         <p><strong>Shooting Star:</strong> Grab its shard to heal and recharge.</p>
         <p><strong>Eclipse:</strong> Briefly freezes enemies.</p>
-        <p><strong>Supernova:</strong> Hit it, then escape the blast.</p>
+        <p><strong>Supernova:</strong> After getting hit, it charges and explodes, damaging the whole arena. The closer you are, the more damage you take.</p>
       </section>
       <section className="rs-guide-section"><h4>CONSTELLATIONS</h4>
         <p>Every 3 stages, choose one of 3 upgrades for the run.</p>

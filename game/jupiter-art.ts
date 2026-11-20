@@ -19,20 +19,58 @@ function jupiterPlasmaPalette(state:GameState) {
 export function drawJupiterBackdrop(ctx: CanvasRenderingContext2D,state:GameState,w:number,h:number,camX:number,camY:number,tick:number) {
   const storm=state.jupiter?.stage==='pursuit';ctx.save();
   rect(ctx,0,0,w,h,jupiterTint(state,'#211921','#071c25'));
-  // Large shadow banks and occasional distant bolts, with plenty of negative space.
+  // Far sky: sparse stars and a small stepped moon above the cloud deck.
+  for(let i=0;i<34;i++){const sx=((i*397.3-camX*.008)%w+w)%w,sy=((i*211.7)%(h*.34)),tw=.25+.2*Math.sin(tick*.03+i*1.7);ctx.globalAlpha=tw;rect(ctx,sx,sy,i%5?2:3,i%5?2:3,jupiterTint(state,'#e9d6c0','#bff2ee'));}
+  {const mx=w*.84-camX*.01,my=h*.13-camY*.008,r=26;
+   for(let row=-r;row<=r;row+=4){const half=Math.round(Math.sqrt(r*r-row*row)/4)*4;ctx.globalAlpha=.42;rect(ctx,mx-half,my+row,half*2,4,jupiterTint(state,'#a88d76','#6aa7a6'));ctx.globalAlpha=.5;rect(ctx,mx+half*.25,my+row,half*.75,4,jupiterTint(state,'#2b2129','#0a2129'));}
+   ctx.globalAlpha=.3;rect(ctx,mx-14,my-8,6,4,jupiterTint(state,'#c9ad8e','#8fd0cb'));rect(ctx,mx-6,my+6,8,4,jupiterTint(state,'#7d6656','#3e7a7c'));}
+  // Jupiter's banded atmosphere: stepped zones and belts with festooned edges,
+  // alternating jet directions and drifting streaks, like the planet's real bands.
+  const bandH=Math.max(64,h*.105),band0=h*.3-camY*.03;
+  for(let i=0;i<9;i++) {
+    const y0=band0+i*bandH,zone=i%2===0,dir=i%2?1:-1,phase=i*1.9+tick*.0025*dir;
+    ctx.globalAlpha=zone?.2:.24;ctx.fillStyle=jupiterTint(state,zone?'#6a5150':['#4a3036','#5b3a33','#43333c'][i%3],zone?'#1f4b57':['#0f303b','#14394a','#0d2a35'][i%3]);
+    for(let x=-16;x<w+16;x+=16){
+      const wx=x+camX*.03,top=y0+Math.round((Math.sin(wx*.011+phase)*9+Math.sin(wx*.037+phase*1.7)*4)/4)*4,bot=y0+bandH+Math.round(Math.sin(wx*.009-phase)*7/4)*4;
+      ctx.fillRect(x,top,16,bot-top);
+    }
+    // Jet streaks drift along each band in alternating directions.
+    ctx.globalAlpha=zone?.14:.1;
+    for(let k=0;k<7;k++){const len=40+((k*53+i*31)%90),span=w+260,sx=(((k*233+i*97)+tick*(storm?.5:.22)*dir-camX*.03)%span+span)%span-130,sy=y0+10+((k*29+i*13)%Math.max(8,Math.floor(bandH-20)));rect(ctx,sx,Math.round(sy/2)*2,len,2,jupiterTint(state,zone?'#c8a487':'#9a6d5c',zone?'#6cc0bb':'#3b8592'));}
+    // Small white ovals ride the zones.
+    if(zone&&i%4===0){const span=w+300,ox=(((i*311)+tick*.06*dir-camX*.03)%span+span)%span-150,oy=y0+bandH*.5;
+      ctx.globalAlpha=.2;rect(ctx,ox-22,oy-6,44,12,jupiterTint(state,'#e8d2b8','#a9e6df'));rect(ctx,ox-14,oy-10,28,20,jupiterTint(state,'#e8d2b8','#a9e6df'));
+      ctx.globalAlpha=.25;rect(ctx,ox-6,oy-3,12,6,jupiterTint(state,'#6a5150','#1f4b57'));}
+  }
+  // Brief flashes inside the cloud deck.
+  for(let i=0;i<3;i++){const age=(tick+i*71)%(storm?120:210);if(age>14)continue;const fx=((i*421+Math.floor(tick/(storm?120:210))*173)%(w*.8))+w*.1,fy=band0+bandH*(1+i*2.2);
+    ctx.globalAlpha=(1-age/14)*(storm?.16:.1);ctx.fillStyle=jupiterTint(state,'#f0c89a','#8ff0dc');ctx.fillRect(fx-60,fy-14,120,28);ctx.fillRect(fx-30,fy-26,60,52);}
+  // Large shadow banks drift over the bands, with plenty of negative space.
   const drift=tick*(storm?.12:.045)-camX*.04;
   for(let i=0;i<4;i++) {
     const base=i*h*.32-h*.15-camY*.035,offset=Math.sin(drift*.004+i)*30;
-    ctx.globalAlpha=.22;ctx.fillStyle=jupiterTint(state,i%2?'#4c3d43':'#514047',i%2?'#1b3d4c':'#163742');
+    ctx.globalAlpha=.16;ctx.fillStyle=jupiterTint(state,i%2?'#4c3d43':'#514047',i%2?'#1b3d4c':'#163742');
     ctx.beginPath();ctx.moveTo(-90,base+60);
     const points=[[-90,60],[w*.1,20],[w*.24,35],[w*.35,-4],[w*.51,15],[w*.67,-8],[w*.8,34],[w+90,12],[w+90,125],[w*.72,99],[w*.5,130],[w*.31,100],[-90,140]];
     points.forEach(([x,y])=>ctx.lineTo(x+offset,base+y));ctx.closePath();ctx.fill();
-    ctx.globalAlpha=.1;rect(ctx,0,base+112,w,3,storm?'#74b5b6':'#b08d7e');
+    ctx.globalAlpha=.08;rect(ctx,0,base+112,w,3,storm?'#74b5b6':'#b08d7e');
   }
-  // Jupiter's Great Red Spot is a subdued distant shape, not another foreground pattern.
+  // The Great Red Spot: a stepped oval vortex with slowly turning inner bands.
   const cx=w*.72-camX*.04,cy=h*.72-camY*.025;
-  ctx.globalAlpha=.09;rect(ctx,cx-140,cy-24,280,48,storm?'#60778d':'#ba705c');
-  rect(ctx,cx-95,cy-42,190,84,storm?'#435a75':'#a75749');
+  for(let ring=0;ring<4;ring++){
+    const rx=150-ring*34,ry=56-ring*12;ctx.globalAlpha=.08+ring*.03;
+    ctx.fillStyle=storm?['#2b4560','#3a5674','#4a6888','#5a7896'][ring]:['#7a3f38','#9a4d40','#b35f48','#c97a5a'][ring];
+    for(let row=-ry;row<ry;row+=6){const half=Math.round(rx*Math.sqrt(1-(row/ry)**2)/6)*6,shift=Math.round(Math.sin(tick*.004+row*.08+ring)*ring*2);ctx.fillRect(cx-half+shift,cy+row,half*2,6);}
+  }
+  ctx.globalAlpha=.18;rect(ctx,cx-18,cy-6,36,12,storm?'#7f98b3':'#e0a07a');
+  // Distant lightning-rod towers rise from the clouds; their tips blink.
+  for(let i=0;i<5;i++){
+    const tx=((i*w*.23+w*.12-camX*.06)%(w+200)+w+200)%(w+200)-100,base=h*.92-camY*.05,th=h*(.22+((i*37)%5)*.05);
+    ctx.globalAlpha=.6;ctx.fillStyle=jupiterTint(state,'#181217','#04121a');
+    ctx.fillRect(tx-5,base-th,10,th);ctx.fillRect(tx-14,base-th*.62,28,6);ctx.fillRect(tx-10,base-th*.34,20,5);ctx.fillRect(tx-2,base-th-22,4,22);
+    ctx.globalAlpha=.35;ctx.fillStyle=jupiterTint(state,'#6b5243','#2b6066');ctx.fillRect(tx-5,base-th,2,th);ctx.fillRect(tx-14,base-th*.62,28,1);ctx.fillRect(tx-10,base-th*.34,20,1);
+    const blink=(tick+i*37)%90<12;ctx.globalAlpha=blink?.85:.25;rect(ctx,tx-2,base-th-26,4,4,jupiterTint(state,'#ffcf8a','#7dffe0'));
+  }
   // A broad storm eye, visible beside the platform, gives the cloud sea a focal point.
   ctx.save();ctx.translate(w*.075-camX*.025,h*.64-camY*.018);ctx.scale(1,.55);ctx.rotate(Math.sin(tick*.002)*.08);
   for(let ring=3;ring>=1;ring--) {
@@ -81,8 +119,29 @@ export function drawJupiterTile(ctx:CanvasRenderingContext2D,state:GameState,tx:
     }
     rect(ctx,x+6,y+9,3,30,jupiterTint(state,'#b89b74','#508a91'));
   } else {
-    ctx.strokeStyle=jupiterTint(state,'#edc89c','#7dceda')+'13';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,47,47);
-    if((tx+ty*3)%7===0) {rect(ctx,x+7,y+7,10,2,jupiterTint(state,'#80634f','#4e8b8c'));rect(ctx,x+7,y+7,2,8,jupiterTint(state,'#80634f','#4e8b8c'));}
+    // Quiet brushed metal on single tiles: soft bevels, corner rivets, faint grain
+    // and a rare faint sheen, occasional raised tread. Keeps the original dark bronze/teal tone.
+    const hash=(a:number,b:number)=>(((a*73856093)^(b*19349663))>>>0)%1000/1000,plate=hash(tx,ty);
+    if(plate<.4)rect(ctx,x,y,48,48,jupiterTint(state,'#261f27','#0c222d'));
+    const shine=jupiterTint(state,'#d8b896','#8adbe0'),sheen=ctx.createLinearGradient(x,y,x+48,y+48);
+    sheen.addColorStop(0,shine+'0e');sheen.addColorStop(.35,shine+'03');sheen.addColorStop(.55,shine+'0b');sheen.addColorStop(1,'#00000018');
+    if(hash(ty*5+1,tx*3-2)>.72){ctx.fillStyle=sheen;ctx.fillRect(x,y,48,48);}
+    if(plate>.9) {
+      for(let gy=0;gy<5;gy++)for(let gx=0;gx<5;gx++) {
+        const bx=x+5+gx*8,by=y+5+gy*8,flat=(gx+gy)%2===0;
+        rect(ctx,bx,by+(flat?2:0),flat?5:2,flat?2:5,jupiterTint(state,'#2e262c','#0f2731'));
+        rect(ctx,bx,by+(flat?2:0),flat?5:2,1,jupiterTint(state,'#3a3033','#16333c'));
+      }
+    } else {
+      const grain=jupiterTint(state,'#2c242b','#0f262f'),bright=jupiterTint(state,'#352c31','#143039');
+      for(let k=0;k<6;k++) {
+        const gy=4+Math.floor(hash(tx*7+k,ty*5-k)*40),gx=3+Math.floor(hash(tx+k*3,ty+k)*26),len=6+Math.floor(hash(ty+k,tx-k)*14);
+        rect(ctx,x+gx,y+gy,Math.min(len,45-gx),1,k%3===0?bright:grain);
+      }
+    }
+    rect(ctx,x,y,48,1,jupiterTint(state,'#3a302f','#183a43'));rect(ctx,x,y,1,48,jupiterTint(state,'#3a302f','#183a43'));
+    rect(ctx,x,y+47,48,1,jupiterTint(state,'#16121a','#06161e'));rect(ctx,x+47,y,1,48,jupiterTint(state,'#16121a','#06161e'));
+    for(const [rx,ry] of [[4,4],[42,4],[4,42],[42,42]]){rect(ctx,x+rx,y+ry,2,2,jupiterTint(state,'#4c3d36','#24494f'));rect(ctx,x+rx,y+ry,1,1,jupiterTint(state,'#6a5546','#33666c'));}
     // Long conductor strips run across panels, with sparse polarity markers.
     if(ty%5===2) {rect(ctx,x,y+35,48,2,jupiterTint(state,'#665044','#29505b'));if(tx%4===0)rect(ctx,x+20,y+32,8,8,c+'55');}
   }
@@ -144,6 +203,52 @@ export function drawVoltFence(ctx:CanvasRenderingContext2D,x:number,y:number,ver
   ctx.restore();
 }
 
+// A brief ignition around the original cast position; the persistent fence renderer stays separate.
+function drawVoltFenceCast(ctx:CanvasRenderingContext2D,wall:Readonly<import('./jupiter').VoltWall>,camX:number,camY:number,tick:number,dx:number,dy:number) {
+  if(wall.age>=30)return;
+  const age=wall.age,t=age/30,fade=Math.pow(1-t,1.4),x=Math.round(wall.x-camX),y=Math.round(wall.y-camY);
+  ctx.save();ctx.translate(x,y);ctx.shadowColor='#79ffdc';ctx.shadowBlur=5;
+  // Four capacitor contacts close onto the caster before opening into the release.
+  const lock=24+18*Math.pow(Math.max(0,1-age/7),2),open=16+t*45;
+  for(const [r,alpha,width] of [[lock,Math.max(0,1-age/13),3],[open,fade*.55,2]]) {
+    ctx.globalAlpha=alpha;
+    for(const [sx,sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+      rect(ctx,sx*r-(sx>0?10:0),sy*r-(sy>0?width:0),10,width,'#a6ffe7');
+      rect(ctx,sx*r-(sx>0?width:0),sy*r-(sy>0?10:0),width,10,'#a6ffe7');
+    }
+  }
+  ctx.shadowBlur=0;
+  // Short current packets shoot from the centre toward the two existing emitters.
+  ctx.save();if(!wall.vertical)ctx.rotate(Math.PI/2);
+  for(const side of [-1,1]) {
+    const end=side<0?(wall.negative??wall.half):(wall.positive??wall.half);
+    const travel=Math.min(1,age/10),head=end*(1-Math.pow(1-travel,3));
+    if(age<12) {
+      ctx.globalAlpha=fade*.3;rect(ctx,-9,side*head-8,18,16,'#59e8ca');
+      ctx.globalAlpha=fade;rect(ctx,-6,side*head-2,12,4,'#e5fff5');
+    }
+    const flare=Math.max(0,1-Math.abs(age-9)/12);
+    ctx.globalAlpha=flare*.85;
+    for(const direction of [-1,1]) {
+      const reach=8+Math.max(0,age-6)*1.7;
+      rect(ctx,direction*reach-5,side*end-2,10,4,'#93ffe0');
+      rect(ctx,direction*(reach+7)-2,side*end-1,4,2,'#edfff6');
+    }
+  }
+  ctx.restore();
+  // The forward discharge opens a pair of clean electrical wings beside the dash lane.
+  ctx.save();ctx.rotate(Math.atan2(dy,dx));
+  for(const side of [-1,1]) {
+    const forward=5+t*42,wide=20+t*18;
+    drawReaperPlasma(ctx,[[forward-20,side*wide],[forward-5,side*wide],[forward-5,side*(wide+8)],[forward+10,side*(wide+8)],[forward+10,side*(wide+3)],[forward+19,side*(wide+3)]],fade*.75);
+    for(let k=0;k<3;k++) {
+      const px=-16+k*16+t*(24+k*9),py=side*(25+k*5+t*12);
+      ctx.globalAlpha=fade*(.8-k*.15);rect(ctx,px,py,9-k*2,3,k?'#75eaca':'#e7fff5');
+    }
+  }
+  ctx.restore();ctx.restore();
+}
+
 export function drawPursuitFragment(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,overdrive=false) {
   ctx.save();ctx.translate(Math.round(x),Math.round(y+Math.sin(tick*.05)*2));
   // Broken capacitor halves, rather than the race's golden star-shaped jewel.
@@ -198,6 +303,20 @@ function drawShardEffects(ctx:CanvasRenderingContext2D,state:GameState,camX:numb
 export function drawJupiterGround(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number,tick:number) {
   const j=state.jupiter;if(!j)return;ctx.save();
 
+  // A charged imprint on traversed floor tiles, with a quick directional surface glint.
+  for(const tile of j.dashTiles??[]) {
+    const x=tile.x*TILE_SIZE-camX,y=tile.y*TILE_SIZE-camY,life=tile.ticks/36;
+    ctx.save();ctx.beginPath();ctx.rect(x+2,y+2,TILE_SIZE-4,TILE_SIZE-4);ctx.clip();
+    ctx.globalAlpha=life*.2;rect(ctx,x+2,y+2,44,44,'#57e9bf');
+    ctx.globalAlpha=life*.6;ctx.strokeStyle='#8dffe0';ctx.lineWidth=2;ctx.strokeRect(x+5,y+5,38,38);
+    ctx.translate(x+24,y+24);ctx.rotate(Math.atan2(tile.dy,tile.dx));
+    const front=24-(1-life)*70;
+    ctx.globalAlpha=life*.55;rect(ctx,front-9,-22,12,44,'#50cfae');
+    ctx.globalAlpha=life*.85;rect(ctx,front,-22,2,44,'#d5fff0');
+    // Broad stepped current traces stay distinct from blue charged hazard bolts.
+    drawReaperPlasma(ctx,[[-15,8],[-4,8],[-4,2],[8,2],[8,-7],[16,-7]],life*.4);
+    ctx.restore();
+  }
   drawJupiterDischarge(ctx,state,camX,camY,tick);
   for(const fragment of j.fragments??[]) {
     const x=(fragment.x+.5)*TILE_SIZE-camX,y=(fragment.y+.5)*TILE_SIZE-camY;
@@ -250,6 +369,7 @@ export function drawJupiterGround(ctx:CanvasRenderingContext2D,state:GameState,c
     }
   });
   ctx.globalAlpha=1;
+  for(const wall of j.walls)drawVoltFenceCast(ctx,wall,camX,camY,tick,j.playerDashX,j.playerDashY);
   for(const wall of j.walls)drawVoltFence(ctx,wall.x-camX,wall.y-camY,wall.vertical,wall.half,tick,Math.min(1,(JUPITER.wallTicks-wall.age)/60),wall.negative??wall.half,wall.positive??wall.half);
   for(const b of j.bursts) {
     ctx.globalAlpha=b.ticks/24;const x=b.x-camX,y=b.y-camY,r=(1-b.ticks/24)*38;
@@ -336,9 +456,18 @@ function drawJupiterDischarge(ctx:CanvasRenderingContext2D,state:GameState,camX:
     const progress=j.energy/100,color=j.round===2?'#c5a4ff':'#72ffd9';
     ctx.globalAlpha=.05+progress*.08;rect(ctx,x,y,w,h,color);
     ctx.globalAlpha=.55+progress*.35;ctx.strokeStyle=color;ctx.lineWidth=4;ctx.setLineDash([22,12]);ctx.strokeRect(x+3,y+3,w-6,h-6);ctx.setLineDash([]);
-    drawChamberCountdown(ctx,x+w/2,y+h*.23,'DISCHARGE',j.stageTicks,color);
   }
   ctx.restore();
+}
+export function drawJupiterDischargeCountdown(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number) {
+  const j = state.jupiter;
+  if (!j || j.stage !== 'charging' || j.blast) return;
+  const bounds = CHAMBER_BOUNDS[j.chargeRoom];
+  if (!bounds) return;
+  const [r1, c1, r2, c2] = bounds;
+  const x = (c1 + c2 + 1) * TILE_SIZE / 2 - camX;
+  const y = (r1 + 1 + (r2 - r1 - 1) * .23) * TILE_SIZE - camY;
+  drawChamberCountdown(ctx, x, y, 'DISCHARGE', j.stageTicks, j.round === 2 ? '#c5a4ff' : '#72ffd9');
 }
 export function drawReaperCharge(ctx:CanvasRenderingContext2D,x:number,y:number,progress:number,tick:number,second=false,front=false) {
   const p=Math.max(0,Math.min(1,progress)),flip=Math.floor(tick/6)%2?1:-1;
@@ -381,8 +510,26 @@ export function drawJupiterBossEffect(ctx:CanvasRenderingContext2D,state:GameSta
       drawReaperPlasma(ctx,[[26,0],[r*.6,0],[r*.6,-6],[r,-6],[r,4],[r+14,4]],(1-age)*.95);ctx.restore();}
     ctx.restore();
   }
-  if(j.stage==='pursuit'&&j.stormAge<18) {
-    ctx.save();ctx.translate(x,y);ctx.scale(1.4,1.4);drawReaperStrike(ctx,0,0,0,1-j.stormAge/18);ctx.restore();
+  if(j.stage==='pursuit'&&j.stormAge<48) {
+    const age=j.stormAge,t=age/48,fade=1-t;
+    ctx.save();ctx.translate(x,y);
+    // The stored charge breaks into four broad plasma cuts rather than a single small swipe.
+    for(let i=0;i<4;i++) {
+      ctx.save();ctx.rotate(i*Math.PI/2);
+      const reach=55+Math.sqrt(t)*210;
+      drawReaperPlasma(ctx,[[24,0],[reach*.45,0],[reach*.45,-14],[reach*.7,-14],
+        [reach*.7,8],[reach,8],[reach,-4],[reach+24,-4]],fade*.95);
+      ctx.globalAlpha=fade*.8;rect(ctx,reach-20,-18,24,6,'#dffff0');
+      ctx.restore();
+    }
+    for(let i=0;i<2;i++) {
+      const r=35+(age-i*5)*3;if(r<35)continue;
+      ctx.globalAlpha=fade*(i?.3:.6);ctx.strokeStyle=i?'#52ffd6':'#dffff0';ctx.lineWidth=i?4:7;
+      ctx.strokeRect(-r,-r,r*2,r*2);
+    }
+    ctx.globalAlpha=Math.pow(Math.max(0,1-age/10),2)*.85;
+    rect(ctx,-42,-5,84,10,'#effff7');rect(ctx,-5,-55,10,110,'#effff7');
+    ctx.restore();
   }
   if(j.stage==='escape') {
     const boss=state.enemies.find(e=>e.id===j.bossId);
@@ -472,13 +619,104 @@ export function drawJupiterTransition(ctx:CanvasRenderingContext2D,state:GameSta
   if(j.stage==='charging') {
     const charge=Math.pow(j.energy/100,3),pulse=.65+.35*Math.sin(tick*.3);
     ctx.save();ctx.globalAlpha=charge*pulse*.065;rect(ctx,0,0,w,h,j.round===2?'#c5a4ff':'#76ffd7');
-    ctx.globalAlpha=charge*.35;ctx.strokeStyle=j.round===2?'#c5a4ff':'#76ffd7';ctx.lineWidth=3;ctx.strokeRect(3,3,w-6,h-6);ctx.restore();
+    const color = j.round === 2 ? '#c5a4ff' : '#76ffd7';
+    ctx.globalAlpha = charge * .35;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(3, 3, w - 6, h - 6);
+    if (j.stageTicks <= 18) {
+      const compression = 1 - Math.max(0, j.stageTicks) / 18;
+      const edge = Math.min(w, h) * (.05 + compression * .16);
+      ctx.globalAlpha = compression * .52;
+      rect(ctx, 0, 0, w, edge, '#06151f');
+      rect(ctx, 0, h - edge, w, edge, '#06151f');
+      ctx.globalAlpha = compression * .8;
+      rect(ctx, 0, edge, w, 3, color);
+      rect(ctx, 0, h - edge - 3, w, 3, color);
+      for (let i = 0; i < 12; i++) {
+        const span = (1 - compression) * w * .42;
+        const side = i % 2 ? 1 : -1;
+        ctx.globalAlpha = compression * .5;
+        rect(ctx, w / 2 + side * (span + 54 + i % 3 * 48), (i + .5) * h / 12, 32 + i % 4 * 15, 3, color);
+      }
+    }
+    ctx.restore();
   }
-  if(j.stage==='pursuit'&&j.stormAge<18) {
-    const t=j.stormAge/18;ctx.save();ctx.globalAlpha=Math.pow(1-t,2)*.3;
-    rect(ctx,0,0,w,h,j.round===2?'#e8dcff':'#d6fff1');
-    ctx.globalAlpha=(1-t)*.55;ctx.strokeStyle=j.round===2?'#d5baff':'#8affe0';ctx.lineWidth=5;
-    const r=.3+t*1.2;ctx.strokeRect(w*(1-r)/2,h*(1-r)/2,w*r,h*r);ctx.restore();
+  if (j.stage === 'pursuit' && j.stormAge < 72) {
+    const age = j.stormAge, fade = 1 - age / 72;
+    const pale = j.round === 2 ? '#eee4ff' : '#e2fff4';
+    const storm = j.round === 2 ? '#c5a4ff' : '#72ffda';
+    const plasma = [j.round === 2 ? '#684ca2' : '#2fa58c', storm, pale];
+    ctx.save();
+
+    // Release the compressed charge in one bright snap and a series of stepped pressure fronts.
+    ctx.globalAlpha = Math.pow(Math.max(0, 1 - age / 14), 2) * .75;
+    rect(ctx, 0, 0, w, h, pale);
+    for (let i = 0; i < 3; i++) {
+      const travel = (age - i * 7) / 44;
+      if (travel < 0 || travel >= 1) continue;
+      const radius = .09 + travel * .78;
+      const rx = w * radius, ry = h * radius;
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(-rx * .62, -ry);
+      ctx.lineTo(rx * .62, -ry);
+      ctx.lineTo(rx * .62, -ry * .68);
+      ctx.lineTo(rx, -ry * .68);
+      ctx.lineTo(rx, ry * .68);
+      ctx.lineTo(rx * .62, ry * .68);
+      ctx.lineTo(rx * .62, ry);
+      ctx.lineTo(-rx * .62, ry);
+      ctx.lineTo(-rx * .62, ry * .68);
+      ctx.lineTo(-rx, ry * .68);
+      ctx.lineTo(-rx, -ry * .68);
+      ctx.lineTo(-rx * .62, -ry * .68);
+      ctx.closePath();
+      ctx.globalAlpha = (1 - travel) * (i ? .24 : .4);
+      ctx.strokeStyle = storm;
+      ctx.lineWidth = i ? 24 : 54;
+      ctx.stroke();
+      ctx.globalAlpha = (1 - travel) * (i ? .48 : .88);
+      ctx.strokeStyle = pale;
+      ctx.lineWidth = i ? 4 : 9;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Thunder cracks across the viewport in staggered forks, then the wind carries the sparks offscreen.
+    for (let i = 0; i < 5; i++) {
+      const local = age - i * 5;
+      if (local < 0 || local >= 27) continue;
+      const x = w * (.1 + i * .2), power = Math.pow(1 - local / 27, 1.6);
+      const side = i % 2 ? -1 : 1;
+      const points = [[x, 0], [x, h * .18], [x + side * 32, h * .18], [x + side * 32, h * .42],
+        [x - side * 23, h * .42], [x - side * 23, h * .67], [x + side * 13, h * .67], [x + side * 13, h]];
+      ctx.save();
+      ctx.translate(x, 0);
+      ctx.scale(2.1, 1);
+      ctx.translate(-x, 0);
+      drawReaperPlasma(ctx, points, power, plasma);
+      drawReaperPlasma(ctx, [[x + side * 32, h * .32], [x + side * 76, h * .32],
+        [x + side * 76, h * .53], [x + side * 102, h * .53]], power * .63, plasma);
+      ctx.restore();
+    }
+    for (let i = 0; i < 44; i++) {
+      const side = i % 2 ? -1 : 1, travel = age * (7 + i % 7 * 3);
+      const y = (i * 137) % h, x = w / 2 + side * (36 + travel);
+      const length = 18 + i % 6 * 24;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(side * (i % 3 - 1) * .18);
+      ctx.globalAlpha = fade * (i % 4 ? .42 : .8);
+      rect(ctx, side < 0 ? -length : 0, -2, length, i % 4 ? 3 : 6, i % 4 ? storm : pale);
+      ctx.restore();
+    }
+    ctx.globalAlpha = fade * .5;
+    ctx.strokeStyle = storm;
+    ctx.lineWidth = 6 + fade * 8;
+    ctx.strokeRect(4, 4, w - 8, h - 8);
+    ctx.restore();
   }
   if(blend<=0||blend>=1)return;
   const entering=j.stage==='pursuit',progress=entering?blend:1-blend,impact=Math.sin(progress*Math.PI);
@@ -496,5 +734,25 @@ export function drawJupiterTransition(ctx:CanvasRenderingContext2D,state:GameSta
   }
   ctx.globalAlpha=impact*.6;ctx.strokeStyle=entering?'#6feacb':'#e9b679';ctx.lineWidth=4;
   const inset=4+progress*12;ctx.strokeRect(inset,inset,w-inset*2,h-inset*2);
+  ctx.restore();
+}
+
+/** Phase 2+ pursuit: once the overdrive bar passes 70%, a mint wash and edge glow build toward full; at full it pulses. */
+export const OVERDRIVE_WARNING_FROM = .7;
+export function drawOverdriveWarning(ctx:CanvasRenderingContext2D,state:GameState,w:number,h:number,tick:number) {
+  const j=state.jupiter;
+  if(!j||j.phase<2||j.stage!=='pursuit')return;
+  const charge=Math.min(1,(j.overdriveCharge??0)/JUPITER.fragmentChargeTicks);
+  if(charge<OVERDRIVE_WARNING_FROM)return;
+  const build=(charge-OVERDRIVE_WARNING_FROM)/(1-OVERDRIVE_WARNING_FROM),full=j.fragmentOverdrive;
+  const pulse=full?.65+.35*Math.abs(Math.sin(tick*.12)):.8+.2*Math.sin(tick*.06);
+  const strength=(full?1:.35+.55*build)*pulse;
+  ctx.save();
+  ctx.globalAlpha=.12*strength;ctx.fillStyle='#52ffd6';ctx.fillRect(0,0,w,h);
+  const edge=Math.round(Math.min(w,h)*(.06+.05*strength));
+  for(const [alpha,inset] of [[.42,0],[.22,edge*.45],[.1,edge*.9]] as const){
+    ctx.globalAlpha=alpha*strength;ctx.strokeStyle='#52ffd6';ctx.lineWidth=edge*.5;
+    ctx.strokeRect(inset+edge*.25,inset+edge*.25,w-2*inset-edge*.5,h-2*inset-edge*.5);
+  }
   ctx.restore();
 }

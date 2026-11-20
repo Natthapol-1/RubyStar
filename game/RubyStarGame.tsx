@@ -1,4 +1,12 @@
 'use client';
+import { drawThornGround } from './thorn-art';
+import { drawSporeShot } from './gaia-art';
+
+import { drawDevourerModel } from './devourer-model-art';
+import { drawConvergenceScreen } from './convergence-art';
+
+import { drawSuitShell, drawSuitHelmet } from './player-suit-art';
+import { ARRIVAL_COURTS } from './arrival-courts';
 import { drawEnemyHealthBar } from './enemy-health-art';
 import { drawSaturnShield, drawMobIceShield } from './ice-shield-art';
 import { canEnter, isDesktop, getProfile, highestStage, saveRun, restoreRun, resumeKey, updateProfile, flushProfile } from './profile';
@@ -19,30 +27,47 @@ import { buildChargeField, openGodBlessings, closeGodBlessings, chooseCelestialB
 
 import { drawMinimapHazard } from './warning-art';
 
-import { VOID_CHAMBER_COLORS, isSingularityMap, drawVoidBackdrop, drawVoidTile } from './singularity-art';
+import { gasFade, singularityLift } from './singularity-maw';
+import { worldTheme, drawSiriusLightOverlay, drawVenusSandWind, drawSingularityAtmosphere, drawSingularitySuction, drawSingularityMawEffects, drawSingularityTrap, drawLostSoul, drawSoulless, drawToxicSoulless, mawGreen, syncSingularityGulp } from './world-themes';
 import SingularityGuide from './SingularityGuide';
 
-import { SATURN_CHAMBER_COLORS, isSaturnMap, drawSaturnBackdrop, drawSaturnTile, drawSaturnBlizzard, drawSaturnGround, drawSaturnUnit, drawSaturnPlayer, drawSaturnBarrier, drawSaturnAtmosphere, drawSaturnShatter } from './saturn-art';
+import { SATURN_CHAMBER_COLORS, isSaturnMap, drawSaturnBackdrop, drawSaturnTile, drawSaturnBlizzard, drawSaturnGround, drawSaturnUnit, drawSaturnAtmosphere, drawSaturnEffects, drawSaturnMinimap, drawSaturnBacklash } from './saturn-art';
 import SaturnGuide from './SaturnGuide';
-import SnowballStatus from './SnowballStatus';
-import BlizzardStatus from './BlizzardStatus';
+import BinaryGuide from './BinaryGuide';
+import SiriusGuide from './SiriusGuide';
+import VenusGuide from './VenusGuide';
+import SandSweepStatus from './SandSweepStatus';
+import { VENUS, venusBand, venusFloor, useSandSweep, venusAirborne, duneWormHidden, venusCoreSealed, venusCoreHint, venusCoreHintRect, venusTotemSink, venusRevealing, venusRevealingOrder, venusShowingNumbers, godSetVenusPhase, godVenusBreakShield, godVenusLeap, godVenusLance } from './venus';
+import { drawVenusGround, drawVenusEffects, drawVenusRelic, drawVenusScarab, drawVenusNest, drawDuneWorm, drawVenusShatter, drawVenusCore, drawSandScorpion } from './venus-art';
+import { SIRIUS, RUNES, runeProgress, useHalo, stopSiriusFloatSound, godSetSiriusPhase, godSiriusRune, godSiriusSwap, godSiriusRitual, godFillHolyLight } from './sirius';
+import HaloStatus from './HaloStatus';
+import { drawSiriusGround, drawSiriusEffects, drawSiriusScreen, drawSiriusUnit, drawSiriusHalo, drawSiriusBurst, siriusFloatLift, drawRuneTiles, RUNE_GOLD, WRATH_RED } from './sirius-art';
+import MagnetStatus from './MagnetStatus';
+import { TWIN_REVIVE_TICKS } from './constants';
+import GambitLoadout from './GambitLoadout';
+import { pressSlot, holdSlot, releaseSlot, GAMBIT_WAVE_TICKS } from './gambit';
+import { drawGambitEffects, drawGambitHud, drawGambitBackdrop } from './gambit-art';
+import { BINARY, BINARY_TWIN_COLORS, POLE_COLORS, binaryTwins, swapTicks as binarySwapTicks, swapPole, godSetBinaryPhase, godJumpTwins, godCollideTwins } from './binary';
+import { BINARY_CHAMBER_COLORS, isBinaryMap, drawBinaryBackdrop, drawBinaryCover, drawBinaryFloor, drawBinaryAmbience } from './binary-world-art';
+import { drawBinaryGround, drawBinaryEffects, drawPoleFrame, drawBinaryMinimap, drawBinaryUnit, drawBinaryScreen } from './binary-art';
+import TimeStopStatus from './TimeStopStatus';
 import ShieldAmount from './ShieldAmount';
-import { SATURN, beginSnowball, releaseSnowball, cancelSnowball, saturnBlizzard, saturnShieldChilled, godSetSaturnPhase } from './saturn';
+import { SATURN, saturnBlizzard, saturnTimeStopped, useSaturnIntercept, godSetSaturnPhase, godSaturnGrant, godSaturnRecall } from './saturn';
 
 import { stopAmbientEventSounds, pauseAmbientEventSounds } from './event-audio';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { drawEncounterEnemy, drawEncounterTelegraphs, drawEncounterEffects } from './encounter-art';
-import { drawNeptuneUnit, drawNeptuneOverlay, drawNeptuneRock, drawSkyLaserImpact, drawWaterBurst } from './neptune-art';
+import { drawNeptuneUnit, drawNeptuneOverlay, drawNeptuneCloneHeal, drawNeptuneRock, drawNeptuneAmbience, drawSkyLaserImpact, drawWaterBurst } from './neptune-art';
 import { drawGaiaUnit, drawGaiaGround, drawScorchTile, drawGaiaOverlay, drawForestBackdrop, drawForestAmbience, drawGaiaStone, GAIA_CHAMBER_COLORS } from './gaia-art';
-import { drawMoonBackdrop, drawMoonAmbience, drawMoonCrystalBlock, drawMoonReflection, drawMoonEffects, drawMoonUnit, isMoonMap, MOON_CHAMBER_COLORS } from './moon-art';
-import { JUPITER, SUN } from './constants';
+import { drawMoonBackdrop, drawMoonAmbience, drawMoonDarkRoom, drawMoonDarkOverlay, drawMoonCrystalBlock, drawMoonReflection, drawMoonEffects, drawMoonUnit, drawMoonRevealOverlay, isMoonMap, MOON_CHAMBER_COLORS } from './moon-art';
+import { JUPITER, SINGULARITY_CHALLENGE, SUN } from './constants';
 import { godAdjustSunHeat, godSetNoWisps, godSetSunHeat, godSetSunPhase, sunStationNearPlayer, useCoolingWave } from './sun';
-import { drawQuenchedKing, drawSunUnit, drawSunBackdrop, drawSunFloorTile, drawSunCover, drawSunPad, drawSunGround, drawSunEffects, drawSunAtmosphere, SUN_CHAMBER_COLORS } from './sun-art';
+import { drawFieryKingModel, drawQuenchedKing, drawFlareFireball, drawSunUnit, drawSunBackdrop, drawSunFloorTile, drawSunCover, drawSunPad, drawSunGround, drawSunEffects, drawSunAtmosphere, SUN_CHAMBER_COLORS } from './sun-art';
 import SunGuide from './SunGuide';
 import JupiterGuide from './JupiterGuide';
 import VoltFenceStatus from './VoltFenceStatus';
 import { jupiterMaxEnergy, godSetJupiterPhase, godSetJupiterStage, useVoltFence } from './jupiter';
-import { drawReaperStrike, jupiterColors, drawJupiterBackdrop, drawJupiterTile, drawJupiterGround, drawJupiterBossEffect, drawJupiterMinimap, drawJupiterGuard, drawJupiterTransition } from './jupiter-art';
+import { drawReaperStrike, jupiterColors, drawJupiterBackdrop, drawJupiterTile, drawJupiterGround, drawJupiterDischargeCountdown, drawJupiterBossEffect, drawJupiterMinimap, drawJupiterGuard, drawJupiterTransition, drawOverdriveWarning } from './jupiter-art';
 import CoolingWaveStatus from './CoolingWaveStatus';
 import { godSetMoonPhase, isMoonBoss, isMoonRevealed, moonHiddenInDark, moonWearsGuise, useMoonMark } from './moon';
 import BackButton from '@/components/BackButton';
@@ -61,22 +86,23 @@ import ConstellationChoice from './ConstellationChoice';
 import ConstellationAfterglow from './ConstellationAfterglow';
 import BombStatus from './BombStatus';
 import CelestialStatus from './CelestialStatus';
+import TetherStatus from './TetherStatus';
 import MoonMarkStatus from './MoonMarkStatus';
 import HudIcon from './HudIcon';
 import BGMController, { BGMControllerHandle } from '@/components/BGMController';
 import {
   TILE_SIZE, MAP_COLS, MAP_ROWS,
-  SPECIAL_SKILLS, SPECIAL_UNLOCK_KILLS, SPECIAL_REAPER_RADIUS, SPECIAL_CHANTER_RADIUS, SPECIAL_WEAVER_RADIUS, SPECIAL_SINGULARITY_RADIUS,
-  T_WALL, T_TELEPORT,
-  CHAMBER_BOUNDS, CHAMBER_LABELS, CHAMBER_COLORS, HALLWAY_BOUNDS, DEVOURER_SELF_SPLIT_TICKS, DEVOURER_SELF_SPLIT_WARNING, TUTORIAL_STEPS, trialSkillCooldown,
-  NEPTUNE_PHASE_HPS, neptunePhaseFloorHP, NEPTUNE_DIVE_POINTS, NEPTUNE_HEAL_CHARGE_MAX, GAIA_PHASE_HP, GAIA_SUN_MAX, GAIA_SUN_MIN, MOON_MARK_COOLDOWN, MOON_PHASE_HP,
+  SPECIAL_SKILLS, SPECIAL_UNLOCK_KILLS, SPECIAL_REAPER_RADIUS, SPECIAL_REAPER_HASTE_TICKS, SPECIAL_CHANTER_RADIUS, SPECIAL_WEAVER_RADIUS, SPECIAL_SINGULARITY_RADIUS,
+  T_WALL, T_FLOOR, T_TELEPORT, TELEPORT_COOLDOWN,
+  CHAMBER_BOUNDS, CHAMBER_LABELS, CHAMBER_COLORS, TELEPORT_PADS, HALLWAY_BOUNDS, DEVOURER_SELF_SPLIT_TICKS, DEVOURER_SELF_SPLIT_WARNING, TUTORIAL_STEPS, trialSkillCooldown,
+  NEPTUNE_PHASE_HPS, neptunePhaseFloorHP, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_TICKS, NEPTUNE_HEAL_CHARGE_MAX, GAIA_PHASE_HP, GAIA_SUN_MAX, GAIA_SUN_MIN, MOON_MARK_COOLDOWN, MOON_PHASE_HP, MOON_DARK_FADE, QUEEN_PHASE_INTERVAL,
   chamberOfTile,
   ENEMY_CONFIGS, isBossType, BOSS_TYPES, BOSS_NAMES, BossType, BOSS_SKILL_REWARDS, SpecialSkill,
   PLAYER_MAX_HP, RUBY_MAX_HP,
   LASER_COOLDOWN,
   STAR_ENERGY_MAX,
-  METEORITE_WARNING, METEORITE_CYCLE, BULLET_COOLDOWN, BULLET_SPEED, COMET, CRATER, BLESSING, ENCHANTER, BLEEDER, SNATCHER, SHOOTER,
-  HEALER_HEAL_INTERVAL, QUEEN_WINDUP_TICKS, QUEEN_PHASE_TELEGRAPH, CHARGER_WINDUP_TICKS, CHARGER_CHARGE_TILES, LANCER,
+  METEORITE_WARNING, METEORITE_CYCLE, BULLET_COOLDOWN, BULLET_SPEED, COMET, CRATER, BLESSING, ENCHANTER, BLEEDER, SNATCHER, SHOOTER, REFLECTOR, TRAPPER, DROPPER, BLINKER, JAMMER, SPOOK, GRAPPLER, SOULLESS_LUNGE,
+  HEALER_HEAL_INTERVAL, QUEEN_WINDUP_TICKS, QUEEN_PHASE_TELEGRAPH, CHARGER_WINDUP_TICKS, CHARGER_CHARGE_TILES, LODESTONE_SNAP, LANCER,
   PRAYER_RUBY_WINDUP, PRAYER_ESCAPE_WINDUP, SEA_SONG_WINDUP, SEA_SONG_BLAST_RADIUS, SEA_SONG_BLAST_TICKS, SEA_ALLY_HEAL_RADIUS,
   KING_ARENA_WINDUP, KING_ARENA_FX_TICKS,
   THORN_WINDUP, THORN_RADIUS, THORN_LIFETIME, getThornFieldBounds,
@@ -84,16 +110,25 @@ import {
 import {
   GameState, RubyStarMode, createModeState, tick, CONSTELLATIONS, chooseConstellation, openGodConstellations, closeGodConstellations, getBombRadius,
   AMBIENT_EVENTS, STAR_FALL_TICKS, SUPERNOVA_CHARGE_TICKS, SUPERNOVA_BLAST_TICKS, triggerAmbientEvent, AmbientEventKind,
-  useLaser, useBullet, lancerBeamEnd, godTriggerComet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
-  chooseStartingSkill, chooseSkyLaser, cancelSkyLaser, toggleCarryRuby, tryActivateTeleport, isNearTeleportPad, doTeleport, cancelTeleport,
+  useLaser, useBullet, lancerBeamEnd, godTriggerComet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, createEncounterEnemy, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
+  chooseStartingSkill, chooseSkyLaser, cancelSkyLaser, toggleCarryRuby, tryActivateTeleport, teleportJammed, jammerCoversTile, playerCCImmune, isNearTeleportPad, isFloorTile, doTeleport, cancelTeleport,
   healRuby, isPlayerChilled, isMovementReversed, isSeaChanterDiving, isEnemyVisibleOnMinimap, startChargeSound, stopChargeSound, stopPoisonSound, stopSingularitySound, stopGaiaFieldSound,
-  METEOR_CLOCKWISE_ORDER, getMirrorTwinTile, devourerBodyScale, ALIEN_INTRO_TICKS,
+  METEOR_CLOCKWISE_ORDER, getMirrorTwinTile, devourerBodyScale, singularityTrialHealth, pressGravityHook, releaseGravityHook, godSetSingularityPhase, ALIEN_INTRO_TICKS,
 } from './engine';
 import { godSetNeptunePhase, openSkyLaser, canOpenSkyLaser } from './neptune';
 import { godSetGaiaPhase, useSunfire, playStrikeCharged } from './gaia';
 
 // ─── Canvas colors ────────────────────────────────────────────────────────────
 const BG_COLOR = '#000010';
+const VENUS_REVEAL_TOTEM = [
+  [-4, -8, 8, 16, '#0d0a06'],
+  [-6, -8, 12, 5, '#0d0a06'],
+  [-6, 3, 12, 5, '#0d0a06'],
+  [-3, -7, 6, 14, '#489da5'],
+  [-5, -7, 10, 3, '#78dedf'],
+  [-5, 4, 10, 3, '#78dedf'],
+  [-1, -4, 2, 8, '#d9ffff'],
+] as const;
 const RUBY_COLOR = '#ff1155';
 const BOMB_COLOR = '#ff6600';
 const COOLDOWN_GRAY = '#5a5a66'; // mobile ability buttons dim to this while their ability is on cooldown
@@ -607,7 +642,7 @@ function drawMinimap(
   isMobileTouch = false,
 ) {
   const S = isMobileTouch ? 3 : 4; // px per tile — smaller on mobile, unchanged on desktop
-  const ROOM_COLORS: readonly string[] = isSingularityMap(state) ? VOID_CHAMBER_COLORS : isSaturnMap(state) ? SATURN_CHAMBER_COLORS : state.jupiter ? jupiterColors(state) : state.sun ? SUN_CHAMBER_COLORS : state.neptune ? OCEAN_CHAMBER_COLORS : state.gaia ? GAIA_CHAMBER_COLORS : isMoonMap(state) ? MOON_CHAMBER_COLORS : CHAMBER_COLORS; // challenge worlds use their own palette
+  const ROOM_COLORS: readonly string[] = worldTheme(state)?.colors ?? (isBinaryMap(state) ? BINARY_CHAMBER_COLORS : isSaturnMap(state) ? SATURN_CHAMBER_COLORS : state.jupiter ? jupiterColors(state) : state.sun ? SUN_CHAMBER_COLORS : state.neptune ? OCEAN_CHAMBER_COLORS : state.gaia ? GAIA_CHAMBER_COLORS : isMoonMap(state) ? MOON_CHAMBER_COLORS : CHAMBER_COLORS); // challenge worlds use their own palette
   const MW = MAP_COLS * S;
   const MH = MAP_ROWS * S;
   const PAD = 8;
@@ -628,7 +663,7 @@ function drawMinimap(
       const px = MX + tx * S;
       const py = MY + ty * S;
       if (tile === T_WALL) {
-        ctx.fillStyle = state.neptune ? '#020d18' : state.gaia ? '#04120a' : isMoonMap(state) ? '#0a0614' : '#060615';
+        ctx.fillStyle = worldTheme(state) ? worldTheme(state)!.minimap : state.neptune ? '#020d18' : state.gaia ? '#04120a' : isMoonMap(state) ? '#0a0614' : isBinaryMap(state) ? '#0a0818' : '#060615';
       } else {
         const ch = chamberOfTile(tx, ty);
         ctx.fillStyle = ch >= 0 ? ROOM_COLORS[ch] + '28' : '#17283c';
@@ -675,11 +710,13 @@ function drawMinimap(
       ctx.fillRect(MX + c1 * S, MY + r1 * S, (c2 - c1 + 1) * S, (r2 - r1 + 1) * S);
     }
   }
-  // Moon phase 3: the dark room is a black wash on the map too.
-  if (state.moon && state.moon.dark >= 0) {
-    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[state.moon.dark];
+  // Moon phase 3: dark rooms carry a black wash on the minimap.
+  for (const room of [state.moon?.dark ?? -1, state.moon?.secondDark ?? -1]) {
+    if (room < 0) continue;
+    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[room];
     ctx.fillStyle = 'rgba(3,1,8,0.85)'; ctx.fillRect(MX + c1 * S, MY + r1 * S, (c2 - c1 + 1) * S, (r2 - r1 + 1) * S);
   }
+  if (state.binary) drawBinaryMinimap(ctx, state, MX, MY, S);
   // Moon phase 2+: mirror tiles as faint silver marks, so you can plan where to stand.
   if (state.moon?.mirrors.length) {
     ctx.fillStyle = 'rgba(230,220,255,0.55)';
@@ -712,7 +749,7 @@ function drawMinimap(
     ctx.fillStyle = 'rgba(160,236,255,0.5)';
     ctx.fillRect(MX + c1 * S, MY + r1 * S, (c2 - c1 + 1) * S, (r2 - r1 + 1) * S);
   }
-  // Gaia: Sunfire's target blinks gold, and lit Sunstones show as gold dots.
+  // Gaia: Sunfire's target blinks gold; Sunstones keep a small stepped mineral silhouette.
   const sunfire = state.gaia?.sunfire;
   if (sunfire && Math.floor(tickN / 6) % 2 === 0) {
     const [r1, c1, r2, c2] = CHAMBER_BOUNDS[sunfire.chamber];
@@ -721,8 +758,12 @@ function drawMinimap(
   }
   for (const stone of state.gaia?.stones ?? []) {
     if (stone.travel > 0) continue;
-    ctx.fillStyle = stone.lit ? '#ffd36a' : '#7a7258';
-    ctx.fillRect(MX + stone.x * S - 1, MY + stone.y * S - 1, S + 2, S + 2);
+    const x=Math.round(MX+(stone.x+.5)*S),y=Math.round(MY+(stone.y+.5)*S);
+    ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);
+    ctx.shadowColor='#ffd36a';ctx.shadowBlur=stone.lit?3:0;
+    ctx.fillStyle=stone.lit?'#d9a34b':'#716653';ctx.fillRect(-4,-4,8,8);
+    ctx.shadowBlur=0;ctx.fillStyle=stone.lit?'#ffe29a':'#968774';ctx.fillRect(-2.5,-2.5,5,5);
+    ctx.fillStyle=stone.lit?'#fffbe4':'#b1a08b';ctx.fillRect(-2.5,-2.5,2,4);ctx.restore();
   }
   // Neptune: a clone revealed by a jellyfish blinks pink.
   const revealed = state.neptune?.reveal && state.enemies.find(c => c.id === state.neptune!.reveal!.cloneId);
@@ -791,6 +832,7 @@ function drawMinimap(
     ctx.fillRect(MX + e.tileX * S, MY + e.tileY * S, S, S);
   }
 
+  if (state.saturn) drawSaturnMinimap(ctx, state, MX, MY, S); // drawn over the enemy dots so her ice reads clearly
   // Moon Mark: an ice-blue frame around the marked dot, so you can follow her across the map.
   if (state.sun) {
     ctx.save();
@@ -807,12 +849,50 @@ function drawMinimap(
     ctx.fillStyle = '#ff7a3a'; // phase 2+ burning trail
     for (const b of state.sun.burning) ctx.fillRect(MX + b.x * S, MY + b.y * S, S, S);
     for (const station of state.sun.stations) {
-      const x = MX + (station.x + .5) * S, y = MY + (station.y + .5) * S;
+      const x = Math.round(MX + (station.x + .5) * S), y = Math.round(MY + (station.y + .5) * S);
       const sapped = state.enemies.some(e => e.type === 'scorch_sapper' && e.sapStation === station.id);
       ctx.fillStyle = sapped && Math.floor(tickN / 8) % 2 === 0 ? '#ffa23a' : station.blocked ? '#ff7956' : '#9af1ff'; // a drained station blinks orange
-      ctx.fillRect(x - 3, y - 1, 6, 2); ctx.fillRect(x - 1, y - 3, 2, 6);
+      const color=ctx.fillStyle;
+      ctx.fillRect(x-4,y-4,8,8);ctx.fillRect(x-3,y-6,6,2);ctx.fillRect(x-5,y+4,10,2);
+      ctx.fillStyle='#102334';ctx.fillRect(x-2,y-2,4,5);
+      ctx.fillStyle=color;const water=1+Math.round(Math.max(0,Math.min(1,station.charge/100))*4);ctx.fillRect(x-2,y+3-water,4,water);
+      ctx.fillStyle='#e8fcff';ctx.fillRect(x-3,y-5,5,1);ctx.fillRect(x-3,y-3,1,4);
     }
     ctx.restore();
+  }
+  for(const sign of state.trial?.devourer?.soulSigns??[]) { // a Lost Soul about to appear: a blinking diamond outline closing in
+    const x=Math.round(MX+(sign.tx+.5)*S),y=Math.round(MY+(sign.ty+.5)*S),p=1-sign.ticks/SINGULARITY_CHALLENGE.soulWarnTicks,r=Math.round(9-4*p);
+    ctx.save();ctx.globalAlpha=.5+.5*Math.abs(Math.sin(tickN*(.15+.3*p)));ctx.strokeStyle=sign.golden?'#ffd86a':'#c6ffd8';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(x,y-r);ctx.lineTo(x+r,y);ctx.lineTo(x,y+r);ctx.lineTo(x-r,y);ctx.closePath();ctx.stroke();ctx.restore();
+  }
+  for(const soul of state.enemies) { // Lost Souls (the swarm's only food): a glowing pale ghost mark; Golden Souls in gold and larger
+    if(soul.type!=='lost_soul'||soul.hp<=0)continue;
+    const x=Math.round(MX+soul.x/TILE_SIZE*S),y=Math.round(MY+soul.y/TILE_SIZE*S),gold=!!soul.goldenSoul,k=gold?1.4:1;
+    ctx.save();ctx.globalAlpha=.75+.25*Math.abs(Math.sin(tickN*.15+soul.id));ctx.shadowColor=gold?'#ffd86a':'#9dff8a';ctx.shadowBlur=gold?8:6;
+    ctx.fillStyle=gold?'#ffd86a':'#d8fff0';ctx.fillRect(x-3*k,y-4*k,6*k,7*k);ctx.fillRect(x-4*k,y-2*k,8*k,4*k); // a blocky ghost
+    ctx.shadowBlur=0;ctx.fillStyle='#0a1410';ctx.fillRect(x-2*k,y-2*k,1.5*k,1.5*k);ctx.fillRect(x+.5*k,y-2*k,1.5*k,1.5*k);ctx.restore();
+  }
+  for(const cloud of state.trial?.devourer?.gas??[]) { // toxic gas: a soft green patch the size of the cloud
+    const x=Math.round(MX+cloud.x/TILE_SIZE*S),y=Math.round(MY+cloud.y/TILE_SIZE*S),r=Math.round((cloud.r??SINGULARITY_CHALLENGE.gas.radius)*S),f=gasFade(cloud);
+    ctx.save();ctx.globalAlpha=.3*f;ctx.fillStyle='#5ad86a';ctx.fillRect(x-r,y-r,r*2,r*2);ctx.globalAlpha=.45*f;ctx.fillStyle='#7dff8a';ctx.fillRect(x-r*.6,y-r*.6,r*1.2,r*1.2);ctx.restore();
+  }
+  if(state.singularity) { // the F Singularity field: its reach in silver with a dark core, blinking in its last seconds
+    const f=state.singularity,x=Math.round(MX+f.x/TILE_SIZE*S),y=Math.round(MY+f.y/TILE_SIZE*S),r=Math.round(SPECIAL_SINGULARITY_RADIUS/TILE_SIZE*S),ending=f.ticks<120&&Math.floor(tickN/6)%2===0;
+    ctx.save();ctx.globalAlpha=ending?.35:.8;ctx.strokeStyle='#bcbccd';ctx.lineWidth=2;ctx.setLineDash([4,3]);ctx.lineDashOffset=-tickN*.3;ctx.strokeRect(x-r,y-r,r*2,r*2);ctx.setLineDash([]);
+    ctx.globalAlpha=.15;ctx.fillStyle='#bcbccd';ctx.fillRect(x-r,y-r,r*2,r*2);ctx.globalAlpha=1;ctx.fillStyle='#08050f';ctx.fillRect(x-5,y-5,10,10);ctx.strokeStyle='#ece4ff';ctx.lineWidth=2;ctx.strokeRect(x-6,y-6,12,12);ctx.restore();
+  }
+  for(const gravityTrap of state.trial?.devourer?.maws??[]) { // each Maw; when it is about to move, a dashed path to a blinking ghost of it at the next spot
+    const x=Math.round(MX+gravityTrap.x/TILE_SIZE*S),y=Math.round(MY+gravityTrap.y/TILE_SIZE*S);
+    if(gravityTrap.next&&gravityTrap.ticks<SINGULARITY_CHALLENGE.mawPreview){
+      const nx=Math.round(MX+(gravityTrap.next.tx+.5)*S),ny=Math.round(MY+(gravityTrap.next.ty+.5)*S),blink=.55+.45*Math.abs(Math.sin(tickN*.15)),p=1-gravityTrap.ticks/SINGULARITY_CHALLENGE.mawPreview;
+      ctx.save();ctx.strokeStyle='#c6ffb0';ctx.lineWidth=2;ctx.setLineDash([4,4]);ctx.lineDashOffset=-tickN*.5;ctx.globalAlpha=.75*Math.min(1,p*3);
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(nx,ny);ctx.stroke();ctx.setLineDash([]);
+      ctx.globalAlpha=(.35+.35*p)*Math.min(1,p*3);ctx.fillStyle='#6fd88a';ctx.fillRect(nx-7,ny-9,14,18);ctx.fillRect(nx-9,ny-7,18,14);ctx.fillStyle='#08050f';ctx.fillRect(nx-6,ny-6,12,12);
+      ctx.globalAlpha=blink*Math.min(1,p*3);ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.strokeRect(nx-11,ny-11,22,22);ctx.restore();
+    }
+    const green=mawGreen(gravityTrap); // turns green before a move, like the Maw itself
+    ctx.save();ctx.shadowColor=mixHex('#b99ce8','#9dff8a',green);ctx.shadowBlur=6;ctx.fillStyle=mixHex('#a58ac8','#6fd88a',green);ctx.fillRect(x-7,y-9,14,18);ctx.fillRect(x-9,y-7,18,14); // a bigger mark so the Maw reads at a glance
+    ctx.shadowBlur=0;ctx.fillStyle='#08050f';ctx.fillRect(x-6,y-6,12,12);ctx.fillStyle='#ded0f5';ctx.fillRect(x-2,y-2,4,4);ctx.restore();
   }
   const markedOnMap = state.moon?.mark && state.enemies.find(e => e.id === state.moon!.mark!.id);
   if (state.moon?.mark && markedOnMap && (state.moon.mark.ticks > 60 || Math.floor(tickN / 6) % 2 === 0)) {
@@ -837,11 +917,11 @@ function drawMinimap(
     ctx.restore();
   }
 
-  // Pylons sit above ordinary alien dots, with the same gold/cyan silhouette as their model.
+  // Totems sit above ordinary alien dots, with the same gold/cyan silhouette as their model.
   for (const e of state.enemies) {
     if (e.type !== 'aegis_construct' || e.hp <= 0) continue;
     const x = Math.round(MX + (e.tileX + .5) * S), y = Math.round(MY + (e.tileY + .5) * S);
-    const overload = (e.pylon?.overloadTicks ?? 0) > 0;
+    const overload = (e.totem?.overloadTicks ?? 0) > 0;
     const pulse = .75 + .25 * Math.abs(Math.sin(tickN * (overload ? .3 : .08)));
     ctx.save(); ctx.globalAlpha = pulse; ctx.shadowColor = overload ? '#ffc47c' : '#78dedf'; ctx.shadowBlur = overload ? 9 : 5;
     ctx.fillStyle = '#e3c581'; ctx.fillRect(x - 4, y - 5, 8, 10);
@@ -852,6 +932,47 @@ function drawMinimap(
       const size = 13 + Math.floor(pulse * 3); ctx.strokeStyle = '#ffce8a'; ctx.lineWidth = 2;
       ctx.strokeRect(x - size / 2, y - size / 2, size, size);
     }
+    ctx.restore();
+  }
+
+  // Venus: leap target, relics, scarab nests and the hidden core.
+  if (state.venus) {
+    ctx.save(); ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
+    const godReveal = venusRevealingOrder(state);
+    for (const sc of godReveal ? state.enemies.filter(e => e.type === 'sand_scorpion' && duneWormHidden(e)) : []) { // god reveal: buried scorpions
+      const x = Math.round(MX + (sc.tileX + .5) * S), y = Math.round(MY + (sc.tileY + .5) * S);
+      ctx.save(); ctx.fillStyle = '#1b130b'; ctx.fillRect(x - 4, y - 4, 8, 8); ctx.fillStyle = '#c99a4a'; ctx.fillRect(x - 3, y - 3, 6, 6); ctx.fillStyle = '#ffd27a'; ctx.fillRect(x - 1, y - 3, 2, 2); ctx.restore();
+    }
+    for (const nest of godReveal ? state.venus.nests : []) {
+      const x = Math.round(MX + (nest.tx + .5) * S), y = Math.round(MY + (nest.ty + .5) * S);
+      ctx.save(); ctx.translate(x, y); ctx.scale(.4, .4); drawVenusNest(ctx, 0, 0); ctx.restore();
+    }
+    const core = state.venus.core; // his core: while uncovered, or while revealed, a cyan diamond (gold-ringed while sealed)
+    if (core && venusCoreHint(state)) { // a hint: with one totem left, his core's chamber pulses cyan; once the core is open it shrinks toward it
+      const room = chamberOfTile(core.enemy.tileX, core.enemy.tileY), shrink = venusCoreHintRect(state);
+      if (room >= 0) {
+        const [r1, c1, r2, c2] = shrink ?? CHAMBER_BOUNDS[room], pulse = .5 + .5 * Math.sin(tickN * .15);
+        ctx.save(); ctx.globalAlpha = .1 + pulse * .12; ctx.fillStyle = '#78dedf'; ctx.fillRect(MX + c1 * S, MY + r1 * S, (c2 - c1 + 1) * S, (r2 - r1 + 1) * S);
+        ctx.globalAlpha = .55 + pulse * .45; ctx.strokeStyle = '#78dedf'; ctx.lineWidth = 2; ctx.strokeRect(MX + c1 * S - 1, MY + r1 * S - 1, (c2 - c1 + 1) * S + 2, (r2 - r1 + 1) * S + 2); ctx.restore();
+      }
+    }
+    if (core && (!core.buried || godReveal)) {
+      const x = Math.round(MX + (core.enemy.tileX + .5) * S), y = Math.round(MY + (core.enemy.tileY + .5) * S);
+      ctx.save(); ctx.translate(x, y);
+      if (core.buried) {
+        ctx.scale(.38, .38); drawVenusCore(ctx, 0, 0, tickN, venusCoreSealed(state), false);
+      } else {
+        ctx.rotate(Math.PI / 4); ctx.fillStyle = venusCoreSealed(state) ? '#ffd27a' : '#ffffff'; ctx.fillRect(-4, -4, 8, 8); ctx.fillStyle = '#78dedf'; ctx.fillRect(-3, -3, 6, 6);
+      }
+      ctx.restore();
+    }
+    for (const relic of godReveal ? state.venus.relics : []) {
+      const x = Math.round(MX + (relic.enemy.tileX + .5) * S), y = Math.round(MY + (relic.enemy.tileY + .5) * S);
+      ctx.save(); ctx.globalAlpha = relic.buried ? .8 : 1;
+      ctx.translate(x, y); ctx.scale(.36, .36); drawVenusRelic(ctx, relic.kind, 0, 0, tickN); ctx.restore();
+    }
+    const leap = state.venus.leap;
+    if (leap) { const x = Math.round(MX + (leap.tx + .5) * S), y = Math.round(MY + (leap.ty + .5) * S); ctx.globalAlpha = .6 + .4 * Math.abs(Math.sin(tickN * .4)); ctx.strokeStyle = leap.stage === 'lock' ? '#ff6a4d' : '#ffd27a'; ctx.lineWidth = 2; ctx.strokeRect(x - 6, y - 6, 12, 12); }
     ctx.restore();
   }
 
@@ -918,17 +1039,50 @@ function drawMinimap(
       ctx.strokeRect(bx - 4, by - 4, 10, 10);
       ctx.shadowBlur = 0;
 
+      // Singularity: a Gnasher wears a white diamond on the minimap.
+      if (e.devourer?.gnasher) { ctx.save(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx + 1, by - 8); ctx.lineTo(bx + 10, by + 1); ctx.lineTo(bx + 1, by + 10); ctx.lineTo(bx - 8, by + 1); ctx.closePath(); ctx.stroke(); ctx.restore(); } // a white diamond
+      // Singularity: a body one meal from full blinks an orange ring; a bursting one throbs a red ring that closes in.
+      const danger = e.type === 'devourer' ? devourerDanger(e) : null;
+      if (danger) {
+        ctx.save();
+        if (danger.bursting) { const r = 6 + Math.round(8 * danger.left); ctx.globalAlpha = .6 + .4 * Math.abs(Math.sin(tickN * .5)); ctx.strokeStyle = '#ff4a3a'; ctx.lineWidth = 2; ctx.strokeRect(bx + 1 - r, by + 1 - r, r * 2, r * 2); }
+        else if (Math.floor(tickN / 10) % 2 === 0) { ctx.strokeStyle = '#ffa53a'; ctx.lineWidth = 2; ctx.strokeRect(bx - 6, by - 6, 14, 14); }
+        ctx.restore();
+      }
     }
+  }
+
+  // Inset brackets mark the player's chamber independently of Ruby and hazard frames.
+  const playerChamber = chamberOfTile(state.playerTileX, state.playerTileY);
+  if (playerChamber >= 0) {
+    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[playerChamber];
+    const inset = Math.round(S * 1.5), arm = S * 3;
+    const left = MX + c1 * S + inset, right = MX + (c2 + 1) * S - inset;
+    const top = MY + r1 * S + inset, bottom = MY + (r2 + 1) * S - inset;
+    ctx.save();
+    ctx.strokeStyle = '#e9f8ff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#81d6ff';
+    ctx.shadowBlur = 3;
+    ctx.beginPath();
+    for (const [x, dx] of [[left, 1], [right, -1]]) {
+      for (const [y, dy] of [[top, 1], [bottom, -1]]) {
+        ctx.moveTo(x + dx * arm, y);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x, y + dy * arm);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Chamber labels on minimap
   ctx.font = '6px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const labelPts = [[3, 3], [32, 3], [3, 32], [32, 32]];
-  for (let i = 0; i < 4; i++) {
-    const [lx, ly] = labelPts[i];
-    ctx.fillStyle = ROOM_COLORS[i] + 'cc';
+  for (let i = 0; i < CHAMBER_BOUNDS.length; i++) {
+    const [, c1, , ] = CHAMBER_BOUNDS[i], [lx, ly] = [c1 + 2, CHAMBER_BOUNDS[i][0] + 2]; // each chamber's label sits in its top-left corner
+    ctx.fillStyle = i === playerChamber ? '#e9f8ff' : ROOM_COLORS[i] + 'cc';
     ctx.fillText(CHAMBER_LABELS[i][0], MX + lx * S + S / 2, MY + ly * S + S / 2);
   }
 
@@ -946,6 +1100,44 @@ function drawMinimap(
   ctx.fillStyle = carryingRuby ? '#ffffff' : '#ffddee';
   ctx.fillRect(rx - 2, ry - 2, 4, 4);
   ctx.restore();
+
+  // Venus totems go on top of everything, Ruby included, so nothing on the map ever covers them: each uncovered one
+  // as an outlined cyan dot (amber while overloading), with its number during its first appearance (every number with
+  // the god panel's Reveal Totems on, gold for the next).
+  if (state.venus) {
+    ctx.save(); ctx.font = '14px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.shadowBlur = 0;
+    const order = venusShowingNumbers(state); // every number: god reveal, or a Seer's Eye
+    if (venusRevealing(state)) {
+      const pulse = .5 + .5 * Math.sin(tickN * .3), ring = 6 + ((tickN * .4) % 8);
+      const core = state.venus.core;
+      if (core?.buried && !order) {
+        const x = Math.round(MX + (core.enemy.tileX + .5) * S), y = Math.round(MY + (core.enemy.tileY + .5) * S);
+        ctx.globalAlpha = 1 - ((tickN * .4) % 8) / 8; ctx.strokeStyle = '#78dedf'; ctx.lineWidth = 2; ctx.strokeRect(x - ring, y - ring, ring * 2, ring * 2);
+        ctx.globalAlpha = 1; ctx.fillStyle = '#0d0a06'; ctx.fillRect(x - 5, y - 5, 10, 10);
+        ctx.fillStyle = '#78dedf'; ctx.globalAlpha = .7 + pulse * .3; ctx.fillRect(x - 4, y - 4, 8, 8);
+        ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 1, y - 1, 2, 2);
+      }
+      for (const p of state.venus.totems) {
+        if (!p.buried) continue;
+        const x = Math.round(MX + (p.enemy.tileX + .5) * S), y = Math.round(MY + (p.enemy.tileY + .5) * S);
+        for (const [left, top, width, height, color] of VENUS_REVEAL_TOTEM) {
+          ctx.fillStyle = color;
+          ctx.fillRect(x + left, y + top, width, height);
+        }
+      }
+    }
+    for (const p of state.venus.totems) {
+      if (!p.buried) {
+        const x = MX + p.enemy.tileX * S, y = MY + p.enemy.tileY * S;
+        ctx.fillStyle = '#0d0a06'; ctx.fillRect(x - 1, y - 1, S + 2, S + 2); ctx.fillStyle = p.overload > 0 ? '#ffce8a' : '#78dedf'; ctx.fillRect(x, y, S, S);
+      }
+      if (!(order || (p.intro && !p.buried))) continue;
+      const x = Math.round(MX + (p.enemy.tileX + .5) * S), y = Math.round(MY + (p.enemy.tileY + .5) * S) - 5;
+      ctx.lineWidth = 3; ctx.strokeStyle = '#0d0a06'; ctx.strokeText(String(p.order + 1), x, y);
+      ctx.fillStyle = order && p.order === state.venus.next ? '#ffd27a' : '#78dedf'; ctx.fillText(String(p.order + 1), x, y);
+    }
+    ctx.restore();
+  }
 }
 
 // Shared ray shape: long cardinal pixels, square diagonal sparks and a tiny leading chip.
@@ -1138,7 +1330,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, sx: number, sy: number, state
 
   // Gradually shrink to tiny while charging (200ms → full charge collapses to 30%) — full
   // charge takes longer while chilled by a Frost Warden sharing the player's chamber
-  const waveChargeMs = (isPlayerChilled(state) ? (saturnShieldChilled(state) ? 1000/SATURN.shieldedChillMult : 1500) : 1000)*(state.build.quickWave ? .65 : 1);
+  const waveChargeMs = (isPlayerChilled(state) ? 1500 : 1000)*(state.build.quickWave ? .65 : 1);
   const chargeProgress = (chargingMs >= 200 && state.waveCooldown <= 0)
     ? Math.min(1, (chargingMs - 200) / (waveChargeMs - 200))
     : 0;
@@ -1176,45 +1368,10 @@ function drawPlayer(ctx: CanvasRenderingContext2D, sx: number, sy: number, state
     for(let i=4;i>=1;i--){ctx.globalAlpha=.18/i;ctx.fillRect(Math.round(sx-(j.playerDashX??dx)*i*13-h),Math.round(sy-(j.playerDashY??dy)*i*13-h),sz,sz);}
     ctx.restore();
   }
-  // Original luminous suit: one colored square rim and a flat darker panel.
   const burstGlow=state.speedFlashTicks>0?Math.floor(12*state.speedFlashTicks/30):0;
-  ctx.shadowColor=glowColor;ctx.shadowBlur=speeding?(burstGlow||8):14;
-
-  ctx.fillStyle = suitColor;
-  ctx.fillRect(sx - h, sy - h, sz, sz);
-  ctx.shadowBlur = 0;
-
-  // ── Inner suit detail — slightly darker inset panel ───────────────────
-  const pad = Math.max(2, Math.floor(sz * 0.12));
-  ctx.fillStyle = suitDark;
-  ctx.fillRect(sx - h + pad, sy - h + pad, sz - pad * 2, sz - pad * 2);
+  drawSuitShell(ctx, sx, sy, sz, suitColor, suitDark, glowColor, speeding ? burstGlow || 8 : 14);
   if(celestialKind)drawPlayerCelestialFeature(ctx,celestialKind,sx,sy,sz,'body',tickN);
-
-  // ── Helmet / visor on the facing side ────────────────────────────────
-  const vw = Math.floor(sz * 0.56); // visor width
-  const vh = Math.floor(sz * 0.30); // visor height
-  let vx = sx - vw / 2, vy = sy - vh / 2;
-
-  if (dx === 1) { vx = sx + h - pad - Math.floor(vh * 0.1) - vh; vy = sy - vw / 2; }
-  else if (dx === -1) { vx = sx - h + pad + Math.floor(vh * 0.1); vy = sy - vw / 2; }
-  else if (dy === -1) { vx = sx - vw / 2; vy = sy - h + pad + Math.floor(vh * 0.1); }
-  else { vx = sx - vw / 2; vy = sy + h - pad - Math.floor(vh * 0.1) - vh; }
-
-  const vwFinal = (dx !== 0) ? vh : vw;
-  const vhFinal = (dx !== 0) ? vw : vh;
-
-  ctx.shadowColor=visorColor;ctx.shadowBlur=10;ctx.fillStyle=visorColor+'cc';
-  ctx.fillRect(vx,vy,vwFinal,vhFinal);
-  ctx.fillStyle='#ffffff55';ctx.fillRect(vx+1,vy+1,Math.floor(vwFinal*.4),Math.floor(vhFinal*.4));ctx.shadowBlur=0;
-
-  const antH = Math.max(3, Math.floor(sz * 0.22));
-  ctx.fillStyle = suitColor;
-  ctx.fillRect(sx - 1, sy - h - antH, 2, antH);
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(sx - 2, sy - h - antH - 2, 4, 4);
-  ctx.shadowBlur = 0;
+  drawSuitHelmet(ctx, sx, sy, sz, dx, dy, suitColor, visorColor, glowColor);
 
   if(celestialKind)drawPlayerCelestialFeature(ctx,celestialKind,sx,sy,sz,'front',tickN);
 
@@ -1399,96 +1556,6 @@ function drawChanterWave(ctx: CanvasRenderingContext2D, x: number, y: number, dx
   ctx.restore();
 }
 
-function drawThornGround(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
-  ctx.save();
-  const areas = (state.thornPatches ?? []).map(p => ({ x: p.x, y: p.y, ticks: p.ticks, radius: p.radius ?? THORN_RADIUS, warning: false }));
-  for (const e of state.enemies) {
-    if (e.type === 'thorn_weaver' && e.hp > 0 && (e.thorn?.windupTicks ?? 0) > 0)
-      areas.push({ x: e.thorn!.aimX, y: e.thorn!.aimY, ticks: e.thorn!.windupTicks, radius: THORN_RADIUS, warning: true });
-    if (e.type === 'thorn_weaver' && e.hp > 0 && (e.thorn?.windupTicks ?? 0) > 0 && e.thorn!.aim2) // Gaia phase 3 twin cast
-      areas.push({ x: e.thorn!.aim2.x, y: e.thorn!.aim2.y, ticks: e.thorn!.windupTicks, radius: THORN_RADIUS, warning: true });
-  }
-  for (const rawArea of areas) {
-    const bounds=getThornFieldBounds(rawArea.x,rawArea.y,rawArea.radius),area={...rawArea,x:bounds.x,y:bounds.y};
-    ctx.save();ctx.beginPath();
-    for(let ty=bounds.top/TILE_SIZE;ty<bounds.bottom/TILE_SIZE;ty++)for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
-      if((state.map[ty]?.[tx]??T_WALL)!==T_WALL)ctx.rect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
-    }
-    ctx.clip();
-    const age = area.warning ? 0 : THORN_LIFETIME - area.ticks;
-    const fade = area.warning ? 1 : Math.min(1, area.ticks / 90);
-    const growth = area.warning ? 0 : Math.min(1, age / 24);
-    const progress = area.warning ? 1 - area.ticks / THORN_WINDUP : 1;
-    // A continuous translucent wash tints floor tiles, keeping walls clear and no grid seams.
-    ctx.globalAlpha = fade * (area.warning ? .09 + progress * .05 : .26);
-    ctx.fillStyle = area.warning ? '#b5bd50' : '#729d3d'; // the defence field shares the normal field's green
-    for(let ty=bounds.top/TILE_SIZE;ty<bounds.bottom/TILE_SIZE;ty++){
-      for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
-        if((state.map[ty]?.[tx] ?? T_WALL)!==T_WALL)ctx.fillRect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
-      }
-    }
-    // One simple thorn sprout per tile, matching the plain overgrowth style: a stem that grows in, then a pale tip.
-    for(let ty=bounds.top/TILE_SIZE;!area.warning&&ty<bounds.bottom/TILE_SIZE;ty++)for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
-      if((state.map[ty]?.[tx]??T_WALL)===T_WALL)continue;
-      const n=Math.sin(tx*127.1+ty*311.7)*43758.5453,h=n-Math.floor(n);
-      const x=tx*TILE_SIZE-camX+12+Math.floor(h*22),y=ty*TILE_SIZE-camY+34,height=Math.round(18*growth);
-      ctx.globalAlpha=fade;ctx.fillStyle='#4f8f3c';ctx.fillRect(x-3,y-height,6,height);
-      ctx.fillStyle='#85c76a';ctx.fillRect(x+3,y-Math.round(height*.6),6,4);
-      if(height>6){ctx.fillStyle='#e0f4a8';ctx.fillRect(x-2,y-height-4,4,4);}
-    }
-    // One luminous boundary marks the actual walkable hazard tiles.
-    ctx.globalAlpha=fade*(area.warning?.6+progress*.3:.45);ctx.strokeStyle=area.warning?'#ffd68b':'#99cf68';ctx.shadowColor=area.warning?'#ffbc65':'#88bc45';ctx.shadowBlur=4;ctx.lineWidth=3;
-    const floor=(tx:number,ty:number)=>tx>=bounds.left/TILE_SIZE&&tx<bounds.right/TILE_SIZE&&ty>=bounds.top/TILE_SIZE&&ty<bounds.bottom/TILE_SIZE&&(state.map[ty]?.[tx]??T_WALL)!==T_WALL;
-    ctx.beginPath();
-    for(let ty=bounds.top/TILE_SIZE;ty<bounds.bottom/TILE_SIZE;ty++)for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
-      if(!floor(tx,ty))continue;const x=tx*TILE_SIZE-camX,y=ty*TILE_SIZE-camY;
-      if(!floor(tx-1,ty)){ctx.moveTo(x+1,y);ctx.lineTo(x+1,y+TILE_SIZE);}
-      if(!floor(tx+1,ty)){ctx.moveTo(x+TILE_SIZE-1,y);ctx.lineTo(x+TILE_SIZE-1,y+TILE_SIZE);}
-      if(!floor(tx,ty-1)){ctx.moveTo(x,y+1);ctx.lineTo(x+TILE_SIZE,y+1);}
-      if(!floor(tx,ty+1)){ctx.moveTo(x,y+TILE_SIZE-1);ctx.lineTo(x+TILE_SIZE,y+TILE_SIZE-1);}
-    }
-    ctx.stroke();ctx.shadowBlur=0;
-    if (area.warning) {
-      const x = Math.round(area.x - camX), y = Math.round(area.y - camY), size = 14 + Math.round(progress * 10);
-      ctx.globalAlpha = 0.7 + Math.sin(tickN * 0.15) * 0.2; ctx.strokeStyle = '#ffd68b'; ctx.lineWidth = 3;
-      ctx.strokeRect(x - size, y - size, size * 2, size * 2);
-      ctx.fillStyle = '#ffd68b'; ctx.fillRect(x - 2, y - 10, 4, 14); ctx.fillRect(x - 2, y + 8, 4, 4);
-    }
-    ctx.restore();
-    // Airborne seed is drawn outside the ground clip so its descent starts above the field.
-    if(area.warning && area.ticks <= 30){
-      const fall=1-area.ticks/30, x=Math.round(area.x-camX), groundY=Math.round(area.y-camY);
-      const y=Math.round(groundY-220*(1-fall*fall));
-      ctx.save();ctx.shadowBlur=0;
-      // Growing square landing shadow anchors the falling object to the marked floor.
-      ctx.globalAlpha=.15+fall*.25;ctx.fillStyle='#132b16';
-      const shadow=7+fall*8;ctx.fillRect(x-shadow,groundY-shadow*.35,shadow*2,shadow*.7);
-      // A compact orbital energy bolt: stepped plasma tail and a pale luminous core.
-      ctx.shadowColor='#a7e66c';ctx.shadowBlur=9;
-      for(let i=4;i>=1;i--){
-        ctx.globalAlpha=(5-i)*.12;ctx.fillStyle=i%2?'#88bc45':'#c9ed9a';
-        ctx.fillRect(x-4-i,y-i*13,8+i*2,12);
-      }
-      ctx.globalAlpha=.35;ctx.fillStyle='#88bc45';ctx.fillRect(x-10,y-22,20,31);
-      ctx.globalAlpha=1;ctx.fillStyle='#a9d866';ctx.fillRect(x-6,y-17,12,24);
-      ctx.shadowBlur=3;ctx.fillStyle='#eaffc8';ctx.fillRect(x-3,y-15,6,23);
-      ctx.fillStyle='#ffffff';ctx.fillRect(x-2,y-3,4,13);
-      ctx.shadowBlur=0;ctx.fillStyle='#bb688b';ctx.fillRect(x-7,y-8,2,5);ctx.fillRect(x+5,y-8,2,5);
-      ctx.restore();
-    }else if(!area.warning && age<16){
-      const hit=age/16,x=area.x-camX,y=area.y-camY;
-      ctx.save();ctx.globalAlpha=(1-hit)*.8;ctx.shadowBlur=0;
-      for(let i=0;i<8;i++){
-        const angle=i*Math.PI/4, r=10+hit*30;
-        ctx.fillStyle=i%2?'#7e9c43':'#b9cb87';
-        ctx.fillRect(Math.round(x+Math.cos(angle)*r),Math.round(y+Math.sin(angle)*r*.5-Math.sin(hit*Math.PI)*13),4,5);
-      }
-      ctx.restore();
-    }
-  }
-  ctx.restore();
-}
-
 function drawSeaSongEffects(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
   ctx.save(); ctx.shadowColor = '#3998d6'; ctx.shadowBlur = 8;
   for (const e of state.enemies) {
@@ -1613,6 +1680,16 @@ function drawEnemyLaser(ctx: CanvasRenderingContext2D, x1: number, y1: number, x
   ctx.restore();
 }
 
+// Singularity: the current phase's max stacks, set each frame by drawGame (0 outside the challenge).
+let singularityMaxStacks = 0;
+// Singularity: whether a Devourer body is one meal from full (warning) or already bursting, with the fuse left (1 → 0).
+function devourerDanger(e: GameState['enemies'][0]) {
+  if (!singularityMaxStacks || e.type !== 'devourer' || !e.devourer?.challenge) return null;
+  const max = (e.devourer.generation ?? 0) === 0 ? singularityMaxStacks : SINGULARITY_CHALLENGE.bodyStacks; // copies are full at bodyStacks
+  const fuse = e.devourer.gorgeTicks;
+  if (fuse !== undefined) return { bursting: true, left: Math.max(0, fuse / SINGULARITY_CHALLENGE.gorgeTicks), max };
+  return e.chargeDirX >= max - 1 ? { bursting: false, left: 1, max } : null;
+}
 function drawBossBeam(ctx: CanvasRenderingContext2D, kind: 'king'|'queen'|'devourer'|'warden', fromX: number, fromY: number, toX: number, toY: number, remaining: number, tick: number) {
   ctx.save();ctx.lineCap='square';const fade=Math.max(0,Math.min(1,remaining)),dx=toX-fromX,dy=toY-fromY,len=Math.hypot(dx,dy)||1;
   const palette={king:['#dc3822','#ff9b35','#fff0ac'],queen:['#bd3ae7','#e99bfa','#ffedff'],devourer:['#6b2fa8','#9bdc65','#e3ffc0'],warden:['#5eaed8','#b5e7fb','#f3fcff']}[kind];
@@ -2103,7 +2180,8 @@ function drawPlayerChain(ctx: CanvasRenderingContext2D, x1: number, y1: number, 
   ctx.restore();
 }
 
-function drawPlayerWave(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, powered: boolean, ticks: number,tint?:'solar'|'emerald'|'opal'|'amber') {
+function drawPlayerWave(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, powered: boolean, ticks: number,tint?:'solar'|'emerald'|'opal'|'amber'|'echo') {
+  if(tint==='echo'){ctx.save();ctx.filter='hue-rotate(130deg) saturate(.8)';ctx.globalAlpha=.85;drawPlayerWave(ctx,x,y,radius,false,ticks);ctx.restore();return;}
   ctx.save();const fade=Math.min(1,ticks/30),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#29ba7c':tint==='solar'?'#ff5b66':powered?'#ffbb22':'#22cfff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffe0ca':tint==='amber'?'#ffd65b':powered?'#fff4b8':'#e4ffff',accent=tint==='opal'?'#ed99cc':tint==='emerald'?'#19a96c':tint==='solar'?'#e63956':tint==='amber'?'#ffad24':powered?'#ff6d37':'#9b7cff';
   ctx.shadowColor=base;ctx.shadowBlur=Math.min(6,32);ctx.globalAlpha=fade*.85;ctx.strokeStyle=base;ctx.lineWidth=18;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
   ctx.shadowBlur=Math.min(6,10);ctx.globalAlpha=fade;ctx.strokeStyle=light;ctx.lineWidth=6;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
@@ -2172,7 +2250,7 @@ function drawRewardSpark(ctx: CanvasRenderingContext2D, x: number, y: number, co
 function drawPrayerRitual(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
   const ability = state.enemies.find(e => e.type === 'blind_prayer')?.prayer;
   if (!ability || ability.rubyCastTicks <= 0 || state.rubyTileX === -1 || ability.rubyDestination < 0) return;
-  const destination = [[10, 10], [39, 10], [10, 39], [39, 39]][ability.rubyDestination];
+  const destination = TELEPORT_PADS[ability.rubyDestination];
   const progress = 1 - ability.rubyCastTicks / PRAYER_RUBY_WINDUP;
   ctx.save();
   for (const [tx, ty] of [[state.rubyTileX, state.rubyTileY], destination]) {
@@ -2252,6 +2330,7 @@ function drawMirrorTwin(ctx: CanvasRenderingContext2D, state: GameState, camX: n
   ctx.restore();
   // A cool blue wash keeps the twin readable as a copy rather than a second player.
   ctx.save();ctx.globalAlpha=blink?.08:.18;ctx.fillStyle='#7fb4ff';const h=Math.floor(TILE_SIZE*.37);ctx.fillRect(Math.round(x)-h,Math.round(y)-h,h*2,h*2);ctx.restore();
+  if(state.binary){ctx.save();ctx.globalAlpha=blink?.35:1;drawPoleFrame(ctx,state,x,y,state.binary.pole==='north'?'south':'north');ctx.restore();} // Binary Star map: the clone holds the opposite pole to yours
 }
 
 function drawVenusReflects(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number) {
@@ -2418,7 +2497,8 @@ function drawBombDevice(ctx: CanvasRenderingContext2D, x: number, y: number, pow
   drawCompassStar(ctx,15,-27,12,light);ctx.fillStyle='#ffffff';ctx.fillRect(14,-28,2,2);ctx.restore();
 }
 
-function drawBombBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number,opal=false,amber=false) {
+function drawBombBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number,opal=false,amber=false,trap=false) {
+  if(trap){drawTrapBlast(ctx,x,y,radius,ticks);return;}
   ctx.save();const fade=Math.min(1,ticks/28),progress=1-fade,r=Math.max(0,radius);
   const glow=opal||amber?'#83bfff':'#ff6a25',base=opal||amber?'#8fcaff':'#ff9c38',light=opal?'#ffd0eb':amber?'#ffd65b':'#fff1b6',accent=opal?'#ed99cc':amber?'#ffad24':'#ffce53';
   ctx.shadowColor=glow;ctx.shadowBlur=Math.min(6,30);ctx.globalAlpha=fade*.8;ctx.strokeStyle=base;ctx.lineWidth=18;ctx.strokeRect(x-r,y-r,r*2,r*2);
@@ -2432,6 +2512,24 @@ function drawBombBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radi
     ctx.fillRect(Math.round(px)-4,Math.round(py-height),8,height);ctx.fillStyle=opal?'#fff0fa':amber?'#fff2a3':'#fff2c7';ctx.fillRect(Math.round(px)-1,Math.round(py-height)+3,3,Math.max(3,height*.45));
   }
   ctx.globalAlpha=fade*.75;drawCompassStar(ctx,x,y,66+progress*54,(opal?'#b3d7ff':amber?'#ffcf4a':'#ffb744'));ctx.globalAlpha=fade*fade*.9;drawCompassStar(ctx,x,y,36,(opal?'#fff0fa':amber?'#fff2a3':'#fff2c7'));ctx.restore();
+}
+
+// A Trapper mine: the same blast as the player's bomb, recoloured crimson so it reads as hostile.
+// Trapper mines use crimson; the Binary Star echo's bomb uses the same blast in its rose.
+function drawTrapBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number, echo = false) {
+  if(echo){ctx.save();ctx.filter='hue-rotate(-28deg) saturate(.75) brightness(1.15)';drawTrapBlast(ctx,x,y,radius,ticks);ctx.restore();return;}
+  ctx.save();const fade=Math.min(1,ticks/28),progress=1-fade,r=Math.max(0,radius);
+  ctx.shadowColor='#ff2a4a';ctx.shadowBlur=6;ctx.globalAlpha=fade*.8;ctx.strokeStyle='#ff4d6a';ctx.lineWidth=18;ctx.strokeRect(x-r,y-r,r*2,r*2);
+  ctx.globalAlpha=fade;ctx.strokeStyle='#ffd0d8';ctx.lineWidth=5;ctx.strokeRect(x-r,y-r,r*2,r*2);
+  const inner=r*.65;ctx.globalAlpha=fade*.6;ctx.strokeStyle='#ff8aa0';ctx.lineWidth=6;ctx.strokeRect(x-inner,y-inner,inner*2,inner*2);
+  ctx.shadowBlur=0;ctx.globalAlpha=fade*.14;ctx.fillStyle='#ff2a4a';ctx.fillRect(x-r,y-r,r*2,r*2);
+  ctx.shadowColor='#ff5470';ctx.shadowBlur=6;
+  for(let i=0;i<12;i++){
+    const angle=i*Math.PI/6,reach=r*(.6+progress*.4),px=x+Math.cos(angle)*reach,py=y+Math.sin(angle)*reach;
+    const height=9+Math.sin(progress*Math.PI)*(12+i%3*6);ctx.globalAlpha=fade*.8;ctx.fillStyle=i%2?'#ff4d6a':'#ff9aae';
+    ctx.fillRect(Math.round(px)-4,Math.round(py-height),8,height);ctx.fillStyle='#ffe4ea';ctx.fillRect(Math.round(px)-1,Math.round(py-height)+3,3,Math.max(3,height*.45));
+  }
+  ctx.globalAlpha=fade*.75;drawCompassStar(ctx,x,y,66+progress*54,'#ff6680');ctx.globalAlpha=fade*fade*.9;drawCompassStar(ctx,x,y,36,'#ffe4ea');ctx.restore();
 }
 
 function drawResourcePickup(ctx: CanvasRenderingContext2D, x: number, y: number, health: boolean | 'shield', tick: number) {
@@ -2471,7 +2569,8 @@ function drawMobBrackets(ctx: CanvasRenderingContext2D, x: number, y: number, ra
 
 
 function drawMobAttack(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, targetX: number, targetY: number, ticks: number, color: string) {
-  if(type==='ice_caller'||type==='rime_brute'||type==='sniper'||type==='lancer'||type==='enchanter'||type==='shooter'||type==='healer'||type==='shielder'||type==='bomber')return;
+  if (type === 'sporeling') return;
+  if(type==='flare_spitter'||type==='zealot'||type==='bellringer'||type==='frostbiter'||type==='sleet_mortar'||type==='glacier_hulk'||type==='sniper'||type==='lancer'||type==='enchanter'||type==='shooter'||type==='trapper'||type==='dropper'||type==='jammer'||type==='grappler'||type==='soulless'||type==='healer'||type==='shielder'||type==='bomber')return;
   ctx.save();ctx.shadowColor=color;ctx.shadowBlur=3;
   const fade=Math.min(1,ticks/14),progress=1-fade,dx=targetX-x,dy=targetY-y,len=Math.hypot(dx,dy)||1;
   if(type==='energy_leech'){
@@ -2498,11 +2597,11 @@ function drawMobAttack(ctx: CanvasRenderingContext2D, type: string, x: number, y
   ctx.restore();
 }
 
-// Challenges show the guardian's HP only in the top bar, so the over-head bars are hidden there.
+// Challenges normally hide overhead boss bars; Singularity's separate bodies opt in.
 let hideBossHeadBars = false;
 
-function drawBossHealthBar(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, hp: number, maxHp: number, baseColor: string) {
-  if (hideBossHeadBars) return;
+function drawBossHealthBar(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, hp: number, maxHp: number, baseColor: string, showInChallenge=false) {
+  if (hideBossHeadBars&&!showInChallenge) return;
   ctx.save();ctx.shadowBlur=0;x=Math.round(x);y=Math.round(y);width=Math.round(width);
   const pct=Math.max(0,Math.min(1,hp/Math.max(1,maxHp))),color=pct>.5?baseColor:pct>.25?'#ff983d':'#ffe17b';
   ctx.fillStyle='#0a101b';ctx.fillRect(x-1,y-1,width+2,7);
@@ -2515,7 +2614,7 @@ function drawBossHealthBar(ctx: CanvasRenderingContext2D, x: number, y: number, 
 let guideBoss: GameState['enemies'][0] | null = null;
 function drawGuideCelestial(ctx: CanvasRenderingContext2D, kind: SpecialSkill, age: number, tick: number) {
   ctx.save(); ctx.translate(100, 60);
-  const scale = kind === 'sea_chanter' ? .14 : .32;
+  const scale = kind === 'sea_chanter' ? .14 : kind === 'fiery_king' ? .44 : .32;
   ctx.scale(scale, scale);
   drawCelestialCast(ctx, kind, 0, 0, age, tick);
   ctx.restore();
@@ -2530,6 +2629,12 @@ function drawGuideBoss(ctx: CanvasRenderingContext2D, x: number, y: number, tick
   hideBossHeadBars = hide;
 }
 
+// Moon rule sheet: a Blinker (phase 3 alien).
+let guideBlinker: GameState['enemies'][0] | null = null;
+function drawGuideBlinker(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number) {
+  if (!guideBlinker) guideBlinker = createEncounterEnemy(createInitialState(), 'blinker', 0, 0, ENEMY_CONFIGS.blinker.maxHp);
+  ctx.save(); ctx.translate(x, y); ctx.scale(1.3, 1.3); drawEnemy(ctx, guideBlinker!, 0, 0, tick); ctx.restore();
+}
 // Moon rule sheet: the Queen disguised as her Echo, or showing her true self.
 let guideQueen: GameState['enemies'][0] | null = null;
 function drawGuideQueen(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number, disguised: boolean) {
@@ -2556,6 +2661,33 @@ function drawGuideKing(ctx: CanvasRenderingContext2D, x: number, y: number, tick
   hideBossHeadBars = hide;
 }
 
+// Binary Star rule sheet: Dawn (0) and Dusk (1) with their real models.
+let guideTwins: GameState['enemies'] = [];
+function drawGuideTwin(ctx: CanvasRenderingContext2D, x: number, y: number, index: 0 | 1, tick: number) {
+  if (!guideTwins.length) { const s = createInitialState(); godSpawnBoss(s, 'astral_twins'); guideTwins = s.enemies.filter(e => e.type === 'astral_twins').sort((a, b) => a.twin!.index - b.twin!.index); }
+  const twin = guideTwins[index]; if (!twin) return;
+  twin.hp = twin.maxHp; twin.visualSpawnTicks = 0;
+  const hide = hideBossHeadBars; hideBossHeadBars = true;
+  ctx.save(); ctx.translate(x, y); ctx.scale(.75, .75); drawEnemy(ctx, twin, 0, 0, tick); ctx.restore();
+  hideBossHeadBars = hide;
+}
+
+// Singularity rule sheet: a Devourer body with the real model. Copies have no stacks; the original swells while its
+// fuse (gorge 0–1) runs.
+let guideDevourer: GameState['enemies'][0] | null = null;
+type GuideDevourerOptions = { scale?: number; original?: boolean; gorge?: number; flash?: boolean; generation?: number; gnasher?: boolean };
+function drawGuideDevourer(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number, o: GuideDevourerOptions = {}) {
+  if (!guideDevourer) { const s = createInitialState(); godSpawnBoss(s, 'devourer'); guideDevourer = s.enemies.find(e => e.type === 'devourer') ?? null; }
+  const d = guideDevourer; if (!d) return;
+  d.hp = d.maxHp; d.visualSpawnTicks = 0; d.healFlashTicks = 0; d.shootTicks = 0; d.windupTicks = 0; d.flashTicks = o.flash ? 6 : 0;
+  d.chargeDirX = o.original ? SINGULARITY_CHALLENGE.maxStacks[0] : 0;
+  d.devourer = { generation: o.original ? 0 : o.generation ?? 1, challenge: true, gnasher: !!o.gnasher,
+    ...(o.gorge !== undefined ? { gorgeTicks: Math.round(SINGULARITY_CHALLENGE.gorgeTicks * (1 - o.gorge)) } : {}) };
+  const hide = hideBossHeadBars; hideBossHeadBars = true;
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(o.scale ?? .55, o.scale ?? .55); drawEnemy(ctx, d, 0, 0, tick); ctx.restore(); // whole pixels: no blur while it walks
+  hideBossHeadBars = hide;
+}
+
 let guideWarden: GameState['enemies'][0] | null = null;
 function drawGuideWarden(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,shielded=false,flash=false){
   if(!guideWarden){const s=createInitialState();godSpawnBoss(s,'frost_warden');guideWarden=s.enemies.find(e=>e.type==='frost_warden')??null;}
@@ -2563,6 +2695,15 @@ function drawGuideWarden(ctx:CanvasRenderingContext2D,x:number,y:number,tick:num
   guideWarden.hp=guideWarden.maxHp;guideWarden.windupTicks=0;guideWarden.shootTicks=0;guideWarden.flashTicks=flash?8:0;
   const hide=hideBossHeadBars;hideBossHeadBars=true;
   ctx.save();ctx.translate(x,y);ctx.scale(.75,.75);drawEnemy(ctx,guideWarden,0,0,tick);if(shielded)drawMobIceShield(ctx,0,0,34,tick);ctx.restore();hideBossHeadBars=hide;
+}
+
+let guidePrayer: GameState['enemies'][0] | null = null;
+function drawGuidePrayer(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,flash=false){
+  if(!guidePrayer){const s=createInitialState();godSpawnBoss(s,'blind_prayer');guidePrayer=s.enemies.find(e=>e.type==='blind_prayer')??null;}
+  if(!guidePrayer)return;
+  guidePrayer.hp=guidePrayer.maxHp;guidePrayer.windupTicks=0;guidePrayer.shootTicks=0;guidePrayer.flashTicks=flash?8:0;
+  const hide=hideBossHeadBars;hideBossHeadBars=true;
+  ctx.save();ctx.translate(x,y);ctx.scale(.7,.7);drawEnemy(ctx,guidePrayer,0,0,tick);ctx.restore();hideBossHeadBars=hide;
 }
 
 let guideWeaver: GameState['enemies'][0] | null = null;
@@ -2582,15 +2723,45 @@ function impostorLook(state: GameState, e: GameState['enemies'][0]): GameState['
   return boss ? { ...boss, id: e.id, x: e.x, y: e.y, tileX: e.tileX, tileY: e.tileY, targetTileX: e.targetTileX, targetTileY: e.targetTileY, stepProgress: e.stepProgress, flashTicks: e.flashTicks, shootTicks: 0, windupTicks: 0 } : e;
 }
 
-function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx: number, sy: number, tickN: number, shielded = false, reaperExposed = false, reaperCharge = -1) {
+function drawReflectorMirror(ctx:CanvasRenderingContext2D,x:number,y:number,length:number,vertical:boolean,down:boolean,tick:number,turning:boolean) {
+  const half=Math.round(length/2);ctx.save();ctx.translate(Math.round(x),Math.round(y));if(vertical)ctx.rotate(Math.PI/2);
+  if(down) {
+    ctx.globalAlpha=.28;ctx.fillStyle='#8293a9';
+    for(let k=-half;k<half;k+=16)ctx.fillRect(k,-2,Math.min(10,half-k),4);
+  } else {
+    const pulse=turning?.25*Math.abs(Math.sin(tick*.3)):0;
+    ctx.globalAlpha=Math.min(1,.78+pulse);ctx.shadowColor='#bbddff';ctx.shadowBlur=4;
+    ctx.fillStyle='#b9d9f5';ctx.fillRect(-half,-4,length,8);ctx.shadowBlur=0;
+    ctx.globalAlpha=.72;ctx.fillStyle='#213e65';ctx.fillRect(-half+3,-2,Math.max(1,length-6),4);
+    ctx.globalAlpha=.65;ctx.fillStyle='#79b8e7';ctx.fillRect(-half+4,0,Math.max(1,length-8),2);
+    ctx.globalAlpha=.9;ctx.fillStyle='#edf8ff';ctx.fillRect(-half+2,-4,Math.max(1,length-4),1);
+    for(const end of [-half,half-5]){ctx.fillStyle='#6e8fac';ctx.fillRect(end,-6,5,12);ctx.fillStyle='#e1f3ff';ctx.fillRect(end+1,-4,3,3);}
+    const glint=-half+6+((tick*.65) % Math.max(1,length-18));
+    ctx.globalAlpha=.85;ctx.fillStyle='#ffffff';ctx.fillRect(Math.round(glint),-3,Math.min(7,Math.max(2,length*.12)),3);
+  }
+  ctx.restore();
+}
+
+function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx: number, sy: number, tickN: number, shielded = false, reaperExposed = false, reaperCharge = -1, cinematic = false) {
+  if (e.devourer?.merging) return;
   const cfg = ENEMY_CONFIGS[e.type];
+  if(e.type==='grappler'&&e.hook?.phase==='pull'){const tug=2+Math.round(2*Math.sin(tickN*.35));sx-=e.hook.dx*tug;sy-=e.hook.dy*tug;}
   if (e.type === 'aegis_sentinel' || e.type === 'aegis_construct' || e.type === 'astral_twins') {
     drawEncounterEnemy(ctx, e, sx, sy, tickN, !(hideBossHeadBars && e.type !== 'aegis_construct')); return;
   }
   if (drawNeptuneUnit(ctx, e, sx, sy, tickN)) return;
   if (drawGaiaUnit(ctx, e, sx, sy, tickN)) return;
   if (drawMoonUnit(ctx, e, sx, sy, tickN)) return;
+  if (drawBinaryUnit(ctx, e, sx, sy, tickN)) return;
   if (drawSunUnit(ctx, e, sx, sy, tickN)) return;
+  if (e.type === 'sand_scorpion') { drawSandScorpion(ctx, sx, sy, tickN, e.id, e.burrow ?? 'under', e.burrowTicks ?? 0, e.shootTicks > 0, e.flashTicks > 0); if (!duneWormHidden(e)) drawEnemyHealthBar(ctx, e, sx, sy); return; }
+  if (e.type === 'dune_worm') { drawDuneWorm(ctx, sx, sy, tickN, e.id, e.burrow ?? 'under', e.burrowTicks ?? 0, e.shootTicks > 0, e.flashTicks > 0); if (!duneWormHidden(e)) drawEnemyHealthBar(ctx, e, sx, sy); return; }
+  if (e.type === 'sand_scarab') { drawVenusScarab(ctx, Math.round(sx), Math.round(sy), tickN, e.id, e.shootTicks > 0, e.flashTicks > 0); drawEnemyHealthBar(ctx, e, sx, sy); return; }
+  if (e.type === 'sand_core') { const sealed = !!e.coreSealed; drawVenusCore(ctx, sx, sy, tickN, sealed, e.flashTicks > 0); if (!sealed) drawEnemyHealthBar(ctx, e, sx, sy); return; }
+  if (e.type === 'sand_relic') { drawVenusRelic(ctx, e.relicKind ?? 'urn', Math.round(sx), Math.round(sy), tickN); return; }
+  if (e.type === 'lost_soul') { drawLostSoul(ctx, Math.round(sx), Math.round(sy), tickN, e.id, !!e.singularityPull, !!e.goldenSoul); return; }
+  if (e.type === 'toxic_soulless') { const a=e.boneLunge,brace=a?.phase==='warning'?3*(1-a.ticks/SOULLESS_LUNGE.warningTicks):0;drawToxicSoulless(ctx, Math.round(sx-(a?.dx??0)*brace), Math.round(sy-(a?.dy??0)*brace), tickN, e.id, e.flashTicks > 0); drawEnemyHealthBar(ctx,e,sx,sy); return; }
+  if (e.type === 'soulless') { const a=e.boneLunge,brace=a?.phase==='warning'?3*(1-a.ticks/SOULLESS_LUNGE.warningTicks):0;drawSoulless(ctx, Math.round(sx-(a?.dx??0)*brace), Math.round(sy-(a?.dy??0)*brace), tickN, e.id, e.flashTicks > 0); drawEnemyHealthBar(ctx,e,sx,sy); return; }
   const size = Math.floor(TILE_SIZE * cfg.bodyFraction);
   const half = size / 2;
   const pad = Math.max(2, Math.floor(size * 0.12));
@@ -2604,8 +2775,8 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
         ? ((e.prayer?.escapeWindupTicks ?? 0) > 0 ? 1 - e.prayer!.escapeWindupTicks / PRAYER_ESCAPE_WINDUP : 0)
         : e.type === 'frost_warden'
           ? (e.windupTicks > 0 && e.windupTicks <= 30 ? 1 - e.windupTicks / 30 : 0)
-          : e.type==='charger'
-            ? ((e.chargeWindupTicks??0)>0?1-e.chargeWindupTicks!/CHARGER_WINDUP_TICKS:0)
+          : e.type==='charger'||e.type==='lodestone'
+            ? ((e.chargeWindupTicks??0)>0?1-e.chargeWindupTicks!/(e.type==='lodestone'?LODESTONE_SNAP.windup:CHARGER_WINDUP_TICKS):0)
             : e.attackTimer > 0 && e.attackTimer <= 15 && !e.exploding ? 1 - e.attackTimer / 15 : 0;
   const attacking = castProgress > 0;
   const attackScale = 1 + 0.15 * castProgress;
@@ -2929,194 +3100,9 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
 
   // ── Boss: fully custom draw ───────────────────────────────────────────
   if (e.type === 'fiery_king') {
-    const bSz = Math.floor(TILE_SIZE * cfg.bodyFraction * attackScale * impactScale);
-    const bH = bSz / 2;
-    const bPad = Math.max(3, Math.floor(bSz * 0.10));
-    const pulse = 0.7 + 0.3 * Math.abs(Math.sin(tickN * 0.06));
-    const hpPct = e.hp / e.maxHp;
-    const bFlash = e.flashTicks > 0;
-    const bodyColor = bFlash ? '#ffffff' : '#cc0022';
-
-    // Outer crimson glow
-    ctx.shadowColor = '#ff0033'; ctx.shadowBlur = Math.floor(6 * pulse);
-
-    // Shoulder spikes (left and right) - they extend further during attack
-    const spikeW = Math.max(4, Math.floor(bSz * 0.18));
-    const spikeH = Math.max(6, Math.floor(bSz * (attacking ? 0.50 : 0.30)));
-    ctx.fillStyle = bFlash ? '#ffffff' : '#880011';
-    ctx.fillRect(sx - bH - spikeW, sy - Math.floor(spikeH * 0.6), spikeW, spikeH); // left spike
-    ctx.fillRect(sx + bH, sy - Math.floor(spikeH * 0.6), spikeW, spikeH); // right spike
-    // Spike tips (gold)
-    ctx.fillStyle = bFlash ? '#ffffff' : '#ffcc00';
-    ctx.fillRect(sx - bH - spikeW - 2, sy - Math.floor(spikeH * 0.6), 3, 3);
-    ctx.fillRect(sx + bH + spikeW, sy - Math.floor(spikeH * 0.6), 3, 3);
-
-    // Main body
-    ctx.fillStyle = bodyColor;
-    ctx.fillRect(sx - bH, sy - bH, bSz, bSz);
-    ctx.shadowBlur = 0;
-
-    // Inner armor plate (dark inset)
-    if (!bFlash) {
-      ctx.fillStyle = '#4d0d1a';
-      ctx.fillRect(sx - bH + bPad, sy - bH + bPad, bSz - bPad * 2, bSz - bPad * 2);
-      // Gold cross/X armor detail
-      ctx.fillStyle = '#ffcc0044';
-      const cx = bSz - bPad * 2, gH = Math.max(1, Math.floor(bSz * 0.07));
-      ctx.fillRect(sx - bH + bPad, sy - Math.floor(gH / 2), cx, gH); // horizontal bar
-      ctx.fillRect(sx - Math.floor(gH / 2), sy - bH + bPad, gH, cx); // vertical bar
-
-      // Corner rivet studs — small gold rivets bolting the armor plate, one per corner
-      const rivetSz = Math.max(2, Math.floor(bSz * 0.07));
-      const rivetInset = bPad + Math.floor(rivetSz * 0.8);
-      ctx.fillStyle = '#ffcc00cc';
-      for (const [ox, oy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as [number, number][]) {
-        ctx.fillRect(sx + ox * (bH - rivetInset) - rivetSz / 2, sy + oy * (bH - rivetInset) - rivetSz / 2, rivetSz, rivetSz);
-      }
-    }
-
-    // Crown (5 spikes on top)
-    if (!bFlash) {
-      ctx.fillStyle = '#ffcc00';
-      ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 4;
-      const crownW = bSz;
-      const crownX = sx - bH;
-      const crownBase = sy - bH;
-      const crownH = Math.max(5, Math.floor(bSz * (attacking ? 0.35 : 0.22)));
-      // 5 alternating-height spikes: tall, short, tall, short, tall
-      const spW = Math.floor(crownW / 5);
-      const heights = [crownH, Math.floor(crownH * 0.55), crownH, Math.floor(crownH * 0.55), crownH];
-      for (let i = 0; i < 5; i++) {
-        ctx.fillRect(crownX + i * spW, crownBase - heights[i], spW - 1, heights[i]);
-      }
-      ctx.shadowBlur = 0;
-
-      // Twinkling ruby gem set into the center spike tip — a "living jewel" like the Queen's
-      const gemTwinkle = 0.6 + 0.4 * Math.abs(Math.sin(tickN * 0.09));
-      ctx.shadowColor = '#ff0033'; ctx.shadowBlur = Math.floor(4 * gemTwinkle);
-      ctx.fillStyle = `rgba(255,51,102,${gemTwinkle})`;
-      ctx.fillRect(sx - 2, crownBase - heights[2] - 3, 4, 4);
-      ctx.shadowBlur = 0;
-    }
-
-    // 4 eyes (2 rows of 2)
-    if (!bFlash) {
-      const eSz = Math.max(3, Math.floor(bSz * 0.16));
-      const pSz = Math.max(2, Math.floor(eSz * 0.6));
-      const ex1 = sx - bH + bPad + 2;
-      const ex2 = sx + bH - bPad - eSz - 2;
-      const ey1 = sy - bH + bPad + 2;
-      const ey2 = ey1 + eSz + 3;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(ex1, ey1, eSz, eSz); ctx.fillRect(ex2, ey1, eSz, eSz);
-      ctx.fillRect(ex1, ey2, eSz, eSz); ctx.fillRect(ex2, ey2, eSz, eSz);
-      // Eyes glow yellow when attacking
-      ctx.fillStyle = attacking ? '#ffcc00' : '#ff0000';
-      ctx.shadowColor = attacking ? '#ffcc00' : '#ff0000'; ctx.shadowBlur = attacking ? 6 : 3;
-      ctx.fillRect(ex1 + 1, ey1 + 1, pSz, pSz); ctx.fillRect(ex2 + 1, ey1 + 1, pSz, pSz);
-      ctx.fillRect(ex1 + 1, ey2 + 1, pSz, pSz); ctx.fillRect(ex2 + 1, ey2 + 1, pSz, pSz);
-      ctx.shadowBlur = 0;
-
-      // Wide jagged mouth with teeth
-      const mW = Math.max(8, Math.floor(bSz * 0.70));
-      const mH = Math.max(2, Math.floor(bSz * (attacking ? 0.18 : 0.10)));
-      const mX = sx - Math.floor(mW / 2);
-      const mY = ey2 + eSz + 3 + (attacking ? 4 : 0); // Drop jaw slightly when attacking
-      const toothW = Math.max(2, Math.floor(mW / 6));
-      ctx.fillStyle = '#cc0000';
-      ctx.fillRect(mX, mY, mW, mH);
-      ctx.fillStyle = '#ffffff';
-      for (let t = 0; t < 5; t++) {
-        ctx.fillRect(mX + toothW * t + 1, mY - mH, Math.max(1, toothW - 2), mH + 1);
-      }
-    }
-
-    // Three compact pixel flames decorate the lower armor without changing his silhouette.
-    if (!bFlash) {
-      const flameBase = sy + bH - bPad - 4;
-      const flameWidth = Math.max(7, Math.floor(bSz * .13));
-      for (let i = 0; i < 3; i++) {
-        const fx = sx + Math.round((i - 1) * bSz * .23);
-        const height = Math.max(8, Math.floor(bSz * (i === 1 ? .20 : .14)) + Math.round(Math.sin(tickN * .08 + i) * 1));
-        const lean = i === 1 ? 1 : -1;
-        ctx.shadowBlur = 0; ctx.fillStyle = '#b92d0b';
-        ctx.fillRect(fx - Math.floor(flameWidth / 2), flameBase - 4, flameWidth, 4);
-        ctx.fillRect(fx - Math.floor(flameWidth / 2) - 1, flameBase - 8, flameWidth + 2, 4);
-        ctx.fillRect(fx - Math.floor(flameWidth / 2) + 1, flameBase - height + 2, flameWidth - 2, Math.max(2, height - 7));
-        ctx.fillRect(fx + lean * 2 - 1, flameBase - height - 2, 3, 5);
-        ctx.fillStyle = '#ed6414'; ctx.fillRect(fx - 2, flameBase - 5, 4, 5);
-        ctx.fillRect(fx - 1, flameBase - 8, 2, 4);
-      }
-    }
-
-    // HP bar above boss
-    drawBossHealthBar(ctx,sx-bSz/2-5,sy-bH-16,bSz+10,e.hp,e.maxHp,'#ff334c');
-
-    const groundPulse = 0.6 + 0.4 * Math.abs(Math.sin(tickN * 0.08));
-    ctx.shadowColor = '#ff4400'; ctx.shadowBlur = Math.floor(20 * groundPulse);
-    ctx.fillStyle = `rgba(255,68,0,${0.25 * groundPulse})`;
-    ctx.fillRect(sx - bH - 6, sy + bH - 4, bSz + 12, 10);
-    ctx.shadowBlur = 0;
-
-    // Orange fiery aura — a guttering flame-outline around his whole body, jittering in size/
-    // brightness like unstable heat haze rather than the Queen's smooth magic-breathing pulse
-    const auraFlicker = 0.5 + 0.5 * Math.abs(Math.sin(tickN * 0.5) * Math.sin(tickN * 0.23 + 1));
-    const fAuraR = bH + 8 + Math.floor(6 * auraFlicker);
-    ctx.shadowColor = '#ff6600'; ctx.shadowBlur = Math.floor(14 * auraFlicker);
-    ctx.strokeStyle = `rgba(255,${120 + Math.floor(60 * auraFlicker)},0,${0.2 + 0.15 * auraFlicker})`;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx - fAuraR, sy - fAuraR, fAuraR * 2, fAuraR * 2);
-    ctx.shadowBlur = 0;
-
-    // Rising embers — sparks kicking off his body and drifting upward, flickering out like real
-    // cinders off a flame (not orbiting him — fire doesn't circle, it rises and dies)
-    const emberCount = 14;
-    for (let m = 0; m < emberCount; m++) {
-      const cycle = 60 + (m % 3) * 15; // varied lifespans so they don't pulse in lockstep
-      const phase = (tickN + m * (cycle / emberCount) * 5.3) % cycle;
-      const riseT = phase / cycle; // 0 (spawn, at his base) -> 1 (fully risen, faded out)
-      const jitterX = Math.sin(tickN * 0.22 + m * 2.1) * (bH * 0.7);
-      const ex = sx + (m % 2 ? 1 : -1) * (bH + 4 + m % 3 * 3) + jitterX * riseT * .15;
-      const ey = sy + bH - riseT * (bSz + 22);
-      const emberSz = Math.max(1, 4 - Math.floor(riseT * 2.5));
-      const emberAlpha = Math.sin(riseT * Math.PI); // fades in, peaks mid-rise, fades out
-      ctx.globalAlpha = emberAlpha;
-      ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 10;
-      ctx.fillStyle = riseT < 0.4 ? '#ffee00' : riseT < 0.7 ? '#ff8800' : '#ff3300';
-      ctx.fillRect(ex - emberSz / 2, ey - emberSz / 2, emberSz, emberSz);
-    }
-    // Extra cinders travel up the sides, adding fire without obscuring his eyes and mouth.
-    for (let i = 0; i < 6; i++) {
-      const life = ((tickN + i * 17) % 95) / 95;
-      const side = i % 2 ? 1 : -1;
-      const px = sx + side * (bH + 7 + i % 3 * 4);
-      const py = sy + bH - life * (bSz + 16);
-      ctx.globalAlpha = Math.sin(life * Math.PI) * .75;
-      ctx.shadowColor = '#ff6600'; ctx.shadowBlur = 5;
-      ctx.fillStyle = life < .45 ? '#ffbd35' : '#e84d16';
-      ctx.fillRect(Math.round(px), Math.round(py / 2) * 2, 2 + i % 2, 2 + i % 2);
-    }
-    ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
-
-    // Flickering flame licks — shoulder spike tips (bigger/brighter) plus the crown peak,
-    // an actual guttering-fire flicker rather than a steady glow
-    const flicker1 = 0.5 + 0.5 * Math.abs(Math.sin(tickN * 0.45));
-    const flicker2 = 0.5 + 0.5 * Math.abs(Math.sin(tickN * 0.45 + 1.3));
-    const flicker3 = 0.5 + 0.5 * Math.abs(Math.sin(tickN * 0.5 + 2.4));
-    ctx.shadowColor = '#ff6600';
-    ctx.shadowBlur = Math.floor(16 * flicker1);
-    ctx.fillStyle = `rgba(255,${140 + Math.floor(90 * flicker1)},0,${0.75 + 0.25 * flicker1})`;
-    ctx.fillRect(sx - bH - spikeW - 2, sy - Math.floor(spikeH * 0.6) - 5, 7, 6);
-    ctx.shadowBlur = Math.floor(16 * flicker2);
-    ctx.fillStyle = `rgba(255,${140 + Math.floor(90 * flicker2)},0,${0.75 + 0.25 * flicker2})`;
-    ctx.fillRect(sx + bH + spikeW - 3, sy - Math.floor(spikeH * 0.6) - 5, 7, 6);
-    ctx.shadowBlur = Math.floor(14 * flicker3);
-    ctx.fillStyle = `rgba(255,${150 + Math.floor(80 * flicker3)},0,${0.7 + 0.3 * flicker3})`;
-    ctx.fillRect(sx - 3, sy - bH - Math.floor(bSz * 0.30) - 6, 6, 6);
-    ctx.shadowBlur = 0;
-
-    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    const size = Math.floor(TILE_SIZE * cfg.bodyFraction * attackScale * impactScale);
+    drawFieryKingModel(ctx, sx, sy, size, tickN, attacking, e.flashTicks > 0);
+    drawBossHealthBar(ctx, sx - size / 2 - 5, sy - size / 2 - 16, size + 10, e.hp, e.maxHp, '#ff334c');
     return;
   }
 
@@ -3169,6 +3155,21 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
       ctx.restore();
     }
 
+    // Singularity danger: one meal from full, orange corner brackets pulse around the body; once full it is bursting,
+    // so red brackets close in as the fuse runs out and red flashes wash over it.
+    const danger = devourerDanger(e);
+    if (danger) {
+      const hot = danger.bursting, color = hot ? '#ff4a3a' : '#ffa53a', half = Math.round(vH + (hot ? 8 + 14 * danger.left : 12 + 2 * Math.sin(tickN * .2)));
+      ctx.save(); ctx.shadowColor = color; ctx.shadowBlur = 8; ctx.fillStyle = color;
+      ctx.globalAlpha = hot ? .7 + .3 * Math.abs(Math.sin(tickN * .5)) : .55 + .4 * Math.abs(Math.sin(tickN * .12));
+      for (const [qx, qy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const x = Math.round(sx + qx * half), y = Math.round(sy + qy * half);
+        ctx.fillRect(qx < 0 ? x : x - 14, qy < 0 ? y : y - 4, 14, 4); ctx.fillRect(qx < 0 ? x : x - 4, qy < 0 ? y : y - 14, 4, 14);
+      }
+      if (hot) { ctx.shadowBlur = 0; ctx.globalAlpha = .25 + .25 * Math.abs(Math.sin(tickN * .5)); ctx.fillRect(Math.round(sx - vH), Math.round(sy - vH), vSz, vSz); }
+      ctx.restore();
+    }
+
     // Newborn copies scatter at a sprint: short violet/green streaks race along both flanks.
     if ((e.devourer?.newbornTicks ?? 0) > 0) {
       ctx.save();
@@ -3179,6 +3180,7 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
       }
       ctx.restore();
     }
+
 
     // Big absorb shockwave — blocky expanding square ring, the moment she eats
     if (vHealFlash) {
@@ -3197,7 +3199,9 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     }
 
     // Always-on violet aura ring — matches her minimap glow, gives her the same idle
-    // presence the other three bosses have (King's ground-fire, Queen's motes, Reaper's halo)
+    // presence the other three bosses have (King's ground-fire, Queen's motes, Reaper's halo).
+    // (Always drawn; the braces below keep the aura, spores and pool together.)
+    {
     ctx.save();
     ctx.globalAlpha = 0.35 * pulse;
     ctx.strokeStyle = '#6b2fa8';
@@ -3226,54 +3230,36 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     ctx.fillStyle = `rgba(107,47,168,${0.22 * pulse})`;
     ctx.fillRect(sx - vH - 6, sy + vH - 4, vSz + 12, 10);
     ctx.shadowBlur = 0;
+    }
 
-    // Approved square pufferfish model. Ambient spores/aura/pool above stay unchanged.
-    ctx.save(); ctx.translate(sx, sy);
-    const modelScale = vSz / 50;
-    ctx.scale(modelScale, modelScale);
-    const part = (color: string, x: number, y: number, width: number, height: number) => {
-      ctx.fillStyle = vFlash ? '#ffffff' : vHealFlash && color === '#7134a2' ? '#c8a0ff' : color;
-      ctx.fillRect(x, y, width, height);
-    };
+    drawDevourerModel(ctx,sx,sy,vSz,attacking,e.shootTicks>0,vFlash,vHealFlash);
 
-
- // Dark purple extensions inherit the body's violet glow, like King's shoulders and Queen's ornaments.
- ctx.save();ctx.shadowColor='#9945c7';ctx.shadowBlur=9;
- part('#50206a',-31,-13,10,21);part('#50206a',21,-20,10,15);
- part('#50206a',-20,24,14,8);part('#50206a',8,24,17,5);ctx.restore();
- // Short rectangular side antennae give the silhouette a pufferfish rhythm.
- ctx.save();ctx.shadowColor='#9945c7';ctx.shadowBlur=7;
- for(const side of [-1,1]){
-  ctx.save();ctx.scale(side,1);
-  part('#7134a2',24,-20,12,5);part('#7134a2',24,-3,16,5);part('#7134a2',24,15,12,5);
-  ctx.restore();
- }
- ctx.restore();
- ctx.shadowColor='#8e45c0';ctx.shadowBlur=9;part('#7134a2',-25,-25,50,50);ctx.shadowBlur=0;
- part('#32153e',-21,-21,42,42);part('#482153',-17,-16,34,32);
- // One large flat eye and a simple hungry mouth: no reflections, plates, or intricate shading.
- part('#9dd959',-8,-14,16,14);part('#18311b',attacking ? -1 : -3,-12,attacking ? 3 : 6,10);
- part('#19211b',-15,e.shootTicks > 0 || vHealFlash ? 4 : 7,30,e.shootTicks > 0 || vHealFlash ? 19 : attacking ? 15 : 11);
- for(const[x,h]of [[-12,7],[-5,5],[2,7],[9,5]])part('#c4ee8b',x,e.shootTicks > 0 || vHealFlash ? 4 : 7,4,h);
- if(e.shootTicks > 0 || vHealFlash)for(const x of [-10,-1,8])part('#c4ee8b',x,19,4,4);
- part('#78a647',-17,-3,3,3);part('#78a647',14,-6,3,2);part('#78a647',15,0,2,2);
- // Small swallowed-creature eyes sit inside the lopsided side chunk.
- part('#28402b',-29,-7,6,8);part('#b9d97c',-28,-5,2,2);part('#b9d97c',-25,-2,2,2);
- part('#432149',23,-16,6,6);part('#96be60',25,-15,2,2);
- ctx.save();ctx.shadowColor='#9945c7';ctx.shadowBlur=8;
- part('#7134a2',-18,-29,5,6);part('#7134a2',12,-31,6,7);ctx.restore();
-
-    ctx.restore();
+    // Gnasher (Singularity phase 3): told apart by shape, not colour (red belongs to the full-stack warning): pale bone
+    // spikes jutting from all four sides and a wide dark mouth of jagged white teeth across its face.
+    if (e.devourer?.gnasher) {
+      const h = Math.round(vH), X = Math.round(sx), Y = Math.round(sy), bone = '#efe4d0', tip = '#3a2a48';
+      ctx.save(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const o of [-.5, .5]) {
+        const bx = X + dx * h + (dy ? Math.round(o * h) : 0), by = Y + dy * h + (dx ? Math.round(o * h) : 0);
+        for (const [d, size] of [[3, 7], [8, 5], [12, 3]] as const) { ctx.fillStyle = d === 12 ? tip : bone; ctx.fillRect(Math.round(bx + dx * d - size / 2), Math.round(by + dy * d - size / 2), size, size); }
+      }
+      const mw = Math.round(h * 1.3), my = Y + Math.round(h * .15);
+      ctx.fillStyle = '#0a0612'; ctx.fillRect(X - mw / 2, my, mw, Math.max(6, Math.round(h * .45)));
+      ctx.fillStyle = '#ffffff'; for (let k = 0; k < 5; k++) { const tx = X - mw / 2 + 2 + k * Math.round((mw - 6) / 4); ctx.fillRect(tx, my, 3, 4); ctx.fillRect(tx + 1, my + Math.max(6, Math.round(h * .45)) - 4, 3, 4); }
+      ctx.restore();
+    }
 
     // Absorb-stack counter, small text above the HP bar
-    ctx.font = '9px monospace';
-    ctx.fillStyle = '#c8ff88';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = danger?.bursting ? '#ff6a5a' : danger ? '#ffb45a' : '#c8ff88';
     ctx.textAlign = 'center';
-    ctx.fillText(`x${stacks}`, sx, sy - vH - 20);
+    ctx.strokeStyle = '#08050f'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; // a dark outline keeps it readable over the floor
+    const stackText = danger ? `x${stacks}/${danger.max}` : e.devourer?.challenge && singularityMaxStacks ? `x${stacks}/${(e.devourer.generation ?? 0) === 0 ? singularityMaxStacks : SINGULARITY_CHALLENGE.bodyStacks}` : `x${stacks}`; // the challenge always shows how close it is to bursting
+    if (!cinematic && (!e.devourer?.challenge || stacks > 0)) { ctx.strokeText(stackText, sx, sy - vH - 20); ctx.fillText(stackText, sx, sy - vH - 20); }
     ctx.textAlign = 'left';
 
     // HP bar above her
-    drawBossHealthBar(ctx,sx-(vSz+10)/2,sy-vH-14,vSz+10,e.hp,e.maxHp,'#9dd959');
+    drawBossHealthBar(ctx,sx-(vSz+10)/2,sy-vH-14,vSz+10,e.hp,e.maxHp,'#9dd959',!!e.devourer?.challenge);
 
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
     return;
@@ -3852,6 +3838,44 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     // No antenna: two short vents on the squat body's top corners
     const w = Math.round(size * 1.25), top = sy + half - Math.round(size * .72);
     ctx.fillStyle = color; ctx.fillRect(sx - Math.round(w / 2) + 3, top - 4, 5, 4); ctx.fillRect(sx + Math.round(w / 2) - 8, top - 4, 5, 4);
+  } else if (e.type === 'reflector') {
+    // A single antenna with a white tip, like a normal alien
+    ctx.fillRect(sx - 1, sy - half - antH, 2, antH);
+    ctx.shadowBlur = 6; ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - Math.floor(dotSz / 2), sy - half - antH - dotSz, dotSz, dotSz); ctx.shadowBlur = 0;
+  } else if (e.type === 'grappler') {
+    const reel=e.hook?.phase==='pull'?Math.round(2+2*Math.sin(tickN*.35)):0;
+    ctx.fillStyle=color;
+    for(const side of [-1,1]){const arm=half+3-reel;ctx.fillRect(sx+side*arm-2,sy-8,4,16);ctx.fillRect(sx+(side<0?-arm-2:arm-6),sy-8,8,4);}
+  } else if (e.type === 'spook') {
+    // Uneven ghost tufts, rather than a mechanical antenna.
+    ctx.fillStyle=color;ctx.fillRect(sx-half+3,sy+half-1,5,5);ctx.fillRect(sx-2,sy+half-1,5,7);ctx.fillRect(sx+half-8,sy+half-1,5,4);
+  } else if (e.type === 'jammer') {
+    // Two broadcast rails and a central oscillator keep it distinct from the healer and railgun aliens.
+    const pulse=.55+.45*Math.sin(tickN*.08+e.id);
+    ctx.fillStyle=color;ctx.fillRect(sx-2,sy-half-12,4,12);
+    ctx.fillRect(sx-13,sy-half-13,26,3);ctx.fillRect(sx-9,sy-half-19,18,3);
+    ctx.fillStyle='#ffd7ed';ctx.globalAlpha=.65+.35*pulse;ctx.fillRect(sx-2,sy-half-19,4,9);ctx.globalAlpha=1;
+  } else if (e.type === 'blinker') {
+    // Opposing tab motion repeats the displaced square motif of its death warp.
+    const bob=Math.round(Math.sin(tickN*.1+e.id*.7)*3);
+    ctx.fillStyle='#a3d7ff';ctx.fillRect(sx-half-4,sy-half-8+bob,8,3);
+    ctx.fillStyle='#f0e8ff';ctx.fillRect(sx+half-4,sy-half-8-bob,8,3);
+  } else if (e.type === 'dropper') {
+    // A broad hammer crown on two short struts, with a pale downward-facing contact.
+    const w=Math.round(size*.9),rise=e.dropAttack?2:0;
+    ctx.fillStyle='#7b5128';ctx.fillRect(sx-w/2+2,sy-half-7-rise,4,7);ctx.fillRect(sx+w/2-6,sy-half-7-rise,4,7);
+    ctx.fillStyle=color;ctx.fillRect(sx-w/2,sy-half-12-rise,w,7);
+    ctx.fillStyle='#fff0be';ctx.fillRect(sx-w/2+3,sy-half-11-rise,w-6,2);
+  } else if (e.type === 'trapper') {
+    // Three stalks: a centre one with the mine-light (white while it plants) and two shorter side ones with small lights
+    const sideX = Math.floor(size * .28), sideH = Math.max(2, antH - 3);
+    ctx.fillStyle = color; ctx.fillRect(sx - 1, sy - half - antH, 3, antH);
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = color; ctx.fillRect(sx + side * sideX - 1, sy - half - sideH, 3, sideH);
+      ctx.fillStyle = '#ff8a3d'; ctx.fillRect(sx + side * sideX - 2, sy - half - sideH - 3, 5, 3);
+    }
+    ctx.shadowColor = '#ff8a3d'; ctx.shadowBlur = e.shootTicks > 0 ? 10 : 4; ctx.fillStyle = e.shootTicks > 0 ? '#ffffff' : '#ff8a3d';
+    ctx.fillRect(sx - 3, sy - half - antH - 5, 7, 5); ctx.shadowBlur = 0;
   } else if (e.type === 'snatcher') {
     // Two grabbing claws: short arms out to the sides ending in hooks that point up
     ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 4;
@@ -3921,11 +3945,52 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
       ctx.fillStyle = '#26300f'; ctx.fillRect(Math.round(sx - ring / 2), cy - Math.round(ring / 2), ring, ring);
       ctx.shadowColor = '#fff2a0'; ctx.shadowBlur = e.windupTicks > 0 ? 12 : 5; ctx.fillStyle = e.windupTicks > 0 ? '#ffffff' : '#fff2a0';
       ctx.fillRect(Math.round(sx - core / 2), cy - Math.round(core / 2), core, core); ctx.shadowBlur = 0;
+    } else if (e.type === 'reflector') {
+      // Its mirror plate across the facing side of the body (down when unknown, e.g. portraits)
+      const gap = Math.floor(size * .12);
+      // A reversed face: a small dark mouth near the top, and the normal alien eyes (white with a steel-blue pupil) at the bottom
+      void gap;
+      const eyeSz = Math.max(2, Math.floor(size * 0.18)), pupSz = Math.max(1, eyeSz - 1), ex1 = sx - half + pad + 1, ex2 = sx + half - pad - eyeSz - 1, lowY = sy + half - pad - eyeSz - 1;
+      const mouthW = Math.floor(size * .5); ctx.fillStyle = '#1c2a44'; ctx.fillRect(Math.round(sx - mouthW / 2), eyeY + Math.floor(size * .2), mouthW, 3);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(ex1, lowY, eyeSz, eyeSz); ctx.fillRect(ex2, lowY, eyeSz, eyeSz);
+      ctx.fillStyle = '#2f4f8f'; ctx.fillRect(ex1 + 1, lowY + 1, pupSz, pupSz); ctx.fillRect(ex2 + 1, lowY + 1, pupSz, pupSz);
+      const fx = e.faceX ?? 0, fy = e.faceY ?? 1, down = !!e.mirrorDown, len = Math.floor(size * .9);
+      drawReflectorMirror(ctx,sx+fx*(half+1),sy+fy*(half+1),len,fx!==0,down,tickN,false);
+    } else if (e.type === 'grappler') {
+      const eye=Math.round(size*.56),left=Math.round(sx-eye/2),top=Math.round(sy-eye/2);
+      ctx.fillStyle='#103f3b';ctx.fillRect(left-3,top-3,eye+6,eye+6);
+      ctx.fillStyle=e.hook?.phase==='warning'?'#ffffff':'#ddfff3';ctx.fillRect(left,top,eye,eye);
+      ctx.fillStyle='#42b9a9';ctx.fillRect(left+3,top+3,eye-6,eye-6);
+      ctx.fillStyle='#0a2527';ctx.fillRect(Math.round(sx)-3,Math.round(sy)-5,6,10);
+    } else if (e.type === 'spook') {
+      drawSpookFeatures(ctx,sx,sy,size);
+    } else if (e.type === 'jammer') {
+      ctx.fillStyle='#412135';ctx.fillRect(sx-9,eyeY,18,7);
+      ctx.fillStyle='#ffd7ed';ctx.fillRect(sx-7,eyeY+1,4,4);ctx.fillRect(sx+3,eyeY+1,4,4);
+      ctx.fillStyle='#e897c5';ctx.fillRect(sx-7,eyeY+12,4,3);ctx.fillRect(sx-2,eyeY+9,4,9);ctx.fillRect(sx+3,eyeY+12,4,3);
+    } else if (e.type === 'blinker') {
+      ctx.save();ctx.translate(sx,sy);ctx.rotate(Math.PI/2);ctx.translate(-sx,-sy);
+      ctx.fillStyle='#11151c';ctx.fillRect(sx-7,eyeY,14,7);
+      ctx.fillStyle='#a3d7ff';ctx.fillRect(sx-5,eyeY+1,3,4);
+      ctx.fillStyle='#f0e8ff';ctx.fillRect(sx+2,eyeY+1,3,4);
+      ctx.fillStyle='#d8e3f0';ctx.fillRect(sx-3,eyeY+11,6,2);
+      ctx.restore();
+    } else if (e.type === 'dropper') {
+      const w=Math.max(8,Math.round(size*.55));ctx.fillStyle='#503317';ctx.fillRect(sx-w/2,eyeY,w,8);
+      ctx.fillStyle=e.dropAttack?'#ffffff':'#fff0be';ctx.fillRect(sx-w/2+2,eyeY+2,3,4);ctx.fillRect(sx+w/2-5,eyeY+2,3,4);
+      ctx.fillStyle='#ffc36a';ctx.fillRect(sx-9,eyeY+11,18,3);ctx.fillRect(sx-6,eyeY+14,12,3);ctx.fillRect(sx-3,eyeY+17,6,3);
+    } else if (e.type === 'trapper') {
+      // One wide dark visor with a small amber scanner light
+      const width = Math.floor(size * .5), left = Math.round(sx - width / 2);
+      ctx.fillStyle = '#2a1a10'; ctx.fillRect(left, eyeY + 1, width, 6);
+      ctx.fillStyle = '#ff8a3d'; ctx.shadowColor = '#ff8a3d'; ctx.shadowBlur = 5; ctx.fillRect(left + 2 + (Math.floor(tickN / 8) % Math.max(1, width - 6)), eyeY + 2, 3, 4); ctx.shadowBlur = 0;
     } else if (e.type === 'snatcher') {
       const width = Math.floor(size * .44), left = Math.round(sx - width / 2);
       ctx.fillStyle = '#3a2410'; ctx.fillRect(left - 1, eyeY, width + 2, 7);
       ctx.shadowColor = '#ffb35a'; ctx.shadowBlur = 6; ctx.fillStyle = '#ffb35a'; ctx.fillRect(left, eyeY + 1, width, 5);
       ctx.fillStyle = '#2a1608'; ctx.fillRect(Math.round(sx) - 2, eyeY + 1, 4, 5); ctx.shadowBlur = 0;
+      ctx.fillStyle='#ffd093';
+      ctx.fillRect(Math.round(sx)-5,eyeY+12,10,3);ctx.fillRect(Math.round(sx)-8,eyeY+15,4,5);ctx.fillRect(Math.round(sx)+4,eyeY+15,4,5);
     } else if (e.type === 'bleeder') {
       // Six red eyes in three rows of two
       const eye = Math.max(3, Math.floor(size * .12)), gapJ = Math.max(2, Math.floor(size * .08)), row = eye + 2;
@@ -3937,6 +4002,9 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
       ctx.shadowColor = '#ffcf5a'; ctx.shadowBlur = 5; ctx.fillStyle = '#ffe08a';
       ctx.fillRect(sx - gapE - eye, eyeY + 1, eye, eye); ctx.fillRect(sx + gapE, eyeY + 1, eye, eye);
       ctx.shadowBlur = 0;
+      const mouthW=Math.max(10,Math.round(size*.44));ctx.fillStyle='#ffbdc8';
+      ctx.fillRect(Math.round(sx-mouthW/2),Math.round(sy+size*.13),mouthW,2);
+      ctx.fillRect(Math.round(sx-mouthW/2),Math.round(sy+size*.29),mouthW,2);
     } else if (e.type === 'lancer') {
       // Wide visor slit; it whitens while the shot charges
       const width = Math.floor(size * 0.62), left = Math.round(sx - width / 2), charging = e.windupTicks > 0;
@@ -4168,6 +4236,12 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     ctx.restore();
   }
 
+  // Lodestone Magnet Snap: closing brackets in its pole colour while it locks on, then a two-block trail while it lunges.
+  if (e.type === 'lodestone') {
+    const pc = POLE_COLORS[e.pole ?? 'north'];
+    if ((e.chargeWindupTicks ?? 0) > 0) drawMobBrackets(ctx, sx, sy, half + 5, pc, .45 + (1 - e.chargeWindupTicks! / LODESTONE_SNAP.windup) * .5, 3);
+    else if (e.chargeDirX !== 0 || e.chargeDirY !== 0) for (let t = 1; t <= 2; t++) { ctx.globalAlpha = .3 / t; ctx.fillStyle = pc; ctx.fillRect(sx - drawH - e.chargeDirX * TILE_SIZE * t * .4, sy - drawH - e.chargeDirY * TILE_SIZE * t * .4, drawSz, drawSz); ctx.globalAlpha = 1; }
+  }
   if (e.type === 'charger') {
     if((e.chargeWindupTicks??0)>0){
       const progress=1-e.chargeWindupTicks!/CHARGER_WINDUP_TICKS;
@@ -4248,6 +4322,44 @@ function drawBattlefieldPad(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+function teleportCooldownOpacity(ticks: number) {
+  const fade = Math.max(0, Math.min(1, (TELEPORT_COOLDOWN - ticks) / 12, ticks / 24));
+  return fade * fade * (3 - 2 * fade);
+}
+
+function drawTeleportPadCooldown(ctx: CanvasRenderingContext2D, state: GameState, tx: number, ty: number, x: number, y: number, color: string) {
+  const size = TILE_SIZE;
+  const remaining = state.teleportCooldown / TELEPORT_COOLDOWN;
+  const radius = Math.round(1.5 * size * remaining);
+  x = Math.round(x);
+  y = Math.round(y);
+  ctx.save();
+  ctx.globalAlpha *= .85 * teleportCooldownOpacity(state.teleportCooldown);
+  ctx.fillStyle = '#142239d9';
+  ctx.fillRect(x + 2, y + 2, size - 4, size - 4);
+  ctx.strokeStyle = color + '85';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x + 4, y + 4, size - 8, size - 8);
+
+  if (radius > 0) {
+    ctx.beginPath();
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (isFloorTile(state.map, tx + dx, ty + dy)) ctx.rect(x + dx * size, y + dy * size, size, size);
+      }
+    }
+    ctx.clip();
+    const left = x + size / 2 - radius, top = y + size / 2 - radius;
+    const edge = radius * 2, border = Math.min(3, radius);
+    ctx.fillStyle = color + '24';
+    ctx.fillRect(left, top, edge, edge);
+    ctx.strokeStyle = color + '8c';
+    ctx.lineWidth = border;
+    ctx.strokeRect(left + border / 2, top + border / 2, edge - border, edge - border);
+  }
+  ctx.restore();
+}
+
 function drawBattlefieldIce(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number, opacity=1) {
   ctx.save();const pulse=.6+.4*Math.abs(Math.sin(tick*.06)),size=TILE_SIZE,alpha=ctx.globalAlpha*Math.max(0,Math.min(1,opacity));ctx.globalAlpha=alpha;
   ctx.shadowColor='#aaeeff';ctx.shadowBlur=10*pulse;ctx.fillStyle='rgba(170,238,255,'+.4*pulse+')';ctx.fillRect(x,y,size,size);
@@ -4258,100 +4370,209 @@ function drawBattlefieldIce(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
-function drawBattlefield(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, viewW: number, viewH: number, tick: number) {
-  ctx.save();const size=TILE_SIZE,ice=new Set([...state.frostIceTiles.map(([x,y])=>x+','+y),...(state.saturn?.temporaryIce??[]).map(t=>t.x+','+t.y)]),eclipse=eclipseVisualStrength(state);
-  const lastingIce=new Set(state.frostIceTiles.map(([x,y])=>x+','+y));
-  const iceFades=new Map((state.saturn?.temporaryIce??[]).map(t=>[t.x+','+t.y,Math.min(1,t.ticks/30)]));
+function drawBattlefield(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, viewW: number, viewH: number, tick: number, sceneryCover?: ReadonlySet<number>) {
+  ctx.save();
+  const size = TILE_SIZE, eclipse = eclipseVisualStrength(state);
+  const iceOpacity = new Map(state.frostIceTiles.map(([x, y]) => [x + ',' + y, 1]));
+  for (const tile of state.saturn?.temporaryIce ?? []) {
+    const key = tile.x + ',' + tile.y;
+    iceOpacity.set(key, Math.max(iceOpacity.get(key) ?? 0, Math.min(1, tile.ticks / 30)));
+  }
+  for (const tile of state.saturn?.frostTrail ?? []) {
+    if (tile.ticks > 0) continue;
+    const key = tile.x + ',' + tile.y;
+    const remaining = SATURN.trailIceTicks + tile.ticks;
+    iceOpacity.set(key, Math.max(iceOpacity.get(key) ?? 0, Math.min(1, remaining / 30)));
+  }
+  for (const tile of state.saturn?.trailFades ?? []) {
+    if (tile.footprintTicks > 0) continue;
+    const key = tile.x + ',' + tile.y;
+    const previousOpacity = Math.min(1, (SATURN.trailIceTicks + tile.footprintTicks) / 30);
+    const opacity = previousOpacity * tile.ticks / SATURN.trailReplaceFadeTicks;
+    iceOpacity.set(key, Math.max(iceOpacity.get(key) ?? 0, opacity));
+  }
   const x0=Math.max(0,Math.floor(camX/size)-1),y0=Math.max(0,Math.floor(camY/size)-1),x1=Math.min(MAP_COLS-1,Math.ceil((camX+viewW)/size)+1),y1=Math.min(MAP_ROWS-1,Math.ceil((camY+viewH)/size)+1);
-  const ocean=!!state.neptune,solar=!!state.sun,forest=!!state.gaia,moon=isMoonMap(state);
+  const ocean=!!state.neptune,solar=!!state.sun,forest=!!state.gaia,moon=isMoonMap(state),binaryWorld=isBinaryMap(state),theme=worldTheme(state);
   const battlefieldColor=(ch:number)=>{
-    const base=isSingularityMap(state)?VOID_CHAMBER_COLORS[Math.max(0,ch)]:isSaturnMap(state)?SATURN_CHAMBER_COLORS[Math.max(0,ch)]:state.jupiter?(ch>=0?jupiterColors(state)[ch]:jupiterColors(state)[0]):solar?(ch>=0?SUN_CHAMBER_COLORS[ch]:'#ffb86b'):ocean?(ch>=0?OCEAN_CHAMBER_COLORS[ch]:'#5fb8ff'):forest?(ch>=0?GAIA_CHAMBER_COLORS[ch]:'#b8d86a'):moon?(ch>=0?MOON_CHAMBER_COLORS[ch]:'#d8c2ff'):ch>=0?CHAMBER_COLORS[ch]:'#8899ff';
+    const base=theme?(ch>=0?theme.colors[ch]:theme.colors[0]):isBinaryMap(state)?(ch>=0?BINARY_CHAMBER_COLORS[ch]:'#c9b8ff'):isSaturnMap(state)?SATURN_CHAMBER_COLORS[Math.max(0,ch)]:state.jupiter?(ch>=0?jupiterColors(state)[ch]:jupiterColors(state)[0]):solar?(ch>=0?SUN_CHAMBER_COLORS[ch]:'#ffb86b'):ocean?(ch>=0?OCEAN_CHAMBER_COLORS[ch]:'#5fb8ff'):forest?(ch>=0?GAIA_CHAMBER_COLORS[ch]:'#b8d86a'):moon?(ch>=0?MOON_CHAMBER_COLORS[ch]:'#d8c2ff'):ch>=0?CHAMBER_COLORS[ch]:'#8899ff';
     if(eclipse<=0)return base;
     const night=ch>=0?['#7986d7','#a185c8','#748dba','#aa95cc'][ch]:'#8b8fcf';
     const channel=(offset:number)=>Math.round(parseInt(base.slice(offset,offset+2),16)*(1-eclipse)+parseInt(night.slice(offset,offset+2),16)*eclipse).toString(16).padStart(2,'0');
     return '#'+channel(1)+channel(3)+channel(5);
   };
   const wall=(x:number,y:number)=>(state.map[y]?.[x]??T_WALL)===T_WALL;
-  const cover=(x:number,y:number)=>{const ch=chamberOfTile(x,y);if(ch<0||!wall(x,y))return false;const [t,l,b,r]=CHAMBER_BOUNDS[ch];return x>l&&x<r&&y>t&&y<b;};
+  const cover=(x:number,y:number)=>{if(sceneryCover)return sceneryCover.has(y * MAP_COLS + x);const ch=chamberOfTile(x,y);if(ch<0||!wall(x,y))return false;const [t,l,b,r]=CHAMBER_BOUNDS[ch];return x>l&&x<r&&y>t&&y<b;};
   // All base tiles are flat dark panels, keeping actors' neon silhouettes dominant.
   for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
     const x=tx*size-camX,y=ty*size-camY,ch=chamberOfTile(tx,ty),color=battlefieldColor(ch);ctx.shadowBlur=0;
     if(wall(tx,ty)){
       if(!cover(tx,ty))continue;
-      if(isSingularityMap(state)){drawVoidTile(ctx,state,tx,ty,x,y,true);continue;}
+      if(theme){theme.cover(ctx,state,tx,ty,x,y,color,state.gameTick);continue;} // Venus, Sirius and the Singularity
       if(isSaturnMap(state)){drawSaturnTile(ctx,state,tx,ty,x,y,true);continue;}
       if(state.jupiter){drawJupiterTile(ctx,state,tx,ty,x,y,true);continue;}
       if(solar){drawSunCover(ctx,state,tx,ty,x,y,state.gameTick);continue;}
+      if(binaryWorld){drawBinaryCover(ctx,state,tx,ty,x,y,color,state.gameTick);continue;} // Binary Star: twin-cell slabs
       if(moon){drawMoonCrystalBlock(ctx,state,tx,ty,x,y,color,tick);continue;} // the Moon: every cover block is crystal
       if(forest){drawGaiaStone(ctx,state,tx,ty,x,y,color);continue;} // Gaia: mossy stone
       if(ocean){drawNeptuneRock(ctx,state,tx,ty,x,y,color);continue;} // Neptune: reef rock with barnacles and coral
+      if(!ocean&&!forest&&!moon){drawEndlessCover(ctx,tx,ty,x,y,color,tick,cover);continue;} // endless: joined raised walls
       ctx.fillStyle=ocean?'#06263a':forest?'#102a14':moon?'#1c1236':'#0f0f28';ctx.fillRect(x,y,size,size);ctx.fillStyle=color+'22';ctx.fillRect(x,y,size,size);
-      ctx.shadowColor=color;ctx.shadowBlur=3;ctx.strokeStyle=color+'55';ctx.lineWidth=2;ctx.strokeRect(x+1,y+1,size-2,size-2);continue;
+      ctx.shadowColor=color;ctx.shadowBlur=3;ctx.strokeStyle=color+'55';ctx.lineWidth=2;ctx.strokeRect(x+1,y+1,size-2,size-2);ctx.shadowBlur=0;
+      continue;
     }
-    if(isSingularityMap(state)){drawVoidTile(ctx,state,tx,ty,x,y);continue;}
+    if(theme){theme.floor(ctx,state,tx,ty,x,y,color,state.gameTick);continue;}
+    if(binaryWorld){drawBinaryFloor(ctx,state,tx,ty,x,y,color,state.gameTick);continue;}
     if(isSaturnMap(state)){drawSaturnTile(ctx,state,tx,ty,x,y);continue;}
     if(state.jupiter){drawJupiterTile(ctx,state,tx,ty,x,y);continue;}
     if(solar){drawSunFloorTile(ctx,state,tx,ty,x,y,state.gameTick);continue;}
-    ctx.fillStyle=solar?(ch>=0?'#201313':'#160d0f'):ocean?(ch>=0?'#04192c':'#031424'):forest?(ch>=0?'#0c1a0e':'#0a160c'):moon?(ch>=0?'#0b0717':'#090614'):ch>=0?'#0d0d22':'#0a0a1a';ctx.fillRect(x,y,size,size);
-    if(ch>=0){ctx.fillStyle=color+(ocean||forest||moon?'14':'10');ctx.fillRect(x,y,size,size);}
+    ctx.fillStyle=binaryWorld?(ch>=0?'#0d0b1e':'#0a0918'):solar?(ch>=0?'#201313':'#160d0f'):ocean?(ch>=0?'#04192c':'#031424'):forest?(ch>=0?'#0c1a0e':'#0a160c'):moon?(ch>=0?'#0b0717':'#090614'):ch>=0?'#0d0d22':'#0a0a1a';ctx.fillRect(x,y,size,size);
+    if(ch>=0){ctx.fillStyle=color+(ocean||forest||moon||binaryWorld?'14':'10');ctx.fillRect(x,y,size,size);}
     ctx.strokeStyle=ocean?'#9fe4ff0d':forest?'#d8f0a00d':moon?'#e9d8ff10':'#ffffff0f';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,size-1,size-1);
+    if(!ocean&&!forest&&!moon&&!binaryWorld&&!solar)drawEndlessFloorDetail(ctx,tx,ty,x,y,ch,color,tick); // endless: panel detail
   }
   // Glowing colored borders follow the map's exposed edges, preserving door openings.
   const drawBorders=(onlyRoom?:number)=>{for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
     if(wall(tx,ty))continue;
     const x=tx*size-camX,y=ty*size-camY,ch=chamberOfTile(tx,ty),color=battlefieldColor(ch);
     if(onlyRoom!==undefined&&ch!==onlyRoom)continue;
-    ctx.shadowColor=color;ctx.shadowBlur=isSingularityMap(state)?3:14;ctx.strokeStyle=color+(isSingularityMap(state)?'70':'99');ctx.lineWidth=isSingularityMap(state)?2:4;ctx.beginPath();
+    ctx.shadowColor=color;ctx.shadowBlur=14;ctx.strokeStyle=color+'99';ctx.lineWidth=4;ctx.beginPath();
     if(wall(tx-1,ty)&&!cover(tx-1,ty)){ctx.moveTo(x+1,y);ctx.lineTo(x+1,y+size);}
     if(wall(tx+1,ty)&&!cover(tx+1,ty)){ctx.moveTo(x+size-1,y);ctx.lineTo(x+size-1,y+size);}
     if(wall(tx,ty-1)&&!cover(tx,ty-1)){ctx.moveTo(x,y+1);ctx.lineTo(x+size,y+1);}
     if(wall(tx,ty+1)&&!cover(tx,ty+1)){ctx.moveTo(x,y+size-1);ctx.lineTo(x+size,y+size-1);}
     ctx.stroke();ctx.shadowBlur=0;
-    if(state.map[ty][tx]===T_TELEPORT){if(solar)drawSunPad(ctx,x,y,state.gameTick,ch);else drawBattlefieldPad(ctx,x,y,color,tick,ch);} // pads stay visible in the dark too
+    if (state.map[ty][tx] === T_TELEPORT) { // pads stay visible in the dark too
+      if (solar) drawSunPad(ctx, x, y, state.gameTick, ch);
+      else drawBattlefieldPad(ctx, x, y, color, tick, ch);
+      if (state.teleportCooldown > 0) drawTeleportPadCooldown(ctx, state, tx, ty, x, y, color);
+    }
     if(onlyRoom!==undefined)continue; // a redraw over the dark keeps only the outline and pad
-    if(ice.has(tx+','+ty))drawBattlefieldIce(ctx,x,y,tick,lastingIce.has(tx+','+ty)?1:iceFades.get(tx+','+ty)??1);
+    const opacity = iceOpacity.get(tx + ',' + ty);
+    if (opacity !== undefined && opacity > 0) drawBattlefieldIce(ctx, x, y, tick, opacity);
   }};
   drawBorders();
-  if(ocean)drawOceanAmbience(ctx,state,camX,camY,x0,y0,x1,y1,tick);
+  if(ocean)drawNeptuneAmbience(ctx,state,camX,camY,x0,y0,x1,y1,state.gameTick);
   else if(forest)drawForestAmbience(ctx,state,camX,camY,x0,y0,x1,y1,tick);
   else if(moon)drawMoonAmbience(ctx,state,camX,camY,x0,y0,x1,y1,tick);
-  else if(!solar&&!isSaturnMap(state)&&!isSingularityMap(state))drawFloorStars(ctx,state,camX,camY,x0,y0,x1,y1,tick);
-  // Moon phase 3: the dark room's floor goes black (cover blocks stay), then its outline is drawn again on top.
-  const darkRooms=state.moon?[[state.moon.dark,1-state.moon.darkFade/30],[state.moon.oldDark,state.moon.darkFade/30]]:[];
-  for(const [room,alpha] of darkRooms){
-    if(room<0||alpha<=0)continue;
-    ctx.globalAlpha=alpha;ctx.fillStyle='#030108';ctx.shadowBlur=0;
-    for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++)if(!wall(tx,ty)&&chamberOfTile(tx,ty)===room)ctx.fillRect(tx*size-camX,ty*size-camY,size,size);
-    ctx.globalAlpha=1;drawBorders(room);
+  else if(binaryWorld)drawBinaryAmbience(ctx,state,camX,camY,x0,y0,x1,y1,state.gameTick);
+  else if(theme)theme.ambience(ctx,state,camX,camY,x0,y0,x1,y1,state.gameTick);
+  else if(!solar&&!isSaturnMap(state))drawFloorStars(ctx,state,camX,camY,x0,y0,x1,y1,tick);
+  // Moon phase 3: cross-fade the eclipse underneath cover, actors and attacks.
+  const fadeProgress = (state.moon?.darkFade ?? 0) / MOON_DARK_FADE;
+  const moonFade = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+  const darkRooms = state.moon ? [
+    [state.moon.dark, 1 - moonFade], [state.moon.secondDark ?? -1, 1 - moonFade],
+    [state.moon.oldDark, moonFade], [state.moon.oldSecondDark ?? -1, moonFade],
+  ] : [];
+  for (const [room, opacity] of darkRooms) {
+    if (room < 0 || opacity <= 0) continue;
+    drawMoonDarkRoom(ctx, state, room, opacity, camX, camY, state.gameTick);
+    drawBorders(room);
   }
   ctx.restore();
 }
 
-// Endless backdrop: deliberately quiet. Two parallax star layers, a few twinkling stars and two very faint
-// blocky nebula patches in the room colors; nothing competes with the battlefield.
+// Endless backdrop: rich but quiet, so it never competes with the battlefield. Everything is dim and scrolls slower than
+// the station (parallax), in the game's blocky style:
+// - a soft vertical gradient from deep navy to near-black;
+// - three soft nebula clouds in the room colours, built from stepped translucent blocks that fade at their edges;
+// - a faint dusty band of light crossing the sky;
+// - one distant blocky ringed planet, barely lit;
+// - stars in three depth layers (dim and tiny far away, brighter and larger near), a few twinkling with soft crosses.
 function drawSpaceBackdrop(ctx: CanvasRenderingContext2D, viewW: number, viewH: number, camX: number, camY: number, tick: number) {
   const hash = (i: number, k: number) => { const n = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return n - Math.floor(n); };
-  ctx.save();
-  ctx.fillStyle = BG_COLOR; ctx.fillRect(0, 0, viewW, viewH);
-  // Nebula: stacked translucent blocks drifting very slowly.
-  for (let n = 0; n < 2; n++) {
-    const color = n ? CHAMBER_COLORS[1] : CHAMBER_COLORS[2], span = viewW + 800;
-    const nx = ((hash(n, 1) * span - camX * .05 + tick * .01) % span + span) % span - 400, ny = viewH * (.25 + n * .45) - ((camY * .05) % 200);
+  const wrap = (v: number, span: number) => ((v % span) + span) % span;
+  ctx.save(); ctx.shadowBlur = 0;
+  const sky = ctx.createLinearGradient(0, 0, 0, viewH); sky.addColorStop(0, '#0b1030'); sky.addColorStop(.55, BG_COLOR); sky.addColorStop(1, '#05050f');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, viewW, viewH);
+  // Nebulae: each a cluster of stepped blocks; the inner ones are brighter, so the cloud fades softly at its edge.
+  const clouds: [string, number, number][] = [[CHAMBER_COLORS[0], .2, .3], ['#8a5cff', .72, .62], [CHAMBER_COLORS[2], .45, .9]];
+  clouds.forEach(([color, fx, fy], n) => {
+    const span = viewW + 1400, cx = wrap(fx * span - camX * .03 + tick * .006, span) - 700, cy = fy * viewH - camY * .03; // scrolls smoothly (no wrap, which made it jump)
     ctx.fillStyle = color;
-    for (let b = 0; b < 7; b++) {
-      ctx.globalAlpha = .025 + hash(n, 10 + b) * .02;
-      const w = 120 + hash(n, 20 + b) * 220, h = 40 + hash(n, 30 + b) * 90;
-      ctx.fillRect(Math.round(nx + (hash(n, 40 + b) - .5) * 260), Math.round(ny + (hash(n, 50 + b) - .5) * 140), Math.round(w), Math.round(h));
+    for (let ring = 3; ring >= 0; ring--) for (let b = 0; b < 6; b++) {
+      const k = n * 40 + ring * 7 + b, spread = 70 + ring * 70, w = (90 + hash(k, 1) * 140) * (1 + ring * .35), h = (30 + hash(k, 2) * 60) * (1 + ring * .3);
+      ctx.globalAlpha = .008 + (3 - ring) * .006;
+      ctx.fillRect(Math.round(cx + (hash(k, 3) - .5) * spread * 2 - w / 2), Math.round(cy + (hash(k, 4) - .5) * spread - h / 2), Math.round(w), Math.round(h));
     }
+  });
+  // A faint dusty band of light crossing the sky diagonally.
+  ctx.save(); ctx.translate(viewW / 2, viewH / 2); ctx.rotate(-.42); ctx.translate(-camX * .02, 0); // scrolls smoothly; the band is long enough to cover the whole camera range
+  for (let k = 0; k < 3; k++) { ctx.globalAlpha = .008 + k * .005; ctx.fillStyle = '#b8c4ff'; const bw = 260 - k * 80; ctx.fillRect(-viewW * 1.2, -bw / 2, viewW * 2.8, bw); }
+  for (let i = 0; i < 140; i++) { const x = hash(i, 61) * viewW * 2.8 - viewW * 1.2, y = (hash(i, 62) - .5) * 220 * hash(i, 63); ctx.globalAlpha = .1 + hash(i, 64) * .15; ctx.fillStyle = '#dfe6ff'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+  ctx.restore();
+  // A distant ringed planet, mostly in shadow: a stepped disc, a lit crescent edge and a thin flat ring.
+  { const px = wrap(viewW * .82 - camX * .015, viewW + 300) - 150, py = viewH * .24 - camY * .015, r = 34;
+    ctx.globalAlpha = .28; ctx.fillStyle = '#9aa4ff'; ctx.fillRect(Math.round(px - r * 1.9), Math.round(py + 2), Math.round(r * 3.8), 3); // the ring, behind
+    for (let k = -r; k < r; k += 4) { // the disc, row by row, lit from the upper left: a few lighter blocks at each row's left
+      const half = Math.round(Math.sqrt(r * r - (k + 2) * (k + 2)) / 4) * 4, x = Math.round(px - half), y = Math.round(py + k);
+      ctx.globalAlpha = .9; ctx.fillStyle = '#17163a'; ctx.fillRect(x, y, half * 2, 4);
+      const lit = Math.max(1, Math.round((1 - (k + r) / (2 * r)) * 4));
+      for (let j = 0; j < lit; j++) { ctx.globalAlpha = .45 - j * .1; ctx.fillStyle = '#7e88d8'; ctx.fillRect(x + j * 4, y, 4, 4); }
+    }
+    ctx.globalAlpha = .4; ctx.fillStyle = '#c3cbff'; ctx.fillRect(Math.round(px - r * 1.9), Math.round(py + 4), Math.round(r * 1.1), 2); ctx.fillRect(Math.round(px + r * .8), Math.round(py + 4), Math.round(r * 1.1), 2); } // the ring in front
+  // Stars in three depth layers; a few near ones twinkle with a soft cross.
+  for (let i = 0; i < 200; i++) {
+    const layer = i % 5 === 0 ? 2 : i % 2 ? 0 : 1, par = [.05, .11, .2][layer];
+    const x = wrap(hash(i, 2) * viewW * 1.5 - camX * par, viewW), y = wrap(hash(i, 3) * viewH * 1.5 - camY * par, viewH);
+    const twinkle = layer === 2 && i % 3 === 0 ? .55 + .45 * Math.sin(tick * .04 + i) : 1;
+    ctx.globalAlpha = [.18, .3, .5][layer] * twinkle; ctx.fillStyle = i % 11 === 0 ? '#ffd9b8' : i % 7 === 0 ? '#c9b8ff' : '#dfe6ff';
+    const size = layer + 1; ctx.fillRect(Math.round(x), Math.round(y), size, size);
+    if (layer === 2 && i % 3 === 0) { ctx.globalAlpha = .22 * twinkle; ctx.fillRect(Math.round(x) - 4, Math.round(y) + 1, 11, 1); ctx.fillRect(Math.round(x) + 1, Math.round(y) - 4, 1, 11); }
   }
-  // Stars in two depth layers; a few twinkle.
-  for (let i = 0; i < 110; i++) {
-    const far = i % 3 !== 0, par = far ? .08 : .2;
-    const x = ((hash(i, 2) * viewW * 1.5 - camX * par) % viewW + viewW) % viewW, y = ((hash(i, 3) * viewH * 1.5 - camY * par) % viewH + viewH) % viewH;
-    const twinkle = i % 9 === 0 ? .5 + .5 * Math.sin(tick * .05 + i) : 1;
-    ctx.globalAlpha = (far ? .22 : .45) * twinkle; ctx.fillStyle = i % 7 === 0 ? '#c9b8ff' : '#dfe6ff';
-    const size = far ? 2 : 3; ctx.fillRect(Math.round(x), Math.round(y), size, size);
-    if (!far && i % 9 === 0) { ctx.globalAlpha = .25 * twinkle; ctx.fillRect(Math.round(x) - 3, Math.round(y) + 1, 9, 1); ctx.fillRect(Math.round(x) + 1, Math.round(y) - 3, 1, 9); }
+  ctx.restore();
+}
+
+// Endless floor detail, kept faint so units stay dominant: a soft bevel on each tile, slightly stronger seams grouping
+// tiles into 2×2 plates with tiny corner rivets, and on a few tiles (fixed per tile) an inset panel, a chamber-coloured
+// circuit trace with a node and a slow travelling glint, or a vent grille.
+function drawEndlessFloorDetail(ctx: CanvasRenderingContext2D, tx: number, ty: number, x: number, y: number, ch: number, color: string, tick: number) {
+  const S = TILE_SIZE, n = Math.sin(tx * 91.7 + ty * 47.3) * 43758.5453, h = n - Math.floor(n);
+  ctx.save(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffffff07'; ctx.fillRect(x + 1, y + 1, S - 2, 1); ctx.fillRect(x + 1, y + 1, 1, S - 2);       // bevel: lit top-left
+  ctx.fillStyle = '#0000002e'; ctx.fillRect(x + 1, y + S - 2, S - 2, 1); ctx.fillRect(x + S - 2, y + 1, 1, S - 2); // shaded bottom-right
+  ctx.fillStyle = '#ffffff0c'; if (tx % 2 === 0) ctx.fillRect(x, y, 1, S); if (ty % 2 === 0) ctx.fillRect(x, y, S, 1); // plate seams
+  if (tx % 2 === 0 && ty % 2 === 0) { ctx.fillStyle = '#ffffff16'; ctx.fillRect(x + 3, y + 3, 2, 2); }              // a rivet at each plate corner
+  if (ch >= 0) {
+    if (h < .22) { ctx.strokeStyle = color + '16'; ctx.lineWidth = 1; ctx.strokeRect(x + 8.5, y + 8.5, S - 17, S - 17); } // inset panel
+    else if (h < .34) { // a circuit trace: an L of thin line ending in a small node, with a slow glint running along it
+      const flip = h < .28, ax = x + (flip ? 10 : S - 10), ay = y + 12, bx = x + (flip ? S - 12 : 12), by = y + S - 10;
+      ctx.fillStyle = color + '22'; ctx.fillRect(Math.min(ax, bx), ay, Math.abs(bx - ax), 1); ctx.fillRect(bx, ay, 1, by - ay);
+      ctx.fillStyle = color + '3a'; ctx.fillRect(bx - 2, by - 2, 5, 5); ctx.fillStyle = '#0d0d22'; ctx.fillRect(bx - 1, by - 1, 3, 3);
+      const g = ((tick * .4 + tx * 13 + ty * 7) % 120) / 120; if (g < .5) { const k = g / .5, len = Math.abs(bx - ax) + (by - ay), d = k * len; ctx.fillStyle = color + '55';
+        if (d < Math.abs(bx - ax)) ctx.fillRect(Math.round(ax + Math.sign(bx - ax) * d) - 1, ay - 1, 3, 3); else ctx.fillRect(bx - 1, Math.round(ay + d - Math.abs(bx - ax)) - 1, 3, 3); }
+    } else if (h > .95) { ctx.fillStyle = '#00000040'; for (let k = 0; k < 3; k++) ctx.fillRect(x + 14, y + 16 + k * 6, S - 28, 2); ctx.fillStyle = '#ffffff08'; for (let k = 0; k < 3; k++) ctx.fillRect(x + 14, y + 18 + k * 6, S - 28, 1); } // a vent grille
+  }
+  ctx.restore();
+}
+// Endless cover, flat neon in the station's blocky sci-fi style (no bevel): neighbouring cover tiles join into one wall.
+// A dark tile tinted with the chamber colour, a glowing neon edge along the wall's outer sides only, and a thin inner
+// neon line a few pixels inside it, both running unbroken across joined tiles. Each tile then carries one fixed neon
+// detail: a pulsing power node, a row of dashes, a small framed screen with a scanline, a conduit line along the wall
+// with a node, or four tiny neon dots.
+function drawEndlessCover(ctx: CanvasRenderingContext2D, tx: number, ty: number, x: number, y: number, color: string, tick: number, isCover: (x: number, y: number) => boolean) {
+  const S = TILE_SIZE, l = isCover(tx - 1, ty), r = isCover(tx + 1, ty), t = isCover(tx, ty - 1), b = isCover(tx, ty + 1), m = 7;
+  ctx.save(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#0b0b22'; ctx.fillRect(x, y, S, S); ctx.fillStyle = color + '18'; ctx.fillRect(x, y, S, S);           // flat dark tile
+  ctx.shadowColor = color; ctx.shadowBlur = 8; ctx.fillStyle = color + 'cc';                                              // outer neon edge
+  if (!l) ctx.fillRect(x, y, 2, S); if (!r) ctx.fillRect(x + S - 2, y, 2, S); if (!t) ctx.fillRect(x, y, S, 2); if (!b) ctx.fillRect(x, y + S - 2, S, 2);
+  ctx.shadowBlur = 0; ctx.fillStyle = color + '4a';                                                                        // inner neon line
+  const ix0 = x + (l ? 0 : m), ix1 = x + S - (r ? 0 : m), iy0 = y + (t ? 0 : m), iy1 = y + S - (b ? 0 : m);
+  if (!l) ctx.fillRect(x + m, iy0, 1, iy1 - iy0); if (!r) ctx.fillRect(x + S - m - 1, iy0, 1, iy1 - iy0);
+  if (!t) ctx.fillRect(ix0, y + m, ix1 - ix0, 1); if (!b) ctx.fillRect(ix0, y + S - m - 1, ix1 - ix0, 1);
+  const n = Math.sin(tx * 12.9898 + ty * 78.233) * 43758.5453, h = n - Math.floor(n), cx = x + S / 2, cy = y + S / 2, run = l || r;
+  const glow = (a: number) => { ctx.globalAlpha = a; ctx.shadowColor = color; ctx.shadowBlur = 5; ctx.fillStyle = color; };
+  if (h < .2) { // a power node, pulsing softly
+    const pulse = .5 + .5 * Math.sin(tick * .04 + tx + ty * 2); glow(.5 + .4 * pulse); ctx.fillRect(cx - 3, cy - 3, 6, 6); ctx.shadowBlur = 0; ctx.globalAlpha = .9; ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - 1, cy - 1, 2, 2);
+  } else if (h < .4) { // a row of neon dashes
+    glow(.55); for (let k = 0; k < 3; k++) if (run) ctx.fillRect(cx - 13 + k * 10, cy - 1, 6, 2); else ctx.fillRect(cx - 1, cy - 13 + k * 10, 2, 6);
+  } else if (h < .55) { // a small framed screen with a scanline
+    ctx.globalAlpha = 1; ctx.fillStyle = '#05050f'; ctx.fillRect(cx - 10, cy - 7, 20, 14); glow(.6); ctx.fillRect(cx - 10, cy - 7, 20, 1); ctx.fillRect(cx - 10, cy + 6, 20, 1); ctx.fillRect(cx - 10, cy - 7, 1, 14); ctx.fillRect(cx + 9, cy - 7, 1, 14);
+    ctx.shadowBlur = 0; ctx.globalAlpha = .55; ctx.fillRect(cx - 8, cy - 5 + Math.floor((tick * .3 + tx * 11) % 10), 16, 1);
+  } else if (h < .75) { // a conduit line along the wall with a node
+    glow(.4); if (run) ctx.fillRect(x, cy, S, 1); else ctx.fillRect(cx, y, 1, S); glow(.7); ctx.fillRect(cx - 2, cy - 2, 5, 5);
+  } else { // four tiny neon dots
+    glow(.45); for (const [dx, dy] of [[-9, -9], [8, -9], [-9, 8], [8, 8]]) ctx.fillRect(cx + dx, cy + dy, 2, 2);
   }
   ctx.restore();
 }
@@ -4398,6 +4619,17 @@ function drawOceanBackdrop(ctx: CanvasRenderingContext2D, viewW: number, viewH: 
     shaft.addColorStop(0, '#bfe9ff'); shaft.addColorStop(1, 'rgba(191,233,255,0)');
     ctx.fillStyle = shaft; ctx.fillRect(0, 0, width, viewH * .95); ctx.restore();
   }
+  // Surface caustics: rippling pale lines near the top, fading with depth.
+  for (let r = 0; r < 4; r++) {
+    ctx.globalAlpha = (.07 - r * .012) * (1 - depth); ctx.fillStyle = '#d8f4ff';
+    for (let x = -20; x < viewW + 20; x += 20) { const wx = x + camX * .1; ctx.fillRect(x, Math.round(14 + r * 22 + Math.sin(wx * .02 + tick * .03 + r * 2) * 5 + Math.sin(wx * .053 - tick * .02) * 3), 20, 2); }
+  }
+  // A distant manta ray glides slowly across the far water.
+  {
+    const span = viewW + 800, mx = ((tick * .18 - camX * .06) % span + span) % span - 400, my = viewH * .38 - camY * .05 + Math.sin(tick * .006) * 20, flap = Math.sin(tick * .03) * 8;
+    ctx.globalAlpha = .28; ctx.fillStyle = '#072a45';
+    ctx.beginPath(); ctx.moveTo(mx + 60, my); ctx.lineTo(mx, my - 26 - flap); ctx.lineTo(mx - 22, my - 4); ctx.lineTo(mx - 90, my + 2); ctx.lineTo(mx - 22, my + 8); ctx.lineTo(mx, my + 30 + flap); ctx.closePath(); ctx.fill();
+  }
   // Distant reef: blocky stepped silhouettes along the seabed band, scrolling at half speed.
   const reefParallax = .45, spacing = 260;
   const first = Math.floor((camX * reefParallax) / spacing) - 1;
@@ -4416,6 +4648,12 @@ function drawOceanBackdrop(ctx: CanvasRenderingContext2D, viewW: number, viewH: 
       ctx.fillRect(Math.round(x + 4), Math.round(floorY - height - 6), 6, 6); ctx.fillRect(Math.round(x + 40), Math.round(floorY - height * .75), 4, 4);
       ctx.globalAlpha = 1;
     }
+    // Kelp sways from the reef in stepped segments, rooted on the top of a reef step.
+    for (let k = 0; k < 3; k++) if (hash(i, 40 + k) > .35) {
+      const step = k + 1, kx = x + step * 26 - 2 + Math.round((hash(i, 46 + k) - .5) * 12), kh = 6 + Math.floor(hash(i, 43 + k) * 9), ky = floorY - height * (1 - step * .17);
+      ctx.fillStyle = k % 2 ? '#0a3a3a' : '#0c4438';
+      for (let seg = 0; seg < kh; seg++) { const sw = Math.sin(tick * .025 + seg * .45 + i + k) * seg * 1.6; ctx.fillRect(Math.round(kx + sw), Math.round(ky - seg * 12), 4, 13); if (seg % 3 === 1) ctx.fillRect(Math.round(kx + sw + (seg % 2 ? 4 : -6)), Math.round(ky - seg * 12 + 3), 6, 4); }
+    }
   }
   // Bubble columns rising from vents in the reef.
   for (let v = 0; v < 4; v++) {
@@ -4426,6 +4664,13 @@ function drawOceanBackdrop(ctx: CanvasRenderingContext2D, viewW: number, viewH: 
       ctx.globalAlpha = .45 * (1 - rise * .7); ctx.strokeStyle = '#bfeaff'; ctx.lineWidth = 1.5;
       const size = 4 + (b % 3) * 2; ctx.strokeRect(Math.round(bx), Math.round(by), size, size);
     }
+  }
+  ctx.globalAlpha = 1;
+  // Small fish schools dart through the middle water as tight groups.
+  for (let s = 0; s < 3; s++) {
+    const dir = s % 2 ? 1 : -1, span = viewW + 500, sx = ((hash(s, 50) * span + tick * (.5 + s * .15) * dir - camX * .25) % span + span) % span - 250, sy = viewH * (.25 + s * .2) - camY * .12 + Math.sin(tick * .02 + s) * 18;
+    ctx.globalAlpha = .4; ctx.fillStyle = s === 1 ? '#7fd8ff' : '#3fb8c8';
+    for (let n = 0; n < 9; n++) { const fx = sx + (hash(s, 60 + n) - .5) * 90 + Math.sin(tick * .06 + n) * 4, fy = sy + (hash(s, 70 + n) - .5) * 40; ctx.fillRect(Math.round(fx), Math.round(fy), 7, 3); ctx.fillRect(Math.round(fx + (dir > 0 ? -3 : 7)), Math.round(fy - 1), 3, 5); }
   }
   ctx.globalAlpha = 1;
   // Jellyfish drifting in the middle water: pulsing blocky bells with trailing tentacles.
@@ -4468,43 +4713,6 @@ function drawOceanBackdrop(ctx: CanvasRenderingContext2D, viewW: number, viewH: 
 
 // Neptune challenge palette: blue-teal rooms in place of the station's chamber colors.
 const OCEAN_CHAMBER_COLORS = ['#3fd0ff', '#5b8cff', '#2fe0c0', '#7d7bff'] as const;
-
-// Underwater dressing for the Neptune challenge: drifting light caustics, sandy floor specks,
-// kelp swaying on cover blocks and bubbles rising through the water. Purely cosmetic.
-function drawOceanAmbience(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, x0: number, y0: number, x1: number, y1: number, tick: number) {
-  const size=TILE_SIZE,hash=(x:number,y:number,k:number)=>{const n=Math.sin(x*127.1+y*311.7+k*74.7)*43758.5453;return n-Math.floor(n);};
-  const wall=(x:number,y:number)=>(state.map[y]?.[x]??T_WALL)===T_WALL;
-  ctx.save();ctx.shadowBlur=0;
-  for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
-    const x=tx*size-camX,y=ty*size-camY;
-    if(wall(tx,ty)){
-      // Kelp: two stepped stalks swaying on interior cover blocks.
-      const ch=chamberOfTile(tx,ty);if(ch<0||hash(tx,ty,9)>.45)continue;
-      const [t,l,b,r]=CHAMBER_BOUNDS[ch];if(!(tx>l&&tx<r&&ty>t&&ty<b))continue; // interior cover only, never the outer walls
-      ctx.globalAlpha=1; // the floor caustics/specks/bubbles leave a faint alpha behind; kelp is always fully drawn
-      for(let k=0;k<2;k++){
-        const base=x+10+k*22,sway=Math.round(Math.sin(tick*.04+tx+k*1.7)*3);
-        ctx.fillStyle=k?'#2fbf8a':'#1f9a74';
-        for(let seg=0;seg<4;seg++)ctx.fillRect(base+Math.round(sway*seg/3),y+size-8-seg*9,5,9);
-        ctx.fillStyle='#7cf0c2';ctx.fillRect(base+sway+1,y+size-44,3,4);
-      }
-      continue;
-    }
-    // Caustics: soft diagonal light bands that drift slowly across the floor.
-    const wave=Math.sin(tx*.55+ty*.35+tick*.025)+Math.sin(tx*.21-ty*.47+tick*.018);
-    if(wave>1.1){ctx.globalAlpha=Math.min(.12,(wave-1.1)*.14);ctx.fillStyle='#9fe8ff';ctx.fillRect(x+4,y+4,size-8,size-8);}
-    // Sandy specks.
-    if(hash(tx,ty,1)>.82){ctx.globalAlpha=.28;ctx.fillStyle='#7fa8c4';ctx.fillRect(x+Math.floor(hash(tx,ty,2)*36)+4,y+Math.floor(hash(tx,ty,3)*36)+4,3,3);}
-    // Rising bubbles loop upward from fixed vents.
-    if(hash(tx,ty,4)>.93){
-      const period=240,phase=(tick+Math.floor(hash(tx,ty,5)*period))%period,rise=phase/period;
-      const bx=x+12+Math.round(Math.sin(tick*.05+tx)*4)+Math.floor(hash(tx,ty,6)*20),by=y+size-rise*size*2.4;
-      ctx.globalAlpha=.5*(1-rise);ctx.strokeStyle='#c9f2ff';ctx.lineWidth=1.5;ctx.strokeRect(bx,by,6,6);
-      ctx.fillStyle='#ffffff';ctx.fillRect(bx+1,by+1,2,2);
-    }
-  }
-  ctx.globalAlpha=1;ctx.restore();
-}
 
 function drawReaperHallwaySeal(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tick: number) {
   const bounds=HALLWAY_BOUNDS[state.hallwaySeal];
@@ -4552,6 +4760,187 @@ function drawEnchantments(ctx: CanvasRenderingContext2D, state: GameState, camX:
 }
 
 // Lancer aim: the beam's hit band and a dotted line to where a wall (or range) stops it; whitens just before firing.
+// Amber landing brackets and an overhead weight distinguish this 2x2 slam from thorn fields.
+function drawJammerFields(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,camX:number,camY:number) {
+  ctx.save();ctx.shadowBlur=0;
+  for(const enemy of state.enemies) {
+    if(enemy.type!=='jammer'||enemy.hp<=0)continue;
+    const cx=Math.floor(enemy.x/TILE_SIZE),cy=Math.floor(enemy.y/TILE_SIZE),tiles=new Set<string>();
+    for(let dy=-JAMMER.radius-1;dy<=JAMMER.radius+1;dy++)for(let dx=-JAMMER.radius-1;dx<=JAMMER.radius+1;dx++) {
+      const tx=cx+dx,ty=cy+dy;
+      if(isFloorTile(state.map,tx,ty)&&jammerCoversTile(enemy,tx,ty))tiles.add(`${tx},${ty}`);
+    }
+    const active=!playerCCImmune(state)&&jammerCoversTile(enemy,Math.floor(state.playerX/TILE_SIZE),Math.floor(state.playerY/TILE_SIZE));
+    const pulse=.5+.5*Math.sin(state.gameTick*.055+enemy.id);
+    ctx.fillStyle=active?'#f467c7':'#d86baf';ctx.globalAlpha=active?.14+pulse*.02:.045;
+    for(const key of tiles){const [tx,ty]=key.split(',').map(Number);ctx.fillRect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);}
+    ctx.globalAlpha=(active?.78:.3)+pulse*.1;ctx.strokeStyle=active?'#ffc0eb':'#ec9bca';ctx.lineWidth=active?3:2;
+    ctx.beginPath();
+    for(const key of tiles){const [tx,ty]=key.split(',').map(Number),x=tx*TILE_SIZE-camX,y=ty*TILE_SIZE-camY;
+      if(!tiles.has(`${tx},${ty-1}`)){ctx.moveTo(x,y);ctx.lineTo(x+TILE_SIZE,y);}
+      if(!tiles.has(`${tx+1},${ty}`)){ctx.moveTo(x+TILE_SIZE,y);ctx.lineTo(x+TILE_SIZE,y+TILE_SIZE);}
+      if(!tiles.has(`${tx},${ty+1}`)){ctx.moveTo(x,y+TILE_SIZE);ctx.lineTo(x+TILE_SIZE,y+TILE_SIZE);}
+      if(!tiles.has(`${tx-1},${ty}`)){ctx.moveTo(x,y);ctx.lineTo(x,y+TILE_SIZE);}
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawGrapplerHooks(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,camX:number,camY:number) {
+  for(const e of state.enemies) {
+    const h=e.hook;if(e.type!=='grappler'||!h||e.hp<=0)continue;
+    const ox=e.x-camX,oy=e.y-camY;ctx.save();
+    if(h.phase==='warning') {
+      let distance=0;
+      for(let d=3;d<=ENEMY_CONFIGS.grappler.attackRange*TILE_SIZE;d+=3){if(!isFloorTile(state.map,Math.floor((e.x+h.dx*d)/TILE_SIZE),Math.floor((e.y+h.dy*d)/TILE_SIZE)))break;distance=d;}
+      const progress=1-h.ticks/GRAPPLER.warningTicks,late=h.ticks<=12;
+      const color=late&&state.gameTick%6<3?'#ffffff':'#42b9a9';
+      ctx.save();ctx.translate(ox,oy);ctx.rotate(Math.atan2(h.dy,h.dx));
+      ctx.fillStyle='#42b9a9';ctx.globalAlpha=.06+.1*progress;ctx.fillRect(0,-GRAPPLER.hitRadius*TILE_SIZE,distance,GRAPPLER.hitRadius*TILE_SIZE*2);
+      ctx.globalAlpha=.35+.5*progress;ctx.fillStyle=color;
+      for(let d=16;d<distance-4;d+=18)ctx.fillRect(Math.round(d),-4,Math.min(12,distance-4-d),8);
+      ctx.restore();
+      ctx.globalAlpha=.55+progress*.4;ctx.strokeStyle=color;ctx.lineWidth=2;
+      ctx.strokeRect(Math.round(ox+h.dx*distance)-6,Math.round(oy+h.dy*distance)-6,12,12);
+    } else {
+      const retreat=h.phase==='retract'?h.ticks/GRAPPLER.retractTicks:1;
+      const hx=h.phase==='pull'?state.playerX:e.x+(h.x-e.x)*retreat,hy=h.phase==='pull'?state.playerY:e.y+(h.y-e.y)*retreat;
+      ctx.globalAlpha=h.phase==='retract'?.65:1;
+      ctx.strokeStyle='#174a47';ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(hx-camX,hy-camY);ctx.stroke();
+      ctx.strokeStyle='#7be7c9';ctx.lineWidth=4;ctx.stroke();
+      if(h.phase==='pull') {
+        const length=Math.hypot(hx-e.x,hy-e.y),phase=(state.gameTick*4)%32;
+        ctx.save();ctx.translate(ox,oy);ctx.rotate(Math.atan2(hy-e.y,hx-e.x));
+        ctx.fillStyle='#e4fff4';ctx.globalAlpha=.8;
+        for(let d=32-phase;d<length-12;d+=32)if(d>10)ctx.fillRect(Math.round(d),-3,7,6);
+        ctx.restore();
+      }
+      ctx.translate(hx-camX,hy-camY);ctx.rotate(Math.atan2(h.dy,h.dx));
+      ctx.fillStyle='#42b9a9';ctx.fillRect(-14,-5,20,10);ctx.fillRect(4,-14,8,28);ctx.fillRect(-5,-14,17,6);ctx.fillRect(-5,8,17,6);
+      ctx.fillStyle='#d6fff0';ctx.fillRect(-12,-2,21,4);ctx.fillRect(6,-11,3,22);ctx.fillRect(-3,-12,12,3);ctx.fillRect(-3,9,12,3);
+    }
+    ctx.restore();
+  }
+}
+
+function drawDropperAttacks(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
+  const width=DROPPER.tiles*TILE_SIZE,half=width/2;
+  const clipFloor=(tileX:number,tileY:number)=>{
+    ctx.beginPath();
+    for(let dy=0;dy<DROPPER.tiles;dy++)for(let dx=0;dx<DROPPER.tiles;dx++)
+      if(isFloorTile(state.map,tileX+dx,tileY+dy))ctx.rect((tileX+dx)*TILE_SIZE-camX,(tileY+dy)*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
+    ctx.clip();
+  };
+  ctx.save();ctx.shadowBlur=0;
+  for(const e of state.enemies) {
+    if(e.type!=='dropper'||e.hp<=0)continue;
+    const a=e.dropAttack;
+    if(a) {
+      const p=1-a.ticks/DROPPER.warningTicks,x=(a.tileX+DROPPER.tiles/2)*TILE_SIZE-camX,y=(a.tileY+DROPPER.tiles/2)*TILE_SIZE-camY;
+      ctx.save();clipFloor(a.tileX,a.tileY);
+      ctx.globalAlpha=.1+.12*p;ctx.fillStyle='#efaa45';
+      ctx.fillRect(x-half+2,y-half+2,width-4,width-4);
+      const r=half-3+Math.round((1-p)*2),blink=.65+.35*Math.abs(Math.sin(p*18));
+      ctx.globalAlpha=blink;ctx.strokeStyle=p>.75?'#fff0be':'#ffc36a';ctx.lineWidth=3;
+      for(const [dx,dy] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
+        ctx.beginPath();ctx.moveTo(x+dx*(r-12),y+dy*r);ctx.lineTo(x+dx*r,y+dy*r);ctx.lineTo(x+dx*r,y+dy*(r-12));ctx.stroke();
+      }
+      ctx.fillStyle='#ffc36a';ctx.fillRect(x-14,y-2,28,4);ctx.fillRect(x-2,y-14,4,28);ctx.restore();
+      const fall=Math.max(0,(p-.5)*2),h=Math.round(72*(1-fall)+12),weightSize=Math.round(TILE_SIZE*.5),ww=weightSize,wh=weightSize;
+      ctx.globalAlpha=.4+.6*p;ctx.fillStyle='#5d3a19';ctx.fillRect(x-ww/2,y-h-wh/2,ww,wh);
+      ctx.strokeStyle='#ffd18a';ctx.lineWidth=2;ctx.strokeRect(x-ww/2,y-h-wh/2,ww,wh);
+      ctx.fillStyle='#fff0be';ctx.fillRect(x-ww/2+5,y-h-wh/2+3,ww-10,4);
+    }
+    const impact=e.dropImpact;
+    if(impact&&impact.until>state.gameTick) {
+      const p=1-(impact.until-state.gameTick)/DROPPER.impactTicks,x=(impact.tileX+DROPPER.tiles/2)*TILE_SIZE-camX,y=(impact.tileY+DROPPER.tiles/2)*TILE_SIZE-camY;
+      ctx.save();clipFloor(impact.tileX,impact.tileY);
+      ctx.globalAlpha=1-p;ctx.fillStyle=p<.15?'#fff5da':'#a76c2c';ctx.fillRect(x-half+7,y-half+7,width-14,width-14);
+      ctx.strokeStyle='#ffd18a';ctx.lineWidth=3;ctx.strokeRect(x-half+7,y-half+7,width-14,width-14);
+      for(let k=0;k<8;k++) {
+        const an=k*Math.PI/4,d=width*(.3+.2*p);ctx.fillStyle=k%2?'#ffc36a':'#fff0be';
+        ctx.fillRect(Math.round(x+Math.cos(an)*d)-2,Math.round(y+Math.sin(an)*d)-2,4,4);
+      }
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+function drawBlinkerWarp(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
+  const w=state.blinkerWarp;if(!w||w.until<=state.gameTick)return;
+  const p=1-(w.until-state.gameTick)/BLINKER.warpTicks;
+  ctx.save();ctx.shadowBlur=0;ctx.globalAlpha=1-p;ctx.lineWidth=3;
+  for(const [wx,wy,arrive] of [[w.fromX,w.fromY,false],[w.x,w.y,true]] as const) {
+    const x=wx-camX,y=wy-camY,r=arrive?12+24*p:36-24*p;
+    ctx.strokeStyle=arrive?'#a3d7ff':'#b5bfcc';ctx.strokeRect(x-r,y-r,r*2,r*2);
+    ctx.fillStyle='#f0e8ff';
+    for(let k=0;k<4;k++){const an=k*Math.PI/2+.35;ctx.fillRect(Math.round(x+Math.cos(an)*(r+8))-2,Math.round(y+Math.sin(an)*(r+8))-2,4,4);}
+  }
+  ctx.restore();
+}
+
+function drawSpookFeatures(ctx:CanvasRenderingContext2D,x:number,y:number,size:number) {
+  const r=(n:number)=>Math.round(n*size);
+  // Unequal wide eyes, cross-eyed pupils, a single tooth and a crooked tongue keep the face goofy.
+  ctx.fillStyle='#f3f5e6';ctx.fillRect(x-r(.34),y-r(.29),r(.27),r(.25));ctx.fillRect(x+r(.07),y-r(.34),r(.27),r(.3));
+  ctx.fillStyle='#26302e';ctx.fillRect(x-r(.18),y-r(.19),r(.08),r(.11));ctx.fillRect(x+r(.1),y-r(.2),r(.08),r(.11));
+  ctx.fillStyle='#302536';ctx.fillRect(x-r(.27),y+r(.1),r(.54),r(.24));
+  ctx.fillStyle='#f3f5e6';ctx.fillRect(x-r(.17),y+r(.1),r(.12),r(.1));
+  ctx.fillStyle='#e9a0b6';ctx.fillRect(x+r(.04),y+r(.23),r(.15),r(.15));
+  ctx.fillStyle='#9a586d';ctx.fillRect(x+r(.11),y+r(.24),Math.max(1,r(.02)),r(.1));
+}
+
+function drawSpookOverlayGhost(ctx:CanvasRenderingContext2D,size:number) {
+  const half=size/2;
+  drawMobBody(ctx,-half,-half,size,size,'#b8c4a7',false);
+  ctx.fillStyle='#b8c4a7';ctx.fillRect(-half+size*.12,half-2,size*.15,size*.1);ctx.fillRect(-size*.07,half-2,size*.15,size*.14);ctx.fillRect(half-size*.27,half-2,size*.15,size*.08);
+  drawSpookFeatures(ctx,0,0,size);
+}
+
+function drawSpookScreen(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,w:number,h:number) {
+  const face=state.spookFace;if(!face||face.until<=state.gameTick)return;
+  const left=face.until-state.gameTick,age=SPOOK.faceTicks-left,p=age/SPOOK.faceTicks;
+  const fade=Math.min(1,age/5,left/16)*.88;
+  const pop=age<9?.76+.28*Math.sin(age/9*Math.PI/2):1.04-.04*Math.min(1,(age-9)/10);
+  const size=Math.round(Math.min(w*.52,h*.78)*pop);
+  // Stable ghost echoes drift gently across separated parts of the viewport.
+  const ghosts=[[.1,.24,.22,.3],[.86,.2,.18,.25],[.17,.76,.26,.32],[.87,.7,.24,.28],[.52,.87,.17,.22]];
+  for(const [i,[x,y,scale,opacity]] of ghosts.entries()) {
+    const drift=Math.sin(face.id*.7+i*1.8),ghostSize=Math.round(Math.min(w,h)*scale*pop);
+    ctx.save();ctx.globalAlpha=fade*opacity;
+    ctx.translate(Math.round(w*(x+drift*p*.025)),Math.round(h*(y-p*.045)));
+    ctx.rotate(drift*.09+Math.sin(p*Math.PI+i)*.035);
+    drawSpookOverlayGhost(ctx,ghostSize);ctx.restore();
+  }
+  ctx.save();ctx.globalAlpha=fade;ctx.translate(Math.round(w/2),Math.round(h*.45));ctx.rotate(Math.sin(face.id)*.05+Math.sin(p*Math.PI)*.035);
+  drawSpookOverlayGhost(ctx,size);ctx.restore();
+}
+
+function drawBlinkerWarpScreen(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,w:number,h:number) {
+  const warp=state.blinkerWarp;if(!warp||warp.until<=state.gameTick)return;
+  const p=Math.max(0,1-(warp.until-state.gameTick)/BLINKER.warpTicks),fade=(1-p)**2;
+  ctx.save();ctx.shadowBlur=0;
+  ctx.globalAlpha=fade*.07;ctx.fillStyle='#97cfff';ctx.fillRect(0,0,w,h);
+  if(p<.2){ctx.globalAlpha=(1-p/.2)*.12;ctx.fillStyle='#e9f5ff';ctx.fillRect(0,0,w,h);}
+  // Broken edge frames move outward as the new location settles, keeping the centre readable.
+  for(let layer=0;layer<2;layer++) {
+    const inset=Math.round(14+(1-p)*(layer?30:10)),arm=Math.round(Math.min(w,h)*.14);
+    ctx.globalAlpha=fade*(layer?.35:.7);ctx.strokeStyle=layer?'#b5bfcc':'#a3d7ff';ctx.lineWidth=layer?2:4;
+    for(const [sx,sy] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
+      const x=sx<0?inset:w-inset,y=sy<0?inset:h-inset;
+      ctx.beginPath();ctx.moveTo(x-sx*arm,y);ctx.lineTo(x,y);ctx.lineTo(x,y-sy*arm);ctx.stroke();
+    }
+  }
+  for(let k=0;k<8;k++) {
+    const side=k%2?-1:1,x=side<0?w*(.08+.1*p):w*(.92-.1*p),y=h*(.12+.11*k);
+    ctx.globalAlpha=fade*(.25+.35*(k%3/2));ctx.fillStyle=k%3?'#a3d7ff':'#edf6ff';
+    ctx.fillRect(Math.round(x),Math.round(y),Math.round(12+32*(1-p)),3);
+  }
+  ctx.restore();
+}
+
 function drawLancerWarnings(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
   ctx.save();
   for(const enemy of state.enemies){
@@ -4646,16 +5035,18 @@ function drawCraterField(ctx: CanvasRenderingContext2D, state: GameState, camX: 
 function drawChargerWarnings(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number) {
   ctx.save();
   for(const enemy of state.enemies){
-    if(enemy.type!=='charger'||enemy.hp<=0||(enemy.chargeWindupTicks??0)<=0)continue;
-    const progress=1-enemy.chargeWindupTicks!/CHARGER_WINDUP_TICKS;
-    for(let step=1;step<=CHARGER_CHARGE_TILES;step++){
+    if((enemy.type!=='charger'&&enemy.type!=='lodestone')||enemy.hp<=0||(enemy.chargeWindupTicks??0)<=0)continue;
+    // A Lodestone's Magnet Snap uses the same lane warning, shorter and in its pole colour.
+    const lode=enemy.type==='lodestone',progress=1-enemy.chargeWindupTicks!/(lode?LODESTONE_SNAP.windup:CHARGER_WINDUP_TICKS);
+    const fill=lode?POLE_COLORS[enemy.pole??'north']:'#ff913f',edge=lode?'#f1ecff':'#ffc37a',dot=lode?'#ffffff':'#ffe0ae';
+    for(let step=1;step<=(lode?LODESTONE_SNAP.tiles:CHARGER_CHARGE_TILES);step++){
       const tx=enemy.tileX+enemy.chargeDirX*step,ty=enemy.tileY+enemy.chargeDirY*step;
       if((state.map[ty]?.[tx]??T_WALL)===T_WALL)break;
       const x=Math.round(tx*TILE_SIZE-camX),y=Math.round(ty*TILE_SIZE-camY);
-      ctx.globalAlpha=.07+progress*.08;ctx.fillStyle='#ff913f';ctx.fillRect(x+6,y+6,TILE_SIZE-12,TILE_SIZE-12);
-      ctx.globalAlpha=(.35+progress*.45)*(1-step*.045);ctx.strokeStyle='#ffc37a';ctx.lineWidth=2;
+      ctx.globalAlpha=(lode?.12:.07)+progress*.08;ctx.fillStyle=fill;ctx.fillRect(x+6,y+6,TILE_SIZE-12,TILE_SIZE-12);
+      ctx.globalAlpha=(.35+progress*.45)*(1-step*.045);ctx.strokeStyle=lode&&progress>.75&&Math.floor(state.gameTick/3)%2?'#ffffff':lode?fill:edge;ctx.lineWidth=2;
       ctx.strokeRect(x+6,y+6,TILE_SIZE-12,TILE_SIZE-12);
-      ctx.fillStyle='#ffe0ae';ctx.fillRect(x+TILE_SIZE/2-2,y+TILE_SIZE/2-2,4,4);
+      ctx.fillStyle=dot;ctx.fillRect(x+TILE_SIZE/2-2,y+TILE_SIZE/2-2,4,4);
     }
   }
   ctx.restore();
@@ -4696,6 +5087,22 @@ function drawMeteor(ctx: CanvasRenderingContext2D, x: number, y: number, size: n
   ctx.restore();
 }
 
+function drawWorldBackdrop(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number, camX: number, camY: number, tickN: number) {
+  syncSingularityGulp(state); // the Singularity backdrop gulps as its Maws open
+  if (worldTheme(state)) worldTheme(state)!.backdrop(ctx,viewW,viewH,camX,camY,state.gameTick); // Venus, Sirius, the Singularity
+  else if (isSaturnMap(state)) drawSaturnBackdrop(ctx,viewW,viewH,camX,camY,state.gameTick);
+  else if (state.jupiter) drawJupiterBackdrop(ctx,state,viewW,viewH,camX,camY,state.gameTick);
+  else if (state.sun) drawSunBackdrop(ctx, state, viewW, viewH, camX, camY, state.gameTick);
+  else if (state.neptune) drawOceanBackdrop(ctx, viewW, viewH, camX, camY, tickN); // Neptune: the void becomes open ocean
+  else if (state.gaia) drawForestBackdrop(ctx, viewW, viewH, camX, camY, tickN); // Gaia: a dusky forest
+  else if (isBinaryMap(state)) drawBinaryBackdrop(ctx, viewW, viewH, camX, camY, state.gameTick, state); // Binary Star: two orbiting stars
+  else if (isMoonMap(state)) drawMoonBackdrop(ctx, viewW, viewH, camX, camY, tickN); // the Moon: a shadowy crystal cavern
+  else if (state.gambit) drawGambitBackdrop(ctx, viewW, viewH, camX, camY, tickN); // Star Gambit: a dusk trading port
+  else drawSpaceBackdrop(ctx, viewW, viewH, camX, camY, tickN); // endless: a quiet starfield behind the station
+  drawSingularitySuction(ctx, state, viewW, viewH, camX, camY); // the Singularity: a sucking Maw drags the void behind the station
+}
+
+
 function drawGame(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -4709,6 +5116,7 @@ function drawGame(
   // in a scaled coordinate space (viewW/viewH), then we restore back to true pixel space
   // before the minimap so it isn't affected by this — it gets its own independent mobile sizing.
   hideBossHeadBars = !!state.trial;
+  singularityMaxStacks = state.trial?.devourer ? SINGULARITY_CHALLENGE.maxStacks[state.trial.devourer.phase - 1] : 0;
   const worldZoom = isMobileTouch ? 0.4 : 1;
   const viewW = canvasW / worldZoom;
   const viewH = canvasH / worldZoom;
@@ -4729,19 +5137,17 @@ function drawGame(
   ctx.save();
   ctx.scale(worldZoom, worldZoom);
 
-  if (isSingularityMap(state)) drawVoidBackdrop(ctx,viewW,viewH,camX,camY,state.gameTick);
-  else if (isSaturnMap(state)) drawSaturnBackdrop(ctx,viewW,viewH,camX,camY,state.gameTick);
-  else if (state.jupiter) drawJupiterBackdrop(ctx,state,viewW,viewH,camX,camY,state.gameTick);
-  else if (state.sun) drawSunBackdrop(ctx, state, viewW, viewH, camX, camY, state.gameTick);
-  else if (state.neptune) drawOceanBackdrop(ctx, viewW, viewH, camX, camY, tickN); // Neptune: the void becomes open ocean
-  else if (state.gaia) drawForestBackdrop(ctx, viewW, viewH, camX, camY, tickN); // Gaia: a dusky forest
-  else if (isMoonMap(state)) drawMoonBackdrop(ctx, viewW, viewH, camX, camY, tickN); // the Moon: a shadowy crystal cavern
-  else drawSpaceBackdrop(ctx, viewW, viewH, camX, camY, tickN); // endless: a quiet starfield behind the station
+  drawWorldBackdrop(ctx,state,viewW,viewH,camX,camY,tickN);
 
   drawBattlefield(ctx,state,camX,camY,viewW,viewH,tickN);
-  if(saturnBlizzard(state))drawSaturnBlizzard(ctx,viewW,viewH,camX,camY,state.gameTick,state.saturn!.level);
+  drawJammerFields(ctx,state,camX,camY);
+  drawSingularityTrap(ctx,state,camX,camY);
+  if(saturnBlizzard(state))drawSaturnBlizzard(ctx,viewW,viewH,camX,camY,state.gameTick,1);
   if(state.saturn)drawSaturnGround(ctx,state,camX,camY);
+  if(state.sirius)drawSiriusGround(ctx,state,camX,camY,state.gameTick);
+  if(state.venus)drawVenusGround(ctx,state,camX,camY,state.gameTick);
   if(state.jupiter)drawJupiterGround(ctx,state,camX,camY,state.gameTick);
+  if(state.binary)drawBinaryGround(ctx,state,camX,camY);
   drawAmbientEvents(ctx,state,camX,camY,viewW,viewH);
   drawReaperHallwaySeal(ctx,state,camX,camY,tickN);
   drawChargerWarnings(ctx,state,camX,camY);
@@ -4935,6 +5341,20 @@ function drawGame(
 
   drawAstralTwinLinks(ctx, state, camX, camY, tickN);
 
+  // Trapper mines: a dark square with an amber light; dim until armed, blinking once armed, flashing red on its fuse.
+  for (const m of state.mines ?? []) {
+    const x = Math.round((m.tileX + .5) * TILE_SIZE - camX), y = Math.round((m.tileY + .5) * TILE_SIZE - camY), armed = m.ticks >= TRAPPER.armTicks;
+    const fading = TRAPPER.lifeTicks - m.ticks < 90 && m.fuse === undefined;
+    ctx.save(); ctx.globalAlpha = fading ? .4 + .4 * Math.abs(Math.sin(tickN * .2)) : 1;
+    ctx.fillStyle = '#1c1410'; ctx.fillRect(x - 15, y - 15, 30, 30); ctx.strokeStyle = '#a0705a'; ctx.lineWidth = 3; ctx.strokeRect(x - 15, y - 15, 30, 30);
+    ctx.fillStyle = '#a0705a'; for (const [cx, cy] of [[-15, -15], [11, -15], [-15, 11], [11, 11]]) ctx.fillRect(x + cx, y + cy, 4, 4); // corner studs
+    const on = m.fuse !== undefined ? Math.floor(tickN / 3) % 2 === 0 : armed ? Math.floor(tickN / 20) % 2 === 0 : false;
+    ctx.fillStyle = m.fuse !== undefined ? (on ? '#ffffff' : '#ff3b2a') : on ? '#ffb070' : '#7a4a2a';
+    ctx.shadowColor = m.fuse !== undefined ? '#ff3b2a' : '#ff8a3d'; ctx.shadowBlur = on || m.fuse !== undefined ? 12 : 0; ctx.fillRect(x - 6, y - 6, 12, 12);
+    if (m.fuse !== undefined) { ctx.shadowBlur = 0; ctx.strokeStyle = '#ff3b2a'; ctx.lineWidth = 2; const r = Math.round(TRAPPER.radius * TILE_SIZE * (1 - m.fuse / TRAPPER.fuseTicks)); ctx.strokeRect(x - r, y - r, r * 2, r * 2); }
+    ctx.restore();
+  }
+
   // Enemies
   const shieldedIds = new Set(
     state.enemies.filter(e => e.type === 'shielder' && e.shieldTargetId !== -1).map(e => e.shieldTargetId)
@@ -4945,7 +5365,15 @@ function drawGame(
     if (state.sun?.bossId === e.id && state.sun.quenchedTicks > 0) {
       drawQuenchedKing(ctx, e, sx, sy); continue;
     }
-    if(state.saturn&&drawSaturnUnit(ctx,e,sx,sy,state.gameTick))continue;
+    if (e.type === 'devourer' && e.devourer?.landTicks) { // Singularity: up in the sky as a comet, then dropping onto its spot
+      const lift = singularityLift(e); if (lift === Infinity) continue;
+      ctx.save(); ctx.translate(0, -Math.round(lift)); drawEnemy(ctx, e, sx, sy, tickN); ctx.restore(); continue;
+    }
+    if(state.venus&&venusAirborne(state,e))continue; // Venus: mid-leap he is up out of sight; his shadow marks the landing
+    if(state.venus&&(e.venusOrder!==undefined||e.type==='sand_relic'||e.type==='sand_core')){const sink=venusTotemSink(state,e);if(sink>0){ // a totem rising out of / sinking into the sand, cut off at the ground line
+      ctx.save();ctx.beginPath();ctx.rect(sx-TILE_SIZE,sy-TILE_SIZE*2,TILE_SIZE*2,TILE_SIZE*2+18);ctx.clip();ctx.translate(0,Math.round(sink*46));drawEnemy(ctx,e,sx,sy,tickN);ctx.restore();continue;}}
+    if(state.saturn&&drawSaturnUnit(ctx,e,sx,sy,state.gameTick,saturnTimeStopped(state,e)))continue;
+    if(state.sirius&&drawSiriusUnit(ctx,e,sx,sy,state.gameTick)){drawEnemyHealthBar(ctx,e,sx,sy);continue;} // the same HP bar as other aliens
     if (e.type === 'impostor') { drawEnemy(ctx, impostorLook(state, e), sx, sy, tickN); continue; }
     // Gaia: she fades into the soil while withering between phases.
     if (state.gaia && e.id === state.gaia.bossId && state.gaia.wither > 0) ctx.globalAlpha = .25 + .2 * Math.abs(Math.sin(tickN * .1));
@@ -4955,12 +5383,15 @@ function drawGame(
       if (isMoonBoss(state, e)) drawMoonReflection(ctx, sx, sy, tickN);
       drawEnemy(ctx, { ...e, type: 'queen_echo' }, sx, sy, tickN, shieldedIds.has(e.id));
     } else drawEnemy(ctx, e, sx, sy, tickN, shieldedIds.has(e.id),state.jupiter?.bossId===e.id&&state.jupiter.stage==='escape',state.jupiter?.bossId===e.id&&state.jupiter.stage==='charging'?state.jupiter.energy/100:-1);
-    if(state.saturn?.bossId===e.id)drawSaturnBarrier(ctx,state,sx,sy);
     if(state.jupiter?.bossId===e.id)drawJupiterBossEffect(ctx,state,sx,sy,state.gameTick);
     ctx.globalAlpha = 1; // reset in case ghost modified it
   }
   drawRunBuildEffects(ctx,state,camX,camY);
   drawMoonEffects(ctx, state, camX, camY, tickN);
+  drawSingularityMawEffects(ctx,state,camX,camY);
+  drawDropperAttacks(ctx,state,camX,camY);
+  drawGrapplerHooks(ctx,state,camX,camY);
+  drawBlinkerWarp(ctx,state,camX,camY);
 
   // Death particles — blocky debris burst on enemy kill
   for (const p of state.deathParticles) {
@@ -5003,6 +5434,8 @@ function drawGame(
   }
 
   drawMirrorTwin(ctx, state, camX, camY, tickN);
+  if (state.gambit) drawGambitEffects(ctx, state, camX, camY); // Star Gambit weapon effects
+
 
   // Player
   const jiggle = state.healJiggleTicks > 0
@@ -5011,7 +5444,10 @@ function drawGame(
   const psx = state.playerX - camX + jiggle;
   const psy = state.playerY - camY;
   drawBlessingBehindPlayer(ctx,state,psx,psy);
-  if(!drawSaturnPlayer(ctx,state,psx,psy))drawPlayer(ctx, psx, psy, state, tickN, chargingMs);
+  if(state.binary)drawPoleFrame(ctx,state,psx,psy);
+  const floatLift = state.sirius ? siriusFloatLift(state, state.gameTick) : 0; // Halo: the model floats above its shadow
+  if(state.sirius)drawSiriusHalo(ctx,state,psx,psy,floatLift,state.gameTick);
+  drawPlayer(ctx, psx, psy - floatLift, state, tickN, chargingMs);
   drawRewardPulses(ctx, state, camX, camY);
   drawPrayerRitual(ctx, state, camX, camY, tickN);
   drawPrayerMagic(ctx, state, camX, camY, tickN);
@@ -5059,7 +5495,7 @@ function drawGame(
 
   // Player bullets use the same crisp pixel vocabulary as celestial effects.
   for(const bullet of state.laserBullets || []){
-    drawPlayerBullet(ctx,bullet.x*TILE_SIZE-camX,bullet.y*TILE_SIZE-camY,bullet.dx,bullet.dy,bullet.powered,bullet.ticks,bullet.blessingDecoy?'lunar':playerAttackTint(state,!!bullet.blessingCopy,bullet.powered),!!bullet.heavy);
+    drawPlayerBullet(ctx,bullet.x*TILE_SIZE-camX,bullet.y*TILE_SIZE-camY,bullet.dx,bullet.dy,bullet.powered,bullet.ticks,bullet.blessingDecoy?'lunar':playerAttackTint(state,!!bullet.blessingCopy&&!bullet.plainCopy,bullet.powered),!!bullet.heavy);
   }
 
   // Player electric buff chains have stable pixel steps and pale cores.
@@ -5084,6 +5520,9 @@ function drawGame(
     if(beam.color===ENEMY_CONFIGS.lancer.color){
       drawEnemyLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,Math.min(1,beam.ticks/LANCER.beamTicks),['#ff3d6e','#ff8aa6','#fff0f4'],[22,9,3]);continue;
     }
+    if(beam.color==='#dfe8f5'){ // a laser bent off a Reflector's mirror: a wide silver beam
+      drawEnemyLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,Math.min(1,beam.ticks/18),['#9fb4cc','#dfe8f5','#ffffff'],[30,13,4]);continue;
+    }
     if(beam.color==='#ffdd22'){
       drawEnemyLaser(ctx,beam.fromX-camX,beam.fromY-camY,beam.endX-camX,beam.endY-camY,Math.min(1,beam.ticks/18),['#ffcc22','#ffe680','#fffbe6'],[16,6,2]);continue;
     }
@@ -5098,13 +5537,14 @@ function drawGame(
 
   // Player charge waves keep square silhouettes and sharp layered bands.
   for(const wave of state.waveEffects){
-    drawPlayerWave(ctx,wave.cx-camX,wave.cy-camY,wave.radius,!!wave.powered,wave.ticks,playerAttackTint(state,!!wave.opal,!!wave.powered));
+    drawPlayerWave(ctx,wave.cx-camX,wave.cy-camY,wave.radius,!!wave.powered,wave.ticks,wave.echo?'echo':playerAttackTint(state,!!wave.opal,!!wave.powered));
   }
 
   // Crisp stepped blast and separated ember rays, with no blanket blur.
   for(const blast of state.bombBlasts){
     if(blast.water)drawWaterBurst(ctx,blast.cx-camX,blast.cy-camY,blast.maxRadius,blast.ticks);
-    else drawBombBlast(ctx,blast.cx-camX,blast.cy-camY,blast.radius,blast.ticks,!!blast.opal,!blast.opal&&playerAttackTint(state,false,!!blast.powered)==='amber');
+    else if(blast.echo)drawTrapBlast(ctx,blast.cx-camX,blast.cy-camY,blast.radius,blast.ticks,true);
+    else drawBombBlast(ctx,blast.cx-camX,blast.cy-camY,blast.radius,blast.ticks,!!blast.opal,!blast.opal&&!blast.trap&&playerAttackTint(state,false,!!blast.powered)==='amber',!!blast.trap);
   }
 
   for(const fx of state.specialEffects){
@@ -5115,13 +5555,30 @@ function drawGame(
   }
 
   drawSunEffects(ctx, state, camX, camY);
+  if(state.binary)drawBinaryEffects(ctx,state,camX,camY);
+  if(state.sirius)drawSiriusEffects(ctx,state,camX,camY,state.gameTick);
+  if(state.venus)drawVenusEffects(ctx,state,camX,camY,state.gameTick);
+  if(state.saturn)drawSaturnEffects(ctx,state,camX,camY);
   if(state.jupiter)drawJupiterGuard(ctx,state,camX,camY,state.gameTick);
   drawGaiaOverlay(ctx, state, camX, camY, tickN);
   drawMeteorImpact(ctx, state, camX, camY);
   drawComet(ctx, state, camX, camY, tickN);
-  // Shooter orbs: a bright square core in a gold glow, with two fading trail blocks.
+  // Reflector mirrors: a 3-tile bright plate across each Reflector's facing edge; grey and broken while knocked down.
+  for (const e of state.enemies) {
+    if (e.type !== 'reflector' || e.hp <= 0 || e.faceX === undefined || e.faceY === undefined) continue;
+    const down = (e.mirrorDownUntil ?? 0) > state.gameTick, fx = e.faceX, fy = e.faceY, half = Math.round(REFLECTOR.halfWidth * TILE_SIZE);
+    const mx = Math.round(e.x + fx * TILE_SIZE * .5 - camX), my = Math.round(e.y + fy * TILE_SIZE * .5 - camY);
+    drawReflectorMirror(ctx,mx,my,half*2,fx!==0,down,tickN,(e.turnTimer??0)>0);
+  }
+  // Shooter orbs: a bright square core in a gold glow, with two fading trail blocks. Reflector bounces are smaller and silver.
   for (const shot of state.enemyShots ?? []) {
     const x = Math.round(shot.x - camX), y = Math.round(shot.y - camY), len = Math.hypot(shot.dx, shot.dy) || 1;
+    if(shot.spore){drawSporeShot(ctx,x,y,shot.dx,shot.dy);continue;}
+    if(shot.flare){drawFlareFireball(ctx,x,y,shot.dx,shot.dy);continue;}
+    if (shot.mirror) {
+      ctx.save(); ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 8; ctx.fillStyle = '#c4d2e4'; ctx.fillRect(x - 7, y - 7, 14, 14);
+      ctx.shadowBlur = 0; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 3, y - 3, 6, 6); ctx.restore(); continue;
+    }
     ctx.save();
     for (let k = 2; k >= 1; k--) { ctx.globalAlpha = .25 * (3 - k); ctx.fillStyle = '#d9c46a'; const tx = Math.round(x - shot.dx / len * 13 * k), ty = Math.round(y - shot.dy / len * 13 * k); ctx.fillRect(tx - 7, ty - 7, 14, 14); }
     ctx.globalAlpha = 1; ctx.shadowColor = '#fff2a0'; ctx.shadowBlur = 10; ctx.fillStyle = '#d9c46a'; ctx.fillRect(x - 11, y - 11, 22, 22);
@@ -5137,6 +5594,8 @@ function drawGame(
     const radius=TILE_SIZE*ENEMY_CONFIGS[enemy.type].bodyFraction*.5+16;
     drawSapphireHitCorners(ctx,x,y,radius,state.gameTick,effect.untilTick);
   }
+
+  if (state.jupiter) drawJupiterDischargeCountdown(ctx, state, camX, camY);
 
   ctx.restore(); // back to true physical-pixel space — unaffected by the world zoom above
   drawKingArenaEffects(ctx, state, canvasW, canvasH);
@@ -5155,11 +5614,26 @@ function drawGame(
   }
 
   drawSunAtmosphere(ctx, state, canvasW, canvasH, state.gameTick);
+  if (state.neptune) drawNeptuneCloneHeal(ctx, state, canvasW, canvasH, camX, camY, worldZoom);
   if(state.saturn)drawSaturnAtmosphere(ctx,state,canvasW,canvasH);
-  if(state.saturn?.shatter)drawSaturnShatter(ctx,state,canvasW,canvasH,camX,camY,worldZoom);
+  if(state.saturn)drawSaturnBacklash(ctx,state,canvasW,canvasH,camX,camY,worldZoom);
+  if(state.venus)drawVenusShatter(ctx,state,canvasW,canvasH,camX,camY,worldZoom,state.gameTick);
   if(state.jupiter)drawJupiterTransition(ctx,state,canvasW,canvasH,state.gameTick);
+  if(state.jupiter)drawOverdriveWarning(ctx,state,canvasW,canvasH,state.gameTick);
+  if(state.binary)drawBinaryScreen(ctx,state,canvasW,canvasH);
+  if(state.gambit)drawGambitHud(ctx,state,canvasW,canvasH);
+  if(state.sirius)drawSiriusScreen(ctx,state,canvasW,canvasH);
+  if(state.sirius)drawSiriusBurst(ctx,state,canvasW,canvasH);
+  if (state.moon) drawMoonDarkOverlay(ctx, state, canvasW, canvasH, state.gameTick);
+  if(state.moon)drawMoonRevealOverlay(ctx,state,canvasW,canvasH,state.gameTick);
+  drawSiriusLightOverlay(ctx, state, canvasW, canvasH);
+  drawVenusSandWind(ctx, state, canvasW, canvasH);
+  drawSingularityAtmosphere(ctx, state, canvasW, canvasH);
+  drawConvergenceScreen(ctx,state,canvasW,canvasH,camX,camY,worldZoom);
   drawEclipseShadow(ctx, state, canvasW, canvasH);
   drawSupernovaSky(ctx, state, canvasW, canvasH);
+  drawBlinkerWarpScreen(ctx,state,canvasW,canvasH);
+  drawSpookScreen(ctx,state,canvasW,canvasH);
   if(state.ambientEvents.active?.kind==='blackhole'){
     const origin=state.ambientEvents.active.points[0];
     drawBlackholeSky(ctx,state,canvasW,canvasH,((origin.x+.5)*TILE_SIZE-camX)*worldZoom,((origin.y+.5)*TILE_SIZE-camY)*worldZoom);
@@ -5171,26 +5645,153 @@ function drawGame(
 
 // ─── Mobile ability button ────────────────────────────────────────────────────
 
+/** A Sirius rune as clear tiles: one tile per step, so each line's length can be counted. The start tile is outlined;
+ * traced tiles turn bright. */
+function RuneGlyph({ rune, traced, casting }: { rune: (typeof RUNES)[number]; traced: number; casting: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => { const ctx = ref.current?.getContext('2d'); if (!ctx) return; ctx.clearRect(0, 0, 52, 52); ctx.fillStyle = '#14121f'; ctx.fillRect(0, 0, 52, 52); drawRuneTiles(ctx, rune, 26, 26, 46, traced); }, [rune, traced]);
+  return <canvas ref={ref} width={52} height={52} role="img" aria-label={`Rune ${rune.name}`} style={{flex:'none',border:`1px solid ${RUNE_GOLD}`,opacity:casting?.6:1}}/>;
+}
+
 // Challenge HUD centre: the guardian's name and one HP bar for the whole encounter (both Twins, every Devourer body).
+function GuardianCountdown({ label, ticks, total, color }: { label: string; ticks: number; total: number; color: string }) {
+  const percent = Math.max(0, Math.min(100, ticks / total * 100));
+  return <div role="meter" aria-label={`${label} time left`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}
+    style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+    <span className="rs-guardian-name" style={{ fontSize: 8, color }}>{label}</span>
+    <span style={{ flex: 1, height: 5, border: `1px solid ${color}`, background: '#14121f' }}>
+      <span style={{ display: 'block', height: '100%', width: `${percent}%`, background: color }} />
+    </span>
+  </div>;
+}
+
 function GuardianBar({ state }: { state: GameState }) {
-  if(state.trial?.mapOnly&&!state.enemies.some(e=>e.type===state.trial!.boss&&e.hp>0))return <div className="rs-guardian" style={{color:'#a8e8d7'}}><span className="rs-guardian-name">{isSingularityMap(state)?'THE SINGULARITY':'SATURN · FROZEN RINGS'}</span></div>;
+  if(state.trial?.mapOnly&&!state.enemies.some(e=>e.type===state.trial!.boss&&e.hp>0))return <div className="rs-guardian" style={{color:'#a8e8d7'}}><span className="rs-guardian-name">{worldTheme(state)?.name??'SATURN · FROZEN RINGS'}</span></div>;
   const boss = state.trial!.boss, color = ENEMY_CONFIGS[boss].color;
   const bodies = state.enemies.filter(e => e.type === boss && e.hp > 0);
   const hp = bodies.reduce((sum, e) => sum + ((e.twin?.downedTicks ?? 0) > 0 ? 0 : e.hp), 0);
   const max = bodies.reduce((sum, e) => sum + e.maxHp, 0);
   const present = bodies.length > 0, pct = present && max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
+  const devourer = state.trial?.devourer;
+  if (devourer) {
+    const family = singularityTrialHealth(state), cap = SINGULARITY_CHALLENGE.familyCap[(state.trial?.devourer?.phase ?? 1) - 1], fill = Math.max(0, Math.min(1, family.bodies / cap));
+    // Living bodies against the family cap.
+    return <div className="rs-guardian" style={{ ['--guardian' as string]: '#ab7bdd' }}>
+      <div role="meter" aria-label="Soul Devourer bodies out of the family cap" aria-valuemin={0} aria-valuemax={cap} aria-valuenow={family.bodies}>
+      <span className="rs-guardian-name">{family.bodies ? `SOUL DEVOURER · PHASE ${devourer.phase} · ×${family.bodies}` : 'GUARDIAN INCOMING'}</span>
+      <span className="rs-guardian-segments">{[3,2,1].map(phase => <span key={phase} className="rs-guardian-bar" data-active={phase===devourer.phase||undefined}>
+        <span className="rs-guardian-fill" style={{width:`${(phase<devourer.phase?0:phase>devourer.phase?1:fill)*100}%`,opacity:phase===devourer.phase?1:.55}}/>
+      </span>)}</span>
+      </div>
+      <div role="meter" aria-label="Swarm convergence countdown" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(100*(devourer.convergence ? devourer.convergence.ticks/(devourer.convergence.stage==='gather'?(devourer.convergence.gatherTicks??SINGULARITY_CHALLENGE.convergence.gatherTicks):SINGULARITY_CHALLENGE.convergence.blastTicks) : (devourer.convergenceTimer??SINGULARITY_CHALLENGE.convergence.everyTicks)/SINGULARITY_CHALLENGE.convergence.everyTicks))} style={{display:'flex',alignItems:'center',gap:5,marginTop:4}}>
+        <span className="rs-guardian-name" style={{fontSize:8,marginBottom:0,color:devourer.convergence?'#eaffc8':'#b995df'}}>{devourer.convergence?.stage==='gather'?'GATHERING':devourer.convergence?.stage==='blast'?'EXPLOSION':'CONVERGENCE'}</span>
+        <span style={{flex:1,height:6,border:'1px solid #b995df',background:'#14121f'}}><span style={{display:'block',height:'100%',background:devourer.convergence?'#d8ff9c':'#9572bd',width:`${Math.max(0,Math.min(1,devourer.convergence ? devourer.convergence.ticks/(devourer.convergence.stage==='gather'?(devourer.convergence.gatherTicks??SINGULARITY_CHALLENGE.convergence.gatherTicks):SINGULARITY_CHALLENGE.convergence.blastTicks) : (devourer.convergenceTimer??SINGULARITY_CHALLENGE.convergence.everyTicks)/SINGULARITY_CHALLENGE.convergence.everyTicks))*100}%`}}/></span>
+      </div>
+    </div>;
+  }
+  const binary = state.binary;
+  if (binary) {
+    // Two rows, one per twin; each row has three lives (phase 3 left). A fallen twin's bar drains as its revival timer.
+    const twins = binaryTwins(state);
+    return <div className="rs-guardian" style={{ ['--guardian' as string]: '#ff8f7a' }}>
+      <span className="rs-guardian-name">{twins.length ? `ASTRAL TWINS · PHASE ${binary.phase}` : 'GUARDIAN INCOMING'}</span>
+      {[0, 1].map(index => {
+        const twin = twins.find(t => t.twin!.index === index), down = twin?.twin?.downedTicks ?? 0;
+        const color = BINARY_TWIN_COLORS[index];
+        return <div key={index} role="meter" aria-label={`${index ? 'Dusk' : 'Dawn'} health`} aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={twin && !down ? Math.round(twin.hp / twin.maxHp * 100) : 0} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, ['--guardian' as string]: color }}>
+          <span className="rs-guardian-name" style={{ fontSize: 9, width: 38, marginRight: 6, flexShrink: 0, color }}>{index ? 'DUSK' : 'DAWN'}</span>
+          <span className="rs-guardian-segments" style={{ flex: 1 }}>{[3, 2, 1].map(phase => {
+            const fill = !twin ? 0 : phase < binary.phase ? 0 : phase > binary.phase ? 1 : down ? down / TWIN_REVIVE_TICKS : Math.max(0, Math.min(1, twin.hp / twin.maxHp));
+            return <span key={phase} className="rs-guardian-bar" data-active={phase === binary.phase || undefined}>
+              <span className="rs-guardian-fill" style={{ width: `${fill * 100}%`, opacity: phase === binary.phase ? (down ? .45 : 1) : .55 }} />
+            </span>;
+          })}</span>
+        </div>;
+      })}
+      {(binary.exposed ?? 0) > 0 ? <GuardianCountdown label="EXPOSED" ticks={binary.exposed!} total={BINARY.collideStunTicks + BINARY.exposeTicks} color="#ffffff" />
+        : twins.some(t => t.hp > 0 && !t.twin!.downedTicks) && <GuardianCountdown label="TELEPORT" ticks={binary.swapTimer} total={binarySwapTicks(binary)} color={binary.swapTimer <= BINARY.swapWarning ? '#ffffff' : '#ff8f7a'} />}
+    </div>;
+  }
+  const venus = state.venus;
+  if (venus) {
+    // Phase HP, then the shield: one section per totem of the sequence (gold = next to destroy), or its broken timer.
+    const broken = venus.exposed > 0;
+    return <div className="rs-guardian rs-venus-guardian" style={{['--guardian' as string]:'#c5a35d'}}>
+    <div>
+    <span className="rs-guardian-name rs-venus-phase">{present ? `AEGIS SENTINEL · PHASE ${venus.phase}` : 'GUARDIAN INCOMING'}</span>
+    <div role="meter" aria-label="Aegis Sentinel health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct*100)}>
+      <span className="rs-guardian-segments">{[3,2,1].map(phase=><span key={phase} className="rs-guardian-bar" data-active={phase===venus.phase||undefined}><span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-venusFloor(phase))/venusBand(phase)))*100:0}%`,opacity:phase===venus.phase?1:.55}}/></span>)}</span>
+    </div>
+    {present&&<div style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>{/* the shield bar, with the leap countdown beside it */}
+      <div role="meter" aria-label={broken?'Shield broken':`Shield: ${venus.total-venus.next} of ${venus.total} totems left`} aria-valuemin={0} aria-valuemax={venus.total} aria-valuenow={venus.total-venus.next} style={{flex:2,minWidth:0,display:'flex',alignItems:'center',gap:4}}>
+      <span className="rs-guardian-name" style={{fontSize:8,color:broken?'#ff9f7a':'#78dedf'}}>{broken?'BROKEN':venus.coreWindow>0?'CORE':'SHIELD'}</span>
+      {venus.coreWindow>0&&!broken
+        ? <span style={{flex:1,height:6,border:'1px solid #78dedf',background:'#14121f'}}><span style={{display:'block',height:'100%',width:`${venus.coreWindow/VENUS.coreTicks*100}%`,background:'#78dedf'}}/></span>
+        : broken
+        ? <span style={{flex:1,height:6,border:'1px solid #ff9f7a',background:'#14121f'}}><span style={{display:'block',height:'100%',width:`${venus.exposed/VENUS.exposeTicks*100}%`,background:'#ff9f7a'}}/></span>
+        : <span style={{flex:1,display:'flex',gap:2}}>{Array.from({length:venus.total},(_,i)=>venus.total-1-i).map(k=><span key={k} style={{flex:1,height:6,border:`1px solid ${k===venus.next?'#ffd27a':'#4f8f8f'}`,background:k<venus.next?'#14121f':k===venus.next?'#ffd27a':'#78dedf'}}/>)}</span>}
+      </div>
+      <div role="meter" aria-label="Time to his next leap" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(venus.leap?100:Math.max(0,Math.min(1,1-venus.leapTimer/Math.max(1,venus.leapTotal)))*100)} style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:4}}>
+      <span className="rs-guardian-name" style={{fontSize:8,color:venus.leap?'#ff6a4d':'#ffd27a'}}>LEAP</span>
+      <span style={{flex:1,height:4,border:`1px solid ${venus.leap?'#ff6a4d':'#c5a35d'}`,background:'#14121f'}}><span style={{display:'block',height:'100%',width:`${venus.leap?100:Math.max(0,Math.min(1,1-venus.leapTimer/Math.max(1,venus.leapTotal)))*100}%`,background:venus.leap?'#ff6a4d':'#ffd27a'}}/></span>
+      </div>
+    </div>}
+    </div>
+    {present && <div className="rs-venus-last-totem" title="Last totem destroyed in order">
+      <span>TOTEM</span>
+      <strong>{venus.next > 0 ? venus.next : '—'}</strong>
+    </div>}
+  </div>;
+  }
+  const sirius = state.sirius;
+  if (sirius) {
+    // Phase HP; then light/dark with its time left, the current rune (traced part bright) with its timer, and the Ruby guess.
+    const lightLeft = sirius.lightTimer / ((sirius.light ? SIRIUS.lightTicks : SIRIUS.darkTicks) * (sirius.phase >= 3 ? SIRIUS.phase3Swap : 1)), swapSoon = sirius.lightTimer <= SIRIUS.swapWarning;
+    const rune = sirius.rune, glyph = rune ? RUNES[rune.index] : null, tracing = !!rune && rune.cast <= 0;
+    const traced = glyph && tracing ? runeProgress(sirius.steps, glyph).tiles : 0, runeLeft = rune ? rune.ticks / rune.total : 1 - sirius.runeTimer / SIRIUS.runeGap;
+    const lightColor = sirius.light ? '#ffe9a8' : '#b9a6ff';
+    return <div className="rs-guardian rs-jupiter-guardian" style={{['--guardian' as string]:'#ffe45c'}}>
+    <div style={{flex:1,minWidth:0}}>
+    <div role="meter" aria-label="Blind Prayer health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct*100)}>
+      <span className="rs-guardian-name">{present?`BLIND PRAYER · PHASE ${sirius.phase}`:'GUARDIAN INCOMING'}</span>
+      <span className="rs-guardian-segments">{[3,2,1].map(phase=><span key={phase} className="rs-guardian-bar" data-active={phase===sirius.phase||undefined}><span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-(3-phase)*SIRIUS.phaseHP)/SIRIUS.phaseHP))*100:0}%`,opacity:phase===sirius.phase?1:.55}}/></span>)}</span>
+    </div>
+    {present&&<div style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>
+      <div role="meter" aria-label={sirius.light?'Light: normal controls':'Dark: reversed controls'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(lightLeft*100)} style={{display:'flex',alignItems:'center',gap:4,flex:1}}>
+        <span className="rs-guardian-name" style={{fontSize:8,color:swapSoon?'#ffffff':lightColor}}>{sirius.light?'LIGHT':'DARK'}</span>
+        <span style={{flex:1,height:5,border:`1px solid ${lightColor}`,background:'#14121f'}}><span style={{display:'block',height:'100%',width:`${lightLeft*100}%`,background:swapSoon?'#ffffff':lightColor}}/></span>
+      </div>
+      <div role="meter" aria-label={rune?'Rune time left':'Next rune'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(runeLeft*100)} style={{display:'flex',alignItems:'center',gap:4,flex:1}}>
+        <span className="rs-guardian-name" style={{fontSize:8,color:rune?RUNE_GOLD:'#9c8f6a'}}>{rune?'RUNE':'NEXT'}</span>
+        <span style={{flex:1,height:5,border:`1px solid ${RUNE_GOLD}`,background:'#14121f'}}><span style={{display:'block',height:'100%',width:`${Math.max(0,Math.min(1,runeLeft))*100}%`,background:rune&&rune.ticks<180?WRATH_RED:rune?RUNE_GOLD:'#6e6448'}}/></span>
+      </div>
+    </div>}
+    {sirius.wrath>0&&<div className="rs-guardian-name" style={{fontSize:8,color:WRATH_RED,marginTop:3}}>ALIENS EMPOWERED</div>}
+    </div>
+    {present&&<div style={{flex:'none',marginLeft:8,width:52,height:52,display:'flex',alignItems:'center',justifyContent:'center'}}>{glyph?<RuneGlyph rune={glyph} traced={traced} casting={!tracing}/>:<span style={{width:52,height:52,boxSizing:'border-box',border:'1px solid #6e6448',background:'#14121f',opacity:.5}}/>}</div>}
+  </div>;
+  }
   const saturn = state.saturn;
-  if(saturn)return <div className="rs-guardian rs-jupiter-guardian" style={{['--guardian' as string]:'#9de7ee'}}>
+  if(saturn){
+    // Phase HP, then the two timers you time C against: her next grant and her next recall.
+    const grant=1-Math.max(0,saturn.grantTimer)/SATURN.grantInterval,recall=1-Math.max(0,saturn.recallTimer)/SATURN.recallInterval;
+    return <div className="rs-guardian rs-jupiter-guardian" style={{['--guardian' as string]:'#9de7ee'}}>
     <div style={{flex:1,minWidth:0}}>
     <div role="meter" aria-label="Frost Warden health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct*100)}>
       <span className="rs-guardian-name">{present?`FROST WARDEN · PHASE ${saturn.phase}`:'GUARDIAN INCOMING'}</span>
       <span className="rs-guardian-segments">{[3,2,1].map(phase=><span key={phase} className="rs-guardian-bar" data-active={phase===saturn.phase||undefined}><span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-(3-phase)*SATURN.phaseHP)/SATURN.phaseHP))*100:0}%`,opacity:phase===saturn.phase?1:.55}}/></span>)}</span>
     </div>
-    {present&&<><div role="meter" aria-label="Warden barrier" aria-valuemin={0} aria-valuemax={SATURN.barrier} aria-valuenow={saturn.barrier} style={{height:5,border:'1px solid #89d9ef',marginTop:4}}><div style={{height:'100%',width:`${saturn.barrier/SATURN.barrier*100}%`,background:'#c1f7ff'}}/></div>
-      {saturn.weakTicks>0&&<span className="rs-guardian-name" style={{fontSize:10,marginTop:3}}>EXPOSED · {Math.ceil(saturn.weakTicks/60)}s</span>}</>}
+    {present&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:4}}>
+      {([['GRANT',grant,saturn.grantTimer<=90,'#9ff1ff'],['RECALL',recall,saturn.recallTimer<=SATURN.recallWarning,'#c39bff']] as const).map(([label,fill,soon,color])=>
+        <div key={label} role="meter" aria-label={`Next ${label.toLowerCase()}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fill*100)} style={{display:'flex',alignItems:'center',gap:4}}>
+          <span className="rs-guardian-name" style={{fontSize:8,color:soon?'#ffffff':color}}>{label}</span>
+          <span style={{flex:1,height:5,border:`1px solid ${color}`,background:'#0b1a26'}}><span style={{display:'block',height:'100%',width:`${fill*100}%`,background:soon?'#ffffff':color}}/></span>
+        </div>)}
+    </div>}
     </div>
-    {present&&<BlizzardStatus saturn={saturn}/>}
   </div>;
+  }
   const j = state.jupiter;
   if (j) {
     const energyColor=j.stage==='escape'?'#ffca8b':j.round===2?'#c5a4ff':j.stage==='pursuit'?'#52ffd6':'#e9b679';
@@ -5201,9 +5802,9 @@ function GuardianBar({ state }: { state: GameState }) {
           <span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-(3-phase)*JUPITER.phaseHP)/JUPITER.phaseHP))*100:0}%`,opacity:phase===j.phase?1:.55}}/>
         </span>)}</span>
       </div>
-      {present&&<div role="meter" aria-label="Reaper energy" aria-valuemin={0} aria-valuemax={jupiterMaxEnergy(j)} aria-valuenow={Math.round(j.energy)} style={{marginTop:5,color:energyColor}}>
-
-        <div style={{height:6,background:'#151826',border:'1px solid '+energyColor}}><div style={{height:'100%',width:`${Math.max(0,Math.min(100,j.energy/jupiterMaxEnergy(j)*100))}%`,background:energyColor}}/></div>
+      {present&&<div role="meter" aria-label="Reaper energy" aria-valuemin={0} aria-valuemax={jupiterMaxEnergy(j)} aria-valuenow={Math.round(j.energy)} style={{display:'flex',alignItems:'center',gap:4,marginTop:4}}>
+        <span className="rs-guardian-name" style={{fontSize:8,color:energyColor}}>ENERGY</span>
+        <span style={{flex:1,height:6,background:'#14121f',border:'1px solid '+energyColor}}><span style={{display:'block',height:'100%',width:`${Math.max(0,Math.min(100,j.energy/jupiterMaxEnergy(j)*100))}%`,background:energyColor}}/></span>
       </div>}</div>
       {present&&j.phase>=2&&j.stage==='pursuit'&&<div className="rs-rage" role="meter" aria-label="Reaper overdrive" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((j.overdriveCharge??0)/JUPITER.fragmentChargeTicks*100)} title="Overdrive" style={{color:j.fragmentOverdrive?'#e2fff0':'#52ffd6'}}>
         <span className="rs-rage-track"><span className="rs-rage-fill" style={{height:Math.min(100,(j.overdriveCharge??0)/JUPITER.fragmentChargeTicks*100)+'%'}}/></span>
@@ -5217,31 +5818,35 @@ function GuardianBar({ state }: { state: GameState }) {
       <span className="rs-guardian-segments">{[3, 2, 1].map(phase => <span key={phase} className="rs-guardian-bar" data-active={phase === sun.phase || undefined}>
         <span className="rs-guardian-fill" style={{ width: `${present ? Math.max(0, Math.min(1, (hp - (3 - phase) * SUN.phaseHP) / SUN.phaseHP)) * 100 : 0}%`, opacity: phase === sun.phase ? 1 : .55 }} />
       </span>)}</span>
+      <div role="meter" aria-label="Fiery King rage" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sun.rage)} title={`Rage: ${Math.round(sun.rage)}%`}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+        <span className="rs-guardian-name" style={{ fontSize: 8, color: sun.rage >= 75 ? '#ff6a5d' : '#ffb263' }}>RAGE</span>
+        <span style={{ flex: 1, height: 6, background: '#14121f', border: `1px solid ${sun.rage >= 75 ? '#ff6a5d' : '#ffb263'}` }}><span style={{ display: 'block', height: '100%', width: `${Math.max(0, Math.min(100, sun.rage))}%`, background: sun.rage >= 75 ? '#ff6a5d' : '#ffb263' }} /></span>
+      </div>
       {sun.quenchedTicks > 0 && <span className="rs-sun-extinguished">EXTINGUISHED · C ×{sun.empoweredCasts}</span>}
-    </div>
-    <div className="rs-rage" role="meter" aria-label="Fiery King rage" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sun.rage)} title={`Rage: ${Math.round(sun.rage)}%`}
-      style={{color:sun.rage>=75?'#ff6a5d':'#ffb263'}}>
-      <span className="rs-rage-track"><span className="rs-rage-fill" style={{height:`${Math.max(0,Math.min(100,sun.rage))}%`}} /></span>
-      <span className="rs-rage-value">{Math.round(sun.rage)}%</span>
     </div>
   </div>;
   const neptune = state.neptune;
   if (neptune) {
+    const dive = present ? neptune.dive : null;
+    const clonesLeft = dive ? state.enemies.filter(c => dive.cloneIds.includes(c.id) && c.hp > 0).length : 0;
     // Three phase segments, phase 3 on the left and phase 1 on the right; dive points marked inside the active one.
     const segments = [3, 2, 1].map(phase => {
       const floor = neptunePhaseFloorHP(phase as 1 | 2 | 3), fill = present ? Math.max(0, Math.min(1, (hp - floor) / NEPTUNE_PHASE_HPS[phase as 1 | 2 | 3])) : 0;
       return { phase, fill: phase < neptune.phase ? 0 : phase > neptune.phase ? (present ? 1 : 0) : fill };
     });
-    return <div className="rs-guardian" role="meter" aria-label={`${BOSS_NAMES[boss]} health`} aria-valuemin={0} aria-valuemax={100}
-      aria-valuenow={Math.round(pct * 100)} style={{ ['--guardian' as string]: color }}>
-      <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${neptune.phase}${neptune.dive ? ` · DIVING · CLONES ${state.enemies.filter(c => neptune.dive!.cloneIds.includes(c.id) && c.hp > 0).length}/${neptune.dive.cloneIds.length + neptune.dive.dropsLeft}` : ''}` : 'GUARDIAN INCOMING'}</span>
-      <span className="rs-guardian-segments">
-        {segments.map(seg => <span key={seg.phase} className="rs-guardian-bar" data-active={seg.phase === neptune.phase || undefined}>
-          <span className="rs-guardian-fill" style={{ width: `${seg.fill * 100}%`, opacity: seg.phase === neptune.phase ? 1 : .55 }} />
-          {seg.phase === neptune.phase && NEPTUNE_DIVE_POINTS[neptune.phase].filter(point => point > 0).map(point =>
-            <span key={point} className="rs-guardian-mark" style={{ left: `${point * 100}%` }} />)}
-        </span>)}
-      </span>
+    return <div className="rs-guardian" style={{ ['--guardian' as string]: color }}>
+      <div role="meter" aria-label={`${BOSS_NAMES[boss]} health`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct * 100)}>
+        <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${neptune.phase}${dive ? ` · CLONES ${clonesLeft}/${dive.cloneIds.length + dive.dropsLeft}` : ''}` : 'GUARDIAN INCOMING'}</span>
+        <span className="rs-guardian-segments">
+          {segments.map(seg => <span key={seg.phase} className="rs-guardian-bar" data-active={seg.phase === neptune.phase || undefined}>
+            <span className="rs-guardian-fill" style={{ width: `${seg.fill * 100}%`, opacity: seg.phase === neptune.phase ? 1 : .55 }} />
+            {seg.phase === neptune.phase && NEPTUNE_DIVE_POINTS[neptune.phase].filter(point => point > 0).map(point =>
+              <span key={point} className="rs-guardian-mark" style={{ left: `${point * 100}%` }} />)}
+          </span>)}
+        </span>
+      </div>
+      {dive && <GuardianCountdown label="DIVE" ticks={dive.ticks} total={NEPTUNE_DIVE_TICKS[neptune.phase]} color={color} />}
     </div>;
   }
   const gaia = state.gaia;
@@ -5264,20 +5869,24 @@ function GuardianBar({ state }: { state: GameState }) {
   }
   const moon = state.moon;
   if (moon) {
+    const queen = bodies.find(e => e.id === moon.bossId);
     // Three phase segments like Gaia's, showing her HP as of her last reveal or jump (not live while she is disguised).
     const shown = moon.shownHp;
     const segments = [3, 2, 1].map(phase => {
       const floor = (3 - phase) * MOON_PHASE_HP, fill = present ? Math.max(0, Math.min(1, (shown - floor) / MOON_PHASE_HP)) : 0;
       return { phase, fill: phase < moon.phase ? 0 : phase > moon.phase ? (present ? 1 : 0) : fill };
     });
-    return <div className="rs-guardian" role="meter" aria-label={`${BOSS_NAMES[boss]} health`} aria-valuemin={0} aria-valuemax={100}
-      aria-valuenow={present && max > 0 ? Math.round(shown / max * 100) : 0} style={{ ['--guardian' as string]: color }}>
-      <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${moon.phase}` : 'GUARDIAN INCOMING'}</span>
-      <span className="rs-guardian-segments">
-        {segments.map(seg => <span key={seg.phase} className="rs-guardian-bar" data-active={seg.phase === moon.phase || undefined}>
-          <span className="rs-guardian-fill" style={{ width: `${seg.fill * 100}%`, opacity: seg.phase === moon.phase ? 1 : .55 }} />
-        </span>)}
-      </span>
+    return <div className="rs-guardian" style={{ ['--guardian' as string]: color }}>
+      <div role="meter" aria-label={`${BOSS_NAMES[boss]} health`} aria-valuemin={0} aria-valuemax={100}
+        aria-valuenow={present && max > 0 ? Math.round(shown / max * 100) : 0}>
+        <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${moon.phase}` : 'GUARDIAN INCOMING'}</span>
+        <span className="rs-guardian-segments">
+          {segments.map(seg => <span key={seg.phase} className="rs-guardian-bar" data-active={seg.phase === moon.phase || undefined}>
+            <span className="rs-guardian-fill" style={{ width: `${seg.fill * 100}%`, opacity: seg.phase === moon.phase ? 1 : .55 }} />
+          </span>)}
+        </span>
+      </div>
+      {queen && <GuardianCountdown label="TELEPORT" ticks={queen.phaseTimer} total={QUEEN_PHASE_INTERVAL} color="#c39bff" />}
     </div>;
   }
   const extra = boss === 'devourer' && bodies.length > 1 ? ` ×${bodies.length}` : '';
@@ -5307,7 +5916,7 @@ function TutorialPanel({ tutorial }: { tutorial: NonNullable<GameState['tutorial
         FIRST ORBIT · {done ? 'TUTORIAL COMPLETE' : `STEP ${tutorial.step + 1}/${TUTORIAL_STEPS.length - 1}`}
       </div>
       <div style={{ marginTop: 4, color: cleared || done ? '#c6ff8a' : '#ff8fb3', fontFamily: 'var(--font-pixel)', fontSize: 15, lineHeight: 1.7 }}>
-        {cleared ? '✓ NICE!' : step.title}
+        {cleared ? 'NICE!' : step.title}
       </div>
       <div style={{ color: '#e1e4f4', fontFamily: 'var(--font-mono)', fontSize: 14, lineHeight: 1.5 }}>
         {tutorial.retry && step.id === 'meteor' ? 'Too close! The meteor hit you. Try again: leave the room this time.' : tutorialInstruction(step.id,step.text)}
@@ -5352,9 +5961,8 @@ function TeleportMinimap({ state, onPick, available: availableRooms }: { state: 
   return (
     <div className="rs-teleport-grid" style={{ position: 'relative', width: w*scale, height: h*scale }}>
       <canvas ref={ref} width={w} height={h} aria-label="Map" style={{ width: w*scale, height: h*scale, imageRendering: 'pixelated', display: 'block' }} />
-      {[0, 1, 2, 3].map(ch => {
-        const [r1, c1, r2, c2] = CHAMBER_BOUNDS[ch];
-        const available = (availableRooms ?? state.teleportDestOptions).includes(ch), color = (isSingularityMap(state) ? VOID_CHAMBER_COLORS : isSaturnMap(state) ? SATURN_CHAMBER_COLORS : state.jupiter ? jupiterColors(state) : state.sun ? SUN_CHAMBER_COLORS : state.neptune ? OCEAN_CHAMBER_COLORS : state.gaia ? GAIA_CHAMBER_COLORS : isMoonMap(state) ? MOON_CHAMBER_COLORS : CHAMBER_COLORS)[ch];
+      {CHAMBER_BOUNDS.map(([r1, c1, r2, c2], ch) => {
+        const available = (availableRooms ?? state.teleportDestOptions).includes(ch), color = (worldTheme(state)?.colors ?? (isBinaryMap(state) ? BINARY_CHAMBER_COLORS : isSaturnMap(state) ? SATURN_CHAMBER_COLORS : state.jupiter ? jupiterColors(state) : state.sun ? SUN_CHAMBER_COLORS : state.neptune ? OCEAN_CHAMBER_COLORS : state.gaia ? GAIA_CHAMBER_COLORS : isMoonMap(state) ? MOON_CHAMBER_COLORS : CHAMBER_COLORS))[ch];
         return (
           <button key={ch} className="rs-teleport-room" disabled={!available} aria-label={`[${ch + 1}] ${CHAMBER_LABELS[ch]}`}
             title={available ? `Teleport to ${CHAMBER_LABELS[ch]} (${ch + 1})` : undefined}
@@ -5388,7 +5996,7 @@ function BossSpawnButton({ type, onSpawn }: { type: BossType; onSpawn: () => voi
         ctx.save();ctx.translate(index?31:12,index?15:30);ctx.scale(.42,.42);drawEncounterEnemy(ctx,enemy,0,0,40,false);ctx.restore();
       }
     }else{
-      ctx.save();ctx.translate(22,25);const scale=type==='splitter_queen'?.54:.37;ctx.scale(scale,scale);if(!drawSaturnUnit(ctx,enemy,0,0,40))drawEnemy(ctx,enemy,0,0,40);ctx.restore();
+      ctx.save();ctx.translate(22,25);const scale=type==='splitter_queen'?.54:.37;ctx.scale(scale,scale);if(!drawSaturnUnit(ctx,enemy,0,0,40)&&!drawSiriusUnit(ctx,enemy,0,0,40))drawEnemy(ctx,enemy,0,0,40);ctx.restore();
     }
     ctx.restore();
   },[type,drawEncounterEnemy]);
@@ -5486,12 +6094,14 @@ function TouchAbilityButton({ label, color, size = 56, onDown, onUp, className, 
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EnemyPortrait({type,size=88}:{type:GameState['enemies'][0]['type'];size?:number}){
+export function EnemyPortrait({type,size=88,variant}:{type:GameState['enemies'][0]['type'];size?:number;variant?:'golden'|'copy'|'gnasher'}){
  const ref=useRef<HTMLCanvasElement>(null);
  useEffect(()=>{const ctx=ref.current?.getContext('2d');if(!ctx)return;const cfg=ENEMY_CONFIGS[type];
- const enemy={id:0,type,x:0,y:0,tileX:0,tileY:0,hp:cfg.maxHp,maxHp:cfg.maxHp,path:[],flashTicks:0,healFlashTicks:0,shootTicks:0,windupTicks:0,phaseTimer:10000,icyShieldHP:0} as unknown as GameState['enemies'][0];
- ctx.clearRect(0,0,96,96);ctx.save();ctx.translate(48,52);const scale=isBossType(type)?(type==='splitter_queen'?.9:.7):1.15;ctx.scale(scale,scale);if(!drawSaturnUnit(ctx,enemy,0,0,40))drawEnemy(ctx,enemy,0,0,40);ctx.restore();
- },[type]);
+ const enemy={id:0,type,x:0,y:0,tileX:0,tileY:0,targetTileX:0,targetTileY:0,stepProgress:0,chargeDirX:0,chargeDirY:0,attackTimer:99,pole:'north',hp:cfg.maxHp,maxHp:cfg.maxHp,path:[],pathTimer:0,flashTicks:0,healFlashTicks:0,shootTicks:0,windupTicks:type==='lifebloom'?120:0,phaseTimer:10000,icyShieldHP:0,goldenSoul:variant==='golden',...(variant==='copy'||variant==='gnasher'?{devourer:{generation:1,challenge:true,gnasher:variant==='gnasher'}}:{})} as unknown as GameState['enemies'][0];
+ // A Queen Illusion wears the Queen's Echo look, as in the fight; Venus burrowers are shown surfaced.
+ const shown=type==='moon_illusion'?{...enemy,type:'queen_echo'} as GameState['enemies'][0]:type==='dune_worm'||type==='sand_scorpion'?{...enemy,burrow:'up'} as GameState['enemies'][0]:enemy;
+ ctx.clearRect(0,0,96,96);ctx.save();ctx.translate(48,52);const scale=type==='moon_illusion'?.9:isBossType(type)?(type==='splitter_queen'?.9:.7):1.15;ctx.scale(scale,scale);if(!drawSaturnUnit(ctx,shown,0,0,40)&&!drawSiriusUnit(ctx,shown,0,0,40))drawEnemy(ctx,shown,0,0,40);ctx.restore();
+ },[type,variant]);
  return <canvas ref={ref} width={96} height={96} aria-label={type.replaceAll('_',' ')} style={{width:size,height:size,objectFit:'contain'}}/>;
 }
 
@@ -5499,6 +6109,51 @@ export function SkillPortrait({kind}:{kind:SpecialSkill}){
  const ref=useRef<HTMLCanvasElement>(null);
  useEffect(()=>{const ctx=ref.current?.getContext('2d');if(!ctx)return;const state=createInitialState();state.specialSkill=kind;ctx.clearRect(0,0,128,128);ctx.save();ctx.translate(64,70);ctx.scale(1.05,1.05);drawPlayer(ctx,0,0,state,40);ctx.restore();},[kind]);
  return <canvas width={128} height={128} ref={ref} aria-label={kind+' player suit'} style={{width:96,height:96}}/>;
+}
+
+/** Render a single cinematic forecourt with the gameplay scenery and guardian models. */
+export function createArrivalScenery(id: Exclude<TrialBody, 'sun'>, boss: BossType) {
+  const state = createModeState('trial', boss);
+  godSpawnBoss(state, boss, { playArrivalSound: false });
+  const guardians = state.enemies.filter(enemy => enemy.type === boss);
+  for (const guardian of guardians) guardian.visualSpawnTicks = 0;
+  const layout = ARRIVAL_COURTS[id];
+  const cover = new Set<number>();
+  for (const row of state.map) row.fill(T_WALL);
+  layout.forEach((row, y) => Array.from(row).forEach((tile, x) => {
+    if (tile === '.') state.map[y + 3][x + 2] = T_FLOOR;
+    if (tile === '#') cover.add((y + 3) * MAP_COLS + x + 2);
+  }));
+  state.frostIceTiles = [];
+  const camX = 2 * TILE_SIZE - 256, camY = 3 * TILE_SIZE - 119;
+  return {
+    backdrop(ctx: CanvasRenderingContext2D, width: number, height: number, tick: number, pan: number) {
+      state.gameTick = tick;
+      drawWorldBackdrop(ctx, state, width, height, camX + pan, camY, tick);
+    },
+    court(ctx: CanvasRenderingContext2D, width: number, height: number, tick: number) {
+      state.gameTick = tick;
+      drawBattlefield(ctx, state, camX, camY, width, height, tick, cover);
+    },
+    guardians(ctx: CanvasRenderingContext2D, tick: number, advance: number) {
+      const previous = hideBossHeadBars;
+      hideBossHeadBars = true;
+      try {
+        guardians.forEach((enemy, i) => {
+          const split = guardians.length > 1 ? (i === 0 ? -1 : 1) : 0;
+          const scale = (guardians.length > 1 ? 1.5 : 100 / (TILE_SIZE * ENEMY_CONFIGS[boss].bodyFraction)) + advance * .12;
+          ctx.save();
+          try {
+            ctx.translate(640 + split * (103 - 20 * advance), 315 + advance * 32 + split * 15);
+            ctx.scale(scale, scale);
+            if (!drawSaturnUnit(ctx, enemy, 0, 0, tick) && !drawSiriusUnit(ctx, enemy, 0, 0, tick)) {
+              drawEnemy(ctx, enemy, 0, 0, tick, false, false, -1, true);
+            }
+          } finally { ctx.restore(); }
+        });
+      } finally { hideBossHeadBars = previous; }
+    },
+  };
 }
 
 export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; trialId?: TrialBody }) {
@@ -5545,9 +6200,11 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   },[]);
   const singularityMap = trialInfo?.boss === 'devourer';
   const saturnMap = trialInfo?.boss === 'frost_warden';
+  const binaryMap = trialInfo?.boss === 'astral_twins';
+  const siriusMap = trialInfo?.boss === 'blind_prayer', venusMap = trialInfo?.boss === 'aegis_sentinel';
   const sunMap = trialInfo?.boss === 'fiery_king', jupiterMap = trialInfo?.boss === 'storm_reaper';
   const neptuneMap = trialInfo?.boss === 'sea_chanter', gaiaMap = trialInfo?.boss === 'thorn_weaver', moonMap = trialInfo?.boss === 'splitter_queen';
-  const [showRules, setShowRules] = useState(singularityMap || saturnMap || jupiterMap || sunMap || neptuneMap || gaiaMap || moonMap); // play starts at once (Neptune opens its own sheet first); RULES opens the sheet
+  const [showRules, setShowRules] = useState(venusMap || singularityMap || siriusMap || saturnMap || binaryMap || jupiterMap || sunMap || neptuneMap || gaiaMap || moonMap); // play starts at once (Neptune opens its own sheet first); RULES opens the sheet
   const [, forceRender] = useState(0);
   const [isGodQuery, setIsGodQuery] = useState(false);
   useEffect(()=>{
@@ -5694,8 +6351,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     window.addEventListener('ruby-save-run',save);window.addEventListener('keydown',desktopKey);window.addEventListener('blur',pause);
     const autosave=window.setInterval(save,15000);
     window.addEventListener('blur',save);window.addEventListener('pagehide',save);
-    const cancelCharge = () => { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if(stateRef.current?.saturn?.charging)cancelSnowball(stateRef.current); if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); };
-    const onVisibility = () => { if (document.hidden) { save();cancelCharge(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); } };
+    const cancelCharge = () => { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); };
+    const onVisibility = () => { if (document.hidden) { save();cancelCharge(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); } };
     window.addEventListener('blur', cancelCharge);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
@@ -5710,7 +6367,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
   // ── Game loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (showRules) { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if(stateRef.current?.saturn?.charging)cancelSnowball(stateRef.current); if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); return; }
+    if (showRules) { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); return; }
     const canvas = canvasRef.current;
     if (!canvas) return;
     frameMeter.current=new FrameMeter();
@@ -5724,8 +6381,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     // instead of being tied to however often requestAnimationFrame happens to fire.
     function runOneTick(state: GameState) {
       tickRef.current++;
+
       if (state.gamePhase !== 'playing') {
-        snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if(state.saturn?.charging)cancelSnowball(state);
+        snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;
         if (state.sun) state.sun.charging = false;
         mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false;
       }
@@ -5733,7 +6391,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if(mouseDownTimeRef.current>0&&(state.waveCooldown>0||state.gamePhase!=='playing'))mouseDownTimeRef.current=Date.now();
       const chargingMsNow = mouseDownTimeRef.current > 0 ? Date.now() - mouseDownTimeRef.current : 0;
       // Full charge takes longer while chilled by a Frost Warden sharing the player's chamber
-      const waveChargeMsNow = (isPlayerChilled(state) ? (saturnShieldChilled(state) ? 1000/SATURN.shieldedChillMult : 1500) : 1000)*(state.build.quickWave ? .65 : 1);
+      const waveChargeMsNow = (isPlayerChilled(state) ? 1500 : 1000)*(state.build.quickWave ? .65 : 1);
       // Auto-fire wave once the hold reaches full charge (only if wave not on cooldown)
       if (chargingMsNow >= waveChargeMsNow && state.gamePhase === 'playing' && state.waveCooldown <= 0) {
         activateWave(state);
@@ -5751,7 +6409,10 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       }
       // Auto-fire bullet while right mouse button is held — fires at exactly the same rate
       // as spam-clicking, since useBullet is already self-gated by the raw bulletCooldown.
-      if ((rightMouseHeldRef.current || keyboardBulletHeldRef.current) && state.gamePhase === 'playing' && state.bulletCooldown <= 0) {
+      if (state.gambit) {
+        if (rightMouseHeldRef.current || keyboardBulletHeldRef.current) holdSlot(state, 1);
+        if (snowballMouseHeldRef.current || snowballKeyHeldRef.current) holdSlot(state, 2);
+      } else if ((rightMouseHeldRef.current || keyboardBulletHeldRef.current) && state.gamePhase === 'playing' && state.bulletCooldown <= 0) {
         useBullet(state);
       }
       const previousPhase=state.gamePhase;
@@ -5771,6 +6432,11 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       // Cap a single frame's catch-up so a backgrounded tab / debugger pause doesn't dump
       // a huge burst of ticks the instant the tab regains focus.
       if (delta > TARGET_MS * 5) delta = TARGET_MS * 5;
+      if (state.trial?.boss === 'blind_prayer') {
+        const current = state.trial.siriusLightBlend ?? (state.trial.siriusLight ? 1 : 0);
+        const target = state.trial.siriusLight ? 1 : 0;
+        state.trial.siriusLightBlend = current + Math.sign(target - current) * Math.min(Math.abs(target - current), delta / 1800);
+      }
       accumulator += delta;
 
       // Fixed-timestep: run exactly as many 60Hz ticks as real time has actually elapsed,
@@ -5797,7 +6463,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if (t % 6 === 0 && t !== lastHudTick) { lastHudTick=t;rerender(); }
     }
     rafRef.current = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(rafRef.current); stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); pauseAmbientEventSounds(); };
+    return () => { cancelAnimationFrame(rafRef.current); stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); };
   }, [showRules, rerender]);
 
   // ── Canvas resize ─────────────────────────────────────────────────────────
@@ -5816,17 +6482,21 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     return () => window.removeEventListener('resize', resize);
   }, []);
 
-  // C and middle-click share the same map skill and cooldown checks.
+  // C and middle-click share the same primal skill and cooldown checks.
   const activateMapSkill = useCallback((state: GameState) => {
     if(state.gamePhase==='laserTarget'){cancelSkyLaser(state);playUiSfx('close');rerender();return;}
     if(state.gamePhase!=='playing')return;
     let used=false;
-    if(state.saturn){used=state.saturn.charging || beginSnowball(state);mouseDownTimeRef.current=0;rightMouseHeldRef.current=pointerLaserHeldRef.current=keyboardLaserHeldRef.current=keyboardBulletHeldRef.current=false;stopChargeSound();}
+    if(state.saturn)used=useSaturnIntercept(state);
     else if(state.jupiter)used=useVoltFence(state);
     else if(state.sun)used=useCoolingWave(state);
     else if(state.gaia)used=useSunfire(state);
     else if(state.moon)used=useMoonMark(state);
     else if(state.neptune)used=canOpenSkyLaser(state)&&openSkyLaser(state);
+    else if(state.binary)used=swapPole(state); // swapPole plays its own cast sound
+    else if(state.sirius)used=useHalo(state);
+    else if(state.venus)used=useSandSweep(state);
+    else if(state.trial?.devourer)used=pressGravityHook(state);
     else return;
     if(!used)playUiSfx('locked');
     else if((state.gamePhase as string)==='laserTarget')playUiSfx('teleport');
@@ -5861,7 +6531,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           return;
         }
         if(e.code==='Space'){e.preventDefault();return;}
-        const numMap: Record<string, number> = { '1': 0, '2': 1, '3': 2, '4': 3 };
+        const numMap: Record<string, number> = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, '7': 6 };
         const dest = numMap[key];
         if (dest !== undefined && state.teleportDestOptions.includes(dest)) {
           doTeleport(state, dest); rerender(); return;
@@ -5874,13 +6544,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         if (e.repeat || keyboardLaserHeldRef.current) return;
         keyboardLaserHeldRef.current = true;
         if (!mouseDownTimeRef.current) mouseDownTimeRef.current = Date.now();
-        useLaser(state); rerender(); return;
+        if (state.gambit) pressSlot(state, 0); else useLaser(state); rerender(); return;
       }
       if (key.toLowerCase() === 'l') {
         e.preventDefault();
         if (e.repeat || keyboardBulletHeldRef.current) return;
         keyboardBulletHeldRef.current = true;
-        useBullet(state); rerender(); return;
+        if (state.gambit) pressSlot(state, 1); else useBullet(state); rerender(); return;
       }
 
       // Movement
@@ -5893,7 +6563,6 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       const dir = dirMap[key];
       if (dir) {
         e.preventDefault();
-        if(state.saturn?.charging){state.playerDirX=dir[0];state.playerDirY=dir[1];}
         state.playerQueuedDirX = dir[0];
         state.playerQueuedDirY = dir[1];
         return;
@@ -5912,7 +6581,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         return;
       }
       if (key === 'c' || key === 'C') {
-        e.preventDefault();if(!e.repeat){snowballKeyHeldRef.current=true;activateMapSkill(state);}return;
+        e.preventDefault();if(!e.repeat){snowballKeyHeldRef.current=true;if(state.gambit)pressSlot(state,2);else activateMapSkill(state);}return;
       }
       if (key === 'r') { e.preventDefault(); useSpeedBoost(state); rerender(); return; }
       if (key === 'e' || key === 'E') {
@@ -5924,14 +6593,14 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
     const onKeyUp = (e: KeyboardEvent) => {
       const key=gameKey(e);
-      if(key.toLowerCase()==='c'){snowballKeyHeldRef.current=false;if(stateRef.current?.saturn&&!snowballMouseHeldRef.current){releaseSnowball(stateRef.current);rerender();}return;}
+      if(key.toLowerCase()==='c'){snowballKeyHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);return;}if(!snowballMouseHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
       if (key === ' ' && stateRef.current?.sun) stateRef.current.sun.charging = false;
       if (key.toLowerCase() === 'k') {
         keyboardLaserHeldRef.current = false;
         if (!pointerLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
         return;
       }
-      if (key.toLowerCase() === 'l') { keyboardBulletHeldRef.current = false; return; }
+      if (key.toLowerCase() === 'l') { keyboardBulletHeldRef.current = false; if (stateRef.current?.gambit) releaseSlot(stateRef.current, 1); return; }
       const state = stateRef.current;
       if (!state) return;
       const dirMap: Record<string, [number, number]> = {
@@ -5947,9 +6616,17 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       }
     };
 
+    // Capture release even over the God panel or another element that stops bubbling.
+    const onPrimalMouseUp=(event:MouseEvent)=>{
+      if(mouseControl(event.button)!=='mapSkill')return;
+      snowballMouseHeldRef.current=false;
+      if(!snowballKeyHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}
+    };
+    window.addEventListener('mouseup',onPrimalMouseUp,true);
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKeyUp);
     return () => {
+      window.removeEventListener('mouseup',onPrimalMouseUp,true);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKeyUp);
     };
@@ -5961,6 +6638,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     const action=mouseControl(e.button);
     if(action==='mapSkill'){
       e.preventDefault();
+      if(state?.gambit&&!showRules){snowballMouseHeldRef.current=true;pressSlot(state,2);rerender();return;} // Star Gambit: the middle slot
       if(state&&!showRules){snowballMouseHeldRef.current=true;activateMapSkill(state);}
       return;
     }
@@ -5969,21 +6647,21 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
       pointerLaserHeldRef.current = true;
       if (!mouseDownTimeRef.current) mouseDownTimeRef.current = Date.now();
-      useLaser(state);
+      if (state.gambit) pressSlot(state, 0); else useLaser(state); // Star Gambit: the left slot's weapon; holding still charges the wave
       rerender();
     } else if (action === 'bullet') {
       e.preventDefault();
       rightMouseHeldRef.current = true;
-      useBullet(state);
+      if (state.gambit) pressSlot(state, 1); else useBullet(state);
       rerender();
     }else if(action==='boost'){useSpeedBoost(state);rerender();}else if(action==='bomb'){useBomb(state);rerender();}else if(action==='ruby'){toggleCarryRuby(state);rerender();}else if(action==='heal'){if(state.sun)state.sun.charging=true;if(!sunStationNearPlayer(state))healRuby(state);rerender();}else if(action==='teleport'){if(tryActivateTeleport(state))playUiSfx('teleport');rerender();}else if(action==='celestial'){useSpecialSkill(state);rerender();}
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     const action=mouseControl(e.button);
-    if(action==='mapSkill'){snowballMouseHeldRef.current=false;if(stateRef.current?.saturn&&!snowballKeyHeldRef.current){releaseSnowball(stateRef.current);rerender();}return;}
+    if(action==='mapSkill'){snowballMouseHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);rerender();return;}if(!snowballKeyHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
     if(action==='heal'&&stateRef.current?.sun)stateRef.current.sun.charging=false;
-    if (action === 'bullet') { rightMouseHeldRef.current = false; return; }
+    if (action === 'bullet') { rightMouseHeldRef.current = false; if (stateRef.current?.gambit) { releaseSlot(stateRef.current, 1); rerender(); } return; }
     if (action !== 'laser') return;
     pointerLaserHeldRef.current = false;
     if (!keyboardLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
@@ -5991,7 +6669,6 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
   const handleMouseLeave = () => {
     snowballMouseHeldRef.current=false;
-    if(stateRef.current?.saturn?.charging&&!snowballKeyHeldRef.current)cancelSnowball(stateRef.current);
     rightMouseHeldRef.current = false; pointerLaserHeldRef.current = false;
     if (!keyboardLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
   };
@@ -6034,9 +6711,12 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     s.godMode = stateRef.current?.godMode ?? false;
     s.immortal = stateRef.current?.immortal ?? false;
     s.noMobs = stateRef.current?.noMobs ?? false;
+    if (s.trial?.boss === 'blind_prayer' && !s.sirius) {
+      s.trial.siriusLight = stateRef.current?.trial?.siriusLight ?? false;
+      s.trial.siriusLightBlend = stateRef.current?.trial?.siriusLightBlend ?? (s.trial.siriusLight ? 1 : 0);
+    }
     if (s.sun) godSetNoWisps(s, stateRef.current?.sun?.noWisps ?? false);
     s.noBossSpawns = stateRef.current?.noBossSpawns ?? false;
-    if(s.saturn&&stateRef.current?.saturn?.permaShield){s.saturn.permaShield=true;s.playerShieldHP=Math.max(40,stateRef.current.playerShieldHP);s.rubyShieldHP=Math.max(40,stateRef.current.rubyShieldHP);s.playerSaturnShield=s.rubySaturnShield=true;}
     stateRef.current = s;
     tickRef.current = 0;
     rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false;
@@ -6063,22 +6743,30 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const carrying = state?.playerCarryingRuby ?? true;
   const godPanelTop = 8;
   const godPanelWidth = godCollapsed ? 180 : 320;
-  const prayerSpawnWarning = phase === 'playing' && (state?.bossSpawnTicks ?? 0) > 0 && !!state && isMovementReversed(state);
-  const playerStatuses: { key: string; label: string; color: string; seconds?: number; progress?: number }[] = [];
+  const prayerSpawnWarning = phase === 'playing' && (state?.bossSpawnTicks ?? 0) > 0 && !!state && !state.sirius && isMovementReversed(state);
+  const playerStatuses: { key: string; label: string; color: string; progress?: number; opacity?: number }[] = [];
   if(state){
-    if((state.bulletStunUntil??0)>state.gameTick)playerStatuses.push({key:'stun-bullets',label:'STUN BULLETS · +30% DAMAGE',color:'#fff2a0',seconds:(state.bulletStunUntil!-state.gameTick)/60,progress:(state.bulletStunUntil!-state.gameTick)/SHOOTER.rewardTicks});
-    if((state.empoweredUntil??0)>state.gameTick)playerStatuses.push({key:'empowered',label:'EMPOWERED · +20% DAMAGE',color:'#ff8a5a',seconds:(state.empoweredUntil!-state.gameTick)/60,progress:(state.empoweredUntil!-state.gameTick)/ENCHANTER.rewardTicks});
-    if((state.regenUntil??0)>state.gameTick)playerStatuses.push({key:'regen',label:'REGENERATING',color:'#66cc88',seconds:(state.regenUntil!-state.gameTick)/60,progress:(state.regenUntil!-state.gameTick)/BLEEDER.regenTicks});
+    if((state.rubyCopyUntil??0)>state.gameTick)playerStatuses.push({key:'ruby-copy',label:'RUBY COPIES ATTACKS',color:'#ffaec1',progress:(state.rubyCopyUntil!-state.gameTick)/REFLECTOR.rewardTicks});
+    if((state.stormHasteTicks??0)>0)playerStatuses.push({key:'storm-haste',label:'STORM HASTE',color:'#7fe9d4',progress:state.stormHasteTicks!/SPECIAL_REAPER_HASTE_TICKS});
+    if(state.jammerWaveReady)playerStatuses.push({key:'teleport-wave',label:'TELEPORT WAVE READY',color:'#f5c4df'});
+    if(teleportJammed(state))playerStatuses.push({key:'teleport-jammed',label:'TELEPORT JAMMED',color:'#ec9bca'});
+    if(playerCCImmune(state))playerStatuses.push({key:'cc-immune',label:'CC IMMUNE',color:'#a5ffde',progress:(state.ccImmuneUntil!-state.gameTick)/GRAPPLER.rewardTicks});
+    if((state.heavyImpactUntil??0)>state.gameTick)playerStatuses.push({key:'heavy-impact',label:'HEAVY IMPACT',color:'#ffc36a',progress:(state.heavyImpactUntil!-state.gameTick)/DROPPER.rewardTicks});
+    if((state.explosiveBulletsUntil??0)>state.gameTick)playerStatuses.push({key:'explosive-bullets',label:'EXPLOSIVE BULLETS',color:'#ffb070',progress:(state.explosiveBulletsUntil!-state.gameTick)/TRAPPER.rewardTicks});
+    if((state.bulletStunUntil??0)>state.gameTick)playerStatuses.push({key:'stun-bullets',label:'STUN BULLETS · +30% DAMAGE',color:'#fff2a0',progress:(state.bulletStunUntil!-state.gameTick)/SHOOTER.rewardTicks});
+    if((state.empoweredUntil??0)>state.gameTick)playerStatuses.push({key:'empowered',label:'EMPOWERED · +20% DAMAGE',color:'#ff8a5a',progress:(state.empoweredUntil!-state.gameTick)/ENCHANTER.rewardTicks});
+    if((state.regenUntil??0)>state.gameTick)playerStatuses.push({key:'regen',label:'REGENERATING',color:'#66cc88',progress:(state.regenUntil!-state.gameTick)/BLEEDER.regenTicks});
     if(state.rubyStolenBy!==undefined)playerStatuses.push({key:'ruby-stolen',label:'RUBY STOLEN · DEFEAT THE SNATCHER',color:'#ffb35a'});
-    if((state.bleedingUntil??0)>state.gameTick)playerStatuses.push({key:'bleeding',label:'BLEEDERED · NO HEALING',color:'#ff6b78',seconds:(state.bleedingUntil!-state.gameTick)/60,progress:(state.bleedingUntil!-state.gameTick)/BLEEDER.curseTicks});
-    if(state.playerFrozenTicks>0&&state.playerStunned)playerStatuses.push({key:'stunned',label:'STUNNED',color:'#ffe680',seconds:state.playerFrozenTicks/60,progress:state.playerFrozenTicks/COMET.stunTicks});
-    else if(state.playerFrozenTicks>0)playerStatuses.push({key:'frozen',label:'FROZEN',color:'#b4eaff',seconds:state.playerFrozenTicks/60,progress:state.playerFrozenTicks/90});
+    if((state.bleedingUntil??0)>state.gameTick)playerStatuses.push({key:'bleeding',label:'BLEEDERED · NO HEALING',color:'#ff6b78',progress:(state.bleedingUntil!-state.gameTick)/BLEEDER.curseTicks});
+    if(state.playerFrozenTicks>0&&state.playerStunned)playerStatuses.push({key:'stunned',label:'STUNNED',color:'#ffe680',progress:state.playerFrozenTicks/COMET.stunTicks});
+    else if(state.playerFrozenTicks>0)playerStatuses.push({key:'frozen',label:'FROZEN',color:'#b4eaff',progress:state.playerFrozenTicks/90});
     else if(isPlayerChilled(state))playerStatuses.push({key:'chilled',label:'CHILLED · MOVE & ATTACK SLOW',color:'#8ecfe9'});
-    if((state.jupiter?.slowTicks??0)>0)playerStatuses.push({key:'static',label:'STATIC · SLOWED',color:'#9fd8ff',seconds:state.jupiter!.slowTicks/60,progress:state.jupiter!.slowTicks/JUPITER.shockSlowTicks});
+    if((state.jupiter?.slowTicks??0)>0)playerStatuses.push({key:'static',label:'STATIC · SLOWED',color:'#9fd8ff',progress:state.jupiter!.slowTicks/JUPITER.shockSlowTicks});
     if(isMovementReversed(state))playerStatuses.push({key:'reversed',label:'CONTROLS REVERSED',color:'#ffe477'});
-    if((state.laserStunTicks??0)>0)playerStatuses.push({key:'laser-stun',label:'LASER STUN',color:'#ff8aa6',seconds:state.laserStunTicks!/60,progress:state.laserStunTicks!/LANCER.rewardTicks});
+    if((state.laserStunTicks??0)>0)playerStatuses.push({key:'laser-stun',label:'LASER STUN',color:'#ff8aa6',progress:state.laserStunTicks!/LANCER.rewardTicks});
     if(state.build.decoy)playerStatuses.push({key:'pyxis-decoy',label:'DECOY · '+CHAMBER_LABELS[chamberOfTile(state.build.decoy.tileX,state.build.decoy.tileY)],color:'#c6b8ff',progress:state.build.decoy.ticks/360});
     if(state.rubyPlacedFlashTicks>0)playerStatuses.push({key:'ruby-placed',label:'RUBY PLACED',color:'#ffa5c3',progress:state.rubyPlacedFlashTicks/120});
+    if(state.teleportCooldown>0)playerStatuses.push({key:'teleport-cooldown',label:'TELEPORT COOLDOWN',color:'#8ad7ef',progress:state.teleportCooldown/TELEPORT_COOLDOWN,opacity:teleportCooldownOpacity(state.teleportCooldown)});
   }
 
   // HP percentages
@@ -6207,6 +6895,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-stage { min-width: 100px; padding: 7px 16px; text-align: center; }
         .rs-guardian { width: min(330px, 24vw); padding: 6px 0; text-align: center; }
         .rs-guardian-name { display: block; margin-bottom: 7px; white-space: nowrap; font-family: var(--font-pixel); font-size: 11px; letter-spacing: .1em; color: var(--guardian); text-shadow: 0 0 10px var(--guardian); }
+        .rs-guardian-name[style*="font-size"] { transform: translateY(3.5px); }
         .rs-guardian-bar { display: block; height: 16px; box-sizing: border-box; padding: 2px; border: 2px solid color-mix(in srgb, var(--guardian) 70%, #ffffff); background: #0b1020; }
         .rs-guardian-segments { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
         .rs-guardian-bar { position: relative; }
@@ -6214,6 +6903,10 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-guardian-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #e8fbff; box-shadow: 0 0 4px #9fe4ff; }
         .rs-guardian-fill { display: block; height: 100%; background: var(--guardian); box-shadow: 0 0 10px var(--guardian), inset 0 -4px 0 rgba(0,0,0,.25), inset 0 3px 0 rgba(255,255,255,.3); transition: width 160ms linear; }
         .rs-jupiter-guardian { display:flex; align-items:center; gap:10px; }
+        .rs-venus-guardian { display: grid; width: min(400px, 29vw); grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: center; }
+        .rs-venus-phase { font-size: clamp(7px, .72vw, 11px); white-space: normal; }
+        .rs-venus-last-totem { box-sizing: border-box; min-width: 64px; padding: 5px 6px; border: 1px solid var(--guardian); background: #21180f; color: #e3c08a; font: 10px var(--font-pixel); white-space: nowrap; }
+        .rs-venus-last-totem strong { display: block; margin-top: 4px; color: #fff1d0; font-size: 18px; font-weight: 400; }
         .rs-jupiter-vitals { flex:1; min-width:0; }
         .rs-sun-guardian { display: flex; align-items: center; gap: 10px; }
         .rs-sun-health { flex: 1; min-width: 0; }
@@ -6224,6 +6917,11 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-sun-extinguished { display: block; margin-top: 3px; font-family: var(--font-mono); font-size: 10px; color: #d5eff5; }
         .rs-stage > span { display: block; color: #dfc4ff; font-size: 12px; font-weight: 700; letter-spacing: .22em; margin-bottom: 5px; }
         .rs-stage > strong { display: block; font-family: var(--font-pixel); font-size: 30px; line-height: 1.15; color: #f4e7ff; text-shadow: 0 0 14px #bb75ff99; }
+        @media (max-width: 1279px) { .rs-gambit-hud { --batt-w: 54px; } } /* room for Glint beside the energy bar */
+        .rs-wave > span { color: #ffd27a; } .rs-wave > strong { color: #fff3c8; text-shadow: 0 0 14px #ffb84d99; }
+        .rs-wave { position: relative; padding-bottom: 16px; }
+        .rs-wave > i { position: absolute; left: 50%; bottom: 5px; transform: translateX(-50%); display: block; width: 150px; height: 6px; box-sizing: border-box; border: 1px solid #ffd27a88; background: rgba(0,0,0,.4); }
+        .rs-wave > i > b { display: block; height: 100%; background: #ffd27a; box-shadow: 0 0 6px #ffb84d; }
         .rs-time { display: flex; gap: 6px; align-items: center; font-size: var(--font-stat); color: #b8cce0; font-weight: 700; }
         .rs-time > span:last-child { font-family: var(--font-pixel); font-size: var(--font-score); color: #a5bfd7; }
         @media (min-width: 850px) and (max-width: 1300px) {
@@ -6246,9 +6944,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           .rs-hud-vitals { gap: 6px 10px; }
           .rs-time { flex-direction: column; gap: 4px; }
         }
-        .rs-player-status { position: absolute; top: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 7px; max-width: calc(100% - 240px); pointer-events: none; }
+        .rs-player-status { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-height: calc(100% - 24px); overflow: hidden; pointer-events: none; }
         .rs-status-tag { position: relative; padding: 6px 9px 8px; background: #0b1320ed; border: 1px solid; font-family: var(--font-mono); font-size: .78rem; font-weight: 700; line-height: 1.4; }
-        .rs-status-time { margin-left: 8px; opacity: .8; font-weight: 400; }
+        .rs-status-tag[data-status="teleport-cooldown"] { transition: opacity 100ms linear; }
         .rs-status-progress { position: absolute; bottom: 0; left: 0; height: 2px; background: currentColor; }
         .ruby-star-ui .rs-hud button {
           min-height: 42px; padding: 9px 12px !important; border: 2px solid #7198be !important;
@@ -6302,7 +7000,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         }
       `}</style>
 
-      <style>{`.rs-pause-panel .btn{width:100%;text-align:left;justify-content:flex-start;font-family:var(--font-pixel);font-size:10px;line-height:1.6;padding:9px 12px;background:#18263c;border:1px solid #4a6380;color:#dfedf5}.rs-pause-panel .btn:hover{background:#243b55;border-color:#9bc7d8}`}</style>
+      <style>{`.rs-pause-panel .btn{width:100%;text-align:left;justify-content:flex-start;font-family:var(--font-pixel);font-size:10px;line-height:1.6;padding:9px 12px;background:#10192be8;border:1px solid #6f93ad;box-shadow:inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c;letter-spacing:.08em;color:#dfedf5}.rs-pause-panel .btn:hover{background:#172741;border-color:#a8d8ea}`}</style>
       {(showPause||resumePrompt)&&<div role="dialog" aria-modal="true" aria-label={resumePrompt?'Resume saved run':'Paused'} onClick={e=>{if(e.target===e.currentTarget&&!resumePrompt){playUiSfx('close');setShowPause(false);setShowRules(false);rerender();}}} style={{position:'fixed',inset:0,zIndex:300,background:'#050810ed',display:'grid',placeItems:'center'}} onKeyDown={e=>e.stopPropagation()}>
         <div className="rs-pause-panel" style={{border:'2px solid #9aa8ff',background:'#10131f',padding:28,color:'#e7e9f6',width:440,maxWidth:"calc(100vw - 48px)",boxSizing:"border-box",fontFamily:"var(--font-pixel)",textAlign:"left",display:'grid',gap:12}}>
           <h2 style={{fontSize:16,margin:"0 0 4px",color:'#ff6f9f'}}>{resumePrompt?'SAVED ORBIT':'PAUSED'}</h2>
@@ -6337,15 +7035,16 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       <RulesModal
         isOpen={showRules && !showPause && !resumePrompt}
         onClose={() => { setShowRules(false); startMusic(); }}
-        title={singularityMap ? ':: THE SINGULARITY' : saturnMap ? ':: SATURN' : jupiterMap ? ':: JUPITER' : sunMap ? ':: THE SUN' : neptuneMap ? ':: NEPTUNE' : gaiaMap ? ':: GAIA' : moonMap ? ':: THE MOON' : ':: RUBY STAR'}
+        title={singularityMap ? ':: THE SINGULARITY' : trialInfo?.boss === 'aegis_sentinel' ? ':: VENUS' : trialInfo?.boss === 'blind_prayer' ? ':: SIRIUS' : saturnMap ? ':: SATURN' : jupiterMap ? ':: JUPITER' : sunMap ? ':: THE SUN' : neptuneMap ? ':: NEPTUNE' : gaiaMap ? ':: GAIA' : moonMap ? ':: THE MOON' : ':: RUBY STAR'}
         playSound={button => playUiSfx(button)}
       >
-        {singularityMap ? <SingularityGuide drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'devourer', age, tick)} /> : saturnMap ? <SaturnGuide drawBoss={drawGuideWarden} drawFrozenTile={drawBattlefieldIce} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'frost_warden', age, tick)} /> : jupiterMap ? <JupiterGuide drawBoss={drawGuideReaper} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'storm_reaper', age, tick)} /> : sunMap ? <SunGuide drawKing={drawGuideKing} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'fiery_king', age, tick)} /> : neptuneMap ? <NeptuneGuide drawBoss={drawGuideBoss} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'sea_chanter', age, tick)} /> : gaiaMap ? <GaiaGuide drawBoss={drawGuideWeaver} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'thorn_weaver', age, tick)} /> : moonMap ? <MoonGuide drawQueen={drawGuideQueen} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'splitter_queen', age, tick)} /> : <RubyStarGuide />}
+        {venusMap ? <VenusGuide drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'aegis_sentinel', age, tick)} /> : siriusMap ? <SiriusGuide drawBoss={drawGuidePrayer} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'blind_prayer', age, tick)} /> : binaryMap ? <BinaryGuide drawTwin={drawGuideTwin} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'astral_twins', age, tick)} /> : singularityMap ? <SingularityGuide drawBody={drawGuideDevourer} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'devourer', age, tick)} /> : saturnMap ? <SaturnGuide drawBoss={drawGuideWarden} drawFrozenTile={drawBattlefieldIce} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'frost_warden', age, tick)} /> : jupiterMap ? <JupiterGuide drawBoss={drawGuideReaper} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'storm_reaper', age, tick)} /> : sunMap ? <SunGuide drawKing={drawGuideKing} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'fiery_king', age, tick)} /> : neptuneMap ? <NeptuneGuide drawBoss={drawGuideBoss} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'sea_chanter', age, tick)} /> : gaiaMap ? <GaiaGuide drawBoss={drawGuideWeaver} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'thorn_weaver', age, tick)} /> : moonMap ? <MoonGuide drawQueen={drawGuideQueen} drawBlinker={drawGuideBlinker} drawCelestial={(ctx, age, tick) => drawGuideCelestial(ctx, 'splitter_queen', age, tick)} /> : <RubyStarGuide />}
       </RulesModal>
 
       {state?.gamePhase === 'skillChoice' && !showRules && <StartingSkillChoice state={state}
         onChoose={kind => { if (chooseStartingSkill(state, kind)) rerender(); }} />}
 
+      {state?.gamePhase === 'loadout' && !showRules && <GambitLoadout state={state} onClose={() => { const current = stateRef.current; if (current?.gamePhase === 'loadout') { current.gamePhase = 'playing'; playUiSfx('close'); } rerender(); }} />}
       {state?.gamePhase === 'constellation' && !showRules && <ConstellationChoice
         choices={state.constellationChoices} toggleMode={state.godConstellationMode} active={state.constellations}
         onClose={() => { closeGodConstellations(state); rerender(); }}
@@ -6377,7 +7076,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       </div>}
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className={state?.saturn?'rs-hud rs-saturn-hud':'rs-hud'}>
+      <div className={state?.saturn?'rs-hud rs-saturn-hud':state?.gambit?'rs-hud rs-gambit-hud':'rs-hud'}>
         <div className="rs-hud-left">
           <BackButton href={trialInfo ? '/challenge' : '/'} playSound={() => {if(stateRef.current)saveRun(stateRef.current,trialId);playUiSfx('back');}} arrow={<PixelArrow direction="left" />} />
           <div className="rs-hud-vitals">
@@ -6397,13 +7096,27 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               <div className="battery-fill" style={{ width: `${rubyHpPct}%`, background: rubyBattColor, boxShadow: `0 0 8px ${rubyBattColor}` }} />
               <div className="battery-nub" style={{ borderLeftColor: RUBY_COLOR + '66' }} />
             </div>
-            {state?.saturn&&<ShieldAmount amount={state.rubyShieldHP} ruby/>}
           </div>
 
-          {state?.sun && <div role="meter" aria-label="Temperature" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.sun.heat)} title="Temperature — cool it with stations and Cooling Wave" style={{display:'flex',alignItems:'center',gap:6}}>
+          {state?.sun && <div role="meter" aria-label="Temperature" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.sun.heat)} title="Temperature — cool it with stations and Hydro Pulse" style={{display:'flex',alignItems:'center',gap:6}}>
             <HudIcon kind="temperature" />
             <div className="battery" style={{width:'var(--batt-w)',height:'var(--batt-h)',borderColor:'#ff985b'}}><div className="battery-fill" style={{width:`${state.sun.heat}%`,background:state.sun.heat>80?'#ff4538':'#ffab55'}} /><div className="battery-nub" /></div>
           </div>}
+          {state?.sirius && (() => {
+            const holy = state.sirius.holy / 100, full = holy >= 1;
+            return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} role="meter" aria-label="Holy Light"
+              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(holy * 100)} title={full ? 'Holy Light full — Sacred Halo bursts it: '+bindingLabel('mapSkill') : 'Gaining energy and tracing runes fill Holy Light'}>
+              <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
+                <path d="M7 1H9V6H14V8H9V15H7V8H2V6H7Z" fill={full ? '#fff6d0' : '#ffe27a'} />
+              </svg>
+              <div style={{ width: 'calc(var(--batt-w) * .8)', height: 'var(--batt-h)', border: `1px solid ${full ? '#fff6d0' : 'rgba(255,226,122,.45)'}`,
+                borderRadius: '2px', background: 'rgba(0,0,0,0.4)', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${holy * 100}%`, background: full ? '#fff6d0' : '#e8c45c',
+                  boxShadow: full ? '0 0 10px #ffe27a' : 'none', animation: full ? 'pulseGlow 0.8s ease-in-out infinite' : undefined }} />
+              </div>
+              {full && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: '#fff6d0' }}><MapSpecialSkillHint/></span>}
+            </div>;
+          })()}
           {state?.neptune && (() => {
             const charge = state.neptune.healCharge / NEPTUNE_HEAL_CHARGE_MAX, ready = charge >= 1;
             return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} role="meter" aria-label="Trident charge"
@@ -6456,9 +7169,19 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             {state?.saturn&&<ShieldAmount amount={state.playerShieldHP}/>}
           </div>
 
+          {/* Star Gambit: Glint, the run's currency */}
+          {state?.gambit && <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} aria-label={`Glint ${state.gambit.glint}`} title="Glint">
+            <svg width="14" height="18" viewBox="0 0 10 14" aria-hidden="true" shapeRendering="crispEdges"><path d="M3 0H7V2H10V12H7V14H3V12H0V2H3Z" fill="#ffd23f" /></svg>
+            <span style={{ minWidth: 24, fontFamily: 'var(--font-pixel)', fontSize: 12, color: '#ffd23f' }}>{state.gambit.glint}</span>
+          </div>}
+
           </div>
         </div>
-        {state?.trial ? <GuardianBar state={state} /> : <div className="rs-stage" aria-label={`Stage ${state?.bossesKilled ?? 0}`}>
+        {state?.gambit ? <div className="rs-stage rs-wave" aria-label={`Wave ${state.gambit.wave}`}>
+          <span>WAVE</span>
+          <strong>{state.gambit.wave}</strong>
+          <i role="meter" aria-label="Wave time left" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.gambit.waveTicks / GAMBIT_WAVE_TICKS * 100)}><b style={{ width: `${state.gambit.waveTicks / GAMBIT_WAVE_TICKS * 100}%` }} /></i>
+        </div> : state?.trial ? <GuardianBar state={state} /> : <div className="rs-stage" aria-label={`Stage ${state?.bossesKilled ?? 0}`}>
           <span>STAGE</span>
           <strong>{state?.bossesKilled ?? 0}</strong>
         </div>}
@@ -6473,10 +7196,14 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.trial && <CelestialStatus name={SPECIAL_SKILLS[state.trial.skill].name}
             color={state.trial.skill === 'devourer' ? '#bcbccd' : SPECIAL_SKILLS[state.trial.skill].color}
             cooldown={state.specialSkill ? 0 : state.trial.cooldown || trialSkillCooldown(state.trial.skill)} totalCooldown={trialSkillCooldown(state.trial.skill)} />}
-          {state?.saturn && <SnowballStatus saturn={state.saturn}/> }
+          {state?.saturn && <TimeStopStatus cooldown={state.saturn.cooldown} totalCooldown={SATURN.cooldown} flip={state.saturn.castTicks} />}
           {state?.jupiter && <VoltFenceStatus cooldown={state.jupiter.wallCooldown} />}
           {state?.sun && <CoolingWaveStatus cooldown={state.sun.waveCooldown} empowered={state.sun.quenchedTicks > 0} casts={state.sun.empoweredCasts} />}
+          {state?.trial?.devourer && <TetherStatus charge={SINGULARITY_CHALLENGE.hook.cooldown - (state.trial.devourer.hookCooldown ?? 0)} max={SINGULARITY_CHALLENGE.hook.cooldown} active={!!state.trial.devourer.hook} />}
           {state?.moon && <MoonMarkStatus cooldown={state.moon.markCooldown} totalCooldown={MOON_MARK_COOLDOWN} />}
+          {state?.sirius && <HaloStatus cooldown={state.sirius.haloCooldown} totalCooldown={SIRIUS.haloCooldown} floating={state.sirius.halo > 0} full={state.sirius.holy >= 100} />}
+          {state?.venus && <SandSweepStatus cooldown={state.venus.sweepCooldown} totalCooldown={VENUS.sweepCooldown} />}
+          {state?.binary && <MagnetStatus pole={state.binary.pole} cooldown={state.binary.poleCooldown} totalCooldown={BINARY.poleCooldown} />}
           {isGodQuery && (
             <button
               className="btn btn-ghost"
@@ -6498,6 +7225,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
       {/* ── Canvas ───────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+        onMouseMove={e => { const st = stateRef.current, cv = canvasRef.current; if (st?.gambit && cv) { const rect = cv.getBoundingClientRect(); st.gambit.aimX = e.clientX - rect.left - rect.width / 2; st.gambit.aimY = e.clientY - rect.top - rect.height / 2; } }}
         onMouseDown={handleMouseDown}
         onAuxClick={e=>{if(e.button===1)e.preventDefault();}}
         onMouseUp={handleMouseUp}
@@ -6511,10 +7239,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         {phase === 'playing' && !showRules && state?.constellationReveal && <ConstellationAfterglow kind={state.constellationReveal.kind} ticks={state.constellationReveal.ticks} />}
         {phase==='playing'&&!showRules&&state?.build.blessingReveal&&<BlessingAfterglow kind={state.build.blessingReveal.kind} ticks={state.build.blessingReveal.ticks} readTicks={()=>stateRef.current?.build.blessingReveal?.ticks??0}/>}
         <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
-        {phase==='playing'&&playerStatuses.length>0&&<div className="rs-player-status" role="status" aria-live="polite" style={{left:isGodQuery?godPanelWidth+24:12,maxWidth:isGodQuery?`calc(100% - ${godPanelWidth+244}px)`:undefined}}>
-          {playerStatuses.map(status=><div key={status.key} className="rs-status-tag" data-status={status.key} style={{color:status.color,borderColor:status.color+'88'}}>
+        {phase==='playing'&&playerStatuses.length>0&&<div className="rs-player-status" role="status" aria-live="polite" style={{left:isGodQuery?godPanelWidth+24:12}}>
+          {playerStatuses.map(status=><div key={status.key} className="rs-status-tag" data-status={status.key} style={{color:status.color,borderColor:status.color+'88',opacity:status.opacity}}>
             {status.label}
-            {status.seconds!==undefined&&<span className="rs-status-time" aria-hidden="true">{status.seconds.toFixed(1)}s</span>}
             {status.progress!==undefined&&<span className="rs-status-progress" aria-hidden="true" style={{width:Math.min(100,status.progress*100)+'%'}} />}
           </div>)}
         </div>}
@@ -6553,47 +7280,87 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             <button type="button" style={{background:'#283b51',color:'#c9e9ff',border:'2px solid #72b5e7',cursor:'pointer'}}
               onClick={() => {if(stateRef.current)addStarEnergy(stateRef.current,STAR_ENERGY_MAX-stateRef.current.starEnergy,false);rerender();}}>Full Energy</button>
           </div>
-          {state?.trial && <div className="rs-god-actions" role="group" aria-label="Celestial skill and map special bar">
+          {state?.trial && <div className="rs-god-actions" role="group" aria-label="Celestial skill and primal skill">
           {state?.trial && <button type="button" title="Give the celestial skill back now, skipping its cooldown"
             style={{background:'#2c2347',color:'#e6dcff',border:'2px solid #a58cff',padding:'7px',fontWeight:700,cursor:'pointer'}}
-            onClick={() => {const current=stateRef.current;if(current?.trial){current.trial.cooldown=0;current.specialLockTicks=0;if(!current.specialSkill){current.specialSkill=current.trial.skill;playStrikeCharged();}}rerender();}}>Skill Ready</button>}
-          {state?.saturn && <button type="button" title="Recharge Snowball now"
+            onClick={() => {const current=stateRef.current;if(current?.trial){current.trial.cooldown=0;current.specialLockTicks=0;if(!current.specialSkill){current.specialSkill=current.trial.skill;playUiSfx('celestialReady');}}rerender();}}>Skill Ready</button>}
+          {state?.saturn && <button type="button" title="Recharge Absolute Zero now"
             style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',padding:'7px',fontWeight:700,cursor:'pointer'}}
-            onClick={()=>{const s=stateRef.current;if(s?.saturn&&s.saturn.cooldown>0){s.saturn.cooldown=0;playUiSfx('fenceReady');}rerender();}}>Snowball Ready</button>}
+            onClick={()=>{const s=stateRef.current;if(s?.saturn&&s.saturn.cooldown>0){s.saturn.cooldown=0;playUiSfx('markReady');}rerender();}}>Zero Ready</button>}
           {state?.jupiter && <button type="button" title="Recharge Volt Fence now"
             style={{background:'#173b38',color:'#d7fff0',border:'2px solid #68dcb9',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={()=>{if(stateRef.current?.jupiter&&stateRef.current.jupiter.wallCooldown>0){stateRef.current.jupiter.wallCooldown=0;playUiSfx('fenceReady');}rerender();}}>Fence Ready</button>}
           {state?.neptune && <button type="button" title="Fill the healing bar so C fires the Trident"
             style={{background:'#123a52',color:'#c9f2ff',border:'2px solid #59c8ff',padding:'7px',fontWeight:700,cursor:'pointer'}}
-            onClick={() => {const current=stateRef.current;if(current?.neptune){current.neptune.healCharge=NEPTUNE_HEAL_CHARGE_MAX;playStrikeCharged();}rerender();}}>Full Trident</button>}
+            onClick={() => {const current=stateRef.current;if(current?.neptune){if(current.neptune.healCharge<NEPTUNE_HEAL_CHARGE_MAX)playStrikeCharged();current.neptune.healCharge=NEPTUNE_HEAL_CHARGE_MAX;}rerender();}}>Full Trident</button>}
           {state?.gaia && <button type="button" title="Fill the Sunfire bar so C picks a room to burn"
             style={{background:'#3a2f12',color:'#fff3b8',border:'2px solid #ffd36a',padding:'7px',fontWeight:700,cursor:'pointer'}}
-            onClick={() => {const current=stateRef.current;if(current?.gaia){current.gaia.sunCharge=GAIA_SUN_MAX;playStrikeCharged();}rerender();}}>Full Sunfire</button>}
+            onClick={() => {const current=stateRef.current;if(current?.gaia){if(current.gaia.sunCharge<GAIA_SUN_MAX)playStrikeCharged();current.gaia.sunCharge=GAIA_SUN_MAX;}rerender();}}>Full Sunfire</button>}
           {state?.sun && <>
-            <button type="button" title="Recharge Cooling Wave now" disabled={phase !== 'playing'}
+            <button type="button" title="Recharge Hydro Pulse now" disabled={phase !== 'playing'}
               style={{background:'#123a52',color:'#c9f2ff',border:'2px solid #59c8ff',padding:'7px',fontWeight:700,cursor:phase==='playing'?'pointer':'default',opacity:phase==='playing'?1:.5}}
-              onClick={() => {const current=stateRef.current;if(current?.sun&&current.gamePhase==='playing')current.sun.waveCooldown=0;rerender();}}>Wave Ready</button>
+              onClick={() => {const current=stateRef.current;if(current?.sun&&current.gamePhase==='playing'&&current.sun.waveCooldown>0){current.sun.waveCooldown=0;playUiSfx('fenceReady');}rerender();}}>Wave Ready</button>
             <button type="button" title="Fill temperature and trigger a thermal eruption" disabled={phase !== 'playing'}
               style={{background:'#4a261d',color:'#ffe0b8',border:'2px solid #f6a568',padding:'7px',fontWeight:700,cursor:phase==='playing'?'pointer':'default',opacity:phase==='playing'?1:.5}}
               onClick={() => {const current=stateRef.current;if(current)godSetSunHeat(current,100);rerender();}}>Full Heat</button>
-            <button type="button" title="Extinguish the King and grant five empowered Cooling Waves" disabled={phase !== 'playing'}
+            <button type="button" title="Extinguish the King and grant five empowered Hydro Pulses" disabled={phase !== 'playing'}
               style={{background:'#153b46',color:'#d8fbff',border:'2px solid #83dce9',padding:'7px',fontWeight:700,cursor:phase==='playing'?'pointer':'default',opacity:phase==='playing'?1:.5}}
               onClick={() => {const current=stateRef.current;if(current)godSetSunHeat(current,0);rerender();}}>Zero Heat</button>
           </>}
+          {state?.trial?.devourer && <button type="button" style={{background:'#1a3023',color:'#ceffa0',border:'2px solid #99db74',padding:7,cursor:'pointer'}}
+            onClick={()=>{const t=stateRef.current?.trial?.devourer;if(t){t.hookCooldown=0;playUiSfx('fenceReady');}rerender();}}>Ready Hook</button>}
+          {state?.trial?.devourer && <button type="button" aria-pressed={!!state.trial.devourer.maws?.[0]?.forced} title="Hold both Maws open, or let them cycle again" style={{background:'#241638',color:'#e8d8ff',border:'2px solid #b07aff',padding:7,cursor:'pointer'}}
+            onClick={()=>{const t=stateRef.current?.trial?.devourer;if(t?.maws){const on=!t.maws[0]?.forced;for(const m of t.maws)m.forced=on?'open':undefined;playUiSfx(on?'confirm':'close');}rerender();}}>{state.trial.devourer.maws?.[0]?.forced?'Cycle Maws':'Open Maws'}</button>}
           {state?.moon && <button type="button" title="Recharge the Moon Mark so C marks at once"
             style={{background:'#1c2c40',color:'#e8fbff',border:'2px solid #a9e6ff',padding:'7px',fontWeight:700,cursor:'pointer'}}
-            onClick={() => {const current=stateRef.current;if(current?.moon){current.moon.markCooldown=0;playStrikeCharged();}rerender();}}>Mark Ready</button>}
+            onClick={() => {const current=stateRef.current;if(current?.moon&&current.moon.markCooldown>0){current.moon.markCooldown=0;playUiSfx('fenceReady');}rerender();}}>Mark Ready</button>}
+          </div>}
+          {state?.trial?.boss === 'blind_prayer' && <div className="rs-god-actions" role="group" aria-label="Sirius scenery" style={{gridTemplateColumns:'1fr'}}>
+            <button type="button" aria-pressed={state.trial.siriusLight ?? false} title="Switch Sirius between dark and golden-light scenery"
+              style={{background:state.trial.siriusLight?'#ecd17c':'#292537',color:state.trial.siriusLight?'#332819':'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}}
+              onClick={()=>{const current=stateRef.current;if(current?.sirius){godSiriusSwap(current);}else if(current?.trial?.boss==='blind_prayer'){current.trial.siriusLightBlend??=current.trial.siriusLight?1:0;current.trial.siriusLight=!current.trial.siriusLight;}rerender();}}>{state.sirius?'Swap Light/Dark':'Light Sanctuary'}</button>
+            {state.sirius&&<div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:4}}>
+              {([1,2,3] as const).map(n=><button key={n} type="button" aria-pressed={state.sirius?.phase===n} style={{background:state.sirius?.phase===n?'#ecd17c':'#292537',color:state.sirius?.phase===n?'#332819':'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSetSiriusPhase(stateRef.current,n);rerender();}}>Phase {n}</button>)}
+            </div>}
+            {state.sirius&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+              <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSiriusRune(stateRef.current);rerender();}}>Cast Rune</button>
+              <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSiriusRitual(stateRef.current);rerender();}}>Ruby Ritual</button>
+              <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{const current=stateRef.current;if(current)godFillHolyLight(current);rerender();}}>Full Holy Light</button>
+              <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{const current=stateRef.current;if(current?.sirius&&current.sirius.haloCooldown>0){current.sirius.haloCooldown=0;playUiSfx('fenceReady');}rerender();}}>Sacred Halo Ready</button>
+              <div role="status" style={{gridColumn:'1 / -1',textAlign:'center',fontSize:12,padding:'3px 0',color:state.sirius.ritual?'#ff9fbf':'#8a7f63',border:'1px solid #6e6448'}}>{state.sirius.ritual?`RUBY → ${CHAMBER_LABELS[state.sirius.ritual.destination]}`:'NO RUBY RITUAL'}</div>
+            </div>}
+          </div>}
+          {state?.trial?.devourer && <button type="button" disabled={!!state.trial.devourer.convergence} style={{background:'#241638',color:'#d8ff9c',border:'2px solid #b07aff',padding:7,cursor:'pointer'}}
+            onClick={()=>{const t=stateRef.current?.trial?.devourer;if(t&&!t.convergence){t.convergenceTimer=0;playUiSfx('confirm');}rerender();}}>Converge</button>}
+          {state?.trial?.devourer && <div className="rs-god-actions" role="group" aria-label="Singularity phase" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
+            {([1,2,3] as const).map(n=><button key={n} type="button" aria-pressed={state.trial?.devourer?.phase===n} style={{background:state.trial?.devourer?.phase===n?'#c9a8ff':'#241736',color:state.trial?.devourer?.phase===n?'#1c1028':'#e8d8ff',border:'2px solid #b07aff',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSetSingularityPhase(stateRef.current,n);rerender();}}>Phase {n}</button>)}
+          </div>}
+          {state?.venus && <div className="rs-god-actions" role="group" aria-label="Venus phase" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
+            {([1,2,3] as const).map(n=><button key={n} type="button" aria-pressed={state.venus?.phase===n} style={{background:state.venus?.phase===n?'#e3c08a':'#2e2416',color:state.venus?.phase===n?'#21180c':'#f5e3c0',border:'2px solid #c5a35d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSetVenusPhase(stateRef.current,n);rerender();}}>Phase {n}</button>)}
+          </div>}
+          {state?.venus && <div className="rs-god-actions" role="group" aria-label="Venus controls">
+            <button type="button" title="Break his shield now" style={{background:'#163636',color:'#dcffff',border:'2px solid #78dedf',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godVenusBreakShield(stateRef.current);rerender();}}>Break Shield</button>
+            <button type="button" title="Sand Swirl ready now" style={{background:'#2e2416',color:'#f5e3c0',border:'2px solid #c5a35d',cursor:'pointer'}} onClick={()=>{const t=stateRef.current?.venus;if(t){t.sweepCooldown=0;playUiSfx('fenceReady');}rerender();}}>Swirl Ready</button>
+            <button type="button" title="He leaps at you now" style={{background:'#2e2416',color:'#f5e3c0',border:'2px solid #c5a35d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godVenusLeap(stateRef.current);rerender();}}>Leap Now</button>
+            <button type="button" title="He charges his lance now" style={{background:'#2e2416',color:'#f5e3c0',border:'2px solid #c5a35d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godVenusLance(stateRef.current);rerender();}}>Lance Now</button>
+            <button type="button" aria-pressed={!!state.venus.godReveal} title="Show every totem's position and sequence number, and every relic, buried or not" style={{gridColumn:'1 / -1',background:state.venus.godReveal?'#e3c08a':'#2e2416',color:state.venus.godReveal?'#21180c':'#f5e3c0',border:'2px solid #c5a35d',cursor:'pointer'}} onClick={()=>{const t=stateRef.current?.venus;if(t)t.godReveal=!t.godReveal;rerender();}}>
+              <svg aria-hidden="true" width="12" height="16" viewBox="-6 -8 12 16" style={{ verticalAlign: 'middle', marginRight: 7 }}>
+                {VENUS_REVEAL_TOTEM.map(([x, y, width, height, fill], index) => <rect key={index} x={x} y={y} width={width} height={height} fill={fill} />)}
+              </svg>
+              Reveal Totems
+            </button>
           </div>}
           {state?.saturn && <div className="rs-god-actions" role="group" aria-label="Saturn controls" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
             {([1,2,3] as const).map(n=><button key={n} type="button" aria-pressed={state.saturn?.phase===n} style={{background:state.saturn?.phase===n?'#9bdde8':'#173b4c',color:state.saturn?.phase===n?'#102632':'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSetSaturnPhase(stateRef.current,n);rerender();}}>Phase {n}</button>)}
           </div>}
           {state?.saturn&&<div className="rs-god-actions" role="group" aria-label="Saturn encounter controls">
-            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.playerShieldHP+=40;s.rubyShieldHP+=40;s.playerSaturnShield=s.rubySaturnShield=true;}rerender();}}>Shield +40</button>
-            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.permaShield=false;s.playerShieldHP=s.rubyShieldHP=0;s.playerSaturnShield=s.rubySaturnShield=false;}rerender();}}>Remove Shield</button>
-            <button type="button" aria-pressed={state.saturn.permaShield} style={{background:state.saturn.permaShield?'#9bdde8':'#173b4c',color:state.saturn.permaShield?'#102632':'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.permaShield=true;s.playerShieldHP=Math.max(40,s.playerShieldHP);s.rubyShieldHP=Math.max(40,s.rubyShieldHP);s.playerSaturnShield=s.rubySaturnShield=true;}rerender();}}>Perma Shield</button>
-            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.level=Math.min(3,s.saturn.level+1) as 1|2|3;s.saturn.levelTicks=0;}rerender();}}>Blizzard +1</button>
-            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.level=Math.max(1,s.saturn.level-1) as 1|2|3;s.saturn.levelTicks=0;}rerender();}}>Blizzard −1</button>
-            <button type="button" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{const s=stateRef.current;if(s?.saturn){s.saturn.barrier=0;s.saturn.weakTicks=SATURN.weakTicks;s.frostIceTiles=[];}rerender();}}>Expose</button>
+            <button type="button" title="Mark grant targets now" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSaturnGrant(stateRef.current);rerender();}}>Grant Now</button>
+            <button type="button" title="Start the recall warning now" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSaturnRecall(stateRef.current);rerender();}}>Recall Now</button>
+          </div>}
+          {state?.binary && <div className="rs-god-actions" role="group" aria-label="Binary Star controls" style={{gridTemplateColumns:'repeat(4, 1fr)'}}>
+            {([1,2,3] as const).map(n=><button key={n} type="button" aria-pressed={state.binary?.phase===n} style={{background:state.binary?.phase===n?'#ffb7a6':'#3a2230',color:state.binary?.phase===n?'#2a1520':'#ffe2da',border:'2px solid #ff8f7a',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSetBinaryPhase(stateRef.current,n);rerender();}}>Phase {n}</button>)}
+            <button type="button" title="Warn and jump both twins to the opposite chamber now" style={{background:'#1d2c44',color:'#dff3ff',border:'2px solid #83cfff',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godJumpTwins(stateRef.current);rerender();}}>Jump</button>
+            <button type="button" title="Move the twins together and crash them now" style={{gridColumn:'span 2',background:'#3a2230',color:'#fff1ea',border:'2px solid #ffffff',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godCollideTwins(stateRef.current);rerender();}}>Collide</button>
           </div>}
           {state?.jupiter && <>
             <div className="rs-god-actions" role="group" aria-label="Jupiter controls" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
@@ -6666,7 +7433,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               style={{ background: '#422936', color: '#ffd3dc', border: '2px solid #e895ac', cursor: 'pointer' }}>RESET</button>
           </div>
 
-          {!trialInfo && <div className="rs-event-controls">
+          {mode === 'gambit' && <button type="button" aria-label="Choose weapons" title="Open the weapon loadout screen" style={{ width:'100%', background:'#2b2414', color:'#ffe6a6', border:'2px solid #ffd27a', cursor:'pointer', fontWeight:700 }}
+            disabled={phase !== 'playing'} onClick={() => { const current = stateRef.current; if (current?.gambit && current.gamePhase === 'playing') { current.gamePhase = 'loadout'; playUiSfx('page'); rerender(); } }}>WEAPONS</button>}
+          {!trialInfo && mode !== 'gambit' && <div className="rs-event-controls">
             {(Object.keys(AMBIENT_EVENTS) as AmbientEventKind[]).map(kind => <button key={kind} type="button"
               aria-label={'Create ' + AMBIENT_EVENTS[kind].name}
               style={{ color: AMBIENT_EVENTS[kind].color, borderColor: AMBIENT_EVENTS[kind].color }}
@@ -6679,7 +7448,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               onClick={() => { if (stateRef.current) godTriggerComet(stateRef.current); rerender(); }}>COMET</button>}
           </div>}
 
-          {!trialInfo && <>
+          {!trialInfo && mode !== 'gambit' && <>
           <div style={{color:'#cbd6ef',fontSize:'.65rem',fontWeight:700,textAlign:'center'}}>BOSSES</div>
           <div className="rs-boss-controls" role="group" aria-label="Summon bosses" style={{ display:'grid',gridTemplateColumns:'repeat(5, 50px)',gap:4,justifyContent:'center' }}>
             {BOSS_TYPES.map(type => <BossSpawnButton key={type} type={type} onSpawn={() => {
@@ -6730,16 +7499,35 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
         {state?.tutorial && <TutorialPanel tutorial={state.tutorial} />}
         {!showRules && phase === 'laserTarget' && state && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,4,16,0.84)', zIndex: 100, display: 'flex', flexDirection: 'column',
+          <div className={state.sirius ? 'rs-ruby-guess' : undefined} style={{ position: 'absolute', inset: 0, background: state.sirius ? 'radial-gradient(ellipse at 50% 48%, rgba(120,40,70,.55) 0%, rgba(30,10,24,.9) 55%, rgba(10,4,12,.95) 100%)' : 'rgba(0,4,16,0.84)', zIndex: 100, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', gap: '20px' }}
             onClick={(event) => { if (event.target !== event.currentTarget) return; cancelSkyLaser(state); playUiSfx('close'); rerender(); }}>
-            <p style={{ fontFamily: 'var(--font-pixel)', fontSize: '1rem', color: state.gaia ? '#ffe680' : '#9fe4ff', textShadow: `0 0 16px ${state.gaia ? '#ffd36a' : '#59c8ff'}`, letterSpacing: '0.12em' }}>
-              {state.gaia ? 'SUNFIRE' : 'TRIDENT'} — CHOOSE A ROOM
+            {state.sirius && <>
+              {/* Sirius: a stepped gold double frame, Ruby-pink corner ornaments and a pulsing rim, unlike the teleport picker */}
+              <div aria-hidden="true" className="rs-ruby-guess-frame" />
+              {(['tl','tr','bl','br'] as const).map(c => <div key={c} aria-hidden="true" className={`rs-ruby-guess-corner rs-ruby-guess-${c}`}><span/><span/><span/></div>)}
+              <style>{`
+                .rs-ruby-guess-frame { position:absolute; inset:14px; border:3px solid #e8c45c; outline:1px solid #ffe9a8; outline-offset:-9px; pointer-events:none; animation: rsRubyRim 1.6s ease-in-out infinite; }
+                @keyframes rsRubyRim { 0%,100% { box-shadow: inset 0 0 22px #ff6fa833, 0 0 18px #ff6fa833; } 50% { box-shadow: inset 0 0 48px #ff6fa888, 0 0 30px #ff6fa866; } }
+                .rs-ruby-guess-corner { position:absolute; width:58px; height:58px; pointer-events:none; }
+                .rs-ruby-guess-corner span { position:absolute; display:block; background:#ff9fbf; box-shadow:0 0 10px #ff6fa8; }
+                .rs-ruby-guess-corner span:nth-child(1) { width:58px; height:6px; }
+                .rs-ruby-guess-corner span:nth-child(2) { width:6px; height:58px; }
+                .rs-ruby-guess-corner span:nth-child(3) { width:14px; height:14px; background:#fff0f6; left:14px; top:14px; transform:rotate(45deg); }
+                .rs-ruby-guess-tl { left:6px; top:6px; } .rs-ruby-guess-tr { right:6px; top:6px; transform:scaleX(-1); }
+                .rs-ruby-guess-bl { left:6px; bottom:6px; transform:scaleY(-1); } .rs-ruby-guess-br { right:6px; bottom:6px; transform:scale(-1,-1); }
+              `}</style>
+            </>}
+            <p style={{ fontFamily: 'var(--font-pixel)', fontSize: '1rem', color: state.sirius ? '#ff9fbf' : state.gaia ? '#ffe680' : '#9fe4ff', textShadow: `0 0 16px ${state.sirius ? '#ff6fa8' : state.gaia ? '#ffd36a' : '#59c8ff'}`, letterSpacing: '0.12em' }}>
+              {state.sirius ? 'WHERE WILL RUBY GO?' : `${state.gaia ? 'SUNFIRE' : 'TRIDENT'} — CHOOSE A ROOM`}
             </p>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#b9bdd6', marginTop: -10 }}>{state.gaia ? 'It burns 3s later. Get yourself and Ruby out of that room!' : 'It strikes 3s later. Get out of that room!'}</p>
-            <TeleportMinimap state={state} available={[0, 1, 2, 3]} onPick={ch => { if (chooseSkyLaser(state, ch)) { playUiSfx('ascension'); rerender(); } }} />
+            {state.sirius?.ritual && isGodQuery && <p style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: '#ffcc00', marginTop: -14 }}>GOD: RUBY GOES TO {CHAMBER_LABELS[state.sirius.ritual.destination]}</p>}
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#b9bdd6', marginTop: -10 }}>{state.sirius ? 'A right guess adds rune time and fills your energy; a wrong one costs two seconds.' : state.gaia ? 'It burns 3s later. Get yourself and Ruby out of that room!' : 'It strikes 3s later. Get out of that room!'}</p>
+            <div style={state.sirius ? { padding: 6, border: '2px solid #ff9fbf', boxShadow: '0 0 28px #ff6fa866, inset 0 0 16px #ff6fa844', background: 'rgba(40,12,28,.6)' } : undefined}>
+              <TeleportMinimap state={state} available={state.sirius ? [0, 1, 2, 3].filter(ch => ch !== chamberOfTile(state.rubyTileX, state.rubyTileY)) : [0, 1, 2, 3]} onPick={ch => { if (chooseSkyLaser(state, ch)) { playUiSfx('ascension'); rerender(); } }} />
+            </div>
             <button className="btn btn-ghost" style={{ fontSize: '0.7rem', padding: '6px 14px' }}
-              onClick={() => { cancelSkyLaser(state); playUiSfx('close'); rerender(); }}>ESC / {bindingLabel('mapSkill')} — CANCEL</button>
+              onClick={() => { cancelSkyLaser(state); playUiSfx('close'); rerender(); }}>ESC / {bindingLabel('mapSkill')} — {state.sirius ? 'SKIP' : 'CANCEL'}</button>
           </div>
         )}
 
@@ -6753,7 +7541,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         )}
 
         {phase === 'playing' && state?.alienIntro && (() => {
-          const intro = state.alienIntro, entry = ALIEN_GUIDE.find(a => a.type === intro.type), color = ENEMY_CONFIGS[intro.type].color;
+          const intro = state.alienIntro, boss = isBossType(intro.type), color = ENEMY_CONFIGS[intro.type].color;
+          const name = boss ? BOSS_NAMES[intro.type as BossType] : ALIEN_GUIDE.find(a => a.type === intro.type)?.name ?? intro.type;
+          const text = boss ? BOSS_GUIDE[intro.type as BossType].description : ALIEN_GUIDE.find(a => a.type === intro.type)?.description;
           const fade = Math.min(1, intro.ticks / 30, (ALIEN_INTRO_TICKS - intro.ticks + 1) / 12);
           return (
             <div role="status" style={{ position: 'absolute', bottom: '28px', left: '50%', transform: 'translateX(-50%)', opacity: fade,
@@ -6761,9 +7551,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               padding: '8px 18px 8px 10px', background: 'rgba(6,8,16,.94)', border: `2px solid ${color}`, boxShadow: `0 0 22px ${color}55`, borderRadius: '2px' }}>
               <EnemyPortrait type={intro.type} size={56} />
               <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#ffd98a', letterSpacing: '.12em' }}>NEW ALIEN</div>
-                <div style={{ fontFamily: 'var(--font-pixel)', fontSize: '.9rem', lineHeight: 1.7, color }}>{(entry?.name ?? intro.type).toUpperCase()}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#dfe6f2', maxWidth: 360 }}>{entry?.description}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#ffd98a', letterSpacing: '.12em' }}>{boss ? 'NEW BOSS' : 'NEW ALIEN'}</div>
+                <div style={{ fontFamily: 'var(--font-pixel)', fontSize: '.9rem', lineHeight: 1.7, color }}>{name.toUpperCase()}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#dfe6f2', maxWidth: 360 }}>{text}</div>
               </div>
             </div>
           );
@@ -6826,7 +7616,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           </div>
         )}
 
-        {!showRules && (phase === 'playing' || phase === 'teleporting' || phase === 'laserTarget') && (state?.meteoriteWarning ?? -1) < 0 && state && !state.tutorial && !state.trial?.mapOnly && (
+        {!showRules && (phase === 'playing' || phase === 'teleporting' || phase === 'laserTarget') && (state?.meteoriteWarning ?? -1) < 0 && state && !state.tutorial && !state.trial?.mapOnly && !state.gambit && (
           <div style={{
             position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 110,
             background: 'rgba(5,0,0,0.7)', border: '1px solid #884400',
@@ -6910,7 +7700,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
                 </dl>
               </div>}
               <button type="button" autoFocus onClick={handleRestart} className="rs-end-restart">PLAY AGAIN</button>
-              {trialInfo && <button type="button" onClick={() => { playUiSfx('back'); router.push('/'); }} className="rs-end-restart" style={{ marginTop: 8 }}>BACK TO LOBBY</button>}
+              {trialInfo && <button type="button" onClick={() => { playUiSfx('back'); router.push('/challenge'); }} className="rs-end-restart" style={{ marginTop: 8 }}>BACK TO STAR MAP</button>}
             </section>
           </div>
         )}

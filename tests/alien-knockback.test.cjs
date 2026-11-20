@@ -16,6 +16,7 @@ for(const type of ['armored','fast','ghost']) test(`${type} hits push the player
 test('a Bomber explosion pushes the player away from the blast',()=>{
   const s=fresh(),b=alien(s,'bomber',10,8);b.exploding=true;b.explodeTick=1;
   e.tick(s);assert.ok(s.playerHP<100);
+  assert.equal(s.bombBlasts.at(-1)?.trap,true);
   settle(s);
   assert.equal(s.playerTileX,10);assert.equal(s.playerTileY,10+c.ALIEN_KNOCKBACK.bomber);
 });
@@ -56,9 +57,38 @@ test('carrying Ruby halves every push, carrying the half tile over to the next o
   const free=fresh();free.playerKnockback={dirX:1,dirY:0,started:false,tilesLeft:3};settle(free);assert.equal(free.playerTileX,13,'not carrying: full push');
 });
 
+test('Ursa Major halves every push, and stacks with carrying Ruby',()=>{
+  const s=fresh();s.constellations=['steady'];
+  const push=(st,tiles)=>{const x=st.playerTileX;st.playerKnockback={dirX:1,dirY:0,started:false,tilesLeft:tiles};settle(st);return st.playerTileX-x;};
+  assert.equal(push(s,3),1);assert.equal(push(s,3),2);assert.equal(push(s,1),0);assert.equal(push(s,1),1);
+  const both=fresh();both.constellations=['steady'];both.playerCarryingRuby=true;both.rubyTileX=both.rubyTileY=-1;
+  assert.equal(push(both,4),1,'a quarter as far while carrying');
+});
+
 test('speed boosts last 30% shorter while carrying Ruby',()=>{
   const run=(carrying)=>{const s=fresh();if(carrying){s.playerCarryingRuby=true;s.rubyTileX=s.rubyTileY=-1;}s.speedActiveTicks=100;let n=0;while(s.speedActiveTicks>0&&n<500){e.tick(s);n++;}return n;};
   assert.equal(run(false),100);const carried=run(true);assert.ok(Math.abs(carried-100*c.CARRY_BOOST_MULT)<=1,`${carried} ticks`);
+});
+
+test('manual and instant boosts move at 85% of their full speed while carrying Ruby', () => {
+  for (const boost of [e.useSpeedBoost, e.grantInstantSpeedBoost]) {
+    const distance = (carrying) => {
+      const s = fresh();
+      if (carrying) {
+        s.rubyTileX = s.rubyTileY = 10;
+        e.toggleCarryRuby(s);
+      }
+      assert.equal(s.playerCarryingRuby, carrying);
+      boost(s);
+      s.playerQueuedDirX = 1;
+      e.tick(s);
+      e.tick(s);
+      return s.playerX - 10.5 * c.TILE_SIZE;
+    };
+    const fullSpeed = distance(false);
+    assert.ok(fullSpeed > 0);
+    assert.ok(Math.abs(distance(true) - fullSpeed * .85) < 1e-9);
+  }
 });
 
 test('enemy attacks deal +5% at stage 15 and another +5% every 5 stages; hazards and earlier stages are unchanged',()=>{

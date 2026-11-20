@@ -14,9 +14,9 @@ function ticks(s,n){for(let i=0;i<n;i++)e.tick(s);}
 
 test('Leech steals energy up close, without damaging HP, shields, Ruby or powered time',()=>{
  const {s,leech}=fresh();s.playerShieldHP=20;s.poweredTicks=100;e.tick(s);
- assert.equal(s.starEnergy,40);assert.equal(leech.stolenEnergy,20);assert.equal(s.playerHP,100);assert.equal(s.rubyHP,100);assert.equal(s.playerShieldHP,20);assert.equal(s.poweredTicks,99);
- ticks(s,c.ENEMY_CONFIGS.energy_leech.attackCooldown);assert.equal(s.starEnergy,40);
- e.tick(s);assert.equal(s.starEnergy,20);assert.equal(leech.stolenEnergy,40);
+ assert.equal(s.starEnergy,30);assert.equal(leech.stolenEnergy,30);assert.equal(s.playerHP,100);assert.equal(s.rubyHP,100);assert.equal(s.playerShieldHP,20);assert.equal(s.poweredTicks,99);
+ ticks(s,c.ENEMY_CONFIGS.energy_leech.attackCooldown);assert.equal(s.starEnergy,30);
+ e.tick(s);assert.equal(s.starEnergy,0);assert.equal(leech.stolenEnergy,60);
 });
 test('partial and empty gauges never create stored energy or go negative',()=>{
  const {s,leech}=fresh();s.starEnergy=7;e.tick(s);assert.equal(s.starEnergy,0);assert.equal(leech.stolenEnergy,7);
@@ -34,10 +34,10 @@ test('Lunar decoy absorbs the bite without losing real energy or creating a refu
 test('teleport pauses both drains and cooldowns, and God mode prevents theft',()=>{
  const {s,leech}=fresh();s.gamePhase='teleporting';ticks(s,100);assert.equal(s.starEnergy,60);assert.equal(leech.attackTimer,0);
  s.gamePhase='playing';s.godMode=true;e.tick(s);assert.equal(s.starEnergy,60);assert.equal(leech.stolenEnergy??0,0);
- s.godMode=false;leech.attackTimer=0;e.tick(s);assert.equal(s.starEnergy,40);
+ s.godMode=false;leech.attackTimer=0;e.tick(s);assert.equal(s.starEnergy,30);
 });
 test('defeating a Leech returns its actual stored energy plus the ordinary kill reward only once',()=>{
- const {s,leech}=fresh();e.tick(s);assert.equal(s.starEnergy,40);leech.hp=.1;e.useLaser(s);
+ const {s,leech}=fresh();e.tick(s);assert.equal(s.starEnergy,30);leech.hp=.1;e.useLaser(s);
  assert.equal(s.enemies.length,0);assert.equal(s.starEnergy,60+c.STAR_ENERGY_PER_KILL);assert.ok(s.runnerEnergyFlashTicks>0);
  s.laserCooldown=0;e.useLaser(s);assert.equal(s.starEnergy,60+c.STAR_ENERGY_PER_KILL);
 });

@@ -12,3 +12,20 @@ for(const full of [false,true])test('energy shard plays one '+(full?'power-up':'
   engine.tick(s);assert.equal(played.length,1);
  }finally{global.Audio=oldAudio;}
 });
+
+test('direct energy gains use the Endless full-bar sound once on every challenge',()=>{
+ const {addStarEnergy}=require('../game/blessing-effects.ts');
+ const oldAudio=global.Audio,played=[];
+ global.Audio=class{constructor(src){this.src=src;}play(){played.push([this.src,this.volume]);return Promise.resolve();}pause(){}};
+ try{
+  for(const skill of ['fiery_king','sea_chanter','thorn_weaver','blind_prayer','devourer','frost_warden','storm_reaper','astral_twins','aegis_sentinel','splitter_queen']){
+   const state=engine.createModeState('trial',skill);
+   played.length=0;
+   addStarEnergy(state, c.STAR_ENERGY_MAX-1, false);
+   assert.deepEqual(played,[],skill);
+   addStarEnergy(state,1,false);
+   addStarEnergy(state,1,false);
+   assert.deepEqual(played,[['/sounds/powerUpBoost.mp3',.38]],skill);
+  }
+ }finally{global.Audio=oldAudio;}
+});

@@ -16,3 +16,23 @@ test('teleport does not open two tiles away from a pad',()=>{
   assert.equal(engine.tryActivateTeleport(s),false,`${x},${y}`);assert.equal(s.gamePhase,'playing');
  }
 });
+
+test('teleport recharges after two seconds of active play following arrival', () => {
+  const s = at(...c.TELEPORT_PADS[0]);
+  s.noBossSpawns = true;
+  assert.equal(engine.tryActivateTeleport(s), true);
+  engine.cancelTeleport(s);
+  assert.equal(engine.tryActivateTeleport(s), true, 'cancelling leaves teleport ready');
+  engine.doTeleport(s, 1);
+  assert.equal(s.teleportCooldown, 120);
+  assert.equal(engine.tryActivateTeleport(s), false);
+
+  s.gamePhase = 'constellation';
+  engine.tick(s);
+  assert.equal(s.teleportCooldown, 120);
+  s.gamePhase = 'playing';
+  for (let i = 0; i < 119; i++) engine.tick(s);
+  assert.equal(engine.tryActivateTeleport(s), false);
+  engine.tick(s);
+  assert.equal(engine.tryActivateTeleport(s), true);
+});

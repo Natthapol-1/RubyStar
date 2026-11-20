@@ -22,9 +22,63 @@ test('heavy bullet hits still add damage to bosses but never push them',()=>{
   near(shoot(s,boss),c.BULLET_DMG*c.BULLET_HEAVY_MULT);assert.equal(boss.pushTiles,0);
 });
 
+test('heavy bullet knockback discards a walking path that would cross cover after the push', () => {
+  const s = fresh(), a = mob(s);
+  s.map[11][14] = c.T_WALL;
+  a.targetTileY = 11;
+  a.path = [[13, 12]];
+  s.bulletShotCount = c.BULLET_HEAVY_EVERY - 1;
+  near(shoot(s, a), c.BULLET_DMG * c.BULLET_HEAVY_MULT);
+  e.tick(s);
+  assert.deepEqual([a.tileX, a.tileY], [14, 10]);
+  assert.deepEqual(a.path, []);
+
+  for (let i = 0; i < 48; i++) {
+    e.tick(s);
+    assert.ok(e.isFloorTile(s.map, Math.floor(a.x / T), Math.floor(a.y / T)));
+  }
+});
+
+test('heavy bullet knockback checks for a wall beside the tile the alien has entered', () => {
+  const s = fresh(), a = mob(s);
+  s.map[11][14] = c.T_WALL;
+  a.targetTileY = 11;
+  a.stepProgress = T * .6;
+  a.y += a.stepProgress;
+  s.bulletShotCount = c.BULLET_HEAVY_EVERY - 1;
+  near(shoot(s, a), c.BULLET_DMG * c.BULLET_HEAVY_MULT);
+  e.tick(s);
+  assert.deepEqual([a.tileX, a.tileY, a.targetTileX, a.targetTileY], [13, 11, 13, 11]);
+  assert.deepEqual([a.x, a.y], [13.5 * T, 11.5 * T]);
+});
+
 test('Monoceros makes every 8th shot heavy instead of every 20th',()=>{
   const s=fresh(),a=mob(s);s.constellations=['heavyShot'];
   for(let i=1;i<c.BULLET_HEAVY_EVERY_MONOCEROS;i++)near(shoot(s,a),c.BULLET_DMG);
   near(shoot(s,a),c.BULLET_DMG*c.BULLET_HEAVY_MULT);
   near(shoot(s,a),c.BULLET_DMG);
+});
+
+test('a heavy bullet does not push (or cancel) a Lancer winding up or a Charger mid-rush',()=>{
+  for(const type of ['lancer','charger']){
+    const s=fresh(),a=mob(s,type);
+    if(type==='lancer'){a.windupTicks=1e7;a.lanceDirX=-1;a.lanceDirY=0;}else{a.windupTicks=0;a.chargeWindupTicks=1e7;a.chargeDirX=-1;a.chargeDirY=0;}
+    for(let i=1;i<c.BULLET_HEAVY_EVERY;i++)shoot(s,a);
+    near(shoot(s,a),c.BULLET_DMG*c.BULLET_HEAVY_MULT);
+    assert.equal(a.tileX,13,type+' not pushed');
+    if(type==='lancer')assert.equal(a.lanceDirX,-1,'aim kept');else assert.equal(a.chargeDirX,-1,'rush kept');
+  }
+});
+
+test('heavy bullets damage Grappler without interrupting an active warning, flight or pull',()=>{
+ for(const phase of ['warning','flying','pull']){
+  const s=fresh(),a=mob(s,'grappler');a.windupTicks=0;a.attackTimer=0;
+  a.hook={phase,dx:-1,dy:0,x:a.x,y:a.y,ticks:1000,travel:0};
+  if(phase==='pull')s.playerKnockback={dirX:1,dirY:0,started:false,tilesLeft:2,hookOwnerId:a.id};
+  s.ccImmuneUntil=s.gameTick+300;
+  // Hold AI so the assertion isolates heavy-shot knockback from the hook's travel and pull completion.
+  s.ambientEvents.active={kind:'eclipse',ticks:1000,points:[]};
+  s.bulletShotCount=c.BULLET_HEAVY_EVERY-1;
+  near(shoot(s,a),c.BULLET_DMG*c.BULLET_HEAVY_MULT);assert.equal(a.pushTiles,0);assert.equal(a.hook.phase,phase);
+ }
 });

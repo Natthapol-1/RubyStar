@@ -1,11 +1,12 @@
 import { gameAudio, channelVolume } from './audio-settings';
+import { playMoonDarknessEntry } from './event-audio';
 import {
   CHAMBER_BOUNDS, CHAMBER_SPAWN_TILES, MAP_COLS, TELEPORT_PADS, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile, type EnemyType,
   MOON_PHASE_HP, MOON_FIRST_CLONES, MOON_CLONES_PER_JUMP, MOON_CLONE_CAPS, MOON_MIRROR_STRIPS, MOON_MIRROR_LENGTH, MOON_MIRROR_SHIFT, MOON_MIRROR_FADE, MOON_REVEAL_TICKS, MOON_REVEAL_DAMAGE_MULT,
-  MOON_MARK_TICKS, MOON_MARK_COOLDOWN, MOON_MITE_HINT_TICKS, MOON_MIMIC_TRUE_TICKS, MOON_MIMIC_GAP, MOON_MIMIC_CAP, MOON_DARK_SHIFT, MOON_DARK_FADE, MOON_SEEN_TICKS, MOON_SHARD_COUNT, MOON_SHARD_SPEED, MOON_SHARD_TICKS, MOON_SHARD_DAMAGE, MOON_SHARD_RUBY_DAMAGE, MOON_SHARD_HIT_RADIUS, ENEMY_CONFIGS,
+  MOON_MARK_TICKS, MOON_MARK_COOLDOWN, MOON_MITE_HINT_TICKS, MOON_MIMIC_TRUE_TICKS, MOON_MIMIC_GAP, MOON_MIMIC_CAP, MOON_DARK_SHIFT, MOON_DOUBLE_DARK_CHANCE, MOON_DARK_OVERLAY_TICKS, MOON_DARK_FADE, MOON_SEEN_TICKS, MOON_SHARD_COUNT, MOON_SHARD_SPEED, MOON_SHARD_TICKS, MOON_SHARD_DAMAGE, MOON_SHARD_RUBY_DAMAGE, MOON_SHARD_HIT_RADIUS, ENEMY_CONFIGS,
   MOVE_SPEED_MULT,
 } from './constants';
-import {
+import { godPhaseClock,
   stormSlowMultiplier, ATTACK_SFX_VOLUME, bfs, createEncounterEnemy, damagePlayer, playAudioOneShot, godSpawnBoss, healCore, healPlayer, playCelestialSound, playSFX_queenTeleport, damageRuby, playSFX_objectBreak, spawnDeathParticles, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
 import { playUiSfx } from './ui-sfx';
@@ -22,16 +23,20 @@ export interface MoonState {
   shards: MoonShard[];
   arrivals: { x: number; y: number; ticks: number }[]; // visual: where she and her new illusions appear together
   unmask: { id: number; ticks: number } | null;        // visual: her disguise breaking as the reveal starts
-  mark: { id: number; ticks: number } | null;          // C: one marked Queen or illusion
+  mark: { id: number; ticks: number; fromX?: number; fromY?: number } | null;          // C: one marked Queen or illusion
   markCooldown: number;
   hint: { rooms: number[]; ticks: number } | null; // after a mite kill: her room and one other, in random order
+  healPulses?: { x: number; y: number; room: number; ticks: number; targets: { x: number; y: number; ruby: boolean }[] }[];
   healBank: number; // heal earned by hitting her, paid out on her next jump
   shownHp: number;  // what the guardian bar shows: synced only while she is revealed and when she jumps
   mirrors: number[]; // phase 2+: mirror floor tiles (y * MAP_COLS + x)
   mirrorTimer: number; // ticks until they move
   mimicTimer: number; // phase 2+: ticks until the next mimic arrives
   dark: number; darkTimer: number; // phase 3: the dark room (-1 none) and ticks until it moves
-  oldDark: number; darkFade: number; // visual: the room it just left, still fading back in
+  secondDark?: number; // the optional second dark room
+  oldDark: number; oldSecondDark?: number; darkFade: number; // the rooms it just left
+  playerInDarkness?: boolean;
+  darkOverlayTicks?: number; // ramps up inside darkness and down after leaving
   seen: { id: number; ticks: number }[]; // units in the dark that were just hit, briefly visible
   oldMirrors: number[]; mirrorFade: number; // visual: last spots fading out while the new ones fade in
   reflects: { x: number; y: number; toX: number; toY: number; ticks: number }[]; // visual: your shot bouncing back
@@ -41,16 +46,16 @@ export const MOON_ARRIVAL_TICKS = 30;
 export const MOON_UNMASK_TICKS = 24;
 
 export function createMoonState(state: GameState) {
-  state.moon = { phase: 1, bossId: -1, jumps: 0, shards: [], arrivals: [], unmask: null, mark: null, markCooldown: 0, hint: null, healBank: 0, shownHp: 0, mirrors: [], mirrorTimer: 0, mimicTimer: MOON_MIMIC_GAP, dark: -1, darkTimer: 0, oldDark: -1, darkFade: 0, seen: [], oldMirrors: [], mirrorFade: 0, reflects: [] };
+  state.moon = { phase: 1, bossId: -1, jumps: 0, shards: [], arrivals: [], unmask: null, mark: null, markCooldown: 0, hint: null, healBank: 0, shownHp: 0, mirrors: [], mirrorTimer: 0, mimicTimer: MOON_MIMIC_GAP, dark: -1, secondDark: -1, darkTimer: 0, oldDark: -1, oldSecondDark: -1, darkFade: 0, seen: [], oldMirrors: [], mirrorFade: 0, reflects: [] };
 }
 
 export function isMoonObject(type: EnemyType) { return type === 'moon_illusion'; }
 
-export function initializeMoonBoss(state: GameState, boss: Enemy) {
+export function initializeMoonBoss(state: GameState, boss: Enemy, playArrivalSound = true) {
   boss.hp = boss.maxHp = MOON_PHASE_HP * 3;
   state.moon!.bossId = boss.id; state.moon!.phase = 1; state.moon!.shownHp = boss.hp;
   state.moon!.arrivals.push({ x: boss.x, y: boss.y, ticks: MOON_ARRIVAL_TICKS }); // she arrives the way she jumps
-  playSFX_queenTeleport();
+  if (playArrivalSound) playSFX_queenTeleport();
 }
 
 export function isMoonBoss(state: Readonly<GameState>, e: Enemy) { return !!state.moon && e.id === state.moon.bossId; }
@@ -133,12 +138,18 @@ export function moonBossDamageMult(state: GameState, e: Enemy) { return isMoonRe
 
 // After she lands: illusions appear in the same instant, one in her own new chamber (so a lone arrival there gives
 // nothing away) and the rest in chambers other than yours. The oldest fade out past the cap.
-export function moonQueenJumped(state: GameState, boss: Enemy) {
+export function moonQueenJumped(state: GameState, boss: Enemy, departed?: { x: number; y: number; room: number }) {
   const moon = state.moon!;
   if (moon.healBank > 0) { // only now that she is gone; Ruby shares it only when it is with you (carried or in your room)
     healPlayer(state, moon.healBank);
     const rubyWithYou = state.playerCarryingRuby || (state.rubyTileX !== -1 && chamberOfTile(state.rubyTileX, state.rubyTileY) === chamberOfTile(state.playerTileX, state.playerTileY));
     if (rubyWithYou) healCore(state, moon.healBank);
+    if(departed && departed.room>=0) {
+      const targets=[{x:state.playerX,y:state.playerY,ruby:false}];
+      if(rubyWithYou)targets.push({x:state.playerCarryingRuby?state.playerX:(state.rubyTileX+.5)*TILE_SIZE,y:state.playerCarryingRuby?state.playerY:(state.rubyTileY+.5)*TILE_SIZE,ruby:true});
+      (moon.healPulses??=[]).push({...departed,ticks:90,targets});
+      playUiSfx('moonHealingWave');
+    }
     moon.healBank = 0;
   }
   moon.hint = null; // a mite's room hint is out of date once she moves
@@ -198,13 +209,18 @@ function syncShownHp(state: GameState, boss: Enemy) {
   if (moon.phase >= 3 && moon.dark < 0) moveMoonDark(state);
 }
 
-// Phase 3: one random room goes dark (a different one each time it moves). Inside it only walls, the room outline,
-// you, Ruby and attack effects show; units appear briefly when hit.
+// Phase 3: darkness moves to one or two previously lit rooms. Units appear briefly when hit.
 export function moveMoonDark(state: GameState) {
   const moon = state.moon!;
-  const rooms = [0, 1, 2, 3].filter(r => r !== moon.dark);
-  moon.oldDark = moon.dark; moon.darkFade = moon.dark >= 0 ? MOON_DARK_FADE : 0;
-  moon.dark = rooms[Math.floor(Math.random() * rooms.length)]; moon.darkTimer = MOON_DARK_SHIFT;
+  const rooms = CHAMBER_BOUNDS.map((_, room) => room).filter(room => room !== moon.dark && room !== moon.secondDark);
+  moon.oldDark = moon.dark;
+  moon.oldSecondDark = moon.secondDark ?? -1;
+  moon.darkFade = moon.dark >= 0 ? MOON_DARK_FADE : 0;
+  moon.dark = rooms.splice(Math.floor(Math.random() * rooms.length), 1)[0];
+  moon.secondDark = Math.random() < MOON_DOUBLE_DARK_CHANCE
+    ? rooms[Math.floor(Math.random() * rooms.length)]
+    : -1;
+  moon.darkTimer = MOON_DARK_SHIFT;
 }
 
 // A unit that takes a hit inside the dark shows itself for a moment.
@@ -217,7 +233,8 @@ export function moonSeenWhenHit(state: GameState, e: Enemy) {
 // Hidden: standing in the dark room and not just hit.
 export function moonHiddenInDark(state: Readonly<GameState>, tx: number, ty: number, id?: number) {
   const moon = state.moon;
-  if (!moon || moon.dark < 0 || chamberOfTile(tx, ty) !== moon.dark) return false;
+  const room = chamberOfTile(tx, ty);
+  if (!moon || room < 0 || (room !== moon.dark && room !== moon.secondDark)) return false;
   return id === undefined || !moon.seen.some(s => s.id === id);
 }
 
@@ -242,6 +259,11 @@ export function placeMoonMirrors(state: GameState) {
         tiles.push(index);
       }
       if (tiles.length < MOON_MIRROR_LENGTH) continue;
+      // Never right alongside a wall: a strip with a wall or cover block beside most of its tiles on one side would
+      // just double a wall that already stops your shots.
+      const [sx, sy] = vertical ? [1, 0] : [0, 1];
+      const hugs = [1, -1].some(side => tiles.filter(i => state.map[Math.floor(i / MAP_COLS) + sy * side]?.[i % MAP_COLS + sx * side] !== T_FLOOR).length >= 2);
+      if (hugs) continue;
       tiles.forEach(i => taken.add(i)); moon.mirrors.push(...tiles); strip++;
     }
   }
@@ -263,6 +285,7 @@ function phaseBanner(state: GameState, phase: number) {
 
 // God panel: jump straight to a phase at full phase HP (summoning her first if she has not arrived).
 export function godSetMoonPhase(state: GameState, phase: 1 | 2 | 3) {
+  godPhaseClock(state, phase); // phase 2+ starts at least a minute in
   const moon = state.moon;
   if (!moon || state.gamePhase !== 'playing') return;
   let boss = state.enemies.find(e => e.id === moon.bossId && e.hp > 0);
@@ -270,7 +293,7 @@ export function godSetMoonPhase(state: GameState, phase: 1 | 2 | 3) {
   if (!boss) return;
   moon.phase = phase; boss.hp = moon.shownHp = MOON_PHASE_HP * (4 - phase) - .01;
   if (phase >= 2) { if (!moon.mirrors.length) placeMoonMirrors(state); } else { moon.mirrors = []; moon.oldMirrors = []; }
-  if (phase >= 3) { if (moon.dark < 0) moveMoonDark(state); } else { moon.dark = moon.oldDark = -1; moon.darkFade = 0; moon.seen = []; }
+  if (phase >= 3) { if (moon.dark < 0) moveMoonDark(state); } else { moon.dark = moon.secondDark = moon.oldDark = moon.oldSecondDark = -1; moon.darkFade = 0; moon.seen = []; }
   phaseBanner(state, phase);
 }
 
@@ -290,7 +313,7 @@ export function clearMoonIllusions(state: GameState) {
     if (state.enemies[i].type !== 'moon_illusion') continue;
     spawnDeathParticles(state, state.enemies[i]); state.enemies.splice(i, 1);
   }
-  state.moon.shards = []; state.moon.mark = null; state.moon.hint = null;
+  state.moon.healPulses = []; state.moon.shards = []; state.moon.mark = null; state.moon.hint = null;
 }
 
 // C: mark the nearest Queen or illusion. The mark rides along with whoever wears it, so if it was her it follows her
@@ -305,13 +328,14 @@ export function useMoonMark(state: GameState): boolean {
     if (d < bestDist) { bestDist = d; best = e; }
   }
   if (!best) return false;
-  moon.mark = { id: best.id, ticks: MOON_MARK_TICKS }; moon.markCooldown = MOON_MARK_COOLDOWN;
+  moon.mark = { id: best.id, ticks: MOON_MARK_TICKS, fromX: state.playerX, fromY: state.playerY }; moon.markCooldown = MOON_MARK_COOLDOWN;
   playUiSfx('markCast');
   return true;
 }
 
 export function updateMoon(state: GameState) {
   const moon = state.moon!;
+  moon.healPulses=(moon.healPulses??[]).filter(fx=>--fx.ticks>0);
   state.ambientEvents.timer = Math.max(state.ambientEvents.timer, 3600); // no space events on this world
   const boss = state.enemies.find(e => e.id === moon.bossId && e.hp > 0);
   if (boss && isMoonRevealed(state, boss)) syncShownHp(state, boss);
@@ -327,7 +351,14 @@ export function updateMoon(state: GameState) {
   if (boss && moon.phase >= 2 && !state.noMobs && --moon.mimicTimer <= 0) { moon.mimicTimer = MOON_MIMIC_GAP; spawnMimic(state); }
   if (moon.mirrorFade > 0 && --moon.mirrorFade <= 0) moon.oldMirrors = [];
   if (moon.dark >= 0 && --moon.darkTimer <= 0) moveMoonDark(state);
-  if (moon.darkFade > 0 && --moon.darkFade <= 0) moon.oldDark = -1;
+  if (moon.darkFade > 0 && --moon.darkFade <= 0) moon.oldDark = moon.oldSecondDark = -1;
+  const overlayTicks = moon.darkOverlayTicks ?? 0;
+  const inDarkness = moonHiddenInDark(state, state.playerTileX, state.playerTileY);
+  if (inDarkness && !moon.playerInDarkness) playMoonDarknessEntry();
+  moon.playerInDarkness = inDarkness;
+  moon.darkOverlayTicks = inDarkness
+    ? Math.min(MOON_DARK_OVERLAY_TICKS, overlayTicks + 1)
+    : Math.max(0, overlayTicks - 1);
   for (let i = moon.seen.length - 1; i >= 0; i--) if (--moon.seen[i].ticks <= 0) moon.seen.splice(i, 1);
   for (let i = moon.reflects.length - 1; i >= 0; i--) if (--moon.reflects[i].ticks <= 0) moon.reflects.splice(i, 1);
   if (moon.mark && (--moon.mark.ticks <= 0 || !state.enemies.some(e => e.id === moon.mark!.id && e.hp > 0))) moon.mark = null;

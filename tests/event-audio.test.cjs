@@ -118,9 +118,9 @@ test('meteor impact plays and damages once, expires, and allows the next strike'
  assert.equal(impacts(),2);assert.equal(s.meteoriteWarning,-1);assert.equal(s.meteoriteImpact.chamber,1);
 }));
 
-test('Volt Fence recharge uses the recorded skill-ready cue once per dispatch',()=>mock(played=>{
- const ui=require('../game/ui-sfx.ts');ui.playUiSfx('fenceReady');
- assert.equal(played.length,1);assert.equal(played[0].src,'/sounds/celestial/skill-ready.wav');assert.equal(played[0].volume,.3825);
+test('all primal ready cue aliases use Jupiter recording, volume and pitch once per dispatch',()=>mock(played=>{
+ const ui=require('../game/ui-sfx.ts');for(const cue of ['fenceReady','markReady','waveReady'])ui.playUiSfx(cue);
+ assert.equal(played.length,3);for(const sound of played){assert.equal(sound.src,'/sounds/celestial/skill-ready.wav');assert.equal(sound.volume,.7);assert.equal(sound.playbackRate,1);}
  assert.ok(fs.existsSync('public'+played[0].src));
 }));
 
@@ -130,4 +130,29 @@ test('bomb readiness uses the supplied power-up recording once instead of the sy
 
 test('Amethyst firing cue is higher-pitched and quieter than the player bullet',()=>mock(played=>{
  e.playSFX_laserBullet();e.playSFX_laserBullet(1.4,.45);assert.equal(played.length,2);assert.equal(played[1].src,played[0].src);assert.equal(played[0].playbackRate,1);assert.equal(played[1].playbackRate,1.4);assert.equal(played[1].preservesPitch,false);assert.ok(Math.abs(played[1].volume/played[0].volume-.45)<1e-9);
+}));
+
+
+test('Sun warnings keep bounded tails and pause cleanup, with a raised Sunburst pitch',()=>mock(played=>{
+ for(const [play,stop] of [[audio.playSunHeatWarning,audio.stopSunHeatWarning],[audio.playSunburstWarning,audio.stopSunburstWarning]]){
+  for(let i=0;i<12;i++)play();
+  const group=played.slice(-12);assert.equal(group.filter(v=>!v.paused).length,7);
+  for(const voice of group){assert.equal(voice.playbackRate,play===audio.playSunburstWarning?1.2:1);assert.equal(voice.preservesPitch,play!==audio.playSunburstWarning);assert.equal(voice.loop,false);}
+  audio.pauseAmbientEventSounds();assert.ok(group.every(v=>v.paused));
+  audio.resumeAmbientEventSounds();assert.equal(group.filter(v=>!v.paused).length,7);
+  stop();assert.ok(group.every(v=>v.paused));
+ }
+}));
+
+
+test('all celestial maps play the supplied F-ready recording once on recharge and stay silent while paused',()=>mock(played=>{
+ const {TRIALS}=require('../game/trials.ts');
+ for(const trial of TRIALS){
+  const s=e.createModeState('trial',trial.boss);s.noMobs=true;s.noBossSpawns=true;s.meteoriteTimer=100000;s.specialSkill=null;s.trial.cooldown=1;
+  const count=()=>played.filter(a=>a.src==='/sounds/celestial-ready.mp3').length,before=count();
+  s.gamePhase='teleporting';e.tick(s);assert.equal(count(),before,trial.id+' paused');assert.equal(s.trial.cooldown,1);
+  s.gamePhase='playing';e.tick(s);assert.equal(s.specialSkill,s.trial.skill,trial.id);assert.equal(count(),before+1,trial.id);
+  const sound=played.findLast(a=>a.src==='/sounds/celestial-ready.mp3');assert.equal(sound.volume,.7);assert.equal(sound.playbackRate,1);
+  e.tick(s);assert.equal(count(),before+1,trial.id+' does not repeat');
+ }
 }));

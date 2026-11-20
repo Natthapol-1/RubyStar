@@ -16,7 +16,7 @@ A short brief for discussing new Celestial Challenge worlds. Ruby Star is a top-
 | **Blind Prayer** | Sirius | Reverses your movement controls while alive. Flees from you, and periodically teleports Ruby to another room. |
 | **Sea Chanter** | Neptune | Hunts with travelling water attacks and heals her allies. At low HP she dives and flees, healing from damage you deal to other aliens. |
 | **Thorn Weaver** | Gaia | Flees while dropping aimed thorn fields on you. The fields slow and poison. She also has an instant field when you get close. |
-| **Aegis Sentinel** | Venus | Shielded hunter that reflects your damage back at you. Two pylons in other rooms must be destroyed to expose her core, and they overload if ignored. |
+| **Aegis Sentinel** | Venus | Shielded hunter that reflects your damage back at you. Two totems in other rooms must be destroyed to expose her core, and they overload if ignored. |
 | **Astral Twins** | Binary Star | Two linked bosses, one melee and one ranged. Killing one starts a revive timer, so both must die close together. They share HP back and forth. |
 
 ## Celestial skills
@@ -27,7 +27,7 @@ Each boss has a celestial skill. In its own world, you hold that skill on F with
 | --- | --- |
 | **Solar Flare** (King) | Hits every enemy on the map: 10% max HP to bosses, and damage to aliens that grows with the stage exactly like their HP up to Stage 18 (25 at the start). |
 | **Lunar Echo** (Queen) | Places a stationary decoy that draws all enemy targeting until it takes 12 hits. |
-| **Jupiter Storm** (Reaper) | Big blast within 6 tiles: 25% max HP to bosses, and damage to aliens that grows with the stage like their HP up to Stage 18 (60 at the start). |
+| **Jupiter Storm** (Reaper) | Big blast within 7 tiles: 25% max HP to bosses, and damage to aliens that grows with the stage like their HP up to Stage 18 (60 at the start). |
 | **Singularity** (Devourer) | An 18s gravity field that pulls enemies in, blocks their teleports and damages them each second. |
 | **Saturn Guard** (Warden) | Gives you and Ruby an absorb shield each: 40, +1 per stage up to Stage 18. |
 | **Sirius Surge** (Prayer) | At least 6s of powered mode, a free speed burst, and all ability cooldowns reset. |
@@ -51,7 +51,7 @@ Every challenge world turns off random space events and gives the boss a big mul
 
 - **Temperature:** starts halfway. Cinder Wisps raise it; full heat triggers a devastating arena-wide eruption that spares the King.
 - **Cooling stations:** hold Space to charge them, cool the arena and heal you and Ruby on completion. At least one stays in each room; the King resets nearby stations.
-- **Cooling Wave (C):** clears wisps, cools the arena, reduces rage and extinguishes armored Emberlings.
+- **Hydro Pulse (C):** clears wisps, cools the arena, reduces rage and extinguishes armored Emberlings.
 - **Zero heat:** stuns the King, slows other enemies and grants five rapid empowered waves that each deal 3% of his phase HP.
 - **Later phases:** burning trails, station-draining Scorch Sappers, then room-wide Sunbursts that water or Solar Flare can disrupt.
 - **Look:** a solar forge with dark metal floors, molten seams and cyan coolant reservoirs.
@@ -99,10 +99,10 @@ Every challenge world turns off random space events and gives the boss a big mul
 - **Electrical hazards:** charged floor tiles burst, slowing you and feeding his pursuit energy. Finishing a charge blasts his entire room, so switch rooms before it ends.
 - **Opening:** after the second pursuit, his armor drops and storms end. Chase him and use Jupiter Storm for heavy damage before the loop restarts.
 
-### Saturn (Frost Warden): managing shields
+### Saturn (Frost Warden): frost shields
 
-Stack permanent shields, steal enemy shields by charging and releasing Snowball, and ram the Warden's otherwise invulnerable barrier. Blizzard covers the map in three intensities; shielded units avoid its slows. Breaking the barrier hurts him and briefly stops the storm. Snowbowls steal shields, Frosticles drop dodgeable icicles that freeze nearby floor, and Ice Cubs knock you toward ice. All three HP phases currently share this loop. See [Saturn](SATURN.md).
+She gives big frost shields to her aliens; breaking or taking those shields hurts her, and she recalls what is left to heal. Absolute Zero (C), a time-stop field, steals grants and blocks frost-shield recalls. See [Saturn](SATURN.md).
 
 ## Not built yet
 
-Venus, Sirius and Binary Star are locked on the star map. The Singularity has a map preview with its existing guardian. These worlds still need their own multi-phase fights, world mechanics, C abilities, themed aliens and a reason their celestial skill matters there.
+Sirius, Venus and the Singularity are playable (see [Sirius](SIRIUS.md), [Venus](VENUS.md) and [The Singularity](SINGULARITY.md)).

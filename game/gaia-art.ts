@@ -1,5 +1,6 @@
+import { drawPrimalAftershock } from './primal-impact-art';
 import { drawEnemyHealthBar } from './enemy-health-art';
-import { TILE_SIZE, MAP_COLS, CHAMBER_BOUNDS, T_FLOOR, GAIA_POD_FUSE, GAIA_SUN_WARNING, GAIA_SCORCH_TICKS, GAIA_STONE_TRAVEL, GAIA_STONE_RELIGHT,
+import { TILE_SIZE, MAP_COLS, MAP_ROWS, CHAMBER_BOUNDS, T_FLOOR, GAIA_POD_FUSE, GAIA_SUN_WARNING, GAIA_SCORCH_TICKS, GAIA_STONE_TRAVEL, GAIA_STONE_RELIGHT,
   GAIA_STONE_DRIFT_TICKS, GAIA_RING_RADIUS, GAIA_RING_WARN, GAIA_WARD_RADIUS, GAIA_SPORE_RADIUS, GAIA_SPORE_TICKS, GAIA_WITHER_TICKS, GAIA_SNARE_ROOT } from './constants';
 import { ENEMY_CONFIGS } from './constants';
 import type { Enemy, GameState } from './engine';
@@ -135,17 +136,31 @@ export function drawRootBind(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.restore();
 }
 
+export function drawSporeShot(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number) {
+  ctx.save(); const len = Math.hypot(dx, dy) || 1;
+  for (let k = 2; k > 0; k--) { ctx.globalAlpha = .18 * (3-k); block(ctx, x-dx/len*k*12-5, y-dy/len*k*12-5, 10, 10, '#b9a8ff'); }
+  ctx.globalAlpha = 1; ctx.shadowColor = '#b9a8ff'; ctx.shadowBlur = 5;
+  block(ctx, x-8, y-8, 16, 16, '#8a6fe0'); ctx.shadowBlur = 0;
+  block(ctx, x-4, y-4, 8, 8, '#e2d9ff'); block(ctx, x-2, y-2, 4, 4, '#b6e05a'); ctx.restore();
+}
+export function drawSporeBurst(ctx: CanvasRenderingContext2D, x: number, y: number, age: number) {
+  ctx.save(); const p = age/24; ctx.globalAlpha = Math.max(0,1-p); ctx.shadowBlur = 0;
+  for (let k=0;k<8;k++) { const a=k*Math.PI/4, r=8+p*64; block(ctx,x+Math.cos(a)*r-3,y+Math.sin(a)*r-3,6,6,k%2?'#b9a8ff':'#b6e05a'); }
+  ctx.strokeStyle='#b9a8ff';ctx.lineWidth=3;const r=8+p*40;ctx.strokeRect(x-r,y-r,r*2,r*2);ctx.restore();
+}
+
 // Above actors: spores, pollen drift, blossom shots, Sunstone burns, root binds and Sunfire.
 export function drawGaiaOverlay(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, tick: number) {
   const gaia = state.gaia; if (!gaia) return;
   const s = TILE_SIZE;
   ctx.save(); ctx.shadowBlur = 0;
+  for (const b of gaia.sporeBursts ?? []) drawSporeBurst(ctx, b.x - camX, b.y - camY, 24 - b.ticks);
   for (const cloud of gaia.spores) {
     const fade = Math.min(1, cloud.ticks / 40) * (1 - Math.max(0, cloud.ticks - (GAIA_SPORE_TICKS - 20)) / 20);
     for (let k = 0; k < 18; k++) {
       const a = hash(cloud.x, cloud.y, k) * Math.PI * 2, r = hash(cloud.y, cloud.x, k) * GAIA_SPORE_RADIUS * s;
       const px = (cloud.x + .5) * s + Math.cos(a + tick * .01) * r - camX, py = (cloud.y + .5) * s + Math.sin(a + tick * .01) * r - camY;
-      ctx.globalAlpha = fade * .55; block(ctx, px - 6, py - 6, 12, 12, k % 3 ? '#a58cff' : '#d8ccff');
+      ctx.globalAlpha = fade * .55; block(ctx, px - 6, py - 6, 12, 12, k % 4 === 0 ? '#b6e05a' : k % 3 ? '#a58cff' : '#d8ccff'); // sickly green motes: it poisons
     }
   }
   if (gaia.pollen) {
@@ -207,7 +222,8 @@ export function drawGaiaOverlay(ctx: CanvasRenderingContext2D, state: Readonly<G
   }
   if (gaia.sunImpact) {
     const [r1, c1, r2, c2] = CHAMBER_BOUNDS[gaia.sunImpact.chamber];
-    const x = c1 * s - camX, y = r1 * s - camY, w = (c2 - c1 + 1) * s, h = (r2 - r1 + 1) * s, age = 60 - gaia.sunImpact.ticks;
+    const x = c1 * s - camX, y = r1 * s - camY, w = (c2 - c1 + 1) * s, h = (r2 - r1 + 1) * s, age = 120 - gaia.sunImpact.ticks;
+    drawPrimalAftershock(ctx,state,camX,camY,gaia.sunImpact.chamber,age,'#ffb84a','#fff3b8');
     ctx.globalAlpha = Math.max(0, 1 - age / 14) * .6; block(ctx, x, y, w, h, '#fff8d8');
     const beam = Math.max(12, w * .8 * Math.max(0, 1 - age / 24)), fade = Math.max(0, 1 - Math.max(0, age - 24) / 30);
     ctx.globalAlpha = .45 * fade; block(ctx, x + w / 2 - beam / 2 - 16, y - 900, beam + 32, h / 2 + 900, '#ffb84a');
@@ -271,6 +287,8 @@ export function drawGaiaUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, 
     block(ctx, -12, -16, 6, 5, '#ffe8e0'); block(ctx, 4, -18, 5, 5, '#ffe8e0'); block(ctx, 10, -11, 4, 4, '#ffe8e0');
   } else if (e.type === 'sporeling') {
     const bob = Math.round(Math.sin(tick * .15 + e.id) * 2);
+    if (e.windupTicks > 0) { ctx.globalAlpha = .5 + .5 * Math.abs(Math.sin(tick*.3)); block(ctx, -8, -23 + bob, 16, 5, '#b6e05a'); ctx.globalAlpha = 1; }
+    if (e.shootTicks > 0) block(ctx, -10, -20 + bob, 20, 6, '#e2d9ff');
     block(ctx, -8, 0 + bob, 16, 12, '#e6dcc0'); block(ctx, -8, 8 + bob, 16, 4, '#b8ad90');
     block(ctx, -5, 3 + bob, 3, 3, '#1a1426'); block(ctx, 2, 3 + bob, 3, 3, '#1a1426');
     ctx.shadowColor = '#b9a8ff'; ctx.shadowBlur = 4;
@@ -305,14 +323,48 @@ export function drawForestBackdrop(ctx: CanvasRenderingContext2D, viewW: number,
     ctx.globalAlpha = .045 + .02 * Math.sin(tick * .01 + k); ctx.fillStyle = '#e8f0a0';
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 120, 0); ctx.lineTo(x + 260, viewH); ctx.lineTo(x + 100, viewH); ctx.fill();
   }
-  for (const [layer, par, color, base] of [[0, .06, '#0f2a1a', .55], [1, .14, '#123a20', .7]] as const) {
-    const span = 90 + layer * 40;
-    for (let k = -1; k < viewW / span + 2; k++) {
-      const n = Math.floor(camX * par / span) + k, x = k * span - (camX * par) % span;
-      const h = viewH * (base - .2 + hash(n, layer, 1) * .25), top = viewH - h - camY * par;
-      ctx.globalAlpha = 1; block(ctx, x + span * .4, top + 30, span * .16, viewH - top + 40, color);
-      for (let tier = 0; tier < 3; tier++) block(ctx, x + tier * 10, top + tier * 26, span - tier * 20, 30, color);
+  // A pale moon with a soft halo and two far stepped ridges give the forest depth.
+  const mx = viewW * .8 - camX * .008, my = viewH * .16 - camY * .006;
+  for (let ring = 3; ring >= 0; ring--) { ctx.globalAlpha = ring ? .035 : .55; const r = 22 + ring * 16; for (let row = -r; row < r; row += 4) { const half = Math.round(Math.sqrt(r * r - row * row) / 4) * 4; block(ctx, mx - half, my + row, half * 2, 4, ring ? '#e8f0c0' : '#dfe8b8'); } }
+  ctx.globalAlpha = .18; block(ctx, mx - 8, my - 6, 8, 6, '#9fb48a'); block(ctx, mx + 6, my + 8, 6, 4, '#9fb48a');
+  for (const [par, base, amp, col] of [[.015, .5, .16, '#0c2216'], [.03, .62, .12, '#0d2818']] as const) {
+    ctx.globalAlpha = 1; ctx.fillStyle = col;
+    for (let x = -24; x < viewW + 24; x += 24) { const wx = x + camX * par, top = viewH * base - camY * par * .5 + Math.round((Math.sin(wx * .004) * amp + Math.sin(wx * .011 + 2) * amp * .35) * viewH / 8) * 8; ctx.fillRect(x, top, 24, viewH - top); }
+  }
+  // Three tree lines with very different heights: short shrubs, mid trees and rare towering pines. The vertical
+  // offset follows where the camera is in the map, within a limited range, so canopies stay in view at the bottom.
+  const mapH = MAP_ROWS * TILE_SIZE, depth = Math.max(0, Math.min(1, camY / mapH)) - .5;
+  for (const [layer, par, color, light] of [[0, .05, '#0d2618', '#14361f'], [1, .1, '#113520', '#1a4a29'], [2, .16, '#15402a', '#215a32']] as const) {
+    const span = 70 + layer * 34, lift = depth * viewH * (.1 + layer * .06);
+    for (let k = -2; k < viewW / span + 3; k++) {
+      const n = Math.floor(camX * par / span) + k, x = n * span - camX * par + (hash(n, layer, 7) - .5) * span * .5; // from the tree's world index, so nothing jumps when camX goes negative
+      const roll = hash(n, layer, 1), kind = roll > .86 ? 'pine' : roll < .22 ? 'shrub' : 'tree';
+      const h = viewH * (kind === 'pine' ? .85 + hash(n, layer, 2) * .25 : kind === 'shrub' ? .12 + hash(n, layer, 2) * .12 : .3 + hash(n, layer, 2) * .42) * (.8 + layer * .1);
+      const top = viewH - h - lift, w = span * (kind === 'shrub' ? 1.1 : .9 + hash(n, layer, 3) * .4);
+      ctx.globalAlpha = 1;
+      if (kind === 'shrub') { block(ctx, x, top + 14, w, viewH - top, color); block(ctx, x + w * .15, top, w * .7, 16, color); block(ctx, x + w * .2, top, w * .4, 3, light); continue; }
+      block(ctx, x + w * .44, top + 30, Math.max(6, w * .12), viewH - top + 60, color); // trunk
+      const tiers = kind === 'pine' ? 6 + Math.floor(hash(n, layer, 4) * 3) : 3 + Math.floor(hash(n, layer, 4) * 2), th = kind === 'pine' ? 30 : 26;
+      for (let tier = 0; tier < tiers; tier++) {
+        const tw = kind === 'pine' ? w * (.3 + tier / tiers * .9) : w - Math.abs(tier - 1) * w * .18, tx = x + (w - tw) / 2;
+        block(ctx, tx, top + tier * th, tw, th + 4, color); block(ctx, tx + 4, top + tier * th, tw * .45, 3, light);
+      }
+      if (layer === 2 && kind === 'tree') {
+        // Hanging vines under the canopy and a small glowing mushroom cluster at the trunk.
+        const bottom = top + tiers * th;
+        for (let v = 0; v < 3; v++) if (hash(n, v, 21) > .45) { const vx = x + w * (.18 + v * .3), vl = 24 + hash(n, v, 22) * 70; block(ctx, vx, bottom, 2, vl, '#1d5a30'); block(ctx, vx - 2, bottom + vl * .5, 6, 4, '#24683a'); block(ctx, vx - 1, bottom + vl, 4, 4, '#2a7442'); }
+        if (hash(n, 5, 23) > .5) {
+          const gx = x + w * .44 + (hash(n, 6, 23) > .5 ? -12 : Math.max(6, w * .12) + 2), gy = viewH - 30 - lift * .3, glow = .55 + .3 * Math.sin(tick * .03 + n), col = hash(n, 7, 23) > .5 ? '#7affd2' : '#ffb0e8';
+          ctx.globalAlpha = glow * .18; block(ctx, gx - 8, gy - 10, 26, 18, col);
+          ctx.globalAlpha = glow; block(ctx, gx, gy, 8, 4, col); block(ctx, gx + 3, gy + 4, 2, 6, '#c8e8b8'); block(ctx, gx + 9, gy + 5, 6, 3, col); block(ctx, gx + 11, gy + 8, 2, 4, '#c8e8b8');
+        }
+      }
     }
+  }
+  // Slow mist drifts low across the forest.
+  for (let k = 0; k < 5; k++) {
+    const span = viewW + 600, x = ((k * 431 + tick * (.12 + k * .03) - camX * .12) % span + span) % span - 300, y = viewH * (.62 + k * .07) - camY * .02;
+    ctx.globalAlpha = .045; block(ctx, x, y, 380, 18, '#cfe8c0'); block(ctx, x + 60, y - 8, 220, 8, '#cfe8c0');
   }
   for (let k = 0; k < 40; k++) {
     const x = ((hash(k, 1, 9) * viewW * 1.4 - camX * .1 + Math.sin(tick * .01 + k) * 30) % viewW + viewW) % viewW;
@@ -328,10 +380,10 @@ const isCoverTile = (state: Readonly<GameState>, tx: number, ty: number) => stat
 
 // A cover block as mossy stone: two or three grey-green stones of different sizes with dark mortar between them, a light
 // top-left bevel and dark lower-right edge on each, an occasional crack, moss patches along the top, and a rim in the
-// room colour only where the block meets open floor.
+// natural stone edges only where the block meets open floor.
 export function drawGaiaStone(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, tx: number, ty: number, x: number, y: number, color: string) {
-  const s = TILE_SIZE;
-  ctx.save(); ctx.shadowBlur = 0;
+  const s = TILE_SIZE, cover = hash(tx, ty, 70), moss = cover > .75 ? 2 : cover > .35 ? 1 : 0;
+  ctx.save(); ctx.shadowBlur = 0; ctx.beginPath(); ctx.rect(x, y, s, s); ctx.clip();
   block(ctx, x, y, s, s, '#1b211a'); // mortar
   const split = 16 + Math.floor(hash(tx, ty, 21) * 16), cut = 14 + Math.floor(hash(tx, ty, 22) * 20), horizontal = hash(tx, ty, 23) > .5;
   const stones = horizontal
@@ -346,28 +398,117 @@ export function drawGaiaStone(ctx: CanvasRenderingContext2D, state: Readonly<Gam
       const cx = x + sx + 4 + Math.floor(hash(tx, ty, 30 + i) * (w - 10)), cy = y + sy + 3;
       block(ctx, cx, cy, 2, 4, '#262c24'); block(ctx, cx + 2, cy + 4, 2, 4, '#262c24'); block(ctx, cx + 1, cy + 8, 2, 3, '#262c24');
     }
+    if (moss > 0 && (moss === 2 || hash(tx, ty, 71 + i) > .3)) {
+      // Thick flat moss mats grow over the stone faces; keep some masonry and its
+      // shaded edges exposed even on the heavily overgrown variant.
+      const depth = Math.max(4, Math.floor((h - 4) * (moss === 2 ? .78 : .38)));
+      const mx = x + sx + 2, my = y + sy + 2, width = w - 4;
+      ctx.save(); ctx.beginPath(); ctx.rect(mx, my, width, h - 4); ctx.clip();
+      block(ctx, mx, my, width * .78, depth, '#365c2c');
+      block(ctx, mx + width * .25, my + 1, width * .75, depth * .72, '#466f33');
+      block(ctx, mx + width * .15, my + depth - 2, width * .3, moss === 2 ? 8 : 4, '#365e29');
+      block(ctx, mx + width * .62, my + depth * .65, width * .25, moss === 2 ? 10 : 3, '#416d2e');
+      block(ctx, mx + 2, my, Math.max(3, width * .4), 3, '#637e43');
+      ctx.restore();
+    }
   });
   if (!isCoverTile(state, tx, ty - 1)) { // moss creeping over the top
     for (let k = 0; k < 3; k++) if (hash(tx, ty, 40 + k) > .4) {
-      const mx = x + 3 + Math.floor(hash(tx, ty, 43 + k) * (s - 14)), mw = 6 + Math.floor(hash(tx, ty, 46 + k) * 8);
-      block(ctx, mx, y, mw, 3, '#5f9a3c'); block(ctx, mx + 2, y + 3, Math.max(2, mw - 5), 2, '#4a7f2e');
+      const mx = x + 3 + Math.floor(hash(tx, ty, 43 + k) * (s - 14));
+      const mw = Math.min(s - (mx - x) - 1, 6 + moss * 4 + Math.floor(hash(tx, ty, 46 + k) * 8));
+      block(ctx, mx, y, mw, moss === 2 ? 5 : 3, '#5f9a3c');
+      block(ctx, mx + 2, y + 3, Math.max(2, mw - 5), moss === 2 ? 7 : 2 + moss * 2, '#4a7f2e');
     }
   }
   const open = (dx: number, dy: number) => !isCoverTile(state, tx + dx, ty + dy);
-  ctx.globalAlpha = .55;
-  if (open(0, -1)) block(ctx, x, y, s, 2, color); if (open(-1, 0)) block(ctx, x, y, 2, s, color);
-  if (open(1, 0)) block(ctx, x + s - 2, y, 2, s, color); if (open(0, 1)) block(ctx, x, y + s - 2, s, 2, color);
+  // Solid worn stone rims give joined walls weight without a luminous colour frame.
+  if (open(0, -1)) { block(ctx, x, y, s, 3, '#899079'); block(ctx, x + 2, y + 3, s - 4, 1, '#626d58'); }
+  if (open(-1, 0)) block(ctx, x, y + (open(0, -1) ? 3 : 0), 2, s - (open(0, -1) ? 3 : 0), '#737c66');
+  if (open(1, 0)) block(ctx, x + s - 3, y + (open(0, -1) ? 3 : 0), 3, s - (open(0, -1) ? 3 : 0), '#30392c');
+  if (open(0, 1)) { block(ctx, x, y + s - 4, s, 4, '#252e23'); block(ctx, x + 2, y + s - 5, s - 4, 1, '#59614e'); }
+  if (moss > 0 && hash(tx, ty, 73) > .93) {
+    ctx.globalAlpha = 1;
+    const fx = x + 12 + Math.floor(hash(tx, ty, 74) * 24), fy = y + 9 + Math.floor(hash(tx, ty, 75) * 15);
+    const petal = ['#b77e96', '#a99b65', '#9886ac'][Math.floor(hash(tx, ty, 76) * 3)];
+    // Square petals and one solid centre, growing from moss rather than floating.
+    block(ctx, fx, fy + 2, 2, 8, '#426e31'); block(ctx, fx + 2, fy + 6, 4, 3, '#5d893d');
+    block(ctx, fx - 1, fy - 4, 3, 3, petal); block(ctx, fx - 4, fy - 1, 3, 3, petal);
+    block(ctx, fx + 2, fy - 1, 3, 3, petal); block(ctx, fx - 1, fy + 2, 3, 3, petal);
+    block(ctx, fx - 1, fy - 1, 3, 3, '#c1b27b');
+  }
   ctx.restore();
 }
 
+function drawGaiaGrass(ctx: CanvasRenderingContext2D, x: number, y: number, height: number, dark: boolean, lean = 0) {
+  const body = dark ? '#365c2c' : '#477132', leaf = dark ? '#527b36' : '#658c40';
+  const small = height < 14, width = small ? 3 : 5, thickness = small ? 2 : 3;
+  ctx.save();
+  for (let frond = 0; frond < 2; frond++) {
+    const fh = height * (frond ? .78 : 1);
+    ctx.save(); ctx.translate(x + (frond ? 4 : -3), y); ctx.rotate((frond ? .12 : -.1) + lean);
+    block(ctx, -1, -fh, height > 18 ? 3 : 2, fh, body);
+    block(ctx, -width, -fh * .4, width, thickness, leaf);
+    block(ctx, -width, -fh * .4 - thickness + 1, 2, thickness, leaf);
+    block(ctx, 1, -fh * .7, width, thickness, leaf);
+    block(ctx, width - 1, -fh * .7 - thickness + 1, 2, thickness, leaf);
+    ctx.restore();
+  }
+  block(ctx, x - 5, y - 1, 12, 2, body);
+  ctx.restore();
+}
+
+// Wind sweep across Gaia's floor: 0 outside the band, 1 at its centre. World-space along x + .4y, like the Moon's sheen.
+const WIND_PERIOD = 1500, WIND_SPEED = 1.5, WIND_HALF = 170;
+function windAt(px: number, py: number, tick: number) {
+  const d = (((px + py * .4) - tick * WIND_SPEED) % WIND_PERIOD + WIND_PERIOD) % WIND_PERIOD;
+  return d < WIND_HALF * 2 ? Math.sin(d / (WIND_HALF * 2) * Math.PI) : 0;
+}
 export function drawForestAmbience(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, x0: number, y0: number, x1: number, y1: number, tick: number) {
   const s = TILE_SIZE;
   ctx.save(); ctx.shadowBlur = 0;
+  { // A soft pale-green band of wind light rolls across open floor, clipped to floor tiles.
+    const left = x0 * s - camX, top = y0 * s - camY, w = (x1 - x0 + 1) * s, h = (y1 - y0 + 1) * s;
+    ctx.save(); ctx.beginPath();
+    for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+      if (state.map[ty]?.[tx] !== T_FLOOR) continue;
+      const start = tx; while (tx < x1 && state.map[ty]?.[tx + 1] === T_FLOOR) tx++;
+      ctx.rect(start * s - camX, ty * s - camY, (tx - start + 1) * s, s);
+    }
+    ctx.clip();
+    const head = ((tick * WIND_SPEED) % WIND_PERIOD + WIND_PERIOD) % WIND_PERIOD, norm = 1.16; // |(1,.4)|^2
+    const lo = left + camX + (top + camY) * .4 - WIND_HALF * 2, hi = left + w + camX + (top + h + camY) * .4 + WIND_HALF * 2;
+    for (let u = lo - ((lo - head) % WIND_PERIOD + WIND_PERIOD) % WIND_PERIOD; u <= hi; u += WIND_PERIOD) {
+      if (u < lo) continue;
+      const C = u + WIND_HALF - camX - camY * .4, qx = C / norm, qy = C * .4 / norm, dx = WIND_HALF / Math.sqrt(norm), dy = dx * .4;
+      const g = ctx.createLinearGradient(qx - dx, qy - dy, qx + dx, qy + dy);
+      g.addColorStop(0, '#b8e07a00'); g.addColorStop(.4, '#b8e07a'); g.addColorStop(.5, '#e8f8c0'); g.addColorStop(.6, '#b8e07a'); g.addColorStop(1, '#b8e07a00');
+      ctx.globalAlpha = .07; ctx.fillStyle = g; ctx.fillRect(left, top, w, h);
+    }
+    ctx.restore();
+    // Subtle grass texture appears only on tiles the wind is crossing: short blades that
+    // fade in and out with the band and bend slightly with it.
+    for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+      if (state.map[ty]?.[tx] !== T_FLOOR || windAt(tx * s + s / 2, ty * s + s / 2, tick) <= 0 && windAt(tx * s, ty * s, tick) <= 0 && windAt(tx * s + s, ty * s + s, tick) <= 0) continue;
+      const x = tx * s - camX, y = ty * s - camY;
+      for (let b = 0; b < 12; b++) {
+        const bx = 2 + Math.floor(hash(tx * 13 + b, ty, 101) * 43), by = 6 + Math.floor(hash(tx, ty * 13 + b, 102) * 40), l = windAt(tx * s + bx, ty * s + by, tick);
+        if (l <= .02) continue;
+        const tall = 3 + Math.floor(hash(tx + b, ty, 103) * 3), bend = l > .5 ? 1 : 0;
+        ctx.globalAlpha = l * .22; const col = b % 3 ? '#5f8f3a' : '#86b04e';
+        block(ctx, x + bx, y + by - tall, 1, tall, col); block(ctx, x + bx + 1 + bend, y + by - tall - 2, 1, 2, col);
+      }
+    }
+  }
   // Subtle forest floor, kept faint under the vines and fully static: thin right-angle root veins etched into some
-  // tiles, a few fallen leaves, pebbles and the odd grass tuft.
+  // tiles, a few fallen leaves, pebbles and low-contrast blocky grass tufts.
   for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
     if (state.map[ty]?.[tx] !== T_FLOOR) continue;
     const x = tx * s - camX, y = ty * s - camY;
+    // Colour variety in soft clumps: moss, olive, teal-green and earth patches in the same dark woodland range.
+    const clump = hash(Math.floor((tx + 1) / 3), Math.floor((ty + 2) / 3), 90), patch = ['#2f5a22', '#4a5420', '#1f5444', '#4f3e22', '#3a5a2a'][Math.floor(clump * 5)];
+    ctx.globalAlpha = .14 + hash(tx, ty, 91) * .06; block(ctx, x, y, s, s, patch);
+    if (hash(tx, ty, 92) > .8) { ctx.globalAlpha = .14; block(ctx, x + 6 + Math.floor(hash(tx, ty, 93) * 20), y + 6 + Math.floor(hash(tx, ty, 94) * 20), 14, 10, clump > .5 ? '#5e7a2c' : '#2c6a50'); }
+    if (hash(tx, ty, 95) > .95) { ctx.globalAlpha = .45; const fx = x + 8 + Math.floor(hash(tx, ty, 96) * 30), fy = y + 8 + Math.floor(hash(tx, ty, 97) * 30); block(ctx, fx, fy, 2, 2, ['#c9b86a', '#a98ab8', '#d8d8b0'][Math.floor(hash(tx, ty, 98) * 3)]); block(ctx, fx + 5, fy + 3, 2, 2, '#c9b86a'); }
     if (hash(tx, ty, 55) > .78) { // a root vein: one straight run with a right-angle bend
       const across = hash(tx, ty, 56) > .5, at = 10 + Math.floor(hash(tx, ty, 57) * 28), bend = 8 + Math.floor(hash(tx, ty, 58) * 30);
       ctx.globalAlpha = .45;
@@ -379,14 +520,28 @@ export function drawForestAmbience(ctx: CanvasRenderingContext2D, state: Readonl
       ctx.globalAlpha = .4; block(ctx, lx, ly + 2, 6, 2, tone); block(ctx, lx + 2, ly, 2, 6, tone);
     }
     if (hash(tx, ty, 50) > .86) { ctx.globalAlpha = .28; block(ctx, x + 8 + Math.floor(hash(tx, ty, 51) * 28), y + 8 + Math.floor(hash(tx, ty, 52) * 28), 4, 3, '#6b6a52'); }
-    if (hash(tx, ty, 53) > .94) { ctx.globalAlpha = .22; const gx = x + 10 + Math.floor(hash(tx, ty, 54) * 24), gy = y + 30; block(ctx, gx, gy, 2, 6, '#6fae45'); block(ctx, gx + 3, gy + 2, 2, 4, '#6fae45'); }
+    if (hash(tx, ty, 53) > .9) {
+      const tall = hash(tx, ty, 77) > .7;
+      const height = tall ? 13 + Math.floor(hash(tx, ty, 78) * 6) : 6 + Math.floor(hash(tx, ty, 78) * 4);
+      const gx = x + 12 + Math.floor(hash(tx, ty, 54) * 22), gy = y + 23 + Math.floor(hash(tx, ty, 79) * 16);
+      const gust = windAt(tx * s + gx - x, ty * s + gy - y, tick);
+      ctx.globalAlpha = (tall ? .25 : .3) + gust * .3;
+      drawGaiaGrass(ctx, gx, gy, height, hash(tx, ty, 80) > .5, gust * .45);
+    }
   }
   ctx.globalAlpha = 1;
   for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
     if (state.map[ty]?.[tx] !== 0 || hash(tx, ty, 3) < .55) continue;
     const ch = CHAMBER_BOUNDS.findIndex(([t, l, b, r]) => tx > l && tx < r && ty > t && ty < b); if (ch < 0) continue;
     const x = tx * s - camX, y = ty * s - camY;
-    block(ctx, x + 4, y + s - 10, s - 8, 6, '#3f7a2c'); block(ctx, x + 10, y + s - 18, 6, 8, '#5fae3e'); block(ctx, x + s - 18, y + s - 16, 8, 6, '#8fdc4a');
+    const onTop = !isCoverTile(state, tx, ty - 1) && hash(tx, ty, 81) > .45;
+    const tall = hash(tx, ty, 82) > .65, baseX = x + 12 + Math.floor(hash(tx, ty, 83) * 22);
+    const baseY = onTop ? y + 2 : y + s - 7;
+    const height = tall ? 20 + Math.floor(hash(tx, ty, 84) * 11) : 8 + Math.floor(hash(tx, ty, 84) * 7);
+    // Two simple rectangular fronds, like Neptune's kelp, in muted woodland greens.
+    ctx.save(); ctx.globalAlpha = .85;
+    drawGaiaGrass(ctx, baseX, baseY, height, hash(tx, ty, 85) > .5);
+    ctx.restore();
   }
   for (let k = 0; k < 24; k++) {
     const fx = (x0 + hash(k, 5, 1) * (x1 - x0 + 1)) * s + Math.sin(tick * .013 + k * 2) * 60 - camX;
