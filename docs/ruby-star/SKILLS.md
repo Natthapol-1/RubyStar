@@ -34,7 +34,6 @@ Click, tap, keys 1/2/3, or focused-button Enter/Space selects. For the first 0.5
 | Hercules / `killHealing` | Ordinary kill healing adds +2 player HP; meteor defeats give none |
 | Cepheus / `bombRate` | Bomb cooldown ×0.8 |
 | Crux / `laserRange` | Normal/powered laser range +2 tiles; bullets unchanged |
-
 | Sculptor / `wallSlam` | A direct Wave's knockback deals one extra 75% of that Wave's damage if a normal alien hits cover. No bonus on bosses or echoes; cover stays intact |
 | Columba / `rubyDefense` | Successfully restoring Ruby HP through manual healing stores one defensive Wave. When an enemy comes within 3 tiles of placed Ruby, it fires at 60% normal Wave radius and 50% normal Wave damage, with one tile of normal-alien push. Draco scales its damage; no echoes or on-cast procs. Stored charge travels with Ruby but cannot trigger while carried |
 | Reticulum / `laserWire` | A Laser hit (including reflections and twin/Ruby copies) stuns an ordinary alien for 24 ticks (0.4s) using the Vulpecula stop timer; that alien then cannot be stunned by Reticulum again for 120 ticks (2s). Bosses are immune. Stacks with the Lancer laser-stun reward by taking the longer stop (`RETICULUM`) |

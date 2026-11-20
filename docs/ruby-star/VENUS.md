@@ -1,6 +1,6 @@
 # Venus
 
-[Overview](README.md) · [World visuals](MAP-PREVIEWS.md#venus-the-fallen-citadel)
+[Overview](README.md) · [World look](#world-look-the-fallen-citadel)
 
 Regular alien spawns use the [shared challenge pool](ENEMIES.md#shared-challenge-alien-pool): Ghost, Bomber and Lancer join after 60 seconds, with Shooter rare. The map’s themed enemies keep their own replacement chances and phase rules.
 
@@ -84,7 +84,7 @@ Venus Veil lasts 10 seconds, as elsewhere, but here it cuts 85% of the damage to
 ## HUD and look
 
 - **Minimap:** totems are drawn last, over everything else including Ruby, as outlined cyan dots (amber while overloading) with a 14px number in Press Start 2P above the marker during their first appearance.
-- **Floor:** staggered limestone paving follows the tile grid. [Venus map art](MAP-PREVIEWS.md).
+- **Floor:** staggered limestone paving follows the tile grid. See [World look](#world-look-the-fallen-citadel).
 - **Guardian bar:** AEGIS SENTINEL · PHASE n with three HP bands, then the shield: one section per totem of the sequence, emptying from right to left like the HP bands (destroyed ones dark, the next gold, the rest cyan), or a BROKEN bar counting down the exposure. The TOTEM badge sits to the right of both the phase title and the HP bar. It shows the number of the last totem destroyed in order. It clears when a fresh sequence begins.
 - **Totems:** the Aegis totem model with no number; it rises out of the sand when it appears, is uncovered or moves, and sinks back in just before the sand takes it (0.4s each way, `sandTicks`, with a sand mound and grains spraying at its base), and shows as the totem mark on the minimap while visible. An overloading totem glows amber like an endless one.
 - **Sand Swirl:** three turning amber ribbons sweep outward from the cast position, with grit caught between them. A thick border (a dark sandy underline under a bright line) outlines the fixed tile footprint at the cast location, and open floor inside turns subtly sandy: a light warm tint, faint wind ripples and a few grains, all fading with the sweep. A tight swirl follows the player while the guard lasts. The C icon shows three stepped amber wind bands narrowing into a funnel, with pale highlights and scattered sand grains. It dims and its rim fills while it recharges. [Sand Swirl icon](visual-reference/venus-sand-swirl-icon.png).
@@ -95,6 +95,17 @@ Venus Veil lasts 10 seconds, as elsewhere, but here it cuts 85% of the damage to
 - **Sounds:** Sand Swirl plays `venus-sand-sweep.wav` at .9 through Other Game SFX. It is a short stereo wind rush with a dry grit tail. Each totem appearing or repositioning plays Saturn’s grant warning, `saturn-warning.mp3` at .9, normal pitch; a destroyed one .6, pitch 1.2, with the totem break; the shield breaking 1.4, pitch .9; its return .4, pitch .6. Overload warns with the urgent meteor beep and blows with `totem-explode.mp3` boosted to 1.8 (louder than in endless) over `sci-fi-explosion-09.mp3` at .6, pitch .7. The leap and lance wind up with `charging.wav`; the landing is `sci-fi-explosion-09.mp3` at .7, pitch .7, the lance `aegis-attack.mp3` at .8, pitch .8. A parry plays `aegis-attack.mp3` at .9, pitch 1.5, with `aegis-shield-break.wav` at .5, pitch 1.8.
 
 [Totems (numbers shown with Reveal Totems on), a buried totem, Sand Swirl, leap, lance, and Seer reveal with a core arrow](visual-reference/venus-challenge.png)
+
+## World look: the Fallen Citadel
+
+Buried monuments and weathered relics of an ancient fallen technological civilisation. Broad stone construction, eroded carvings and rare dormant aegis seals distinguish it from Jupiter's capacitors and Binary Star's station panels. Technology survives as traces in the ruins.
+- **Rooms:** ALPHA antique gold `#c9ad72`, BETA oxidized teal `#78a99b`, DELTA terracotta `#b98264`, GAMMA pale limestone `#c5c2a0`. Borders, pads, minimap and teleport picker share these subdued mineral colours.
+- **Cover:** large weathered sandstone courses crossing tile joins, broad mineral patches, worn crowns and plinths, chipped upper faces and sand along exposed lower edges. Sparse eroded inscriptions vary between interrupted stepped seals, worn horizontal bands and old glyph columns; only the rare carved bronze aegis seals retain a faint cyan remnant. No repeating machine cassettes, vents or circuit panels.
+- **Floor:** worn limestone slabs span three tiles by two, with alternating courses offset by one tile. The sand-filled joints follow the gameplay grid, and inside each slab every tile is a scored paver: faint sand-filled seams along its top and left edges, broken where the stone has worn smooth, with a soft lit lip beside them (edges on a slab joint are left alone). About a fifth of tiles add a chipped corner holding a little sand, and some a hairline crack wandering in from an edge. Subdued mineral stains, chipped corners, occasional partly buried fractures and rare fragments of carved seals keep the material ancient and quiet. A few broken bronze/jade mosaic fragments show through sand at the slab edges. Low stepped sand banks partly bury slab joints and gather at the foot of ruin walls, without hiding the walking surface. Sparse tiny windblown grains fade as they drift. The paving remains darker than cover; no active conduits, shield lattice or machine-panel markings.
+- **Backdrop:** a pale sun smothered in haze above two far stepped dune lines; a colossal fallen guardian's head lies half buried, its eye slit faintly cyan. Half-buried ruined terraces, a huge leaning fractured monument, dormant aegis totem fragments that still hover and bob with faintly flickering cores, and a toppled inscribed lintel sit beneath layered amber clouds. Worn stone and mostly dormant aegis carvings give the ruins their technological ancestry. Slow clouds and dust bury the lower silhouettes; no regular city towers.
+- **Sand wind:** a visible blizzard-like flow of amber grains and long slanted streaks, in two depths with gently pulsing gusts. Faster brighter foreground sand crosses a denser layer of smaller grains; keep the scene readable without a fog blanket. It crosses scenery and actors before the minimap/HUD. Animation uses `gameTick` and freezes with play. It is entirely cosmetic: no damage, slowing, pushing, warnings or other gameplay effects.
+
+![Venus](visual-reference/venus.png)
 
 ## God panel
 
