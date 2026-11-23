@@ -1,21 +1,23 @@
 import type { BossType } from './constants';
 import type { GameState } from './engine';
 import type { TrialBody } from './trials';
+export interface DisplayPreferences { shake: 'off' | 'low' | 'full'; reduceFlashing: boolean }
 export interface Profile {
   keyBindings?:Record<string,string[]>;
   version: 1; tutorialCompleted: boolean; introSeen?: boolean; // introSeen: the opening cutscene has played once
   sunArrivalSeen?: boolean;
   arrivalsSeen?: Partial<Record<TrialBody, boolean>>;
-  sunExplore?: import('./sun-explore-story').SunExploreProgress;
   defeated: BossType[]; completed: BossType[]; encountered: string[]; constellations: string[]; skills: string[];
   highestEndless: number;
   highestAscension?: number;
   settings: { music: number; attack: number; effects: number };
+  display?: DisplayPreferences; // screen shake and reduced flashing (display-settings.ts)
+  photosensitivitySeen?: boolean; // the first-launch photosensitivity notice was acknowledged
   resumes: Record<string, { version: 1; mode: string; trialId?: string; savedAt: string; state: GameState }>;
 }
 interface DesktopBridge {
   load(): Promise<{data:unknown;error:string|null}>; save(data:Profile):Promise<boolean>;
-  fullscreen():Promise<boolean>;quit():Promise<void>;onClosing(callback:()=>void):()=>void;closeReady(saved?:boolean):void;
+  fullscreen():Promise<boolean>;quit():Promise<void>;openDataFolder?():Promise<string>;logError?(message:string):void;onClosing(callback:()=>void):()=>void;closeReady(saved?:boolean):void;
 }
 interface ProfileSession {profile:Profile;pending?:ReturnType<typeof setTimeout>;writing:Promise<boolean>;error:string;protectedSave:boolean}
 declare global { interface Window { rubyDesktop?: DesktopBridge; rubyProfileSession?:ProfileSession } }

@@ -5,7 +5,7 @@
 import {
   ALIEN_KNOCKBACK, CHARGER_CHARGE_SPEED, CHARGER_KNOCKBACK, CHARGER_CHARGE_TILES, CHARGER_SIGHT_RANGE, CHARGER_STUN_TICKS, CHARGER_WINDUP_TICKS, LODESTONE_SNAP,
   GAIA_SPORE_SHOT, SUN, DROPPER, JAMMER, GRAPPLER, SOULLESS_LUNGE, ENCHANTER, IMPOSTOR, REFLECTOR, SHOOTER, SNATCHER, TRAPPER, ENEMY_CONFIGS, HEALER_HEAL_AMOUNT, HEALER_HEAL_INTERVAL, HEALER_HEAL_RADIUS, LANCER, MAP_COLS, MAP_ROWS,
-  chamberOfTile, SHIELDER_SHIELD_RANGE, SNIPER_ATTACK_RANGE, SNIPER_WINDUP_TICKS, TILE_SIZE, T_WALL, isBossType,
+  chamberOfTile, SHIELDER_SHIELD_RANGE, SINGULARITY_CHALLENGE, SNIPER_ATTACK_RANGE, SNIPER_WINDUP_TICKS, TILE_SIZE, T_WALL, isBossType,
 } from './constants';
 import {
   ALIEN_ATTACK_SFX, ATTACK_SFX_VOLUME, bfs, playSFX_special, celestialMoveMultiplier, damagePlayer, damageRuby, hasLineOfSight, isFloorTile, playAudioOneShot,
@@ -13,6 +13,7 @@ import {
   tileDist, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
 import { gameAudio } from './audio-settings';
+import { toxicSoullessTrail } from './singularity-maw';
 
 /** Advances one step toward the alien's target tile. Returns true on the tick it arrives. */
 export function stepEnemy(state: GameState, e: Enemy, speed: number) {
@@ -58,7 +59,8 @@ export function updateRegularAlien(state: GameState, e: Enemy, playerCarrying: b
     case 'enchanter': updateEnchanter(state, e); return true;
     case 'snatcher': updateSnatcher(state, e); return true;
     case 'impostor': updateImpostor(state, e); return true;
-    case 'soulless': case 'toxic_soulless': updateSoulless(state,e,playerCarrying); return true; // the toxic variant fights the same way
+    case 'soulless': updateSoulless(state,e,playerCarrying); return true;
+    case 'toxic_soulless': updateSoulless(state,e,playerCarrying); toxicSoullessTrail(state,e); return true; // fights the same way, leaving a gas trail
     case 'grappler': updateGrappler(state,e); return true;
     case 'jammer': updateJammer(state,e); return true;
     case 'dropper': updateDropper(state, e, playerCarrying); return true;
@@ -534,7 +536,7 @@ function updateSoulless(state:GameState,e:Enemy,playerCarrying:boolean) {
   };
   if(a){
     if(a.phase==='warning'){
-      if(--a.ticks<=0){a.phase='dash';playAudioOneShot('/sounds/slash.mp3',.25*ATTACK_SFX_VOLUME,1.2);}
+      if(--a.ticks<=0){a.phase='dash';if(tileEuclidDist(e.tileX,e.tileY,state.playerTileX,state.playerTileY)<=16)playSFX_alienShoot(ALIEN_ATTACK_SFX.shot,1.3);} // the Charger's rush cue
       return;
     }
     if(a.phase==='recover'){
@@ -557,9 +559,9 @@ function updateSoulless(state:GameState,e:Enemy,playerCarrying:boolean) {
   if(e.attackTimer===0&&settled&&dist<=L.range&&hasLineOfSight(state.map,e.tileX,e.tileY,tx,ty)){
     const dx=tx-e.tileX,dy=ty-e.tileY,horizontal=Math.abs(dx)>=Math.abs(dy);
     e.boneLunge={phase:'warning',dx:horizontal?(Math.sign(dx)||1):0,dy:horizontal?0:Math.sign(dy),ticks:L.warningTicks,left:L.tiles};
-    e.path=[];playAudioOneShot('/sounds/strike-charged.wav',.12*ATTACK_SFX_VOLUME,.8);return;
+    e.path=[];if(tileEuclidDist(e.tileX,e.tileY,state.playerTileX,state.playerTileY)<=16)playAudioOneShot('/sounds/place_bomb.wav',ALIEN_ATTACK_SFX.chargerLock);return; // the Charger's lock-on cue
   }
-  walkPath(state,e,tx,ty,cfg.speed);
+  walkPath(state,e,tx,ty,cfg.speed*(e.type==='toxic_soulless'?SINGULARITY_CHALLENGE.soulless.toxicSpeed:1)); // a Contaminated Soulless walks faster
 }
 
 

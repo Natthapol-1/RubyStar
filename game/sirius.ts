@@ -1,4 +1,5 @@
 import { playUiSfx } from './ui-sfx';
+import { prepareSiriusSwapBell, playSiriusSwapBell } from './sirius-swap-audio';
 import { CHAMBER_SPAWN_TILES, DIFFICULTY_TIERS, ENEMY_CONFIGS, MAP_COLS, MAP_ROWS, SIRIUS_HOLY_PER_ENERGY, TELEPORT_PADS, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile, type EnemyType } from './constants';
 import { addStarEnergy } from './blessing-effects';
 import { godPhaseClock, ALIEN_ATTACK_SFX, playSFX_alienShoot, playSFX_chargerImpact, healCore, spawnPool, createEncounterEnemy, godSpawnBoss, damageEnemy, damagePlayer, damageRuby, healPlayer, isFloorTile, killEnemy, playAudioOneShot, shovePlayerFromEnemy, type Enemy, type GameState } from './engine';
@@ -16,20 +17,20 @@ export const SIRIUS = {
   lightTicks: 1080,       // 18s of light (normal controls)
   darkTicks: 720,         // 12s of dark (reversed controls)
   swapWarning: 120,       // 2s warning before each swap
-  phase3Swap: .65,        // phase 3: light and dark last 35% less (about 12s light, 8s dark)
+  laterLightTicks: 960, laterDarkTicks: 600, // phases 2–3: 16s light, 10s dark
   firstRune: 360,         // the first rune 6s after he arrives
   runeGap: 420,           // 7s between one rune ending and the next cast
   runeCast: 60,           // 1s cast before tracing starts
   runeTicks: 1200,        // 20s to trace it
-  laterRuneCut: 180,      // phase 2+: 3s less
-  runeDamage: 48,         // a traced rune burns 4% of a phase: runes mostly build Holy Light for the Halo burst
+  phase3RuneBonus: 300,   // phase 3: 5 extra seconds to include a seal
+  runeDamage: 60,         // a traced rune burns 5% of a phase: runes also build Holy Light for the Halo burst
   runeHeal: 45,
-  runeFailHeal: 12,      // 1% of a phase, without undoing phase progress
+  runeFailHeal: 60,      // 5% of a phase, without undoing phase progress
   holyFailLoss: 20,       // a missed rune drains all your energy and this much Holy Light
-  failDamage: 15,         // and hurts you and Ruby
   haloTicks: 360,         // C: Halo lets you float for 6s: walk over walls, 40% faster
-  haloCooldown: 1020,     // 17s from cast
+  haloCooldown: 900,      // 15s from cast
   haloSpeed: 1.4,
+  haloWaveRadius: 6, haloWavePush: 5, haloWaveTicks: 30, haloWaveStun: 18,
   burstBoss: 240,         // Halo cast with full Holy Light: 20% of a phase to the Prayer
   burstAlien: 90,         // and this much to every other enemy
   alienHpMult: 2.5,
@@ -37,6 +38,7 @@ export const SIRIUS = {
   wrathTicks: 600,        // a missed rune empowers aliens for 10s
   wrathDamage: 1.6, wrathSpeed: 1.35,
   trailMax: 30,           // tiles of trail kept
+  sealsPerChamber: 8,     // phase 3: include any one Sanctuary Seal in the rune shape
   ritualCooldown: 1500,   // 25s between Ruby rituals, only while a rune is being traced
   ritualWindup: 60,       // after your guess (time stops while you choose), Ruby moves 1s later
   ritualMinLeft: 360,     // only starts with at least 6s left on the rune
@@ -46,8 +48,8 @@ export const SIRIUS = {
   laterPhaseMore: 1.1,    // phase 2+: 10% more aliens (cap and spawn rate)
   zealot: { range: 5, windup: 36, dashTiles: 6, dashTicks: 14, damage: 12, damageRuby: 9, push: 3, cooldown: 150, hitRadius: .75, speed: 1.9 },
   bellringer: { keep: 4, radius: 3.5, windup: 45, damage: 8, damageRuby: 6, push: 2, cooldown: 240, speed: 1.1 },
-  penitent: { fromPhase: 3, maxAlive: 2, chance: .25, speed: 2.3, reach: .6 },
-  mason: { fromPhase: 2, maxAlive: 3, spawnInterval: 360, keep: 5, range: 7, windup: 30, ahead: 2, length: 4, wallTicks: 300, cooldown: 240, speed: 1 },
+  penitent: { fromPhase: 3, maxAlive: 2, chance: .25, speed: 1.75, reach: .6 },
+  mason: { fromPhase: 2, maxAlive: 3, spawnInterval: 360, keep: 5, range: 10, windup: 30, ahead: 2, length: 4, wallTicks: 300, cooldown: 240, speed: 1 },
 } as const;
 
 /** The full Holy Light burst plays over 2 seconds. */
@@ -59,7 +61,7 @@ export const isSiriusAlien = (type: EnemyType) => SIRIUS_ALIENS.includes(type);
 export type RuneDir = 0 | 1 | 2 | 3;
 export const RUNE_STEP: readonly [number, number][] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 export interface Rune { name: string; tier: 1 | 2 | 3; strokes: readonly (readonly [RuneDir, number])[] }
-/** Every rune is one continuous walk: strokes of so many tiles in a direction. */
+/** Every rune is one continuous walk; the centerline shows its route even where separate strokes touch. */
 // Tier 1 runes have three strokes, tier 2 four, tier 3 five or six. Phase 1 draws tier 1, phase 2 tiers 1–2, phase 3
 // tiers 2–3 (`runeTiers`).
 export const RUNES: readonly Rune[] = [
@@ -96,6 +98,7 @@ export interface SiriusState {
   trail: { x: number; y: number }[];                  // the tiles you walked, oldest first, in one unbroken line
   steps: RuneDir[];                                   // the direction of each step along the trail
   lastTile: [number, number];
+  sanctuarySeals?: { x: number; y: number }[]; // optional for older saves; refreshed at each rune cast
   wrath: number;                                      // ticks left of empowered aliens
   ritual: { destination: number; ticks: number; guess: number } | null; ritualCooldown: number;
   flashes: { kind: 'success' | 'fail' | 'guessRight' | 'guessWrong' | 'swap'; ticks: number }[];
@@ -107,6 +110,7 @@ export interface SiriusState {
   eaten: { x: number; y: number; ticks: number }[];   // Penitent erasing your trail, for its effect
   holy: number;                                       // Holy Light, 0–100
   halo: number; haloCooldown: number;                 // C: ticks left floating, and until it is ready again
+  haloWave?: { x: number; y: number; ticks: number }; // one pulse from the cast position; optional for older saves
   burst: number;                                      // ticks left of the Holy Light burst effect
   traced: number;                                     // rune tiles matched so far, for the step chime
   wasFull: boolean;                                   // Holy Light was already full last tick
@@ -117,8 +121,9 @@ export function createSiriusState(s: GameState) {
   // It opens in the dark (reversed controls).
   s.sirius = { phase: 1, bossId: -1, spawnTimer: 120, light: false, lightTimer: SIRIUS.darkTicks, rune: null, runeTimer: SIRIUS.firstRune,
     trail: [{ x: s.playerTileX, y: s.playerTileY }], steps: [], lastTile: [s.playerTileX, s.playerTileY], wrath: 0,
-    ritual: null, ritualCooldown: SIRIUS.ritualCooldown / 2, flashes: [], bolts: [], rings: [], holy: 0, halo: 0, haloCooldown: 0, burst: 0, traced: 0, wasFull: false, burstAt: { x: 0, y: 0 }, walls: [], lastRune: -1, eaten: [] };
+    ritual: null, ritualCooldown: SIRIUS.ritualCooldown / 2, flashes: [], bolts: [], rings: [], holy: 0, halo: 0, haloCooldown: 0, burst: 0, traced: 0, wasFull: false, burstAt: { x: 0, y: 0 }, walls: [], lastRune: -1, eaten: [], sanctuarySeals: [] };
   if (s.trial) { s.trial.siriusLight = false; s.trial.siriusLightBlend = 0; }
+  void prepareSiriusSwapBell();
 }
 export function siriusBoss(s: GameState) { return s.enemies.find(e => e.id === s.sirius?.bossId && e.hp > 0); }
 export function initializeSiriusBoss(s: GameState, boss: Enemy) {
@@ -129,7 +134,7 @@ export function initializeSiriusBoss(s: GameState, boss: Enemy) {
 export function clearSiriusEncounter(s: GameState) {
   if (!s.sirius) return;
   clearSiriusWalls(s);
-  Object.assign(s.sirius, { rune: null, ritual: null, wrath: 0, flashes: [], bolts: [], rings: [], halo: 0, burst: 0 });
+  Object.assign(s.sirius, { rune: null, ritual: null, wrath: 0, flashes: [], bolts: [], rings: [], halo: 0, haloWave: undefined, burst: 0, sanctuarySeals: [] });
   stopSiriusFloatSound();
 }
 
@@ -192,11 +197,21 @@ function trackTrail(s: GameState) {
 
 // ─── Light and dark ──────────────────────────────────────────────────────────
 
+export const siriusLightDuration = (t: Pick<SiriusState, 'light' | 'phase'>) => {
+  return t.phase >= 2 ? (t.light ? SIRIUS.laterLightTicks : SIRIUS.laterDarkTicks) : (t.light ? SIRIUS.lightTicks : SIRIUS.darkTicks);
+};
+
 function updateLight(s: GameState) {
   const t = s.sirius!;
-  if (--t.lightTimer === SIRIUS.swapWarning) playAudioOneShot('/sounds/celestial/sirius-surge.wav', .35, t.light ? .6 : 1.3); // the coming swap
+  t.lightTimer = Math.min(t.lightTimer, siriusLightDuration(t)); // includes older saves with a longer timer
+  if (--t.lightTimer === SIRIUS.swapWarning) playSiriusSwapBell();
   if (t.lightTimer > 0) return;
-  t.light = !t.light; t.lightTimer = Math.round((t.light ? SIRIUS.lightTicks : SIRIUS.darkTicks) * (t.phase >= 3 ? SIRIUS.phase3Swap : 1));
+  swapLight(s);
+}
+
+function swapLight(s: GameState) {
+  const t = s.sirius!;
+  t.light = !t.light; t.lightTimer = siriusLightDuration(t);
   if (s.trial) s.trial.siriusLight = t.light;
   t.flashes.push({ kind: 'swap', ticks: 40 });
   playAudioOneShot('/sounds/sirius-heal.mp3', .7, t.light ? 1 : .75); // the holy chime, pitched lower as the dark falls
@@ -204,13 +219,59 @@ function updateLight(s: GameState) {
 
 // ─── Runes ───────────────────────────────────────────────────────────────────
 
+/** Only the matched rune suffix counts, including its start and end tiles, never an unrelated approach. */
+export function sanctuarySealInRune(t: Readonly<SiriusState>) {
+  if (!t.rune || t.rune.cast > 0) return false;
+  const matched = runeProgress(t.steps, RUNES[t.rune.index]).tiles;
+  if (matched <= 0) return false;
+  const shape = t.trail.slice(-(matched + 1));
+  return !!t.sanctuarySeals?.some(seal => shape.some(p => p.x === seal.x && p.y === seal.y));
+}
+
+function placeSanctuarySeals(s: GameState) {
+  const t = s.sirius!;
+  if (t.phase < 3 || !t.rune) { t.sanctuarySeals = []; return; }
+  const previous = t.sanctuarySeals ?? [], chosen: { x: number; y: number }[] = [];
+  // Each candidate is the start of a complete, unobstructed copy of this rune.
+  const footprint: [number, number][] = [[0, 0]];
+  let dx = 0, dy = 0;
+  for (const [dir, count] of RUNES[t.rune.index].strokes) for (let i = 0; i < count; i++) {
+    dx += RUNE_STEP[dir][0]; dy += RUNE_STEP[dir][1]; footprint.push([dx, dy]);
+  }
+  const floors: { x: number; y: number }[] = [];
+  for (let y = 1; y < MAP_ROWS - 1; y++) for (let x = 1; x < MAP_COLS - 1; x++) if (isFloorTile(s.map, x, y)) floors.push({ x, y });
+  // Halo may currently put the player on a wall; use its nearest floor as the flood-fill seed.
+  const seed = floors.reduce((best, p) => Math.hypot(p.x - s.playerTileX, p.y - s.playerTileY) < Math.hypot(best.x - s.playerTileX, best.y - s.playerTileY) ? p : best, floors[0]);
+  const reachable = new Set<string>(), queue = seed ? [seed] : [];
+  if (seed) reachable.add(`${seed.x},${seed.y}`);
+  for (let i = 0; i < queue.length; i++) for (const [mx, my] of RUNE_STEP) {
+    const x = queue[i].x + mx, y = queue[i].y + my, key = `${x},${y}`;
+    if (!reachable.has(key) && isFloorTile(s.map, x, y)) { reachable.add(key); queue.push({ x, y }); }
+  }
+  for (let chamber = 0; chamber < 4; chamber++) {
+    const candidates = floors.filter(p => chamberOfTile(p.x, p.y) === chamber && reachable.has(`${p.x},${p.y}`)
+      && !TELEPORT_PADS.some(([x, y]) => x === p.x && y === p.y) && !(s.rubyTileX === p.x && s.rubyTileY === p.y)
+      && footprint.every(([x, y]) => isFloorTile(s.map, p.x + x, p.y + y)));
+    for (let i = 0; i < SIRIUS.sealsPerChamber && candidates.length; i++) {
+      const fresh = candidates.filter(p => !previous.some(q => p.x === q.x && p.y === q.y));
+      const pool = fresh.length ? fresh : candidates;
+      const spaced = pool.filter(p => chosen.every(q => Math.hypot(p.x - q.x, p.y - q.y) >= 4));
+      const available = spaced.length ? spaced : pool;
+      const seal = available[Math.floor(Math.random() * available.length)]; chosen.push(seal);
+      candidates.splice(candidates.indexOf(seal), 1);
+    }
+  }
+  t.sanctuarySeals = chosen;
+}
+
 function castRune(s: GameState) {
   const t = s.sirius!, previous = t.rune?.index ?? t.lastRune;
   const tiers = runeTiers(t.phase), pool = RUNES.map((r, i) => i).filter(i => tiers.includes(RUNES[i].tier) && i !== previous);
   const index = pool[Math.floor(Math.random() * pool.length)];
   t.lastRune = index;
-  const time = SIRIUS.runeTicks - (t.phase >= 2 ? SIRIUS.laterRuneCut : 0);
+  const time = SIRIUS.runeTicks + (t.phase >= 3 ? SIRIUS.phase3RuneBonus : 0);
   t.rune = { index, cast: SIRIUS.runeCast, ticks: time, total: time };
+  placeSanctuarySeals(s);
   playAudioOneShot('/sounds/sirius-rune-cast.mp3', 1.5); // boosted: the cast must be heard over combat
 }
 
@@ -237,13 +298,13 @@ function resolveRune(s: GameState, success: boolean) {
     }
     t.wrath = SIRIUS.wrathTicks; t.flashes.push({ kind: 'fail', ticks: 50 });
     s.starEnergy = 0; t.holy = Math.max(0, t.holy - SIRIUS.holyFailLoss);
-    damagePlayer(s, SIRIUS.failDamage); if (s.gamePhase === 'playing') damageRuby(s, SIRIUS.failDamage);
     playAudioOneShot('/sounds/dusk-attack.mp3', .55, .8); playAudioOneShot('/sounds/holy2.mp3', .8, .6); // a deep, broken holy chord
   }
 }
 
 function updateRune(s: GameState) {
   const t = s.sirius!;
+  if (t.phase >= 3 && t.rune && !t.sanctuarySeals?.length) placeSanctuarySeals(s);
   if (!t.rune) { if (--t.runeTimer <= 0) castRune(s); return; }
   if (t.rune.cast > 0) { if (--t.rune.cast === 0) resetTrail(t, s.playerTileX, s.playerTileY); return; } // tracing starts fresh once the cast ends
   const rune = RUNES[t.rune.index], progress = runeProgress(t.steps, rune);
@@ -252,7 +313,7 @@ function updateRune(s: GameState) {
     playAudioOneShot('/sounds/celestial/skill-ready.wav', .55, .8 + .8 * progress.tiles / total);
   }
   t.traced = progress.tiles;
-  if (progress.complete) { resolveRune(s, true); return; }
+  if (progress.complete && (t.phase < 3 || sanctuarySealInRune(t))) { resolveRune(s, true); return; }
   if (--t.rune.ticks <= 0) resolveRune(s, false);
 }
 
@@ -445,11 +506,25 @@ export function godFillHolyLight(state: GameState) {
   readyFullHolyLight(t);
 }
 
-/** C: float for a while under a halo, walking over walls and faster. With full Holy Light it also releases a burst. */
+/** C: repel nearby aliens and float over walls. With full Holy Light it also releases a damaging burst. */
 export function useHalo(s: GameState): boolean {
   const t = s.sirius;
   if (!t || s.gamePhase !== 'playing' || t.haloCooldown > 0) return false;
+  s.playerCastTicks = 24; s.playerCastKind = 'blind_prayer'; s.playerPrimalCast = true;
   t.halo = SIRIUS.haloTicks; t.haloCooldown = SIRIUS.haloCooldown;
+  t.haloWave = { x: s.playerX, y: s.playerY, ticks: SIRIUS.haloWaveTicks };
+  playAudioOneShot('/sounds/light.mp3', .7, .85);
+  for (const e of s.enemies) {
+    if (e.hp <= 0 || e.id === t.bossId || e.twin?.downedTicks) continue;
+    const dx = e.x - s.playerX, dy = e.y - s.playerY, distance = Math.hypot(dx, dy);
+    if (distance > SIRIUS.haloWaveRadius * TILE_SIZE) continue;
+    e.pushDirX = Math.round(dx / (distance || 1)); e.pushDirY = Math.round(dy / (distance || 1));
+    if (!e.pushDirX && !e.pushDirY) e.pushDirX = 1;
+    e.pushTiles = Math.max(e.pushTiles, SIRIUS.haloWavePush); e.buildWallDamage = undefined;
+    e.haloStunTicks = Math.max(e.haloStunTicks ?? 0, SIRIUS.haloWaveStun);
+    // A displaced dash cannot resume from its old origin after the push.
+    if (e.siriusAct) { e.siriusAct = undefined; e.attackTimer = Math.max(e.attackTimer, 60); }
+  }
   playAudioOneShot('/sounds/sirius-heal.mp3', 1.4, 1.25);
   startFloatSound(); // boosted so the cast stands out over combat
   if (t.holy >= 100) holyBurst(s);
@@ -460,7 +535,7 @@ function holyBurst(s: GameState) {
   t.holy = 0; t.burst = SIRIUS_BURST_TICKS; t.burstAt = { x: s.playerX, y: s.playerY };
   t.wasFull = false;
   playAudioOneShot('/sounds/sirius-rune-seal.mp3', 1.4); playAudioOneShot('/sounds/holy2.mp3', 1, .8); playAudioOneShot('/sounds/levelup.mp3', .6, .7); playAudioOneShot('/sounds/sirius-float.mp3', 1.2); // the holy spell at full strength
-  s.screenShakeTicks = Math.max(s.screenShakeTicks, 45); s.screenShakeAmt = Math.max(s.screenShakeAmt, 12);
+  s.screenShakeTicks = Math.max(s.screenShakeTicks, 36); s.screenShakeAmt = Math.max(s.screenShakeAmt, 11);
   for (const e of [...s.enemies]) {
     if (e.hp <= 0 || !s.enemies.includes(e)) continue;
     const boss = e.id === t.bossId;
@@ -501,6 +576,7 @@ function wallTiles(s: GameState): [number, number][] {
   for (let k = start; k < start + SIRIUS.mason.length; k++) {
     const x = fx + (dy ? k : 0), y = fy + (dx ? k : 0);
     if (!isFloorTile(s.map, x, y) || chamberOfTile(x, y) < 0) continue;
+    if (s.sirius?.sanctuarySeals?.some(p => p.x === x && p.y === y)) continue;
     if (TELEPORT_PADS.some(([px, py]) => px === x && py === y) || (x === s.rubyTileX && y === s.rubyTileY)) continue;
     if ((x === s.playerTileX && y === s.playerTileY) || (x === s.playerTargetX && y === s.playerTargetY)) continue;
     if (s.enemies.some(e => e.hp > 0 && ((e.tileX === x && e.tileY === y) || (e.targetTileX === x && e.targetTileY === y)))) continue;
@@ -514,6 +590,7 @@ function updateMason(s: GameState, e: Enemy) {
     if (--act.ticks > 0) return;
     e.siriusAct = undefined; e.attackTimer = c.cooldown; e.shootTicks = 20;
     for (const [x, y] of (act.tiles ?? [])) {
+      if (t.sanctuarySeals?.some(p => p.x === x && p.y === y)) continue;
       if (!isFloorTile(s.map, x, y) || (x === s.playerTileX && y === s.playerTileY) || (x === s.playerTargetX && y === s.playerTargetY)) continue; // never on you
       if (s.enemies.some(o => o.hp > 0 && ((o.tileX === x && o.tileY === y) || (o.targetTileX === x && o.targetTileY === y)))) continue;
       s.map[y][x] = T_WALL; t.walls.push({ x, y, ticks: c.wallTicks });
@@ -575,6 +652,7 @@ export function updateSirius(s: GameState) {
   t.eaten = t.eaten.filter(p => --p.ticks > 0);
   if (t.wrath > 0) t.wrath--;
   if (t.burst > 0) t.burst--;
+  if (t.haloWave && --t.haloWave.ticks <= 0) t.haloWave = undefined;
   updateWalls(s);
   if (t.halo <= 0) fadeFloatSound(); else keepFloatSound();
   let primalReadied = false;
@@ -593,7 +671,7 @@ export function updateSirius(s: GameState) {
   const phase = Math.min(3, 3 - Math.floor(Math.max(0, boss.hp - .001) / SIRIUS.phaseHP)) as 1 | 2 | 3;
   if (phase > t.phase) {
     t.phase = phase; s.bossSpawnName = `BLIND PRAYER · PHASE ${phase}`; s.bossSpawnTicks = 150;
-    if (phase >= 3) t.lightTimer = Math.min(t.lightTimer, Math.round((t.light ? SIRIUS.lightTicks : SIRIUS.darkTicks) * SIRIUS.phase3Swap)); // the quicker swaps start at once
+    if (phase >= 2) t.lightTimer = Math.min(t.lightTimer, siriusLightDuration(t)); // the quicker swaps start at once
   }
   updateRune(s); if (s.gamePhase !== 'playing') return;
   updateRitual(s);
@@ -607,10 +685,12 @@ export function godSetSiriusPhase(s: GameState, phase: 1 | 2 | 3) {
   if (!siriusBoss(s)) { godSpawnBoss(s, 'blind_prayer'); if (!siriusBoss(s)) return; }
   const boss = siriusBoss(s)!;
   boss.hp = (4 - phase) * SIRIUS.phaseHP; t.phase = phase;
+  t.lightTimer = Math.min(t.lightTimer, siriusLightDuration(t));
+  placeSanctuarySeals(s);
   s.bossSpawnName = `BLIND PRAYER · PHASE ${phase}`; s.bossSpawnTicks = 150;
 }
 
 /** God controls. */
 export function godSiriusRune(s: GameState) { const t = s.sirius; if (t && siriusBoss(s) && !t.rune) castRune(s); }
-export function godSiriusSwap(s: GameState) { if (s.sirius) s.sirius.lightTimer = Math.min(s.sirius.lightTimer, SIRIUS.swapWarning + 1); }
+export function godSiriusSwap(s: GameState) { if (s.sirius) swapLight(s); }
 export function godSiriusRitual(s: GameState) { if (s.sirius) s.sirius.ritualCooldown = 0; }

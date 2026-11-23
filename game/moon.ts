@@ -4,12 +4,13 @@ import {
   CHAMBER_BOUNDS, CHAMBER_SPAWN_TILES, MAP_COLS, TELEPORT_PADS, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile, type EnemyType,
   MOON_PHASE_HP, MOON_FIRST_CLONES, MOON_CLONES_PER_JUMP, MOON_CLONE_CAPS, MOON_MIRROR_STRIPS, MOON_MIRROR_LENGTH, MOON_MIRROR_SHIFT, MOON_MIRROR_FADE, MOON_REVEAL_TICKS, MOON_REVEAL_DAMAGE_MULT,
   MOON_MARK_TICKS, MOON_MARK_COOLDOWN, MOON_MITE_HINT_TICKS, MOON_MIMIC_TRUE_TICKS, MOON_MIMIC_GAP, MOON_MIMIC_CAP, MOON_DARK_SHIFT, MOON_DOUBLE_DARK_CHANCE, MOON_DARK_OVERLAY_TICKS, MOON_DARK_FADE, MOON_SEEN_TICKS, MOON_SHARD_COUNT, MOON_SHARD_SPEED, MOON_SHARD_TICKS, MOON_SHARD_DAMAGE, MOON_SHARD_RUBY_DAMAGE, MOON_SHARD_HIT_RADIUS, ENEMY_CONFIGS,
-  MOVE_SPEED_MULT,
+  MOVE_SPEED_MULT, MOON_SHADE_RUBY_PUSH, MOON_RUBY_PUSH_STEP,
 } from './constants';
-import { godPhaseClock,
+import { godPhaseClock, isFloorTile, playSFX_enemyAttack, tileDist,
   stormSlowMultiplier, ATTACK_SFX_VOLUME, bfs, createEncounterEnemy, damagePlayer, playAudioOneShot, godSpawnBoss, healCore, healPlayer, playCelestialSound, playSFX_queenTeleport, damageRuby, playSFX_objectBreak, spawnDeathParticles, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
 import { playUiSfx } from './ui-sfx';
+import { stepEnemy } from './aliens';
 
 // Moon challenge (Shadow Queen), phase 1: illusions. She wears her Echo's look and, from her first jump on, hides among
 // illusions that look and attack exactly like her. For the last moments before each jump she shows her true self and
@@ -31,7 +32,7 @@ export interface MoonState {
   shownHp: number;  // what the guardian bar shows: synced only while she is revealed and when she jumps
   mirrors: number[]; // phase 2+: mirror floor tiles (y * MAP_COLS + x)
   mirrorTimer: number; // ticks until they move
-  mimicTimer: number; // phase 2+: ticks until the next mimic arrives
+  mimicTimer: number; // ticks until the next mimic arrives (every phase)
   dark: number; darkTimer: number; // phase 3: the dark room (-1 none) and ticks until it moves
   secondDark?: number; // the optional second dark room
   oldDark: number; oldSecondDark?: number; darkFade: number; // the rooms it just left
@@ -40,6 +41,7 @@ export interface MoonState {
   seen: { id: number; ticks: number }[]; // units in the dark that were just hit, briefly visible
   oldMirrors: number[]; mirrorFade: number; // visual: last spots fading out while the new ones fade in
   reflects: { x: number; y: number; toX: number; toY: number; ticks: number }[]; // visual: your shot bouncing back
+  rubyPush?: { dx: number; dy: number; tilesLeft: number; timer: number } | null; // a shade shoving a placed Ruby away
 }
 
 export const MOON_ARRIVAL_TICKS = 30;
@@ -328,13 +330,104 @@ export function useMoonMark(state: GameState): boolean {
     if (d < bestDist) { bestDist = d; best = e; }
   }
   if (!best) return false;
+  state.playerCastTicks = 24; state.playerCastKind = 'splitter_queen'; state.playerPrimalCast = true;
   moon.mark = { id: best.id, ticks: MOON_MARK_TICKS, fromX: state.playerX, fromY: state.playerY }; moon.markCooldown = MOON_MARK_COOLDOWN;
   playUiSfx('markCast');
   return true;
 }
 
+// Shade: it belongs to the chamber it spawned in and never leaves it. It hunts a placed Ruby only while Ruby is in
+// that chamber (you, only while you carry Ruby there); otherwise it wanders its chamber. Paths are searched on a copy
+// of the map where everything outside its chamber is wall, so it never cuts through a hallway; if a push throws it
+// out, it walks straight back. When it goes for Ruby it strikes from the side facing its chamber's teleport pad, so
+// its shove pushes Ruby away from the pad. Always returns true, so the normal chase-and-attack AI never runs for it.
+const shadeMaps = new WeakMap<number[][], Map<number, number[][]>>();
+function chamberOnlyMap(map: number[][], room: number) {
+  let byRoom = shadeMaps.get(map); if (!byRoom) shadeMaps.set(map, byRoom = new Map());
+  let masked = byRoom.get(room);
+  if (!masked) {
+    masked = map.map((row, y) => row.map((tile, x) => (chamberOfTile(x, y) === room ? tile : T_WALL)));
+    byRoom.set(room, masked);
+  }
+  return masked;
+}
+export function updateMoonShade(state: GameState, e: Enemy, playerCarrying: boolean): boolean {
+  const cfg = ENEMY_CONFIGS.moon_shade;
+  const here = chamberOfTile(e.tileX, e.tileY);
+  const s = e.shade ??= { home: here };
+  if (s.home < 0) { if (here < 0) return false; s.home = here; } // only possible if it began in a hallway
+  const home = s.home, settled = e.tileX === e.targetTileX && e.tileY === e.targetTileY;
+  const rubyHome = state.rubyTileX !== -1 && chamberOfTile(state.rubyTileX, state.rubyTileY) === home;
+  const carriedHome = playerCarrying && chamberOfTile(state.playerTileX, state.playerTileY) === home;
+  e.targeting = carriedHome ? 'player' : 'ruby';
+  const goal: [number, number] | null = here !== home ? null : rubyHome ? [state.rubyTileX, state.rubyTileY] : carriedHome ? [state.playerTileX, state.playerTileY] : null;
+  // Against Ruby: stand on the tile beside it toward the pad, so the shove sends it away from the pad.
+  let strikeFrom: [number, number] | null = null;
+  if (goal && rubyHome) {
+    const pad = TELEPORT_PADS.find(([px, py]) => chamberOfTile(px, py) === home);
+    const dx = pad ? pad[0] - goal[0] : 0, dy = pad ? pad[1] - goal[1] : 0;
+    if (dx || dy) {
+      const [kx, ky] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+      const sx = goal[0] + kx, sy = goal[1] + ky;
+      if (isFloorTile(state.map, sx, sy) && chamberOfTile(sx, sy) === home) strikeFrom = [sx, sy];
+    }
+  }
+  if (settled) {
+    if (e.attackTimer > 0) e.attackTimer--;
+    else if (goal && (strikeFrom ? e.tileX === strikeFrom[0] && e.tileY === strikeFrom[1] : tileDist(e.tileX, e.tileY, goal[0], goal[1]) <= cfg.attackRange)) {
+      playSFX_enemyAttack(e);
+      if (rubyHome) { damageRuby(state, cfg.damageToRuby, e); moonShadePushRuby(state, e); }
+      else damagePlayer(state, cfg.damageToPlayer, e);
+      e.attackTimer = cfg.attackCooldown; e.shootTicks = 14;
+      return true;
+    }
+  }
+  // Where to walk: its striking spot or prey, back home if it was pushed out, or a wander spot in its chamber.
+  let to = strikeFrom ?? goal;
+  if (!to) {
+    if (!s.wander || (settled && e.tileX === s.wander[0] && e.tileY === s.wander[1]) || chamberOfTile(s.wander[0], s.wander[1]) !== home) {
+      const [r1, c1, r2, c2] = CHAMBER_BOUNDS[home];
+      for (let tries = 0; tries < 20; tries++) {
+        const x = c1 + 1 + Math.floor(Math.random() * (c2 - c1 - 1)), y = r1 + 1 + Math.floor(Math.random() * (r2 - r1 - 1));
+        if (state.map[y]?.[x] === T_FLOOR) { s.wander = [x, y]; e.pathTimer = 0; break; }
+      }
+    }
+    to = s.wander ?? null;
+  } else s.wander = undefined;
+  if (!to) return true;
+  if (!settled) { stepEnemy(state, e, cfg.speed); return true; }
+  if (--e.pathTimer <= 0 || !e.path.length) {
+    e.path = bfs(here === home ? chamberOnlyMap(state.map, home) : state.map, e.tileX, e.tileY, to[0], to[1]);
+    e.pathTimer = 25 + Math.floor(Math.random() * 15);
+  }
+  const next = e.path.shift();
+  if (!next || !isFloorTile(state.map, next[0], next[1])) return true;
+  if (here === home && chamberOfTile(next[0], next[1]) !== home) { e.path = []; return true; } // never step out of its chamber
+  [e.targetTileX, e.targetTileY] = next; e.stepProgress = 0;
+  return true;
+}
+
+// A shade's hit shoves a placed Ruby straight away from the shade, one tile at a time; walls and cover stop it.
+export function moonShadePushRuby(state: GameState, shade: Enemy) {
+  const moon = state.moon; if (!moon || state.rubyTileX === -1 || state.rubyStolenBy !== undefined) return;
+  const dx = state.rubyTileX - shade.tileX, dy = state.rubyTileY - shade.tileY;
+  const [kx, ky] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
+  moon.rubyPush = { dx: kx, dy: ky, tilesLeft: MOON_SHADE_RUBY_PUSH, timer: 0 };
+}
+function stepMoonRubyPush(state: GameState) {
+  const moon = state.moon!, push = moon.rubyPush; if (!push) return;
+  if (state.rubyTileX === -1 || state.rubyStolenBy !== undefined) { moon.rubyPush = null; return; } // picked up
+  if (--push.timer > 0) return;
+  push.timer = MOON_RUBY_PUSH_STEP;
+  const nx = state.rubyTileX + push.dx, ny = state.rubyTileY + push.dy;
+  if (!isFloorTile(state.map, nx, ny)) { moon.rubyPush = null; return; }
+  state.rubyTileX = nx; state.rubyTileY = ny;
+  if (--push.tilesLeft <= 0) moon.rubyPush = null;
+}
+
 export function updateMoon(state: GameState) {
   const moon = state.moon!;
+  stepMoonRubyPush(state);
   moon.healPulses=(moon.healPulses??[]).filter(fx=>--fx.ticks>0);
   state.ambientEvents.timer = Math.max(state.ambientEvents.timer, 3600); // no space events on this world
   const boss = state.enemies.find(e => e.id === moon.bossId && e.hp > 0);
@@ -348,7 +441,7 @@ export function updateMoon(state: GameState) {
   if (moon.markCooldown > 0 && --moon.markCooldown === 0) playUiSfx('markReady'); // the Mark is ready again
   if (moon.hint && --moon.hint.ticks <= 0) moon.hint = null;
   if (moon.mirrors.length && --moon.mirrorTimer <= 0) placeMoonMirrors(state); // they move every so often
-  if (boss && moon.phase >= 2 && !state.noMobs && --moon.mimicTimer <= 0) { moon.mimicTimer = MOON_MIMIC_GAP; spawnMimic(state); }
+  if (boss && !state.noMobs && --moon.mimicTimer <= 0) { moon.mimicTimer = MOON_MIMIC_GAP; spawnMimic(state); }
   if (moon.mirrorFade > 0 && --moon.mirrorFade <= 0) moon.oldMirrors = [];
   if (moon.dark >= 0 && --moon.darkTimer <= 0) moveMoonDark(state);
   if (moon.darkFade > 0 && --moon.darkFade <= 0) moon.oldDark = moon.oldSecondDark = -1;

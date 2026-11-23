@@ -1,3 +1,4 @@
+import { drawGravityHookCatch, drawGravityHookMark, drawGravityHookPulse, drawGravityTether } from './singularity-hook-art';
 import { drawSwarmConvergence } from './convergence-art';
 import { gasDepth, gasFade, hookTarget, mawReach, mawWindow, singularityOpenness, singularityLift, SINGULARITY_LAND_TICKS, SINGULARITY_FALL_HEIGHT } from './singularity-maw';
 import { CHAMBER_BOUNDS, MAP_COLS, MAP_ROWS, SINGULARITY_CHALLENGE, SOULLESS_LUNGE, SINGULARITY_GULP_SHAPE, SINGULARITY_GULP_TICKS, TELEPORT_PADS, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile } from './constants';
@@ -857,6 +858,38 @@ function drawJawBite(ctx:CanvasRenderingContext2D,jaw:{tx:number;ty:number;snap:
   ctx.restore();
 }
 
+/** Void Shell (Singularity phase 3): a cage of thick pale-violet plates around a Devourer copy. Corner plates and edge
+ * bars sit on a translucent violet wash with pale inner rails; plates drop away as the shell weakens (frac 0–1). */
+export function drawVoidShell(ctx:CanvasRenderingContext2D,x:number,y:number,half:number,tick:number,frac:number) {
+  const h=Math.round(half),pulse=.5+.5*Math.sin(tick*.08),th=7,len=Math.max(10,Math.round(h*.6));
+  ctx.save();ctx.shadowBlur=0;
+  ctx.globalAlpha=.28+.1*pulse;block(ctx,x-h,y-h,h*2,h*2,'#8a5cff');
+  ctx.globalAlpha=.2;block(ctx,x-h+th,y-h+th,(h-th)*.9,(h-th)*.6,'#efe6ff'); // a pale sheen on the upper-left face
+  ctx.globalAlpha=.55+.25*pulse;ctx.strokeStyle='#e8d8ff';ctx.lineWidth=1;ctx.strokeRect(Math.round(x-h+th)+.5,Math.round(y-h+th)+.5,h*2-th*2-1,h*2-th*2-1);
+  // Twelve plates (four corners, eight edge bars); the weaker the shell, the more are gone.
+  const plates:[number,number,number,number][]=[];
+  for(const [qx,qy] of [[-1,-1],[1,-1],[1,1],[-1,1]]){const cx=x+qx*h,cy=y+qy*h;
+    plates.push([qx<0?cx:cx-len,qy<0?cy:cy-th,len,th],[qx<0?cx:cx-th,qy<0?cy:cy-len,th,len]);}
+  for(const [qx,qy] of [[0,-1],[0,1],[-1,0],[1,0]]){const w=qx?th:Math.round(h*.5),hh=qx?Math.round(h*.5):th;
+    plates.push([x+qx*h-(qx>0?th:qx<0?0:w/2),y+qy*h-(qy>0?th:qy<0?0:hh/2),w,hh]);}
+  const keep=Math.ceil(plates.length*Math.max(0,Math.min(1,frac)));
+  plates.forEach(([px,py,w,hh],i)=>{if(i>=keep)return;ctx.globalAlpha=1;block(ctx,px-1,py-1,w+2,hh+2,'#1a0b2e');block(ctx,px,py,w,hh,'#9d7bff');block(ctx,px+2,py+2,Math.max(1,w-4),Math.max(1,hh-4),'#efe6ff');});
+  // A glint runs along the top rail.
+  const g=wrap(tick*1.4,h*4)-h*2;if(Math.abs(g)<h){ctx.globalAlpha=.8;block(ctx,x+g-3,y-h,6,th,'#ffffff');}
+  ctx.restore();
+}
+
+/** A Void Shell shattering: its plates fly outward and fall while a pale square ring expands. p runs 0–1. */
+function drawVoidShellBreak(ctx:CanvasRenderingContext2D,x:number,y:number,p:number,seed:number) {
+  const ease=1-(1-p)**3,r=S*(.45+1.1*ease);
+  ctx.globalAlpha=(1-p)*.9;ctx.strokeStyle='#e8d8ff';ctx.lineWidth=4*(1-p)+1;ctx.strokeRect(Math.round(x-r),Math.round(y-r),Math.round(r*2),Math.round(r*2));
+  if(p<.2){ctx.globalAlpha=(.2-p)/.2*.7;block(ctx,x-S*.5,y-S*.5,S,S,'#ffffff');}
+  for(let k=0;k<12;k++){const an=k*Math.PI/6+hash(k,seed,21)*.5,d=S*(.5+1.3*ease*(.7+.3*hash(k,seed,22))),w=k%3?10:6,hh=k%3?4:10;
+    ctx.save();ctx.translate(Math.round(x+Math.cos(an)*d),Math.round(y+Math.sin(an)*d+p*p*18));ctx.rotate(an+p*2*(k%2?1:-1));
+    ctx.globalAlpha=1-p;block(ctx,-w/2,-hh/2,w,hh,k%2?'#b39aff':'#e8d8ff');ctx.restore();}
+  ctx.globalAlpha=1;
+}
+
 // A toxic gas cloud, in the wall pipes' smoke style: layered soft green squares, each with a fainter shade halo, slowly
 // swelling, turning and drifting around the cloud's centre, so the whole cloud reads as a living puff.
 function drawGasCloud(ctx:CanvasRenderingContext2D,g:{x:number;y:number;seed:number;ticks:number;max:number},camX:number,camY:number,tick:number) {
@@ -878,6 +911,13 @@ function drawGasCloud(ctx:CanvasRenderingContext2D,g:{x:number;y:number;seed:num
 // patch on the right cheek dripping down, and the left foot), and gas rising from each soaked part in the wall pipes'
 // smoke style.
 export function drawToxicSoulless(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,id:number,hurt=false) {
+  // Toxic aura: a pulsing poison-green haze on the floor, a stepped square rim and toxin motes circling it.
+  {const X=Math.round(x),Y=Math.round(y),pulse=.5+.5*Math.sin(tick*.09+id),r=30+Math.round(pulse*3);
+   ctx.save();ctx.shadowBlur=0;
+   ctx.globalAlpha=.14+.08*pulse;steppedDisc(ctx,X,Y+4,r,SINGULARITY_GAS.shade,6);
+   ctx.globalAlpha=.2+.12*pulse;steppedDisc(ctx,X,Y+4,r-10,SINGULARITY_GAS.body,6);
+   for(let k=0;k<6;k++){const a=tick*.035+k*Math.PI/3+id,d=r-2+Math.sin(tick*.1+k)*3;ctx.globalAlpha=.55+.35*Math.sin(tick*.13+k*1.7);block(ctx,X+Math.cos(a)*d-2,Y+4+Math.sin(a)*d-2,4,4,k%2?SINGULARITY_GAS.light:SINGULARITY_GAS.body);}
+   ctx.restore();}
   drawSoulless(ctx,x,y,tick,id,hurt);
   const step=Math.round(Math.sin(tick*.16+id)),X=Math.round(x),Y=Math.round(y);
   ctx.save();ctx.shadowBlur=0;ctx.globalAlpha=hurt?.5:.92;
@@ -944,28 +984,30 @@ export function drawSingularityMawEffects(ctx:CanvasRenderingContext2D,state:Rea
   for(const g of t.gas??[])drawGasCloud(ctx,g,camX,camY,tick);
   const CY='#7fe8ff',PALE='#e6fbff';
   const at=(id:number)=>state.enemies.find(e=>e.id===id&&e.hp>0);
-  // The body the hook would catch: cyan corner brackets that breathe, and a faint dashed line to it.
+  // A broken orbital seal marks the catchable body; a second orbit binds a held body.
   const aim=hookTarget(state as GameState);
   if(aim){
-    const x=aim.x-camX,y=aim.y-camY,r=S*.75+Math.sin(tick*.15)*2;
-    ctx.globalAlpha=.35;ctx.strokeStyle=CY;ctx.lineWidth=2;ctx.setLineDash([6,6]);ctx.lineDashOffset=-tick;ctx.beginPath();ctx.moveTo(state.playerX-camX,state.playerY-camY);ctx.lineTo(x,y);ctx.stroke();ctx.setLineDash([]);
-    ctx.globalAlpha=.85;ctx.strokeStyle=CY;ctx.lineWidth=3;
-    for(const [dx,dy] of [[-1,-1],[1,-1],[1,1],[-1,1]]){ctx.beginPath();ctx.moveTo(x+dx*(r-9),y+dy*r);ctx.lineTo(x+dx*r,y+dy*r);ctx.lineTo(x+dx*r,y+dy*(r-9));ctx.stroke();}
+    const x=Math.round(aim.x-camX),y=Math.round(aim.y-camY),r=Math.round(S*.75+Math.sin(tick*.15)*2);
+    ctx.save();ctx.globalAlpha=.3;ctx.strokeStyle=CY;ctx.lineWidth=1.5;ctx.setLineDash([6,7]);ctx.lineDashOffset=-tick*.5;
+    ctx.beginPath();ctx.moveTo(state.playerX-camX,state.playerY-camY);ctx.lineTo(x,y);ctx.stroke();ctx.restore();
+    drawGravityHookMark(ctx,x,y,r,false,false,tick);
+
   }
-  // The tether while you hold a body: a three-band cyan chain of links from you to it, tightening as the hold runs out.
+  // Layered cyan tether and a flat, evenly lit frame on the held body.
   const held=t.hook&&at(t.hook.id);
   if(held){
-    const x1=state.playerX-camX,y1=state.playerY-camY,x2=held.x-camX,y2=held.y-camY,strain=t.hook!.ticks/SC.hook.maxTicks,len=Math.hypot(x2-x1,y2-y1),n=Math.max(2,Math.round(len/14));
-    ctx.save();ctx.lineCap='square';ctx.shadowColor=CY;
-    for(const [w,col,a,g] of [[12,CY,.35,6],[5,'#bff6ff',.85,3],[2,'#ffffff',1,0]] as const){ctx.globalAlpha=a;ctx.shadowBlur=g;ctx.strokeStyle=col;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
-    ctx.shadowBlur=0;for(let k=1;k<n;k++){const p=k/n;ctx.globalAlpha=.9;block(ctx,Math.round(x1+(x2-x1)*p)-3,Math.round(y1+(y2-y1)*p)-3,6,6,k%2?PALE:CY);}
-    const r=S*.7;ctx.globalAlpha=.9;ctx.strokeStyle=strain>.75&&Math.floor(tick/3)%2?'#ffffff':CY;ctx.lineWidth=3;ctx.strokeRect(Math.round(x2-r),Math.round(y2-r),Math.round(r*2),Math.round(r*2));
+    const x1=state.playerX-camX,y1=state.playerY-camY,x2=held.x-camX,y2=held.y-camY,strain=t.hook!.ticks/SC.hook.maxTicks;
+    ctx.save();drawGravityTether(ctx,x1,y1,x2,y2,tick,strain);
+    drawGravityHookMark(ctx,x2,y2,Math.round(S*.7),true,strain>.75&&Math.floor(tick/3)%2===1,tick);
     ctx.restore();
   }
-  // Flung bodies: a cyan streak trailing behind each, the way it flies.
+  // Thrown bodies carry a tapered sheet of cyan momentum with a pale leading core.
   for(const f of t.flings??[]){const e=at(f.id);if(!e)continue;const x=e.x-camX,y=e.y-camY;
-    for(let k=1;k<=4;k++){ctx.globalAlpha=.55-k*.11;block(ctx,x-f.dx*k*12-(12-k*2)/2,y-f.dy*k*12-(12-k*2)/2,12-k*2,12-k*2,k%2?PALE:CY);}
-    ctx.save();ctx.shadowColor=CY;ctx.shadowBlur=6;ctx.globalAlpha=.6;ctx.strokeStyle=CY;ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(x-f.dx*S*1.4,y-f.dy*S*1.4);ctx.lineTo(x,y);ctx.stroke();ctx.restore();}
+    ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(f.dy,f.dx));ctx.shadowBlur=0;
+    const trail=ctx.createLinearGradient(-S*1.8,0,0,0);trail.addColorStop(0,'#7664b800');trail.addColorStop(.65,'#59c7dc66');trail.addColorStop(1,'#b8f6ffbb');
+    ctx.globalAlpha=.8;ctx.fillStyle=trail;ctx.fillRect(-S*1.8,-10,S*1.8,20);
+    ctx.globalAlpha=.85;ctx.fillStyle='#e6fbff';ctx.fillRect(-S*.65,-1,S*.65,2);
+    for(let k=0;k<4;k++){ctx.globalAlpha=(1-k/4)*.5;block(ctx,-20-k*17,(k%2?1:-1)*(12+k*2),9-k,2,'#79d9ed');}ctx.restore();}
   // Slammed or wall-hit bodies are dazed: stars circle over them, blinking out as the stun ends.
   for(const e of state.enemies){const st=e.devourer?.stunTicks??0;if(e.type!=='devourer'||st<=0||e.hp<=0||e.devourer?.landTicks)continue;
     if(st<30&&Math.floor(st/4)%2)continue;
@@ -977,9 +1019,12 @@ export function drawSingularityMawEffects(ctx:CanvasRenderingContext2D,state:Rea
   // Hook impacts: a latch flash, a slam between two bodies, a wall hit.
   for(const f of t.hookFx??[]){
     if(f.kind==='slam'){drawHookSlam(ctx,f.x-camX,f.y-camY,1-f.ticks/40,f.x+f.y);continue;}
-    const max=f.kind==='wall'?22:20,p=1-f.ticks/max,x=f.x-camX,y=f.y-camY,r=S*.9*(.3+p);
-    ctx.globalAlpha=(1-p)*.85;ctx.strokeStyle=CY;ctx.lineWidth=3;ctx.strokeRect(Math.round(x-r),Math.round(y-r),Math.round(r*2),Math.round(r*2));
-    if(f.kind!=='latch')for(let k=0;k<8;k++){const an=k*Math.PI/4,d=r*1.1;ctx.globalAlpha=(1-p)*.9;block(ctx,x+Math.cos(an)*d-3,y+Math.sin(an)*d-3,6,6,k%2?'#9dff8a':PALE);}}
+    const max=f.kind==='wall'?22:20,p=1-f.ticks/max,x=f.x-camX,y=f.y-camY;
+    if(f.kind==='latch')drawGravityHookCatch(ctx,(held?.x??f.x)-camX,(held?.y??f.y)-camY,p,Math.round(S*.7)*1.12);
+    else drawGravityHookPulse(ctx,x,y,p,85);
+    if(f.kind==='latch')drawGravityHookPulse(ctx,state.playerX-camX,state.playerY-camY,p,46);
+  }
+  for(const b of t.shellBreaks??[])drawVoidShellBreak(ctx,b.x-camX,b.y-camY,1-b.ticks/30,b.x+b.y);
   for(const w of t.swallows??[]) {
     const max=w.big?40:24,p=1-w.ticks/max,x=w.x-camX,y=w.y-camY,r=(w.big?90:50)*(1-p);
     ctx.globalAlpha=(1-p)*.9;ctx.strokeStyle=w.big?'#9dff8a':'#e8d8ff';ctx.lineWidth=w.big?6:3;
@@ -1037,8 +1082,7 @@ function drawHookSlam(ctx:CanvasRenderingContext2D,x:number,y:number,p:number,se
   const ease=1-(1-p)**3;
   if(p<.18){ctx.globalAlpha=(.18-p)/.18;voidDisc(ctx,x,y,S*(1+p*4),'#ffffff');}
   if(p<.35){const k=1-p/.35;ctx.globalAlpha=k;for(let a=0;a<8;a++){const an=a*Math.PI/4+.2,len=S*(a%2?1:1.8)*(.6+ease);ctx.save();ctx.translate(x,y);ctx.rotate(an);block(ctx,0,-3,len,6,a%2?'#9dff8a':'#ffffff');ctx.restore();}}
-  for(const [lag,col,lw,size] of [[0,'#ffffff',8,2.4],[.12,'#9dff8a',5,3.2]] as const){const q=Math.max(0,ease-lag);if(q<=0)continue;const r=S*(.4+size*q);
-    ctx.globalAlpha=(1-p)*.9;ctx.strokeStyle=col;ctx.lineWidth=lw*(1-p)+1;ctx.strokeRect(Math.round(x-r),Math.round(y-r),Math.round(r*2),Math.round(r*2));}
+  drawGravityHookPulse(ctx,x,y,p,S*3.2);
   for(let k=0;k<18;k++){const an=hash(k,seed,21)*Math.PI*2,d=S*(.4+hash(k,seed,22)*2.6)*ease,sz=k%3?6:10;
     ctx.globalAlpha=(1-p)*.95;block(ctx,x+Math.cos(an)*d-sz/2,y+Math.sin(an)*d-sz/2+p*p*S*.8,sz,sz,['#ffffff','#9dff8a','#ffe680','#b07aff'][k%4]);}
   ctx.globalAlpha=1;

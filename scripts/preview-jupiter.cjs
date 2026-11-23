@@ -7,10 +7,10 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const c = require('../game/constants.ts'), engine = require('../game/engine.ts');
 const source = fs.readFileSync('game/RubyStarGame.tsx', 'utf8');
 // Local art modules keep their real imports; React/UI imports are dropped since only canvas drawing runs.
-const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
+const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(display-settings|thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
   .map(m => `const ${m[1].replace(/\btype\s+/g, '')}=require('./${m[2]}.ts');`).join('');
-const code = 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
-  + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;exports.drawMinimap=drawMinimap;exports.drawGuideCelestial=drawGuideCelestial;';
+const code = "const {drawConvergenceScreen,drawConvergenceMinimap}=require('./convergence-art.ts');const {drawSuitShell,drawSuitHelmet}=require('./player-suit-art.ts');" + 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
+  + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;exports.drawMinimap=drawMinimap;exports.drawGuideCelestial=drawGuideCelestial;exports.drawGuideReaper=drawGuideReaper;';
 const renderer = new Module(path.resolve('game/jupiter-preview.cjs'), module);
 renderer.filename = path.resolve('game/jupiter-preview.cjs'); renderer.paths = module.paths;
 renderer._compile(compile(code), renderer.filename);
@@ -20,6 +20,45 @@ const out = process.argv[2];
 if (!out) throw new Error('Provide an output directory');
 fs.mkdirSync(out, {recursive:true});
 const jupiter = require('../game/jupiter.ts'), art = require('../game/jupiter-art.ts');
+const guide=require('../game/JupiterGuide.tsx');
+for(const [name,dash] of [['jupiter-dash-effect',true],['jupiter-slow-impact',false]]) {
+ const cv=createCanvas(800,240),ctx=cv.getContext('2d');
+ for(let i=0;i<4;i++) {
+  const st=engine.createModeState('trial','storm_reaper');st.jupiter.stage='pursuit';st.jupiter.stormAge=100;
+  ctx.save();ctx.translate(i*200,0);ctx.beginPath();ctx.rect(0,0,200,240);ctx.clip();ctx.fillStyle='#211b24';ctx.fillRect(0,0,200,240);
+  if(dash){st.jupiter.bossBoost=24-i*5;st.jupiter.bossDashX=1;st.jupiter.bossDashY=0;renderer.exports.drawGuideReaper(ctx,110,130,i*5);art.drawJupiterBossEffect(ctx,st,110,130,i*5);}
+  else {require('../game/guide-art.ts').drawGuidePlayer(ctx,100,170);art.drawJupiterSlowImpact(ctx,100,170,1-i*.22);}
+  ctx.restore();
+ }
+ fs.writeFileSync(path.join(out,name+'.png'),cv.toBuffer('image/png'));
+}
+for(const [name,paint,ages] of [
+ ['jupiter-guide-race', (ctx,t)=>guide.drawShardRacePreview(ctx,t,renderer.exports.drawGuideReaper),[0,35,70,89]],
+ ['jupiter-guide-floor',guide.drawChargedFloorPreview,[0,18,27,60]],
+ ['jupiter-guide-cover',guide.drawMovingCoverPreview,[0,40,69,87]],
+ ['jupiter-guide-trail',(ctx,t)=>guide.drawReaperTrailPreview(ctx,t,renderer.exports.drawGuideReaper),[0,55,100,165]],
+]) {
+ const cv=createCanvas(800,120),ctx=cv.getContext('2d');
+ ages.forEach((age,i)=>{ctx.save();ctx.translate(i*200,0);ctx.beginPath();ctx.rect(0,0,200,120);ctx.clip();ctx.fillStyle='#211b24';ctx.fillRect(0,0,200,120);paint(ctx,age);ctx.restore();});
+ fs.writeFileSync(path.join(out,name+'.png'),cv.toBuffer('image/png'));
+}
+
+// Real phase-2 pursuit: preview footprints, retraction, rising replacement and new layout.
+{
+ const st=engine.createModeState('trial','storm_reaper');engine.godSpawnBoss(st,'storm_reaper');
+ st.immortal=true;st.resources=[];st.jupiter.shockTiles=[];
+ st.playerTileX=st.playerTargetX=10;st.playerTileY=st.playerTargetY=10;st.playerX=10.5*48;st.playerY=10.5*48;
+ const boss=jupiter.jupiterBoss(st);Object.assign(boss,{tileX:39,targetTileX:39,tileY:39,targetTileY:39,x:39.5*48,y:39.5*48,stepProgress:0});
+ jupiter.godSetJupiterPhase(st,2);jupiter.godSetJupiterStage(st,'pursuit');st.jupiter.stormBlend=1;st.jupiter.stormAge=120;st.jupiter.coverTimer=1;jupiter.updateJupiter(st);
+ const cv=createCanvas(1800,1200),ctx=cv.getContext('2d');let age=0;
+ for(const [i,target]of [0,80,98,108].entries()) {
+  while(age<target){st.gameTick++;jupiter.updateJupiter(st);age++;}
+  const frame=createCanvas(900,600),before=JSON.stringify(st);renderer.exports.drawGame(frame.getContext('2d'),st,900,600,st.gameTick,0,false);
+  if(before!==JSON.stringify(st))throw Error('Reconfiguring cover art mutated simulation');
+  ctx.drawImage(frame,(i%2)*900,Math.floor(i/2)*600);
+ }
+ fs.writeFileSync(path.join(out,'jupiter-moving-cover.png'),cv.toBuffer('image/png'));
+}
 
 const W=1280,H=720,sheet=createCanvas(W,H*4),sc=sheet.getContext('2d');
 for(const [i,stage] of ['charging','pursuit','overcharged','escape'].entries()) {
@@ -96,7 +135,7 @@ fs.writeFileSync(path.join(out,'jupiter-static-slow.png'),slowSheet.toBuffer('im
 for(const heal of [false,true]) {
  const st=engine.createModeState('trial','storm_reaper');engine.godSpawnBoss(st,'storm_reaper');st.resources=[];
  const boss=jupiter.jupiterBoss(st);Object.assign(boss,{tileX:14,targetTileX:14,tileY:10,targetTileY:10,x:14.5*48,y:10.5*48,stepProgress:0});
- jupiter.godSetJupiterStage(st,'escape');boss.hp=5300;
+ jupiter.godSetJupiterStage(st,'escape');boss.hp=boss.maxHp-100;
  st.jupiter.shards=[{id:1,x:heal?14:10,y:10},{id:2,x:39,y:39}];st.jupiter.shardBossX=boss.x;st.jupiter.shardBossY=boss.y;st.jupiter.shockTiles=[];
  jupiter.updateJupiter(st);st.jupiter.stormBlend=0;
  const cv=createCanvas(1280,720);renderer.exports.drawGame(cv.getContext('2d'),st,1280,720,24,0,false);
@@ -144,3 +183,23 @@ for(const [i,age] of [-5,3,16,38].entries()) {
  releaseCtx.drawImage(cv,(i%2)*640,Math.floor(i/2)*360,640,360);
 }
 fs.writeFileSync(path.join(out,'jupiter-pursuit-release.png'),releaseSheet.toBuffer('image/png'));
+
+// Phase-3 trail generated by real movement, then left to expire under the player.
+{
+ const st=engine.createModeState('trial','storm_reaper');engine.godSpawnBoss(st,'storm_reaper');st.godMode=true;st.noMobs=true;st.resources=[];
+ jupiter.godSetJupiterPhase(st,3);jupiter.godSetJupiterStage(st,'pursuit');st.jupiter.shockTiles=[];st.jupiter.miniStormHitCooldown=1e9;st.jupiter.stormBlend=1;st.jupiter.stormAge=120;
+ const boss=jupiter.jupiterBoss(st);Object.assign(boss,{tileX:11,targetTileX:11,tileY:10,targetTileY:10,x:11.5*48,y:10.5*48,stepProgress:0,path:[],pathTimer:0});
+ Object.assign(st,{playerTileX:18,playerTargetX:18,playerTileY:10,playerTargetY:10,playerX:18.5*48,playerY:10.5*48});
+ for(let x=11;x<=18;x++)st.map[10][x]=c.T_FLOOR;
+ for(let i=0;i<38;i++)jupiter.updateJupiterReaper(st,boss);
+ if(!st.jupiter.reaperTrail?.length)throw Error('Reaper movement emitted no trail');
+ Object.assign(st,{playerTileX:12,playerTargetX:12,playerX:12.5*48});
+ const cv=createCanvas(1800,1200),ctx=cv.getContext('2d');let age=0;
+ for(const [i,target]of [0,60,270,300].entries()) {
+  while(age<target){st.gameTick++;jupiter.updateJupiter(st);age++;}
+  const before=JSON.stringify(st),frame=createCanvas(900,600);renderer.exports.drawGame(frame.getContext('2d'),st,900,600,st.gameTick,0,false);
+  if(before!==JSON.stringify(st))throw Error('Trail art mutated simulation');
+  ctx.drawImage(frame,(i%2)*900,Math.floor(i/2)*600);
+ }
+ fs.writeFileSync(path.join(out,'jupiter-reaper-trail.png'),cv.toBuffer('image/png'));
+}

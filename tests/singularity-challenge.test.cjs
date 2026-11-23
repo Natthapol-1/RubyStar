@@ -131,7 +131,7 @@ test('the Gravity Hook latches the nearest body in range and sight, tows it behi
  assert.ok(Math.hypot(b.tileX-10,b.tileY-10)<=2,'towed to you: '+b.tileX+','+b.tileY);
  const out=fresh();emptyRoom(out);player(out,10,10);const far=calm(bodies(out)[0]);far.devourer.generation=1;place(far,10+SC.hook.range+1,10);
  assert.equal(maw.hookTarget(out),undefined,'out of range');
- place(far,13,10);out.map[10][12]=c.T_WALL;assert.equal(maw.hookTarget(out),undefined,'out of sight');
+ place(far,13,10);out.map[10][12]=c.T_WALL;assert.equal(maw.hookTarget(out),far,'walls do not block the latch');
  const orig=fresh();emptyRoom(orig);player(orig,10,10);place(bodies(orig)[0],12,10);assert.equal(maw.hookTarget(orig),undefined,'the original cannot be hooked');
 });
 test('releasing flings the body the way you face; it is swallowed on reaching a Maw, open or not',()=>{
@@ -212,7 +212,7 @@ test('all phases share health and soul limits; Golden Souls appear only from pha
  const orig=Math.random;
  try{for(const phase of [1,2,3]){const s=fresh();e.godSetSingularityPhase(s,phase);s.noMobs=false;s.trial.devourer.soulTimer=undefined;Math.random=()=>.01; // every roll golden where allowed
   tickMaws(s,SC.soulSpawnTicks*8);assert.ok(souls(s).length<=SC.soulCap);assert.ok(souls(s).length>0);
-  assert.equal(souls(s).some(x=>x.goldenSoul),phase>=SC.goldenFromPhase,'phase '+phase);}}finally{Math.random=orig;}
+  assert.equal(souls(s).some(x=>x.goldenSoul),phase>=2,'phase '+phase);}}finally{Math.random=orig;}
 });
 
 test('a body that eats a Golden Soul is filled to full stacks at once and lights its fuse',()=>{
@@ -294,22 +294,41 @@ test('holding past the limit flings on its own and the hook is immediately ready
  place(b,12,10);b.devourer.stunTicks=0;s.trial.devourer.flings=[];assert.equal(maw.pressGravityHook(s),true);
 });
 
-test('each Maw idles small, warns, then opens wide; the two are half a cycle apart; you are pulled only while one is open',()=>{
+test('each Maw idles small, warns, then opens wide; the two open together; you are pulled only while one is open',()=>{
  const s=fresh();tickMaws(s);const [a,b]=s.trial.devourer.maws,C=SC.mawCycle,total=C.closed+C.warn+C.open;
  assert.equal(maw.mawWindow(a).state,'closed');assert.equal(maw.mawReach(s,a),SC.mawRadius);
  a.age=C.closed;assert.equal(maw.mawWindow(a).state,'warn');a.age=C.closed+C.warn;assert.equal(maw.mawWindow(a).state,'open');assert.ok(maw.mawReach(s,a)<SC.mawOpenRadius,'its reach eases in');a.age=C.closed+C.warn+C.open/2;assert.equal(maw.mawReach(s,a),SC.mawOpenRadius);
- assert.equal(b.offset-a.offset,Math.floor(total/2));
+ assert.equal(b.offset,a.offset);void total;
  const q=fresh();emptyRoom(q);q.trial.devourer.maws=[mawAt(10,10,'closed'),mawAt(40,40,'closed')];player(q,12,10);let pulls=0;
  for(let i=0;i<300;i++){q.playerKnockback=null;tickMaws(q);if(q.playerKnockback)pulls++;}assert.equal(pulls,0,'closed: no pull from two tiles away');
  q.trial.devourer.maws[0].forced='open';for(let i=0;i<300;i++){q.playerKnockback=null;tickMaws(q);if(q.playerKnockback)pulls++;}assert.ok(pulls>0,'open: it pulls you');
 });
 
 test('swallowing bodies in quick succession builds a Feast chain that heals more each time',()=>{
- const s=fresh();emptyRoom(s);setMaw(s,10,10);player(s,3,3);s.playerHP=10;s.rubyHP=10;
- const heals=[];for(let k=0;k<3;k++){const x=e.createEncounterEnemy(s,'devourer',10,10,90);x.devourer={generation:1,challenge:true};x.encounterId=s.trial.devourer.encounterId;s.enemies.push(x);const before=s.playerHP;tickMaws(s);heals.push(s.playerHP-before);s.playerHP=10;}
+ const s=fresh();emptyRoom(s);setMaw(s,10,10);player(s,3,3);s.playerHP=10;s.rubyHP=10;s.trial.devourer.jawTimer=1e9; // no Jaw bites on the low-HP player
+ const heals=[];for(let k=0;k<3;k++){tickMaws(s,SC.mawEatCooldown);const x=e.createEncounterEnemy(s,'devourer',10,10,90);x.devourer={generation:1,challenge:true};x.encounterId=s.trial.devourer.encounterId;s.enemies.push(x);const before=s.playerHP;tickMaws(s);heals.push(s.playerHP-before);s.playerHP=10;}
  assert.equal(s.trial.devourer.feast.count,3);assert.ok(heals[1]>heals[0]&&heals[2]>heals[1],String(heals));
  tickMaws(s,SC.feastWindow+80);const x=e.createEncounterEnemy(s,'devourer',10,10,90);x.devourer={generation:1,challenge:true};x.encounterId=s.trial.devourer.encounterId;s.enemies.push(x);tickMaws(s);
  assert.equal(s.trial.devourer.feast.count,1,'the chain resets after a pause');
+});
+
+test('a Maw swallows one copy at a time, with a short cooldown between swallows',()=>{
+ const s=fresh();emptyRoom(s);setMaw(s,10,10);player(s,3,3);s.enemies=[];
+ const copy=()=>{const x=e.createEncounterEnemy(s,'devourer',10,10,90);x.devourer={generation:1,challenge:true};x.encounterId=s.trial.devourer.encounterId;x.windupTicks=999;s.enemies.push(x);return x;};
+ const a=copy(),b=copy();tickMaws(s);
+ assert.equal([a,b].filter(x=>s.enemies.includes(x)).length,1,'one swallowed');
+ tickMaws(s,SC.mawEatCooldown-2);assert.equal([a,b].filter(x=>s.enemies.includes(x)).length,1,'the other waits');
+ tickMaws(s,2);assert.equal([a,b].filter(x=>s.enemies.includes(x)).length,0,'then it is swallowed too');
+});
+
+test('the F field swallows one copy at a time, with the Maw swallow cooldown',()=>{
+ const s=fresh();emptyRoom(s);s.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(s,3,3);s.enemies=[];s.trial.devourer.jawTimer=1e9;
+ s.singularity={x:10.5*48,y:10.5*48,ticks:600,maxTicks:600};
+ const copy=()=>{const x=e.createEncounterEnemy(s,'devourer',10,10,90);x.devourer={generation:1,challenge:true};x.encounterId=s.trial.devourer.encounterId;x.windupTicks=999;s.enemies.push(x);return x;};
+ const a=copy(),b=copy(),left=()=>[a,b].filter(x=>s.enemies.includes(x)).length;
+ maw.swallowAtField(s);assert.equal(left(),1,'one swallowed');
+ for(let i=0;i<SC.mawEatCooldown-1;i++){tickMaws(s);maw.swallowAtField(s);}assert.equal(left(),1,'the other waits');
+ tickMaws(s);maw.swallowAtField(s);assert.equal(left(),0,'then it is swallowed too');
 });
 
 test('a Lost Soul runs from you when you come close',()=>{
@@ -337,7 +356,7 @@ test('F stays where you cast it, even beside a Maw, and keeps its own reach, dam
  assert.equal(e.useSpecialSkill(s),true);for(let i=0;i<120;i++)e.singularityTest.updateSingularity(s);
  assert.equal(s.singularity.x,13.5*48);assert.equal(s.singularity.y,10.5*48,'not drawn into the Maw');
  const a=e.createEncounterEnemy(s,'normal',15,10,100);s.enemies.push(a);s.singularity.damageTimer=1;e.singularityTest.updateSingularity(s);assert.ok(a.hp<100,'damages within its reach');
- assert.equal(c.trialSkillCooldown('devourer'),12*60);assert.equal(s.singularity.maxTicks,SC.fTicks,'half as long here');
+ assert.equal(c.trialSkillCooldown('devourer'),9*60);assert.equal(s.singularity.maxTicks,SC.fTicks,'shorter here');
 });
 
 test('a copy pulled to the F centre is swallowed like at a Maw: gone for good, and it heals you',()=>{
@@ -410,10 +429,10 @@ test('each repeatable Singularity sound plays at most once per cooldown, kinds a
  s.gameTick+=SC.soundGap;assert.ok(e.devourerSoundAllowed(s,'boom'),'free again after the gap');
 });
 
-test('drifting and Contaminated Soulless gas slow you without damaging player or Ruby',()=>{
+test('drifting gas and Contaminated Soulless trail puffs slow you without damaging player or Ruby',()=>{
  for(const still of [false,true]){
   const s=fresh();e.godSetSingularityPhase(s,2);s.enemies=[];s.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(s,10,10);s.playerHP=100;s.rubyHP=100;s.rubyTileX=10;s.rubyTileY=10;
-  s.trial.devourer.gas=[{x:10.5*48,y:10.5*48,vx:0,vy:0,ticks:5000,max:10000,seed:1,still,r:still?SC.soulless.cloudRadius:SC.gas.radius}];
+  s.trial.devourer.gas=[{x:10.5*48,y:10.5*48,vx:0,vy:0,ticks:5000,max:10000,seed:1,still,r:still?SC.soulless.trailRadius:SC.gas.radius,...(still?{fade:SC.soulless.trailFade}:{})}];
   tickMaws(s,120);assert.equal(s.playerHP,100);assert.equal(s.rubyHP,100);assert.equal(maw.gasPlayerSlow(s),SC.gas.slow);
  }
 });
@@ -427,11 +446,106 @@ test('the Jaw also swallows any enemy caught in it, but never the original',()=>
  assert.ok(!s.enemies.includes(copy)&&copy.devourer.consumed,'the copy is swallowed');assert.ok(!s.enemies.includes(husk),'and the Soulless');assert.ok(s.enemies.includes(orig),'the original stays');
 });
 
-test('a Toxic Soulless fights like a Soulless and leaves a still, larger gas cloud where it dies',()=>{
- const s=fresh();emptyRoom(s);e.godSetSingularityPhase(s,2);s.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(s,3,3);
- const t=e.createEncounterEnemy(s,'toxic_soulless',12,12,30);s.enemies.push(t);t.hp=0;e.killEnemy(s,s.enemies.indexOf(t));
- const cloud=s.trial.devourer.gas.find(g=>g.still);assert.ok(cloud,'a still cloud');assert.equal(cloud.r,SC.soulless.cloudRadius);
- const at=[cloud.x,cloud.y];tickMaws(s,60);assert.deepEqual([cloud.x,cloud.y],at,'it does not drift');
+test('a Contaminated Soulless leaves still gas puffs on new tiles as it walks, and none when it dies',()=>{
+ const s=fresh();emptyRoom(s);e.godSetSingularityPhase(s,3);s.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(s,3,3);
+ const t=e.createEncounterEnemy(s,'toxic_soulless',12,12,30);s.enemies.push(t);
+ const trail=()=>s.trial.devourer.gas.filter(g=>g.still);s.trial.devourer.gas=[];
+ maw.toxicSoullessTrail(s,t);assert.equal(trail().length,0,'its starting tile is not part of the trail');
+ place(t,13,12);s.gameTick+=SC.soulless.trailGap;maw.toxicSoullessTrail(s,t);assert.equal(trail().length,1,'a puff on the new tile');
+ const puff=trail()[0];assert.equal(puff.r,SC.soulless.trailRadius);assert.deepEqual([puff.x,puff.y],[13.5*48,12.5*48]);
+ maw.toxicSoullessTrail(s,t);assert.equal(trail().length,1,'standing still leaves nothing more');
+ place(t,14,12);s.gameTick+=1;maw.toxicSoullessTrail(s,t);assert.equal(trail().length,1,'at most one puff per gap');
+ s.gameTick+=SC.soulless.trailGap;maw.toxicSoullessTrail(s,t);assert.equal(trail().length,2);
+ for(let i=0;i<SC.soulless.trailMax+3;i++){place(t,15+i,12);s.gameTick+=SC.soulless.trailGap;maw.toxicSoullessTrail(s,t);}
+ assert.equal(trail().length,SC.soulless.trailMax,'at most trailMax puffs');assert.ok(!trail().includes(puff),'the oldest went first');
+ s.trial.devourer.gas=[puff];
+ s.enemies=s.enemies.filter(x=>x!==t);
+ const at=[puff.x,puff.y];tickMaws(s,60);assert.deepEqual([puff.x,puff.y],at,'puffs do not drift');
+ tickMaws(s,SC.soulless.trailTicks);assert.equal(trail().length,0,'puffs fade away');
+ s.enemies.push(t);kill(s,t);assert.equal(trail().length,0,'dying leaves no cloud');
+});
+
+test('Contaminated Soulless spawn only from phase 3',()=>{
+ const orig=Math.random;
+ try{for(const phase of [1,2,3]){const s=fresh();e.godSetSingularityPhase(s,phase);s.noMobs=false;s.trial.devourer.soulTimer=1e9;Math.random=()=>.01;
+  tickMaws(s,SC.soulless.everyTicks*3+SC.soulWarnTicks);
+  assert.ok(s.enemies.some(x=>x.type==='soulless'||x.type==='toxic_soulless'),'phase '+phase+' has Soulless');
+  assert.equal(s.enemies.some(x=>x.type==='toxic_soulless'),phase>=3,'phase '+phase);}}finally{Math.random=orig;}
+});
+
+test('phase 3 copies may carry a Void Shell that absorbs damage and blocks the Gravity Hook until it breaks',()=>{
+ const orig=Math.random;
+ try{for(const phase of [2,3]){const s=fresh();emptyRoom(s);e.godSetSingularityPhase(s,phase);player(s,3,3);Math.random=()=>.01;
+  const root=calm(bodies(s)[0]);place(root,10,10);root.chargeDirX=4;e.explodeDevourer(s,root);
+  const copies=bodies(s);assert.ok(copies.length>0);
+  assert.ok(copies.every(b=>b.icyShieldHP===(phase>=3?SC.shell.hp:0)),'phase '+phase);}}finally{Math.random=orig;}
+ const s=fresh();emptyRoom(s);e.godSetSingularityPhase(s,3);player(s,10,10);s.enemies=[];
+ const b=e.createEncounterEnemy(s,'devourer',12,10,130);b.devourer={generation:1,challenge:true};b.icyShieldHP=SC.shell.hp;s.enemies.push(b);
+ assert.ok(maw.voidShelled(b));assert.equal(maw.hookTarget(s),undefined,'a shelled copy cannot be hooked');
+ e.damageEnemy(s,b,SC.shell.hp-1,'player');assert.equal(b.hp,130,'the shell absorbs the hit');assert.equal(maw.hookTarget(s),undefined);
+ e.damageEnemy(s,b,11,'player');assert.equal(b.icyShieldHP,0);assert.equal(b.hp,120,'damage past the shell carries through');
+ assert.equal(s.trial.devourer.shellBreaks.length,1,'it shatters');assert.equal(maw.hookTarget(s),b,'once broken it can be hooked');
+});
+
+test('the Gravity Hook picks a Devourer in range before a nearer Soul or Soulless',()=>{
+ const s=fresh();emptyRoom(s);player(s,10,10);s.enemies=[];
+ const husk=e.createEncounterEnemy(s,'soulless',11,10,30),soul=e.createEncounterEnemy(s,'lost_soul',10,11,1);s.enemies.push(husk,soul);
+ assert.ok([husk,soul].includes(maw.hookTarget(s)),'with no Devourer, the nearest mob');
+ const b=e.createEncounterEnemy(s,'devourer',16,10,130);b.devourer={generation:1,challenge:true};s.enemies.push(b);
+ assert.equal(maw.hookTarget(s),b,'the Devourer first');
+ b.icyShieldHP=SC.shell.hp;assert.notEqual(maw.hookTarget(s),b,'unless it wears a Void Shell');
+ b.icyShieldHP=0;s.map[10][14]=c.T_WALL;assert.ok([husk,soul].includes(maw.hookTarget(s)),'a visible mob before a Devourer behind a wall');
+ s.enemies=[b];assert.equal(maw.hookTarget(s),b,'with nothing visible it reaches through the wall');
+});
+
+test('a Soulless caught in a Gravity Hook slam or thrown into a wall takes impact damage',()=>{
+ for(const type of ['soulless','toxic_soulless']){
+  const s=fresh();emptyRoom(s);s.trial.devourer.maws=[mawAt(40,40),mawAt(41,41)];player(s,10,10);s.rubyTileX=-1;s.enemies=[];
+  const h=e.createEncounterEnemy(s,type,9,10,30);h.windupTicks=999;s.enemies.push(h);s.map[10][13]=c.T_WALL;
+  maw.pressGravityHook(s);s.playerDirX=1;s.playerDirY=0;maw.releaseGravityHook(s);
+  for(let i=0;i<60&&!(h.devourer?.stunTicks>0);i++){tickMaws(s);swarm(s);}
+  assert.equal(h.hp,30-SC.hook.soullessImpact,type+' hit by the wall');
+  if(type==='toxic_soulless')continue; // a Devourer touching it bursts instead (tested below)
+  const w=fresh();emptyRoom(w);w.trial.devourer.maws=[mawAt(40,40),mawAt(41,41)];player(w,10,10);w.rubyTileX=-1;w.enemies=[];
+  const b=e.createEncounterEnemy(w,'devourer',9,10,130);b.devourer={generation:1,challenge:true};b.windupTicks=999;w.enemies.push(b);
+  const o=e.createEncounterEnemy(w,type,14,10,30);w.enemies.push(o);
+  maw.pressGravityHook(w);w.playerDirX=1;w.playerDirY=0;maw.releaseGravityHook(w);
+  for(let i=0;i<60&&!(b.devourer.stunTicks>0);i++){tickMaws(w);swarm(w);}
+  assert.ok(b.devourer.stunTicks>0);assert.equal(b.hp,130,'the Devourer takes no damage');assert.equal(o.hp,30-SC.hook.soullessImpact,type+' hurt by the slam');
+ }
+});
+
+test('Contaminated Soulless: walks faster, a Devourer touching it bursts, and a Soulless in gas becomes one',()=>{
+ assert.ok(SC.soulless.toxicSpeed>1);
+ const s=fresh();emptyRoom(s);e.godSetSingularityPhase(s,3);s.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(s,3,3);s.enemies=[];s.trial.devourer.gas=[];
+ const b=e.createEncounterEnemy(s,'devourer',10,10,130);b.devourer={generation:1,challenge:true};b.chargeDirX=2;b.encounterId=b.id;s.trial.devourer.encounterId=b.id;s.enemies.push(b);
+ const t=e.createEncounterEnemy(s,'toxic_soulless',11,10,30);s.enemies.push(t);
+ tickMaws(s);assert.ok(!s.enemies.includes(b),'a Devourer with stacks touching it explodes');
+ const h=e.createEncounterEnemy(s,'soulless',20,20,30);s.enemies.push(h);
+ s.trial.devourer.gas.push({x:20.5*48,y:20.5*48,vx:0,vy:0,ticks:5000,max:10000,seed:1,still:true,r:2});
+ tickMaws(s);assert.equal(h.type,'toxic_soulless','gas contaminates it');assert.equal(h.hp,30);
+ const q=fresh();emptyRoom(q);e.godSetSingularityPhase(q,2);q.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(q,3,3);q.enemies=[];
+ const g=e.createEncounterEnemy(q,'soulless',20,20,30);q.enemies.push(g);q.trial.devourer.gas=[{x:20.5*48,y:20.5*48,vx:0,vy:0,ticks:5000,max:10000,seed:1,still:true,r:2}];
+ tickMaws(q);assert.equal(g.type,'soulless','phase 2 gas leaves it alone');
+});
+
+test('a thrown Devourer bursts when it flies into gas',()=>{
+ const s=fresh();emptyRoom(s);e.godSetSingularityPhase(s,2);s.trial.devourer.maws=[mawAt(40,40),mawAt(41,41)];player(s,10,10);s.rubyTileX=-1;s.enemies=[];
+ const b=e.createEncounterEnemy(s,'devourer',9,10,130);b.devourer={generation:1,challenge:true};b.windupTicks=999;s.enemies.push(b);
+ s.trial.devourer.gas=[{x:14.5*48,y:10.5*48,vx:0,vy:0,ticks:5000,max:10000,seed:1,still:true,r:1.2}];
+ maw.pressGravityHook(s);s.playerDirX=1;s.playerDirY=0;maw.releaseGravityHook(s);
+ for(let i=0;i<60&&s.trial.devourer.flings.length;i++){tickMaws(s);swarm(s);}
+ assert.equal(s.trial.devourer.flings.length,0);assert.ok(b.devourer.landTicks>0,'burst and flung away');assert.ok(Math.abs(b.tileX-14)+Math.abs(b.tileY-10)>2);
+ assert.equal(s.trial.devourer.bursts.length,1);
+});
+
+test('a Soulless on a Maw centre takes damage over time',()=>{
+ for(const type of ['soulless','toxic_soulless']){
+  const s=fresh();emptyRoom(s);setMaw(s,10,10);player(s,3,3);s.enemies=[];
+  const h=e.createEncounterEnemy(s,type,10,10,30);s.enemies.push(h);
+  tickMaws(s,SC.mawSoulless.every);assert.equal(h.hp,30-SC.mawSoulless.damage,type);
+  tickMaws(s,SC.mawSoulless.every*3);assert.ok(!s.enemies.includes(h),type+' dies at the centre');
+ }
 });
 
 test('a Devourer you hit drops its food and hunts you for a while',()=>{
@@ -443,25 +557,15 @@ test('a Devourer you hit drops its food and hunts you for a while',()=>{
  swarm(s);assert.deepEqual(b.path[b.path.length-1],[4,10],'after a hit it hunts you');
  b.devourer.aggroTicks=1;player(s,3,3);swarm(s);b.pathTimer=0;swarm(s);assert.deepEqual(b.path[b.path.length-1],[15,10],'then back to food');
 });
-test('phase 3 Gnashers: only in phase 3; a bite bursts a stacked body with double stacks or splits a stackless one',()=>{
- const orig=Math.random;
- try{Math.random=()=>.01;const s1=fresh();assert.equal(maw.rollGnasher(s1),false,'not in phase 1');
-  const s3=fresh();e.godSetSingularityPhase(s3,3);assert.equal(maw.rollGnasher(s3),true,'phase 3');}finally{Math.random=orig;}
- const mk=(stacks)=>{const s=fresh();e.godSetSingularityPhase(s,3);emptyRoom(s);s.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(s,3,3);
-  const o=calm(bodies(s)[0]);place(o,18,18);
-  const g=e.createEncounterEnemy(s,'devourer',10,10,100);g.devourer={generation:1,challenge:true,gnasher:true,biteTicks:0};g.encounterId=o.encounterId;s.enemies.push(g);
-  const v=e.createEncounterEnemy(s,'devourer',11,10,100);v.devourer={generation:1,challenge:true};v.encounterId=o.encounterId;v.chargeDirX=stacks;s.enemies.push(v);
-  maw.gnasherBite(s,g);return{s,v,g};};
- let {s,v}=mk(2);assert.ok(!s.enemies.includes(v),'stacked: it burst');assert.equal(bodies(s).length,2+4,'with double stacks: four copies');
- ({s,v}=mk(0));assert.ok(s.enemies.includes(v),'stackless: it stays');assert.equal(bodies(s).length,4,'and splits into two');
-});
-
-test('a bursting body can still burst while it is being pulled',()=>{
+test('a bursting body pauses while pulled or hooked, then resumes once released',()=>{
  const s=fresh();emptyRoom(s);s.trial.devourer.maws=[mawAt(40,40,'closed'),mawAt(41,41,'closed')];player(s,3,3);
  const o=calm(bodies(s)[0]);place(o,18,18);
  const b=e.createEncounterEnemy(s,'devourer',10,10,100);b.devourer={generation:1,challenge:true,gorgeTicks:3};b.encounterId=o.encounterId;b.chargeDirX=3;s.enemies.push(b);
  for(let i=0;i<5;i++){if(!b.singularityPull)b.singularityPull={started:false,dx:1,dy:0,speed:2};swarm(s);}
- assert.ok(!s.enemies.includes(b),'it burst mid-pull');
+ assert.ok(s.enemies.includes(b));assert.equal(b.devourer.gorgeTicks,3);
+ b.singularityPull=undefined;s.trial.devourer.hook={id:b.id,ticks:0};for(let i=0;i<5;i++)swarm(s);
+ assert.equal(b.devourer.gorgeTicks,3);s.trial.devourer.hook=undefined;
+ for(let i=0;i<4;i++)swarm(s);assert.ok(!s.enemies.includes(b),'bursts after release');
 });
 
 test('early in a phase a lone body bursts at once with the phase full stacks; after 30s it does not',()=>{
@@ -549,7 +653,7 @@ function convergenceSetup(phase,count){
  for(let i=0;i<count;i++){const b=e.createEncounterEnemy(s,'devourer',3+i%15,3+Math.floor(i/15),130);b.encounterId=s.trial.devourer.encounterId;b.devourer={generation:1,challenge:true};b.chargeDirX=i%3;s.enemies.push(b);}
  return s;
 }
-test('convergence preserves each living body and stack; full cap deals exactly 30 player and 15 Ruby damage once in every phase',()=>{
+test('convergence preserves each living body and stack; a full cap hits once in every phase, scaled by distance',()=>{
  const C=SC.convergence;
  for(const phase of [1,2,3]){
   const s=convergenceSetup(phase,SC.familyCap[phase-1]),t=s.trial.devourer;
@@ -558,11 +662,19 @@ test('convergence preserves each living body and stack; full cap deals exactly 3
   assert.equal(bodies(s).filter(b=>b.devourer.merging).length,1,'only the body whose turn started is frozen');
   for(let i=0,n=t.convergence.gatherTicks-1;i<n;i++)maw.updateConvergence(s,t);assert.equal(t.convergence.stage,'gather');assert.equal(s.playerHP,100);
   maw.updateConvergence(s,t); // final arrival immediately explodes, without a charge delay
-  assert.equal(t.convergence.stage,'blast');assert.equal(s.playerHP,70);assert.equal(s.rubyHP,85);
+  assert.equal(t.convergence.stage,'blast');
+  const pm=maw.convergenceDamageMult(t.convergence,s.playerX,s.playerY),rx=s.rubyTileX!==-1&&!s.playerCarryingRuby?(s.rubyTileX+.5)*48:s.playerX,ry=s.rubyTileX!==-1&&!s.playerCarryingRuby?(s.rubyTileY+.5)*48:s.playerY;
+  const hit=Math.ceil(C.maxDamage*pm);assert.equal(s.playerHP,100-hit);assert.equal(s.rubyHP,100-Math.ceil(C.maxDamage*C.rubyShare*maw.convergenceDamageMult(t.convergence,rx,ry)));
   assert.deepEqual(bodies(s).map(b=>[b.id,b.hp,b.maxHp,b.chargeDirX]),before);
   assert.ok(bodies(s).every(b=>!b.devourer.merging&&b.devourer.landTicks>0));
-  for(let i=0;i<C.blastTicks;i++)maw.updateConvergence(s,t);assert.equal(t.convergence,undefined);assert.equal(s.playerHP,70);
+  for(let i=0;i<C.blastTicks;i++)maw.updateConvergence(s,t);assert.equal(t.convergence,undefined);assert.equal(s.playerHP,100-hit);
  }
+});
+test('convergence damage: 1.5x close to the gather point, easing down to 0.5x, and 0.5x in the opposite chamber',()=>{
+ const C=SC.convergence,[t,l,b,r]=c.CHAMBER_BOUNDS[0],gx=l+5,gy=t+5,a={x:(gx+.5)*48,y:(gy+.5)*48};
+ assert.equal(maw.convergenceDamageMult(a,a.x,a.y),C.nearMult);assert.equal(maw.convergenceDamageMult(a,a.x+3*48,a.y),C.nearMult);
+ const mid=maw.convergenceDamageMult(a,a.x+20*48,a.y);assert.ok(mid>C.farMult&&mid<C.nearMult);
+ const [ot,ol,ob,or]=c.CHAMBER_BOUNDS[3];assert.equal(maw.convergenceDamageMult(a,(ol+1.5)*48,(ot+1.5)*48),C.farMult,'the opposite chamber');
 });
 test('convergence pauses; its giant body is invincible, cannot be hooked, pulled or eaten, and reset clears it',()=>{
  const s=convergenceSetup(1,10),t=s.trial.devourer;maw.updateConvergence(s,t);
@@ -583,7 +695,7 @@ test('a fractional damaging hit kills an ordinary or Golden Soul',()=>{
 });
 
 
-test('Gravity Hook grabs Souls, Soulless, Contaminated Soulless and regular mobs, pauses their AI and throws without damage',()=>{
+test('Gravity Hook grabs Souls, Soulless, Contaminated Soulless and regular mobs, pauses their AI and throws them',()=>{
  for(const type of ['lost_soul','soulless','toxic_soulless','normal']){
   const s=fresh();emptyRoom(s);s.enemies=[];s.trial.devourer.maws=[mawAt(40,40),mawAt(41,41)];player(s,10,10);
   const mob=e.createEncounterEnemy(s,type,12,10,type==='lost_soul'?1:30);s.enemies.push(mob);s.rubyTileX=-1;
@@ -591,7 +703,8 @@ test('Gravity Hook grabs Souls, Soulless, Contaminated Soulless and regular mobs
   const before=[mob.x,mob.y,mob.hp];swarm(s,5);assert.deepEqual([mob.x,mob.y,mob.hp],before,'own AI waits while held');
   s.playerDirX=1;s.playerDirY=0;s.map[10][13]=c.T_WALL;maw.releaseGravityHook(s);
   for(let i=0;i<80&&s.trial.devourer.flings.length;i++){tickMaws(s);swarm(s);}
-  assert.equal(mob.hp,before[2]);assert.ok(mob.devourer.stunTicks>0);assert.equal(s.trial.devourer.flings.length,0);
+  if(type==='lost_soul'){assert.ok(!s.enemies.includes(mob),'a soul dies against the wall');continue;}
+  assert.equal(mob.hp,before[2]-(type==='soulless'||type==='toxic_soulless'?SC.hook.soullessImpact:0),'only a Soulless is hurt by the wall');assert.ok(mob.devourer.stunTicks>0);assert.equal(s.trial.devourer.flings.length,0);
  }
 });
 test('a thrown Soul survives F inner reach without being consumed or damaged by the throw',()=>{
@@ -683,4 +796,53 @@ test('a meteor destroys copies in its chamber but never the phase original',()=>
  const copy=e.createEncounterEnemy(s,'devourer',11,10,100);copy.devourer={generation:1,challenge:true};copy.encounterId=root.encounterId;s.enemies.push(copy);
  s.meteoriteWarning=c.chamberOfTile(10,10);s.meteoriteStrikeIn=1;e.tick(s);
  assert.ok(s.enemies.includes(root)&&root.hp>0,'the original survives');assert.ok(!s.enemies.includes(copy),'the copy is destroyed');
+});
+
+
+test('Convergence pushes five tiles away once, quickly, and normal walls stop the push',()=>{
+ for(const [dx,dy,expected]of [[3,0,[1,0]],[-3,0,[-1,0]],[0,3,[0,1]],[0,-3,[0,-1]],[3,3,[1,0]],[0,0,[1,0]]]){
+  const s=convergenceSetup(1,1),t=s.trial.devourer;emptyRoom(s);player(s,12,12);s.playerDirX=1;s.playerDirY=0;
+  const b=bodies(s)[0];t.convergence={x:s.playerX-dx*48,y:s.playerY-dy*48,stage:'gather',ticks:1,count:1,members:[{id:b.id,x:b.x,y:b.y,tx:b.tileX,ty:b.tileY}]};
+  maw.updateConvergence(s,t);
+  if(dx||dy)assert.equal(s.playerKnockback,null,'distant player waits until the leading wave reaches them');
+  for(let i=0;i<SC.convergence.waveTicks&&!s.playerKnockback;i++)maw.updateConvergence(s,t);
+  assert.ok(s.playerKnockback,'leading wave eventually reaches player');
+  const elapsed=SC.convergence.blastTicks-t.convergence.ticks,radius=maw.convergenceWaveRadius(s,t.convergence,elapsed),need=Math.max(Math.abs(dx*48),Math.abs(dy*48),Math.min(Math.abs(dx*48),Math.abs(dy*48))/.65);
+  assert.ok(radius>=need,'knockback coincides with the stepped front reaching the player');
+  if(elapsed>0)assert.ok(maw.convergenceWaveRadius(s,t.convergence,elapsed-1)<need,'push does not wait past the first contact frame');
+  assert.deepEqual([s.playerKnockback.dirX,s.playerKnockback.dirY],expected);assert.equal(s.playerKnockback.tilesLeft,5);assert.equal(s.playerKnockback.speedMult,2.4);
+  const push=s.playerKnockback;maw.updateConvergence(s,t);assert.equal(s.playerKnockback,push,'subsequent blast frames do not restart the push');
+  if(dx===3){
+   s.map[12][15]=c.T_WALL;
+   for(let i=0;i<80&&s.playerKnockback;i++)e.singularityTest.updatePlayer(s);
+   assert.equal(s.playerTileX,14,'wall stops the five-tile push');assert.equal(s.playerTileY,12);
+  }
+ }
+});
+
+
+test('Convergence gas is fixed across camera locations, read-only, and uses a bounded single overlay pass',()=>{
+ const {createCanvas}=require('@napi-rs/canvas'),art=require('../game/convergence-art.ts');
+ const s=convergenceSetup(1,1);s.trial.devourer.convergence={x:1000,y:1000,stage:'blast',ticks:120,count:1,members:[]};
+ const before=JSON.stringify(s),render=(camX,camY,zoom)=>{
+  const cv=createCanvas(640,360),ctx=cv.getContext('2d'),fill=ctx.fillRect.bind(ctx);let calls=0;
+  ctx.fillRect=(...args)=>{calls++;return fill(...args);};
+  art.drawConvergenceScreen(ctx,s,640,360,camX,camY,zoom);assert.ok(calls<=80,'fixed gas has a small draw-call budget');return cv.toBuffer('image/png');
+ };
+ const first=render(0,0,1);assert.deepEqual(render(4000,2500,.5),first);assert.deepEqual(render(-2000,-1000,1.4),first);assert.equal(JSON.stringify(s),before);
+});
+
+
+test('gathering adds two seconds for every family size and next countdown runs during the blast',()=>{
+ const C=SC.convergence;
+ for(const count of [1,40,56])assert.equal(maw.convergenceGatherTicks(count),Math.max(C.gatherTicks,count*C.bodyTicks)+120);
+ const s=convergenceSetup(1,2),t=s.trial.devourer;maw.updateConvergence(s,t);
+ assert.equal(t.convergence.gatherTicks,maw.convergenceGatherTicks(2));
+ while(t.convergence.stage==='gather')maw.updateConvergence(s,t);
+ assert.equal(t.convergenceTimer,C.everyTicks);
+ for(let i=0;i<20;i++)maw.updateConvergence(s,t);
+ assert.equal(t.convergenceTimer,C.everyTicks-20,'next countdown begins at the explosion');
+ s.gamePhase='rules';maw.updateConvergence(s,t);assert.equal(t.convergenceTimer,C.everyTicks-20,'pause freezes countdown');s.gamePhase='playing';
+ for(let i=20;i<C.blastTicks;i++)maw.updateConvergence(s,t);
+ assert.equal(t.convergence,undefined);assert.equal(t.convergenceTimer,C.everyTicks-C.blastTicks,'visual expiry does not restart the countdown');
 });

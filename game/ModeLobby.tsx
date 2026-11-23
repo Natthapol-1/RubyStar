@@ -1,10 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useLoadingRouter as useRouter } from './NavigationProvider';
 import PixelArrow from '@/components/PixelArrow';
 import { canEnter, getProfile, highestStage, introSeen, isDesktop, markIntroSeen } from './profile';
 import IntroCutscene from './IntroCutscene';
+import PhotosensitivityNotice from './PhotosensitivityNotice';
+import { APP_VERSION } from './app-version';
+import { photosensitivitySeen } from './display-settings';
 import RulesModal from '@/components/RulesModal';
 import RubyStarGuide from './RubyStarGuide';
 import MenuButton from './MenuButton';
@@ -28,10 +31,6 @@ const MODES: ModeCard[] = [
   {
     id: 'trials', title: 'CELESTIAL CHALLENGE', color: '#9aa8ff', sound: 'ascension', path: '/challenge',
     description: 'Travel to a world and face its guardian in an epic multi-phase boss battle with its own rules.',
-  },
-  {
-    id: 'gambit', title: 'STAR GAMBIT', tag: 'IN DEVELOPMENT', color: '#ffd27a', sound: 'confirm', path: '/gambit',
-    description: 'Build your run: pick a rule, fill three weapon slots and hold the bazaar.',
   },
 ];
 
@@ -69,7 +68,9 @@ export default function RubyStarLobby() {
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [rulesOpen,setRulesOpen]=useState(false);
   const [intro,setIntro]=useState<null|'first'|'replay'>(null); // the opening cutscene: on first launch (then the tutorial), or replayed
-  useEffect(()=>{if(!introSeen()&&!(isDesktop()&&getProfile().tutorialCompleted))setIntro('first');},[]); // new players only; anyone can replay it
+  const [notice,setNotice]=useState(false); // the one-time photosensitivity warning, before anything flashes
+  const startIntro=()=>{if(!introSeen()&&!(isDesktop()&&getProfile().tutorialCompleted))setIntro('first');}; // new players only; anyone can replay it
+  useEffect(()=>{if(!photosensitivitySeen())setNotice(true);else startIntro();},[]); // eslint-disable-line react-hooks/exhaustive-deps
   const [query, setQuery] = useState('');
   const [, refreshProfile] = useState(0);
   useEffect(() => { const refresh=()=>refreshProfile(value=>value+1);window.addEventListener('ruby-profile',refresh);return ()=>window.removeEventListener('ruby-profile',refresh); }, []);
@@ -222,7 +223,9 @@ export default function RubyStarLobby() {
         style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid '+(kind==='book'?'#827bb1':'#639d9a'),cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c'}}><LobbyUtilityIcon kind={kind}/></MenuButton>)}
       </div>
       <RulesModal isOpen={rulesOpen} onClose={()=>setRulesOpen(false)} title=":: ENDLESS SPACE" playSound={kind=>playUiSfx(kind)}><RubyStarGuide showEnemyGuide={false} endlessOnly/></RulesModal>
+      <p aria-label={'Version '+APP_VERSION} style={{position:'fixed',right:16,bottom:12,zIndex:5,fontFamily:'var(--font-pixel)',fontSize:9,color:'#6f8496',pointerEvents:'none'}}>v{APP_VERSION}</p>
       {settingsOpen&&<GameSettings onClose={()=>setSettingsOpen(false)}/>}
+      {notice&&<PhotosensitivityNotice onDone={()=>{setNotice(false);startIntro();}}/>}
       {intro&&<IntroCutscene onDone={()=>{const first=intro==='first';setIntro(null);if(first){markIntroSeen();router.push('/tutorial'+query);}}}/>}
       {terminal&&<ExplorationTerminal onClose={()=>setTerminal(false)}/>}
       {startPick&&<div className="rs-start" role="dialog" aria-modal="true" aria-label="Choose an Endless Space start" onClick={e=>{if(e.target===e.currentTarget){playUiSfx('back');setStartPick(false);}}}>

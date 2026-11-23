@@ -1,9 +1,10 @@
 'use client';
+import { jupiterPhaseHP, jupiterPhaseFloorHP } from './constants';
 import { drawThornGround } from './thorn-art';
 import { drawSporeShot } from './gaia-art';
 
 import { drawDevourerModel } from './devourer-model-art';
-import { drawConvergenceScreen } from './convergence-art';
+import { drawConvergenceScreen, drawConvergenceMinimap, drawConvergenceGatherBody } from './convergence-art';
 
 import { drawSuitShell, drawSuitHelmet } from './player-suit-art';
 import { ARRIVAL_COURTS } from './arrival-courts';
@@ -14,9 +15,11 @@ import { FrameMeter, observeDiscoveries } from './desktop-runtime';
 
 import MapSpecialSkillHint from './MapSpecialSkillHint';
 import ControlSettings from './ControlSettings';
-import {gameKey,mouseControl,bindingLabel,tutorialInstruction} from './controls';
+import {gameKey,mouseControl,bindingLabel,tutorialInstruction,controlForCode} from './controls';
 import MenuButton from './MenuButton';
 import AudioSliders from './AudioSliders';
+import DisplaySettings from './DisplaySettings';
+import { shakeScale, reduceFlashing, REDUCED_FLASH_ALPHA } from './display-settings';
 import BlessingAfterglow from './BlessingAfterglow';
 import {drawDiamondBlessingShield,drawBlessingBehindPlayer,drawBlessingCombatEffects,drawSapphireHitCorners} from './blessing-art';
 import {addStarEnergy,solarBlessingReady,emeraldBlessingFull,playerAttackTint} from './blessing-effects';
@@ -27,8 +30,8 @@ import { buildChargeField, openGodBlessings, closeGodBlessings, chooseCelestialB
 
 import { drawMinimapHazard } from './warning-art';
 
-import { gasFade, singularityLift } from './singularity-maw';
-import { worldTheme, drawSiriusLightOverlay, drawVenusSandWind, drawSingularityAtmosphere, drawSingularitySuction, drawSingularityMawEffects, drawSingularityTrap, drawLostSoul, drawSoulless, drawToxicSoulless, mawGreen, syncSingularityGulp } from './world-themes';
+import { gasFade, singularityLift, convergenceGatherTicks } from './singularity-maw';
+import { worldTheme, drawSiriusLightOverlay, drawVenusSandWind, drawSingularityAtmosphere, drawSingularitySuction, drawSingularityMawEffects, drawSingularityTrap, drawLostSoul, drawSoulless, drawToxicSoulless, drawVoidShell, mawGreen, syncSingularityGulp } from './world-themes';
 import SingularityGuide from './SingularityGuide';
 
 import { SATURN_CHAMBER_COLORS, isSaturnMap, drawSaturnBackdrop, drawSaturnTile, drawSaturnBlizzard, drawSaturnGround, drawSaturnUnit, drawSaturnAtmosphere, drawSaturnEffects, drawSaturnMinimap, drawSaturnBacklash } from './saturn-art';
@@ -39,9 +42,9 @@ import VenusGuide from './VenusGuide';
 import SandSweepStatus from './SandSweepStatus';
 import { VENUS, venusBand, venusFloor, useSandSweep, venusAirborne, duneWormHidden, venusCoreSealed, venusCoreHint, venusCoreHintRect, venusTotemSink, venusRevealing, venusRevealingOrder, venusShowingNumbers, godSetVenusPhase, godVenusBreakShield, godVenusLeap, godVenusLance } from './venus';
 import { drawVenusGround, drawVenusEffects, drawVenusRelic, drawVenusScarab, drawVenusNest, drawDuneWorm, drawVenusShatter, drawVenusCore, drawSandScorpion } from './venus-art';
-import { SIRIUS, RUNES, runeProgress, useHalo, stopSiriusFloatSound, godSetSiriusPhase, godSiriusRune, godSiriusSwap, godSiriusRitual, godFillHolyLight } from './sirius';
+import { SIRIUS, RUNES, runeProgress, sanctuarySealInRune, siriusLightDuration, useHalo, stopSiriusFloatSound, godSetSiriusPhase, godSiriusRune, godSiriusSwap, godSiriusRitual, godFillHolyLight } from './sirius';
 import HaloStatus from './HaloStatus';
-import { drawSiriusGround, drawSiriusEffects, drawSiriusScreen, drawSiriusUnit, drawSiriusHalo, drawSiriusBurst, siriusFloatLift, drawRuneTiles, RUNE_GOLD, WRATH_RED } from './sirius-art';
+import { drawSiriusGround, drawSiriusEffects, drawSiriusHolyRays, drawSiriusBurstGlow, drawSiriusScreen, drawSiriusSwapWarning, drawSiriusUnit, drawSiriusHalo, drawSiriusBurst, siriusFloatLift, drawRuneTiles, RUNE_GOLD, WRATH_RED } from './sirius-art';
 import MagnetStatus from './MagnetStatus';
 import { TWIN_REVIVE_TICKS } from './constants';
 import GambitLoadout from './GambitLoadout';
@@ -49,29 +52,30 @@ import { pressSlot, holdSlot, releaseSlot, GAMBIT_WAVE_TICKS } from './gambit';
 import { drawGambitEffects, drawGambitHud, drawGambitBackdrop } from './gambit-art';
 import { BINARY, BINARY_TWIN_COLORS, POLE_COLORS, binaryTwins, swapTicks as binarySwapTicks, swapPole, godSetBinaryPhase, godJumpTwins, godCollideTwins } from './binary';
 import { BINARY_CHAMBER_COLORS, isBinaryMap, drawBinaryBackdrop, drawBinaryCover, drawBinaryFloor, drawBinaryAmbience } from './binary-world-art';
-import { drawBinaryGround, drawBinaryEffects, drawPoleFrame, drawBinaryMinimap, drawBinaryUnit, drawBinaryScreen } from './binary-art';
+import { drawBinaryGround, drawBinaryEffects, drawBinaryCollisionScreen, drawPoleFrame, drawBinaryMinimap, drawBinaryUnit, drawBinaryScreen } from './binary-art';
 import TimeStopStatus from './TimeStopStatus';
 import ShieldAmount from './ShieldAmount';
 import { SATURN, saturnBlizzard, saturnTimeStopped, useSaturnIntercept, godSetSaturnPhase, godSaturnGrant, godSaturnRecall } from './saturn';
 
 import { stopAmbientEventSounds, pauseAmbientEventSounds } from './event-audio';
+import { setNonMusicAudioDuck } from './audio-settings';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { drawEncounterEnemy, drawEncounterTelegraphs, drawEncounterEffects } from './encounter-art';
-import { drawNeptuneUnit, drawNeptuneOverlay, drawNeptuneCloneHeal, drawNeptuneRock, drawNeptuneAmbience, drawSkyLaserImpact, drawWaterBurst } from './neptune-art';
-import { drawGaiaUnit, drawGaiaGround, drawScorchTile, drawGaiaOverlay, drawForestBackdrop, drawForestAmbience, drawGaiaStone, GAIA_CHAMBER_COLORS } from './gaia-art';
-import { drawMoonBackdrop, drawMoonAmbience, drawMoonDarkRoom, drawMoonDarkOverlay, drawMoonCrystalBlock, drawMoonReflection, drawMoonEffects, drawMoonUnit, drawMoonRevealOverlay, isMoonMap, MOON_CHAMBER_COLORS } from './moon-art';
+import { drawNeptuneUnit, drawNeptuneOverlay, drawNeptuneResurfaceEffect, drawNeptuneRock, drawNeptuneAmbience, drawSkyLaserImpact, drawWaterBurst } from './neptune-art';
+import { drawGaiaUnit, drawGaiaGround, drawScorchTile, drawGaiaOverlay, drawForestBackdrop, drawForestAmbience, drawGaiaStone, drawGaiaSunfireReady, GAIA_CHAMBER_COLORS } from './gaia-art';
+import { drawMoonBackdrop, drawMoonAmbience, drawMoonDarkRoom, drawMoonDarkOverlay, drawMoonCrystalBlock, drawMoonReflection, drawMoonEffects, drawMoonMarkLight, drawMoonUnit, drawMoonRevealOverlay, isMoonMap, MOON_CHAMBER_COLORS } from './moon-art';
 import { JUPITER, SINGULARITY_CHALLENGE, SUN } from './constants';
-import { godAdjustSunHeat, godSetNoWisps, godSetSunHeat, godSetSunPhase, sunStationNearPlayer, useCoolingWave } from './sun';
+import { godAdjustSunHeat, godSunburst, godSetNoWisps, godSetSunHeat, godSetSunPhase, sunStationNearPlayer, useCoolingWave } from './sun';
 import { drawFieryKingModel, drawQuenchedKing, drawFlareFireball, drawSunUnit, drawSunBackdrop, drawSunFloorTile, drawSunCover, drawSunPad, drawSunGround, drawSunEffects, drawSunAtmosphere, SUN_CHAMBER_COLORS } from './sun-art';
 import SunGuide from './SunGuide';
 import JupiterGuide from './JupiterGuide';
 import VoltFenceStatus from './VoltFenceStatus';
 import { jupiterMaxEnergy, godSetJupiterPhase, godSetJupiterStage, useVoltFence } from './jupiter';
-import { drawReaperStrike, jupiterColors, drawJupiterBackdrop, drawJupiterTile, drawJupiterGround, drawJupiterDischargeCountdown, drawJupiterBossEffect, drawJupiterMinimap, drawJupiterGuard, drawJupiterTransition, drawOverdriveWarning } from './jupiter-art';
+import { drawReaperStrike, drawJupiterLightning, jupiterColors, drawJupiterBackdrop, drawJupiterTile, drawJupiterGround, drawJupiterDischargeCountdown, drawJupiterBossEffect, drawJupiterMinimap, drawJupiterGuard, drawJupiterTransition, drawOverdriveWarning } from './jupiter-art';
 import CoolingWaveStatus from './CoolingWaveStatus';
 import { godSetMoonPhase, isMoonBoss, isMoonRevealed, moonHiddenInDark, moonWearsGuise, useMoonMark } from './moon';
 import BackButton from '@/components/BackButton';
-import { useRouter } from 'next/navigation';
+import { useLoadingRouter as useRouter } from './NavigationProvider';
 import PixelArrow from '@/components/PixelArrow';
 import RulesModal from '@/components/RulesModal';
 import RubyStarGuide from './RubyStarGuide';
@@ -86,7 +90,6 @@ import ConstellationChoice from './ConstellationChoice';
 import ConstellationAfterglow from './ConstellationAfterglow';
 import BombStatus from './BombStatus';
 import CelestialStatus from './CelestialStatus';
-import TetherStatus from './TetherStatus';
 import MoonMarkStatus from './MoonMarkStatus';
 import HudIcon from './HudIcon';
 import BGMController, { BGMControllerHandle } from '@/components/BGMController';
@@ -95,7 +98,7 @@ import {
   SPECIAL_SKILLS, SPECIAL_UNLOCK_KILLS, SPECIAL_REAPER_RADIUS, SPECIAL_REAPER_HASTE_TICKS, SPECIAL_CHANTER_RADIUS, SPECIAL_WEAVER_RADIUS, SPECIAL_SINGULARITY_RADIUS,
   T_WALL, T_FLOOR, T_TELEPORT, TELEPORT_COOLDOWN,
   CHAMBER_BOUNDS, CHAMBER_LABELS, CHAMBER_COLORS, TELEPORT_PADS, HALLWAY_BOUNDS, DEVOURER_SELF_SPLIT_TICKS, DEVOURER_SELF_SPLIT_WARNING, TUTORIAL_STEPS, trialSkillCooldown,
-  NEPTUNE_PHASE_HPS, neptunePhaseFloorHP, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_TICKS, NEPTUNE_HEAL_CHARGE_MAX, GAIA_PHASE_HP, GAIA_SUN_MAX, GAIA_SUN_MIN, MOON_MARK_COOLDOWN, MOON_PHASE_HP, MOON_DARK_FADE, QUEEN_PHASE_INTERVAL,
+  NEPTUNE_PHASE_HPS, neptunePhaseFloorHP, NEPTUNE_DIVE_POINTS, NEPTUNE_DIVE_TICKS, NEPTUNE_HEAL_CHARGE_MAX, GAIA_PHASE_HP, GAIA_CAST_COOLDOWN, GAIA_SUN_MAX, GAIA_SUN_MIN, MOON_MARK_COOLDOWN, MOON_PHASE_HP, MOON_DARK_FADE, QUEEN_PHASE_INTERVAL,
   chamberOfTile,
   ENEMY_CONFIGS, isBossType, BOSS_TYPES, BOSS_NAMES, BossType, BOSS_SKILL_REWARDS, SpecialSkill,
   PLAYER_MAX_HP, RUBY_MAX_HP,
@@ -110,12 +113,15 @@ import {
 import {
   GameState, RubyStarMode, createModeState, tick, CONSTELLATIONS, chooseConstellation, openGodConstellations, closeGodConstellations, getBombRadius,
   AMBIENT_EVENTS, STAR_FALL_TICKS, SUPERNOVA_CHARGE_TICKS, SUPERNOVA_BLAST_TICKS, triggerAmbientEvent, AmbientEventKind,
-  useLaser, useBullet, lancerBeamEnd, godTriggerComet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, createEncounterEnemy, godSetNoMobs, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
+  useLaser, useBullet, lancerBeamEnd, godTriggerComet, activateWave, useSpeedBoost, useBomb, useSpecialSkill, godSpawnBoss, createInitialState, createEncounterEnemy, godSetNoMobs, godSetNoMeteors, godSetNoFreeze, godSetNoBossSpawns, godAdvanceStage, godJumpStage20,
   chooseStartingSkill, chooseSkyLaser, cancelSkyLaser, toggleCarryRuby, tryActivateTeleport, teleportJammed, jammerCoversTile, playerCCImmune, isNearTeleportPad, isFloorTile, doTeleport, cancelTeleport,
   healRuby, isPlayerChilled, isMovementReversed, isSeaChanterDiving, isEnemyVisibleOnMinimap, startChargeSound, stopChargeSound, stopPoisonSound, stopSingularitySound, stopGaiaFieldSound,
   METEOR_CLOCKWISE_ORDER, getMirrorTwinTile, devourerBodyScale, singularityTrialHealth, pressGravityHook, releaseGravityHook, godSetSingularityPhase, ALIEN_INTRO_TICKS,
 } from './engine';
-import { godSetNeptunePhase, openSkyLaser, canOpenSkyLaser } from './neptune';
+import { godSetNeptunePhase, godDiveToNextThreshold, useOceanMelody, canOpenSkyLaser, openSkyLaser, NEPTUNE_CHORUS_HOLD_MS, fillNeptuneCharge, godStartOceanMelody } from './neptune';
+import { NEPTUNE_REFRAIN, neptunePendingRefrainPreview, neptunePendingMistakeHeal } from './neptune-refrain';
+import { drawNeptuneRefrainEffects, drawNeptuneRhythmOverlay } from './neptune-refrain-art';
+import NeptuneRefrainBar from './NeptuneRefrainBar';
 import { godSetGaiaPhase, useSunfire, playStrikeCharged } from './gaia';
 
 // ─── Canvas colors ────────────────────────────────────────────────────────────
@@ -717,6 +723,14 @@ function drawMinimap(
     ctx.fillStyle = 'rgba(3,1,8,0.85)'; ctx.fillRect(MX + c1 * S, MY + r1 * S, (c2 - c1 + 1) * S, (r2 - r1 + 1) * S);
   }
   if (state.binary) drawBinaryMinimap(ctx, state, MX, MY, S);
+  if (state.sirius?.phase === 3 && state.sirius.rune) {
+    ctx.save(); ctx.fillStyle = '#fff0bd';
+    for (const seal of state.sirius.sanctuarySeals ?? []) {
+      const x = MX + (seal.x + .5) * S, y = MY + (seal.y + .5) * S;
+      ctx.fillRect(x - 1, y - 3, 2, 6); ctx.fillRect(x - 3, y - 1, 6, 2);
+    }
+    ctx.restore();
+  }
   // Moon phase 2+: mirror tiles as faint silver marks, so you can plan where to stand.
   if (state.moon?.mirrors.length) {
     ctx.fillStyle = 'rgba(230,220,255,0.55)';
@@ -825,11 +839,20 @@ function drawMinimap(
     ctx.fillRect(MX + state.bomb.tileX * S - 1, MY + state.bomb.tileY * S - 1, 3, 3);
   }
 
-  // Enemies
+  // Enemies. Anything with the Queen Echo look (Endless echoes; on the Moon the disguised Queen, her illusions and
+  // posing mimics alike) gets its own hollow magenta frame, drawn on top so it stands out from ordinary alien dots.
+  const echoLooks: { tileX: number; tileY: number }[] = [];
   for (const e of state.enemies.map(en => impostorLook(state, en))) {
     if (!isEnemyVisibleOnMinimap(e) || (moonHiddenInDark(state, e.tileX, e.tileY, e.id) && !isMoonRevealed(state, e))) continue; // she still shows on the map while revealed
-    ctx.fillStyle = state.moon && moonWearsGuise(state, e) ? ENEMY_CONFIGS.moon_illusion.color : ENEMY_CONFIGS[e.type].color; // the Moon Queen hides among her illusions
+    if (e.type === 'queen_echo' || (state.moon && moonWearsGuise(state, e))) { echoLooks.push(e); continue; }
+    ctx.fillStyle = ENEMY_CONFIGS[e.type].color;
     ctx.fillRect(MX + e.tileX * S, MY + e.tileY * S, S, S);
+  }
+  for (const e of echoLooks) {
+    const x = MX + e.tileX * S, y = MY + e.tileY * S;
+    ctx.fillStyle = '#ff7ae6'; ctx.fillRect(x - 2, y - 2, S + 4, S + 4);
+    ctx.fillStyle = '#2a0f33'; ctx.fillRect(x - 1, y - 1, S + 2, S + 2);
+    ctx.fillStyle = '#ffe6fb'; ctx.fillRect(x + 1, y + 1, Math.max(1, S - 2), Math.max(1, S - 2));
   }
 
   if (state.saturn) drawSaturnMinimap(ctx, state, MX, MY, S); // drawn over the enemy dots so her ice reads clearly
@@ -894,6 +917,7 @@ function drawMinimap(
     ctx.save();ctx.shadowColor=mixHex('#b99ce8','#9dff8a',green);ctx.shadowBlur=6;ctx.fillStyle=mixHex('#a58ac8','#6fd88a',green);ctx.fillRect(x-7,y-9,14,18);ctx.fillRect(x-9,y-7,18,14); // a bigger mark so the Maw reads at a glance
     ctx.shadowBlur=0;ctx.fillStyle='#08050f';ctx.fillRect(x-6,y-6,12,12);ctx.fillStyle='#ded0f5';ctx.fillRect(x-2,y-2,4,4);ctx.restore();
   }
+  drawConvergenceMinimap(ctx,state,MX,MY,S,tickN);
   const markedOnMap = state.moon?.mark && state.enemies.find(e => e.id === state.moon!.mark!.id);
   if (state.moon?.mark && markedOnMap && (state.moon.mark.ticks > 60 || Math.floor(tickN / 6) % 2 === 0)) {
     const x = Math.round(MX + (markedOnMap.tileX + .5) * S), y = Math.round(MY + (markedOnMap.tileY + .5) * S), r = 6 + Math.floor(Math.abs(Math.sin(tickN * .1)) * 2);
@@ -1039,8 +1063,6 @@ function drawMinimap(
       ctx.strokeRect(bx - 4, by - 4, 10, 10);
       ctx.shadowBlur = 0;
 
-      // Singularity: a Gnasher wears a white diamond on the minimap.
-      if (e.devourer?.gnasher) { ctx.save(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx + 1, by - 8); ctx.lineTo(bx + 10, by + 1); ctx.lineTo(bx + 1, by + 10); ctx.lineTo(bx - 8, by + 1); ctx.closePath(); ctx.stroke(); ctx.restore(); } // a white diamond
       // Singularity: a body one meal from full blinks an orange ring; a bursting one throbs a red ring that closes in.
       const danger = e.type === 'devourer' ? devourerDanger(e) : null;
       if (danger) {
@@ -1345,7 +1367,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, sx: number, sy: number, state
   const h = Math.floor(sz / 2);
   const { playerDirX: dx, playerDirY: dy } = state;
 
-  if(state.playerCastTicks>0 && state.playerCastKind){
+  if(state.playerCastTicks>0 && state.playerCastKind && !state.playerPrimalCast){
     const castColor=state.playerCastKind==='bomb'?'#ff9b45':state.playerCastKind==='devourer'?'#c6c6df':SPECIAL_SKILLS[state.playerCastKind].color;
     ctx.save();ctx.globalAlpha=castPulse*.85;ctx.shadowColor=castColor;ctx.shadowBlur=10;
     ctx.strokeStyle=castColor;ctx.lineWidth=3;
@@ -1834,7 +1856,7 @@ function drawStormReaperModel(ctx: CanvasRenderingContext2D, tickN: number, flas
   const angle=fanAngle*.45+i*Math.PI/3, radius=47+(i%2)*8;
   ctx.save();ctx.translate(Math.round(Math.cos(angle)*radius),Math.round(Math.sin(angle)*radius));
   ctx.globalAlpha=.45+.45*Math.abs(Math.sin(tickN*.12+i*2));ctx.shadowBlur=0;
-  ctx.fillStyle=i%2?'#87ddbe':'#caffea';ctx.fillRect(-6,-8,10,3);ctx.fillRect(1,-8,3,8);ctx.fillRect(-3,-2,7,3);ctx.fillRect(-3,-2,3,8);ctx.fillRect(-3,4,11,3);ctx.restore();
+  drawJupiterLightning(ctx,[[-6,-8],[2,-8],[2,-1],[-3,-1],[-3,6],[7,6]],(.45+.45*Math.abs(Math.sin(tickN*.12+i*2)))*.8,undefined,.7);ctx.restore();
  }
  // A few soft pixel motes complement the larger lightning fragments.
  for(let i=0;i<(exposed?0:8);i++){
@@ -2018,13 +2040,14 @@ function drawCelestialCast(ctx: CanvasRenderingContext2D, kind: keyof typeof SPE
     const orb=(r: number,base: string,dark: string,light: string)=>{const n=Math.ceil(r/G);for(let row=-n;row<=n;row++)for(let col=-n;col<=n;col++){const cx=col*G,cy=row*G;if(cx*cx+cy*cy>r*r)continue;const edge=(cx+G)*(cx+G)+(cy+G)*(cy+G)>r*r,top=(cx-G)*(cx-G)+(cy-G)*(cy-G)>r*r;b6(cx-G/2,cy-G/2,G,G,edge&&(col>0||row>0)?dark:top&&(col<0||row<0)?light:base);}};
     const ring6=(r: number,c: string)=>{const rr=Math.max(G*2,Math.round(r/G)*G);for(let py=-rr;py<=rr;py+=G)for(let px=-rr;px<=rr;px+=G){const outer=(px*px+py*py)/(rr*rr),inner=(px*px+py*py)/((rr-G)*(rr-G));if(outer<=1&&inner>=1)b6(px-G/2,py-G/2,G,G,c);}};
     ctx.shadowBlur=0;
-    // Jupiter: banded planet, one reach ring and four stepped lightning bolts.
+    // Jupiter: a warm inner storm band and a pale outer reach ring, like Tide's pressure fronts.
     const reach=36+reachAge*(SPECIAL_REAPER_RADIUS-36);
-    ctx.globalAlpha=fade*.6;ring6(reach,'#ffa34d');
+    ctx.globalAlpha=fade*.45;ring6(Math.max(G*3,reach-36),'#ffa34d');
+    ctx.globalAlpha=fade*.8;ring6(reach,'#ffe5ad');
     ctx.globalAlpha=fade*.9;
     for(let side=0;side<4;side++){
       const a2=side*Math.PI/2,dx=Math.round(Math.cos(a2)),dy=Math.round(Math.sin(a2)),len=48+reachAge*36;
-      for(let step=0;step<4;step++){const d=48+step*len/4,off=step%2?G:0;b6(dx*d-dy*off-G/2,dy*d+dx*off-G/2,G,G,step===3?'#fff0c7':'#ffc066');}
+      ctx.save();ctx.rotate(a2);drawJupiterLightning(ctx,[[46,0],[46+len*.35,0],[46+len*.35,7],[46+len*.68,7],[46+len*.68,2],[46+len,2]],fade,['#ac672d','#ffc066','#fff0c7'],1.8);ctx.restore();
     }
     ctx.globalAlpha=fade;orb(36,'#f0a058','#a85a28','#ffe0a8');b6(-30,-12,60,6,'#ffe0a8');b6(-30,6,60,6,'#c86a30');b6(6,0,G,6,'#c9452a');
   }else if(kind==='frost_warden'){
@@ -2046,6 +2069,7 @@ function drawCelestialCast(ctx: CanvasRenderingContext2D, kind: keyof typeof SPE
     ctx.globalAlpha=fade;orb(36,'#4a86e8','#26478f','#a9d8ff');b6(0,0,18,G,'#1b2f78');
     for(let i=0;i<3;i++){const cx=(i-1)*36,cy=-60-age*48;ctx.globalAlpha=fade*(1-age);b6(cx-6,cy-15,12,30,'#d8f6ff');b6(cx-15,cy-6,30,12,'#d8f6ff');b6(cx-6,cy-6,12,12,'#ffffff');}
   }else if(kind==='blind_prayer'){
+    ctx.save();ctx.scale(1.3,1.3);
     // The Dog Star: long diffraction spikes, a twinkling halo and its small white-dwarf companion.
     const spike=48+age*156;
     ctx.save();ctx.shadowBlur=0;
@@ -2068,6 +2092,7 @@ function drawCelestialCast(ctx: CanvasRenderingContext2D, kind: keyof typeof SPE
       const size=trail?6:9;block(Math.cos(angle)*r-size/2,Math.sin(angle)*r*.6-size/2,size,size,trail?'#cfe8ff':'#ffffff');
     }
     ctx.restore();
+    ctx.restore();
   }else if(kind==='splitter_queen'){
     // Crescent cut from a stepped pixel disc; no smooth curves or boss ornaments.
     for(let row=-4;row<=4;row++)for(let col=-4;col<=4;col++)if(col*col+row*row<=19 && (col-2)*(col-2)+(row+1)*(row+1)>16)block(col*6-3,row*6-3,6,6,col<-1?'#8052ba':'#c89aff');
@@ -2081,6 +2106,7 @@ function drawCelestialCast(ctx: CanvasRenderingContext2D, kind: keyof typeof SPE
     }
   }else if(kind==='astral_twins'){
     // Coral and blue half-rings split apart while two small stars orbit outward from one seam.
+    const growth=1+age*.3;ctx.scale(growth,growth);
     const reach=30+age*84;
     ctx.globalAlpha=fade*.85;ring(reach,1,'#ff8f7a',0,false);ring(reach,1,'#7fb4ff',0,true);
     ctx.globalAlpha=fade*.35;ring(Math.max(24,reach-30),1,'#ffe1d8',0,false);ring(Math.max(24,reach-30),1,'#d8ecff',0,true);
@@ -2092,6 +2118,13 @@ function drawCelestialCast(ctx: CanvasRenderingContext2D, kind: keyof typeof SPE
         ctx.globalAlpha=fade*(.6-trail*.12);block(tx-3,ty-3,6,6,base);
       }
       ctx.globalAlpha=fade;star(px,py,30,base);star(px,py,12,light);
+    }
+    for(let i=0;i<12;i++){
+      const angle=i*Math.PI/6+age*1.4,d=reach*(.72+i%3*.08),glint=Math.pow(Math.max(0,Math.sin(age*8+i*1.7)),3);
+      ctx.save();ctx.rotate(angle);ctx.globalAlpha=fade*(.25+.4*glint);
+      block(d-6,-2,12,3,i%2?'#7fb4ff':'#ff8f7a');
+      if(i%3===0){ctx.globalAlpha=fade*glint;block(d-2,-4,4,8,'#e9f6ff');}
+      ctx.restore();
     }
     ctx.globalAlpha=fade*.8;block(-3,-18,6,36,'#ffffff');
   }else if(kind==='aegis_sentinel'){
@@ -2170,9 +2203,10 @@ function drawPlayerLaser(ctx: CanvasRenderingContext2D, x1: number, y1: number, 
   ctx.restore();
 }
 
-function drawPlayerChain(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, ticks: number) {
+function drawPlayerChain(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, ticks: number, jupiterStyle=false) {
   ctx.save();ctx.lineJoin='miter';ctx.lineCap='butt';const fade=Math.min(1,ticks/22),dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1;
   const points=Array.from({length:5},(_,i)=>{const t=i/4,off=i===0||i===4?0:(i%2?1:-1)*12;return [x1+dx*t-dy/len*off,y1+dy*t+dx/len*off];});
+  if(jupiterStyle){drawJupiterLightning(ctx,points,fade,['#9c772b','#ffcf65','#fffbdc']);ctx.restore();return;}
   for(const [width,color,glow,alpha]of [[12,'#ffcc33',26,.65],[7,'#ffff88',8,.9],[3,'#ffffff',0,1]] as const){
     ctx.globalAlpha=fade*alpha;ctx.shadowColor='#ffff44';ctx.shadowBlur=glow;ctx.strokeStyle=color;ctx.lineWidth=width;
     ctx.beginPath();ctx.moveTo(x1,y1);for(const point of points.slice(1))ctx.lineTo(point[0],point[1]);ctx.stroke();
@@ -2675,13 +2709,13 @@ function drawGuideTwin(ctx: CanvasRenderingContext2D, x: number, y: number, inde
 // Singularity rule sheet: a Devourer body with the real model. Copies have no stacks; the original swells while its
 // fuse (gorge 0–1) runs.
 let guideDevourer: GameState['enemies'][0] | null = null;
-type GuideDevourerOptions = { scale?: number; original?: boolean; gorge?: number; flash?: boolean; generation?: number; gnasher?: boolean };
+type GuideDevourerOptions = { scale?: number; original?: boolean; gorge?: number; flash?: boolean; generation?: number; shell?: number }; // shell: Void Shell strength 0–1
 function drawGuideDevourer(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number, o: GuideDevourerOptions = {}) {
   if (!guideDevourer) { const s = createInitialState(); godSpawnBoss(s, 'devourer'); guideDevourer = s.enemies.find(e => e.type === 'devourer') ?? null; }
   const d = guideDevourer; if (!d) return;
   d.hp = d.maxHp; d.visualSpawnTicks = 0; d.healFlashTicks = 0; d.shootTicks = 0; d.windupTicks = 0; d.flashTicks = o.flash ? 6 : 0;
-  d.chargeDirX = o.original ? SINGULARITY_CHALLENGE.maxStacks[0] : 0;
-  d.devourer = { generation: o.original ? 0 : o.generation ?? 1, challenge: true, gnasher: !!o.gnasher,
+  d.chargeDirX = o.original ? SINGULARITY_CHALLENGE.maxStacks[0] : 0; d.icyShieldHP = (o.shell ?? 0) * SINGULARITY_CHALLENGE.shell.hp;
+  d.devourer = { generation: o.original ? 0 : o.generation ?? 1, challenge: true,
     ...(o.gorge !== undefined ? { gorgeTicks: Math.round(SINGULARITY_CHALLENGE.gorgeTicks * (1 - o.gorge)) } : {}) };
   const hide = hideBossHeadBars; hideBossHeadBars = true;
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(o.scale ?? .55, o.scale ?? .55); drawEnemy(ctx, d, 0, 0, tick); ctx.restore(); // whole pixels: no blur while it walks
@@ -3233,24 +3267,10 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: GameState['enemies'][0], sx
     }
 
     drawDevourerModel(ctx,sx,sy,vSz,attacking,e.shootTicks>0,vFlash,vHealFlash);
-
-    // Gnasher (Singularity phase 3): told apart by shape, not colour (red belongs to the full-stack warning): pale bone
-    // spikes jutting from all four sides and a wide dark mouth of jagged white teeth across its face.
-    if (e.devourer?.gnasher) {
-      const h = Math.round(vH), X = Math.round(sx), Y = Math.round(sy), bone = '#efe4d0', tip = '#3a2a48';
-      ctx.save(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const o of [-.5, .5]) {
-        const bx = X + dx * h + (dy ? Math.round(o * h) : 0), by = Y + dy * h + (dx ? Math.round(o * h) : 0);
-        for (const [d, size] of [[3, 7], [8, 5], [12, 3]] as const) { ctx.fillStyle = d === 12 ? tip : bone; ctx.fillRect(Math.round(bx + dx * d - size / 2), Math.round(by + dy * d - size / 2), size, size); }
-      }
-      const mw = Math.round(h * 1.3), my = Y + Math.round(h * .15);
-      ctx.fillStyle = '#0a0612'; ctx.fillRect(X - mw / 2, my, mw, Math.max(6, Math.round(h * .45)));
-      ctx.fillStyle = '#ffffff'; for (let k = 0; k < 5; k++) { const tx = X - mw / 2 + 2 + k * Math.round((mw - 6) / 4); ctx.fillRect(tx, my, 3, 4); ctx.fillRect(tx + 1, my + Math.max(6, Math.round(h * .45)) - 4, 3, 4); }
-      ctx.restore();
-    }
+    if (e.icyShieldHP > 0 && e.devourer?.challenge) drawVoidShell(ctx, sx, sy, vH + 9, tickN, e.icyShieldHP / SINGULARITY_CHALLENGE.shell.hp); // Singularity phase 3: Void Shell
 
     // Absorb-stack counter, small text above the HP bar
-    ctx.font = 'bold 14px monospace';
+    ctx.font = '10px "Press Start 2P", monospace'; // the game's blocky pixel font
     ctx.fillStyle = danger?.bursting ? '#ff6a5a' : danger ? '#ffb45a' : '#c8ff88';
     ctx.textAlign = 'center';
     ctx.strokeStyle = '#08050f'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; // a dark outline keeps it readable over the floor
@@ -5117,7 +5137,9 @@ function drawGame(
   // before the minimap so it isn't affected by this — it gets its own independent mobile sizing.
   hideBossHeadBars = !!state.trial;
   singularityMaxStacks = state.trial?.devourer ? SINGULARITY_CHALLENGE.maxStacks[state.trial.devourer.phase - 1] : 0;
-  const worldZoom = isMobileTouch ? 0.4 : 1;
+  const swapProgress=state.binary?.swapFlashTicks ? Math.min(1,(BINARY.swapVisualTicks-state.binary.swapFlashTicks)/12) : 0;
+  const swapZoom=1+.06*Math.pow(Math.sin(Math.PI*swapProgress),2);
+  const worldZoom = (isMobileTouch ? 0.4 : 1)*swapZoom;
   const viewW = canvasW / worldZoom;
   const viewH = canvasH / worldZoom;
 
@@ -5125,11 +5147,11 @@ function drawGame(
   let camY = state.playerY - viewH / 2;
   const gravityEvent=state.ambientEvents.active;
   if(gravityEvent?.kind==='blackhole'){
-    const tremor=Math.max(0,1-gravityEvent.age/36,1-gravityEvent.ticks/30)*4;
+    const tremor=Math.max(0,1-gravityEvent.age/36,1-gravityEvent.ticks/30)*4*shakeScale();
     camX+=Math.round(Math.sin(gravityEvent.age*2.3)*tremor);camY+=Math.round(Math.cos(gravityEvent.age*2.9)*tremor);
   }
   if (state.screenShakeTicks > 0) {
-    const shakeStr = state.screenShakeAmt * (state.screenShakeTicks / 22);
+    const shakeStr = state.screenShakeAmt * (state.screenShakeTicks / 22) * shakeScale(); // the Screen Shake setting
     camX += Math.round((Math.random() - 0.5) * shakeStr * 2);
     camY += Math.round((Math.random() - 0.5) * shakeStr * 2);
   }
@@ -5148,6 +5170,7 @@ function drawGame(
   if(state.venus)drawVenusGround(ctx,state,camX,camY,state.gameTick);
   if(state.jupiter)drawJupiterGround(ctx,state,camX,camY,state.gameTick);
   if(state.binary)drawBinaryGround(ctx,state,camX,camY);
+  drawMoonMarkLight(ctx,state,camX,camY);
   drawAmbientEvents(ctx,state,camX,camY,viewW,viewH);
   drawReaperHallwaySeal(ctx,state,camX,camY,tickN);
   drawChargerWarnings(ctx,state,camX,camY);
@@ -5375,8 +5398,6 @@ function drawGame(
     if(state.saturn&&drawSaturnUnit(ctx,e,sx,sy,state.gameTick,saturnTimeStopped(state,e)))continue;
     if(state.sirius&&drawSiriusUnit(ctx,e,sx,sy,state.gameTick)){drawEnemyHealthBar(ctx,e,sx,sy);continue;} // the same HP bar as other aliens
     if (e.type === 'impostor') { drawEnemy(ctx, impostorLook(state, e), sx, sy, tickN); continue; }
-    // Gaia: she fades into the soil while withering between phases.
-    if (state.gaia && e.id === state.gaia.bossId && state.gaia.wither > 0) ctx.globalAlpha = .25 + .2 * Math.abs(Math.sin(tickN * .1));
     if (moonHiddenInDark(state, e.tileX, e.tileY, e.id)) continue; // Moon phase 3: unseen in the dark unless just hit
     // Moon: she and her illusions share the Echo look; only she casts a reflection on the crystal floor.
     if (state.moon && moonWearsGuise(state, e)) {
@@ -5446,6 +5467,10 @@ function drawGame(
   drawBlessingBehindPlayer(ctx,state,psx,psy);
   if(state.binary)drawPoleFrame(ctx,state,psx,psy);
   const floatLift = state.sirius ? siriusFloatLift(state, state.gameTick) : 0; // Halo: the model floats above its shadow
+  if(state.sirius){
+    drawSiriusBurstGlow(ctx,state,viewW,viewH,state.playerX-camX,state.playerY-camY-siriusFloatLift(state,state.gameTick));
+    drawSiriusHolyRays(ctx,state,camX,camY,state.gameTick);
+  }
   if(state.sirius)drawSiriusHalo(ctx,state,psx,psy,floatLift,state.gameTick);
   drawPlayer(ctx, psx, psy - floatLift, state, tickN, chargingMs);
   drawRewardPulses(ctx, state, camX, camY);
@@ -5500,7 +5525,7 @@ function drawGame(
 
   // Player electric buff chains have stable pixel steps and pale cores.
   for(const arc of state.lightningArcs){
-    drawPlayerChain(ctx,arc.fromX-camX,arc.fromY-camY,arc.toX-camX,arc.toY-camY,arc.ticks);
+    drawPlayerChain(ctx,arc.fromX-camX,arc.fromY-camY,arc.toX-camX,arc.toY-camY,arc.ticks,!!state.jupiter);
   }
 
   // Storm Reaper melee: crisp stepped lightning cuts replace curved crescents.
@@ -5557,6 +5582,7 @@ function drawGame(
   drawSunEffects(ctx, state, camX, camY);
   if(state.binary)drawBinaryEffects(ctx,state,camX,camY);
   if(state.sirius)drawSiriusEffects(ctx,state,camX,camY,state.gameTick);
+  if(state.neptune)drawNeptuneRefrainEffects(ctx,state,camX,camY);
   if(state.venus)drawVenusEffects(ctx,state,camX,camY,state.gameTick);
   if(state.saturn)drawSaturnEffects(ctx,state,camX,camY);
   if(state.jupiter)drawJupiterGuard(ctx,state,camX,camY,state.gameTick);
@@ -5599,6 +5625,7 @@ function drawGame(
 
   ctx.restore(); // back to true physical-pixel space — unaffected by the world zoom above
   drawKingArenaEffects(ctx, state, canvasW, canvasH);
+  drawFlashLayer(ctx,ctx=>{ // full-screen cast flashes (dimmed by Reduce Flashing)
   for(const fx of state.specialEffects)if(fx.kind==='blind_prayer'&&fx.ticks>15){
     const remaining=(fx.ticks-15)/21;
     ctx.save();ctx.globalAlpha=.42*remaining*remaining;ctx.fillStyle='#ffe45c';ctx.fillRect(0,0,canvasW,canvasH);ctx.restore();
@@ -5612,45 +5639,74 @@ function drawGame(
     }
     ctx.restore();
   }
+  });
 
-  drawSunAtmosphere(ctx, state, canvasW, canvasH, state.gameTick);
-  if (state.neptune) drawNeptuneCloneHeal(ctx, state, canvasW, canvasH, camX, camY, worldZoom);
+  // Flash-style screen effects go through drawFlashLayer (dimmed by Reduce Flashing); overlays that carry gameplay
+  // information (darkness, gas, light and dark, eclipse) always draw at full strength.
+  drawFlashLayer(ctx,ctx=>drawSunAtmosphere(ctx, state, canvasW, canvasH, state.gameTick));
+  if (state.neptune) drawFlashLayer(ctx,ctx=>drawNeptuneResurfaceEffect(ctx, state, canvasW, canvasH, camX, camY, worldZoom));
   if(state.saturn)drawSaturnAtmosphere(ctx,state,canvasW,canvasH);
-  if(state.saturn)drawSaturnBacklash(ctx,state,canvasW,canvasH,camX,camY,worldZoom);
-  if(state.venus)drawVenusShatter(ctx,state,canvasW,canvasH,camX,camY,worldZoom,state.gameTick);
-  if(state.jupiter)drawJupiterTransition(ctx,state,canvasW,canvasH,state.gameTick);
-  if(state.jupiter)drawOverdriveWarning(ctx,state,canvasW,canvasH,state.gameTick);
+  if(state.saturn)drawFlashLayer(ctx,ctx=>drawSaturnBacklash(ctx,state,canvasW,canvasH,camX,camY,worldZoom));
+  if(state.binary)drawFlashLayer(ctx,ctx=>drawBinaryCollisionScreen(ctx,state,canvasW,canvasH,camX,camY,worldZoom));
+  if(state.venus)drawFlashLayer(ctx,ctx=>drawVenusShatter(ctx,state,canvasW,canvasH,camX,camY,worldZoom,state.gameTick));
+  if(state.jupiter)drawFlashLayer(ctx,ctx=>drawJupiterTransition(ctx,state,canvasW,canvasH,state.gameTick));
+  if(state.jupiter)drawFlashLayer(ctx,ctx=>drawOverdriveWarning(ctx,state,canvasW,canvasH,state.gameTick));
   if(state.binary)drawBinaryScreen(ctx,state,canvasW,canvasH);
   if(state.gambit)drawGambitHud(ctx,state,canvasW,canvasH);
   if(state.sirius)drawSiriusScreen(ctx,state,canvasW,canvasH);
-  if(state.sirius)drawSiriusBurst(ctx,state,canvasW,canvasH);
+  if(state.sirius)drawFlashLayer(ctx,ctx=>drawSiriusBurst(ctx,state,canvasW,canvasH));
   if (state.moon) drawMoonDarkOverlay(ctx, state, canvasW, canvasH, state.gameTick);
-  if(state.moon)drawMoonRevealOverlay(ctx,state,canvasW,canvasH,state.gameTick);
+  if(state.neptune)drawFlashLayer(ctx,ctx=>drawNeptuneRhythmOverlay(ctx,state,canvasW,canvasH));
+  if(state.gaia)drawFlashLayer(ctx,ctx=>drawGaiaSunfireReady(ctx,state,canvasW,canvasH));
+  if(state.moon)drawFlashLayer(ctx,ctx=>drawMoonRevealOverlay(ctx,state,canvasW,canvasH,state.gameTick));
   drawSiriusLightOverlay(ctx, state, canvasW, canvasH);
+  if(state.sirius)drawFlashLayer(ctx,ctx=>drawSiriusSwapWarning(ctx,state,canvasW,canvasH));
   drawVenusSandWind(ctx, state, canvasW, canvasH);
   drawSingularityAtmosphere(ctx, state, canvasW, canvasH);
-  drawConvergenceScreen(ctx,state,canvasW,canvasH,camX,camY,worldZoom);
+  if(state.trial?.devourer?.convergence){drawFlashLayer(ctx,ctx=>drawConvergenceScreen(ctx,state,canvasW,canvasH,camX,camY,worldZoom));drawConvergenceGatherBody(ctx,state,camX,camY,worldZoom);}
   drawEclipseShadow(ctx, state, canvasW, canvasH);
-  drawSupernovaSky(ctx, state, canvasW, canvasH);
-  drawBlinkerWarpScreen(ctx,state,canvasW,canvasH);
+  drawFlashLayer(ctx,ctx=>drawSupernovaSky(ctx, state, canvasW, canvasH));
+  drawFlashLayer(ctx,ctx=>drawBlinkerWarpScreen(ctx,state,canvasW,canvasH));
   drawSpookScreen(ctx,state,canvasW,canvasH);
   if(state.ambientEvents.active?.kind==='blackhole'){
     const origin=state.ambientEvents.active.points[0];
-    drawBlackholeSky(ctx,state,canvasW,canvasH,((origin.x+.5)*TILE_SIZE-camX)*worldZoom,((origin.y+.5)*TILE_SIZE-camY)*worldZoom);
+    drawFlashLayer(ctx,ctx=>drawBlackholeSky(ctx,state,canvasW,canvasH,((origin.x+.5)*TILE_SIZE-camX)*worldZoom,((origin.y+.5)*TILE_SIZE-camY)*worldZoom));
   }
 
   // Minimap — drawn in true pixel space, with its own independent (smaller) mobile sizing
   drawMinimap(ctx, state, canvasW, tickN, isMobileTouch);
 }
 
+// ─── Reduce Flashing ──────────────────────────────────────────────────────────
+
+let flashCanvas: HTMLCanvasElement | null = null;
+/** Draws a flash-style screen effect. With Reduce Flashing on, it is drawn on a scratch canvas and composited at
+ * REDUCED_FLASH_ALPHA, so every flash, wash and pressure front in it is toned down together. */
+function drawFlashLayer(ctx: CanvasRenderingContext2D, draw: (ctx: CanvasRenderingContext2D) => void) {
+  if (!reduceFlashing() || typeof document === 'undefined') { draw(ctx); return; }
+  const w = ctx.canvas.width, h = ctx.canvas.height;
+  flashCanvas ??= document.createElement('canvas');
+  if (flashCanvas.width !== w || flashCanvas.height !== h) { flashCanvas.width = w; flashCanvas.height = h; }
+  const layer = flashCanvas.getContext('2d'); if (!layer) { draw(ctx); return; }
+  layer.setTransform(1, 0, 0, 1, 0, 0); layer.clearRect(0, 0, w, h); layer.globalAlpha = 1; layer.setTransform(ctx.getTransform());
+  draw(layer);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = REDUCED_FLASH_ALPHA; ctx.drawImage(flashCanvas, 0, 0); ctx.restore();
+}
+
 // ─── Mobile ability button ────────────────────────────────────────────────────
 
 /** A Sirius rune as clear tiles: one tile per step, so each line's length can be counted. The start tile is outlined;
  * traced tiles turn bright. */
-function RuneGlyph({ rune, traced, casting }: { rune: (typeof RUNES)[number]; traced: number; casting: boolean }) {
+function RuneGlyph({ rune, traced, casting, locked = false }: { rune: (typeof RUNES)[number]; traced: number; casting: boolean; locked?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { const ctx = ref.current?.getContext('2d'); if (!ctx) return; ctx.clearRect(0, 0, 52, 52); ctx.fillStyle = '#14121f'; ctx.fillRect(0, 0, 52, 52); drawRuneTiles(ctx, rune, 26, 26, 46, traced); }, [rune, traced]);
-  return <canvas ref={ref} width={52} height={52} role="img" aria-label={`Rune ${rune.name}`} style={{flex:'none',border:`1px solid ${RUNE_GOLD}`,opacity:casting?.6:1}}/>;
+  useEffect(() => {
+    const ctx = ref.current?.getContext('2d'); if (!ctx) return;
+    ctx.clearRect(0, 0, 52, 52); ctx.fillStyle = '#14121f'; ctx.fillRect(0, 0, 52, 52);
+    drawRuneTiles(ctx, rune, 26, 26, 46, traced);
+  }, [rune, traced, locked]);
+  return <span style={{display:'block',position:'relative',width:54,height:54,flex:'none'}}>
+    <canvas ref={ref} width={52} height={52} role="img" aria-label={`Rune ${rune.name}${locked ? ', locked: include a Sanctuary Seal in the rune shape' : ''}`} style={{display:'block',border:`1px solid ${locked?'#777984':RUNE_GOLD}`,filter:locked?'grayscale(1)':undefined,opacity:casting?.6:locked?.75:1}}/>
+  </span>;
 }
 
 // Challenge HUD centre: the guardian's name and one HP bar for the whole encounter (both Twins, every Devourer body).
@@ -5683,10 +5739,13 @@ function GuardianBar({ state }: { state: GameState }) {
         <span className="rs-guardian-fill" style={{width:`${(phase<devourer.phase?0:phase>devourer.phase?1:fill)*100}%`,opacity:phase===devourer.phase?1:.55}}/>
       </span>)}</span>
       </div>
-      <div role="meter" aria-label="Swarm convergence countdown" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(100*(devourer.convergence ? devourer.convergence.ticks/(devourer.convergence.stage==='gather'?(devourer.convergence.gatherTicks??SINGULARITY_CHALLENGE.convergence.gatherTicks):SINGULARITY_CHALLENGE.convergence.blastTicks) : (devourer.convergenceTimer??SINGULARITY_CHALLENGE.convergence.everyTicks)/SINGULARITY_CHALLENGE.convergence.everyTicks))} style={{display:'flex',alignItems:'center',gap:5,marginTop:4}}>
-        <span className="rs-guardian-name" style={{fontSize:8,marginBottom:0,color:devourer.convergence?'#eaffc8':'#b995df'}}>{devourer.convergence?.stage==='gather'?'GATHERING':devourer.convergence?.stage==='blast'?'EXPLOSION':'CONVERGENCE'}</span>
-        <span style={{flex:1,height:6,border:'1px solid #b995df',background:'#14121f'}}><span style={{display:'block',height:'100%',background:devourer.convergence?'#d8ff9c':'#9572bd',width:`${Math.max(0,Math.min(1,devourer.convergence ? devourer.convergence.ticks/(devourer.convergence.stage==='gather'?(devourer.convergence.gatherTicks??SINGULARITY_CHALLENGE.convergence.gatherTicks):SINGULARITY_CHALLENGE.convergence.blastTicks) : (devourer.convergenceTimer??SINGULARITY_CHALLENGE.convergence.everyTicks)/SINGULARITY_CHALLENGE.convergence.everyTicks))*100}%`}}/></span>
-      </div>
+      {(() => { // the convergence countdown, drawn like every other map's countdown bar
+        const conv = devourer.convergence, cfg = SINGULARITY_CHALLENGE.convergence;
+        const gathering = conv && conv.stage !== 'blast';
+        const total = gathering ? (conv.gatherTicks ?? convergenceGatherTicks(conv.members.length)) : cfg.everyTicks;
+        return <GuardianCountdown label={gathering ? 'GATHERING' : 'CONVERGENCE'}
+          ticks={gathering ? conv.ticks : (devourer.convergenceTimer ?? cfg.everyTicks)} total={total} color={gathering ? '#d8ff9c' : '#b995df'} />;
+      })()}
     </div>;
   }
   const binary = state.binary;
@@ -5747,7 +5806,7 @@ function GuardianBar({ state }: { state: GameState }) {
   const sirius = state.sirius;
   if (sirius) {
     // Phase HP; then light/dark with its time left, the current rune (traced part bright) with its timer, and the Ruby guess.
-    const lightLeft = sirius.lightTimer / ((sirius.light ? SIRIUS.lightTicks : SIRIUS.darkTicks) * (sirius.phase >= 3 ? SIRIUS.phase3Swap : 1)), swapSoon = sirius.lightTimer <= SIRIUS.swapWarning;
+    const lightLeft = Math.max(0, Math.min(1, sirius.lightTimer / siriusLightDuration(sirius))), swapSoon = sirius.lightTimer <= SIRIUS.swapWarning;
     const rune = sirius.rune, glyph = rune ? RUNES[rune.index] : null, tracing = !!rune && rune.cast <= 0;
     const traced = glyph && tracing ? runeProgress(sirius.steps, glyph).tiles : 0, runeLeft = rune ? rune.ticks / rune.total : 1 - sirius.runeTimer / SIRIUS.runeGap;
     const lightColor = sirius.light ? '#ffe9a8' : '#b9a6ff';
@@ -5769,7 +5828,7 @@ function GuardianBar({ state }: { state: GameState }) {
     </div>}
     {sirius.wrath>0&&<div className="rs-guardian-name" style={{fontSize:8,color:WRATH_RED,marginTop:3}}>ALIENS EMPOWERED</div>}
     </div>
-    {present&&<div style={{flex:'none',marginLeft:8,width:52,height:52,display:'flex',alignItems:'center',justifyContent:'center'}}>{glyph?<RuneGlyph rune={glyph} traced={traced} casting={!tracing}/>:<span style={{width:52,height:52,boxSizing:'border-box',border:'1px solid #6e6448',background:'#14121f',opacity:.5}}/>}</div>}
+    {present&&<div style={{flex:'none',marginLeft:8,width:54,height:54,display:'flex',alignItems:'center',justifyContent:'center'}}>{glyph?<RuneGlyph rune={glyph} traced={traced} casting={!tracing} locked={sirius.phase>=3&&(!tracing||!sanctuarySealInRune(sirius))}/>:<span style={{width:52,height:52,boxSizing:'border-box',border:'1px solid #6e6448',background:'#14121f',opacity:.5}}/>}</div>}
   </div>;
   }
   const saturn = state.saturn;
@@ -5799,7 +5858,7 @@ function GuardianBar({ state }: { state: GameState }) {
       <div className="rs-jupiter-vitals"><div role="meter" aria-label="Storm Reaper health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct*100)}>
         <span className="rs-guardian-name">{present?`STORM REAPER · PHASE ${j.phase}`:'GUARDIAN INCOMING'}</span>
         <span className="rs-guardian-segments">{[3,2,1].map(phase=><span key={phase} className="rs-guardian-bar" data-active={phase===j.phase||undefined}>
-          <span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-(3-phase)*JUPITER.phaseHP)/JUPITER.phaseHP))*100:0}%`,opacity:phase===j.phase?1:.55}}/>
+          <span className="rs-guardian-fill" style={{width:`${present?Math.max(0,Math.min(1,(hp-jupiterPhaseFloorHP(phase))/jupiterPhaseHP(phase)))*100:0}%`,opacity:phase===j.phase?1:.55}}/>
         </span>)}</span>
       </div>
       {present&&<div role="meter" aria-label="Reaper energy" aria-valuemin={0} aria-valuemax={jupiterMaxEnergy(j)} aria-valuenow={Math.round(j.energy)} style={{display:'flex',alignItems:'center',gap:4,marginTop:4}}>
@@ -5823,7 +5882,6 @@ function GuardianBar({ state }: { state: GameState }) {
         <span className="rs-guardian-name" style={{ fontSize: 8, color: sun.rage >= 75 ? '#ff6a5d' : '#ffb263' }}>RAGE</span>
         <span style={{ flex: 1, height: 6, background: '#14121f', border: `1px solid ${sun.rage >= 75 ? '#ff6a5d' : '#ffb263'}` }}><span style={{ display: 'block', height: '100%', width: `${Math.max(0, Math.min(100, sun.rage))}%`, background: sun.rage >= 75 ? '#ff6a5d' : '#ffb263' }} /></span>
       </div>
-      {sun.quenchedTicks > 0 && <span className="rs-sun-extinguished">EXTINGUISHED · C ×{sun.empoweredCasts}</span>}
     </div>
   </div>;
   const neptune = state.neptune;
@@ -5835,18 +5893,26 @@ function GuardianBar({ state }: { state: GameState }) {
       const floor = neptunePhaseFloorHP(phase as 1 | 2 | 3), fill = present ? Math.max(0, Math.min(1, (hp - floor) / NEPTUNE_PHASE_HPS[phase as 1 | 2 | 3])) : 0;
       return { phase, fill: phase < neptune.phase ? 0 : phase > neptune.phase ? (present ? 1 : 0) : fill };
     });
+    const pendingHeal = neptunePendingRefrainPreview(state) / NEPTUNE_PHASE_HPS[neptune.phase];
+    const mistakeHeal = neptunePendingMistakeHeal(state) / NEPTUNE_PHASE_HPS[neptune.phase];
+    const songLeadIn = neptune.refrain?.exampleLeadIn ?? 0;
+    const songWaiting = !neptune.refrain && present && !dive && !neptune.laser && neptune.healCharge < NEPTUNE_HEAL_CHARGE_MAX;
+    const nextSongTicks = songLeadIn || (neptune.refrainTimer ?? NEPTUNE_REFRAIN.first);
+    const nextSongTotal = neptune.lastRefrain === undefined ? NEPTUNE_REFRAIN.first : NEPTUNE_REFRAIN.gap;
     return <div className="rs-guardian" style={{ ['--guardian' as string]: color }}>
       <div role="meter" aria-label={`${BOSS_NAMES[boss]} health`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct * 100)}>
-        <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${neptune.phase}${dive ? ` · CLONES ${clonesLeft}/${dive.cloneIds.length + dive.dropsLeft}` : ''}` : 'GUARDIAN INCOMING'}</span>
+        <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${neptune.phase}${dive ? ` · ECHOES ${clonesLeft}/${dive.cloneIds.length + dive.dropsLeft}` : ''}` : 'GUARDIAN INCOMING'}</span>
         <span className="rs-guardian-segments">
           {segments.map(seg => <span key={seg.phase} className="rs-guardian-bar" data-active={seg.phase === neptune.phase || undefined}>
             <span className="rs-guardian-fill" style={{ width: `${seg.fill * 100}%`, opacity: seg.phase === neptune.phase ? 1 : .55 }} />
+            {seg.phase===neptune.phase&&pendingHeal>0&&<span className="rs-guardian-fill" aria-label="Pending song healing" title="Pending healing: cancel it with Ocean’s Melody" style={{position:'absolute',left:`calc(${seg.fill*100}% + ${4-8*seg.fill}px)`,top:2,bottom:2,width:`calc(${Math.min(1-seg.fill,pendingHeal)*100}% - ${8*Math.min(1-seg.fill,pendingHeal)}px)`,height:'auto',background:'#b9e9ff',opacity:.4}}/>}
+            {seg.phase===neptune.phase&&mistakeHeal>0&&<span className="rs-guardian-fill" aria-label="Pending healing from mistakes" style={{position:'absolute',left:`calc(${(seg.fill+Math.min(1-seg.fill,pendingHeal)-Math.min(1-seg.fill,mistakeHeal))*100}% + ${4-8*(seg.fill+Math.min(1-seg.fill,pendingHeal)-Math.min(1-seg.fill,mistakeHeal))}px)`,top:2,bottom:2,height:'auto',width:`calc(${Math.min(1-seg.fill,mistakeHeal)*100}% - ${8*Math.min(1-seg.fill,mistakeHeal)}px)`,background:'#ef829b',opacity:.7}}/>}
             {seg.phase === neptune.phase && NEPTUNE_DIVE_POINTS[neptune.phase].filter(point => point > 0).map(point =>
               <span key={point} className="rs-guardian-mark" style={{ left: `${point * 100}%` }} />)}
           </span>)}
         </span>
       </div>
-      {dive && <GuardianCountdown label="DIVE" ticks={dive.ticks} total={NEPTUNE_DIVE_TICKS[neptune.phase]} color={color} />}
+      <div style={{height:32}}>{songLeadIn>0||songWaiting?<GuardianCountdown label="NEXT SONG" ticks={nextSongTicks} total={nextSongTotal} color="#8ecbe8"/>:neptune.refrain?<NeptuneRefrainBar state={state}/>:present&&dive?<GuardianCountdown label="DIVE" ticks={dive.ticks} total={NEPTUNE_DIVE_TICKS[neptune.phase]} color={color}/>:null}</div>
     </div>;
   }
   const gaia = state.gaia;
@@ -5856,15 +5922,20 @@ function GuardianBar({ state }: { state: GameState }) {
       const floor = (3 - phase) * GAIA_PHASE_HP, fill = present ? Math.max(0, Math.min(1, (hp - floor) / GAIA_PHASE_HP)) : 0;
       return { phase, fill: phase < gaia.phase ? 0 : phase > gaia.phase ? (present ? 1 : 0) : fill };
     });
-    const status = gaia.wither > 0 ? ' · WITHERING' : '';
-    return <div className="rs-guardian" role="meter" aria-label={`${BOSS_NAMES[boss]} health`} aria-valuemin={0} aria-valuemax={100}
-      aria-valuenow={Math.round(pct * 100)} style={{ ['--guardian' as string]: color }}>
-      <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${gaia.phase}${status}` : 'GUARDIAN INCOMING'}</span>
-      <span className="rs-guardian-segments">
-        {segments.map(seg => <span key={seg.phase} className="rs-guardian-bar" data-active={seg.phase === gaia.phase || undefined}>
-          <span className="rs-guardian-fill" style={{ width: `${seg.fill * 100}%`, opacity: seg.phase === gaia.phase ? 1 : .55 }} />
-        </span>)}
-      </span>
+    // Time until her next aimed field's warning tiles appear; empty during the warning, full again when it lands.
+    const weaver = present ? state.enemies.find(e => e.id === gaia.bossId && e.hp > 0) : undefined;
+    const thorn = weaver?.thorn, warning = (thorn?.windupTicks ?? 0) > 0;
+    return <div className="rs-guardian" style={{ ['--guardian' as string]: color }}>
+      <div role="meter" aria-label={`${BOSS_NAMES[boss]} health`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct * 100)}>
+        <span className="rs-guardian-name">{present ? `${BOSS_NAMES[boss]} · PHASE ${gaia.phase}` : 'GUARDIAN INCOMING'}</span>
+        <span className="rs-guardian-segments">
+          {segments.map(seg => <span key={seg.phase} className="rs-guardian-bar" data-active={seg.phase === gaia.phase || undefined}>
+            <span className="rs-guardian-fill" style={{ width: `${seg.fill * 100}%`, opacity: seg.phase === gaia.phase ? 1 : .55 }} />
+          </span>)}
+        </span>
+      </div>
+      {thorn && <GuardianCountdown label="THORN FIELD" ticks={warning ? 0 : thorn.cooldown}
+        total={GAIA_CAST_COOLDOWN} color={color} />}
     </div>;
   }
   const moon = state.moon;
@@ -6094,10 +6165,10 @@ function TouchAbilityButton({ label, color, size = 56, onDown, onUp, className, 
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EnemyPortrait({type,size=88,variant}:{type:GameState['enemies'][0]['type'];size?:number;variant?:'golden'|'copy'|'gnasher'}){
+export function EnemyPortrait({type,size=88,variant}:{type:GameState['enemies'][0]['type'];size?:number;variant?:'golden'|'copy'}){
  const ref=useRef<HTMLCanvasElement>(null);
  useEffect(()=>{const ctx=ref.current?.getContext('2d');if(!ctx)return;const cfg=ENEMY_CONFIGS[type];
- const enemy={id:0,type,x:0,y:0,tileX:0,tileY:0,targetTileX:0,targetTileY:0,stepProgress:0,chargeDirX:0,chargeDirY:0,attackTimer:99,pole:'north',hp:cfg.maxHp,maxHp:cfg.maxHp,path:[],pathTimer:0,flashTicks:0,healFlashTicks:0,shootTicks:0,windupTicks:type==='lifebloom'?120:0,phaseTimer:10000,icyShieldHP:0,goldenSoul:variant==='golden',...(variant==='copy'||variant==='gnasher'?{devourer:{generation:1,challenge:true,gnasher:variant==='gnasher'}}:{})} as unknown as GameState['enemies'][0];
+ const enemy={id:0,type,x:0,y:0,tileX:0,tileY:0,targetTileX:0,targetTileY:0,stepProgress:0,chargeDirX:0,chargeDirY:0,attackTimer:99,pole:'north',hp:cfg.maxHp,maxHp:cfg.maxHp,path:[],pathTimer:0,flashTicks:0,healFlashTicks:0,shootTicks:0,windupTicks:type==='lifebloom'?120:0,phaseTimer:10000,icyShieldHP:0,goldenSoul:variant==='golden',...(variant==='copy'?{devourer:{generation:1,challenge:true}}:{})} as unknown as GameState['enemies'][0];
  // A Queen Illusion wears the Queen's Echo look, as in the fight; Venus burrowers are shown surfaced.
  const shown=type==='moon_illusion'?{...enemy,type:'queen_echo'} as GameState['enemies'][0]:type==='dune_worm'||type==='sand_scorpion'?{...enemy,burrow:'up'} as GameState['enemies'][0]:enemy;
  ctx.clearRect(0,0,96,96);ctx.save();ctx.translate(48,52);const scale=type==='moon_illusion'?.9:isBossType(type)?(type==='splitter_queen'?.9:.7):1.15;ctx.scale(scale,scale);if(!drawSaturnUnit(ctx,shown,0,0,40)&&!drawSiriusUnit(ctx,shown,0,0,40))drawEnemy(ctx,shown,0,0,40);ctx.restore();
@@ -6225,6 +6296,10 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const keyboardBulletHeldRef = useRef(false);
   const snowballMouseHeldRef = useRef(false);
   const snowballKeyHeldRef = useRef(false);
+  const neptuneChorusPressRef=useRef<{source:'key'|'mouse';startedAt:number;timer:number;triggered:boolean}|null>(null);
+  const cancelNeptuneChorusPress=useCallback(()=>{
+    const press=neptuneChorusPressRef.current;if(press)window.clearTimeout(press.timer);neptuneChorusPressRef.current=null;
+  },[]);
 
   // ── Mobile virtual joystick ──────────────────────────────────────────────
   const [joyThumb, setJoyThumb] = useState({ x: 0, y: 0 });
@@ -6351,7 +6426,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     window.addEventListener('ruby-save-run',save);window.addEventListener('keydown',desktopKey);window.addEventListener('blur',pause);
     const autosave=window.setInterval(save,15000);
     window.addEventListener('blur',save);window.addEventListener('pagehide',save);
-    const cancelCharge = () => { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); };
+    const cancelCharge = () => { cancelNeptuneChorusPress();snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); };
     const onVisibility = () => { if (document.hidden) { save();cancelCharge(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); } };
     window.addEventListener('blur', cancelCharge);
     document.addEventListener('visibilitychange', onVisibility);
@@ -6363,11 +6438,11 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       cancelCharge();
       stopAmbientEventSounds();
     };
-  }, []);
+  }, [cancelNeptuneChorusPress]);
 
   // ── Game loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (showRules) { snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); return; }
+    if (showRules) { cancelNeptuneChorusPress();setNonMusicAudioDuck(1); snowballKeyHeldRef.current=snowballMouseHeldRef.current=false;if (stateRef.current?.sun) stateRef.current.sun.charging = false; mouseDownTimeRef.current = 0; rightMouseHeldRef.current = pointerLaserHeldRef.current = keyboardLaserHeldRef.current = keyboardBulletHeldRef.current = false; stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); return; }
     const canvas = canvasRef.current;
     if (!canvas) return;
     frameMeter.current=new FrameMeter();
@@ -6435,7 +6510,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if (state.trial?.boss === 'blind_prayer') {
         const current = state.trial.siriusLightBlend ?? (state.trial.siriusLight ? 1 : 0);
         const target = state.trial.siriusLight ? 1 : 0;
-        state.trial.siriusLightBlend = current + Math.sign(target - current) * Math.min(Math.abs(target - current), delta / 1800);
+        state.trial.siriusLightBlend = current + Math.sign(target - current) * Math.min(Math.abs(target - current), delta / 600);
       }
       accumulator += delta;
 
@@ -6463,7 +6538,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if (t % 6 === 0 && t !== lastHudTick) { lastHudTick=t;rerender(); }
     }
     rafRef.current = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(rafRef.current); stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); };
+    return () => { setNonMusicAudioDuck(1); cancelAnimationFrame(rafRef.current); stopChargeSound(); stopPoisonSound(); stopSingularitySound(); stopGaiaFieldSound(); stopSiriusFloatSound(); pauseAmbientEventSounds(); };
   }, [showRules, rerender]);
 
   // ── Canvas resize ─────────────────────────────────────────────────────────
@@ -6492,7 +6567,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     else if(state.sun)used=useCoolingWave(state);
     else if(state.gaia)used=useSunfire(state);
     else if(state.moon)used=useMoonMark(state);
-    else if(state.neptune)used=canOpenSkyLaser(state)&&openSkyLaser(state);
+    else if(state.neptune)used=useOceanMelody(state);
     else if(state.binary)used=swapPole(state); // swapPole plays its own cast sound
     else if(state.sirius)used=useHalo(state);
     else if(state.venus)used=useSandSweep(state);
@@ -6502,12 +6577,37 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     else if((state.gamePhase as string)==='laserTarget')playUiSfx('teleport');
     rerender();
   },[rerender]);
+  const beginNeptuneChorusPress=useCallback((state:GameState,source:'key'|'mouse')=>{
+    if(neptuneChorusPressRef.current)return;
+    const press={source,startedAt:Date.now(),timer:0,triggered:false};
+    neptuneChorusPressRef.current=press;
+    press.timer=window.setTimeout(()=>{
+      if(neptuneChorusPressRef.current!==press||showRules)return;
+      const current=stateRef.current;
+      if(current!==state||!current||!canOpenSkyLaser(current))return;
+      if(openSkyLaser(current)){press.triggered=true;playUiSfx('teleport');rerender();}
+    },NEPTUNE_CHORUS_HOLD_MS);
+  },[rerender,showRules]);
+  const finishNeptuneChorusPress=useCallback((source:'key'|'mouse')=>{
+    const press=neptuneChorusPressRef.current;
+    if(!press||press.source!==source)return false;
+    window.clearTimeout(press.timer);neptuneChorusPressRef.current=null;
+    const current=stateRef.current;
+    if(!press.triggered&&current?.neptune&&current.gamePhase==='playing'){
+      if(Date.now()-press.startedAt>=NEPTUNE_CHORUS_HOLD_MS&&canOpenSkyLaser(current)&&openSkyLaser(current)){
+        press.triggered=true;playUiSfx('teleport');rerender();
+      }
+      if(!press.triggered)activateMapSkill(current);
+    }
+    return true;
+  },[activateMapSkill,rerender]);
 
   // ── Keyboard input ────────────────────────────────────────────────────────
   useEffect(() => {
     if (showRules) return;
     const onKey = (e: KeyboardEvent) => {
       const state = stateRef.current;
+      const mapSkillKey=controlForCode(e.code)==='mapSkill';
       const key=state&&(state.gamePhase==='teleporting'||state.gamePhase==='laserTarget')&&/^[1-4]$/.test(e.key)?e.key:gameKey(e);
       if (!state || state.gamePhase === 'lost') return;
 
@@ -6517,7 +6617,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       if (state.gamePhase === 'laserTarget') {
         e.preventDefault();
         if (e.repeat) return;
-        if (key === 'Escape' || key === 'c' || key === 'C') { cancelSkyLaser(state); playUiSfx('close'); rerender(); return; }
+        if (key === 'Escape' || mapSkillKey) { cancelSkyLaser(state); playUiSfx('close'); rerender(); return; }
         const room = ({ '1': 0, '2': 1, '3': 2, '4': 3 } as Record<string, number>)[key];
         if (room !== undefined && chooseSkyLaser(state, room)) { playUiSfx('ascension'); rerender(); }
         return;
@@ -6580,8 +6680,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         if(!e.repeat){if(tryActivateTeleport(state))playUiSfx('teleport');rerender();}
         return;
       }
-      if (key === 'c' || key === 'C') {
-        e.preventDefault();if(!e.repeat){snowballKeyHeldRef.current=true;if(state.gambit)pressSlot(state,2);else activateMapSkill(state);}return;
+      if (mapSkillKey) {
+        e.preventDefault();if(!e.repeat){snowballKeyHeldRef.current=true;if(state.gambit)pressSlot(state,2);else if(state.neptune&&state.gamePhase==='playing')beginNeptuneChorusPress(state,'key');else activateMapSkill(state);}return;
       }
       if (key === 'r') { e.preventDefault(); useSpeedBoost(state); rerender(); return; }
       if (key === 'e' || key === 'E') {
@@ -6593,7 +6693,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
     const onKeyUp = (e: KeyboardEvent) => {
       const key=gameKey(e);
-      if(key.toLowerCase()==='c'){snowballKeyHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);return;}if(!snowballMouseHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
+      if(controlForCode(e.code)==='mapSkill'){snowballKeyHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);return;}if(finishNeptuneChorusPress('key'))return;if(!snowballMouseHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
       if (key === ' ' && stateRef.current?.sun) stateRef.current.sun.charging = false;
       if (key.toLowerCase() === 'k') {
         keyboardLaserHeldRef.current = false;
@@ -6620,6 +6720,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     const onPrimalMouseUp=(event:MouseEvent)=>{
       if(mouseControl(event.button)!=='mapSkill')return;
       snowballMouseHeldRef.current=false;
+      if(finishNeptuneChorusPress('mouse'))return;
       if(!snowballKeyHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}
     };
     window.addEventListener('mouseup',onPrimalMouseUp,true);
@@ -6630,7 +6731,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [showRules, rerender, activateMapSkill]);
+  }, [showRules, rerender, activateMapSkill, beginNeptuneChorusPress, finishNeptuneChorusPress]);
 
   // ── Mouse input ───────────────────────────────────────────────────────────
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -6639,7 +6740,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     if(action==='mapSkill'){
       e.preventDefault();
       if(state?.gambit&&!showRules){snowballMouseHeldRef.current=true;pressSlot(state,2);rerender();return;} // Star Gambit: the middle slot
-      if(state&&!showRules){snowballMouseHeldRef.current=true;activateMapSkill(state);}
+      if(state&&!showRules){snowballMouseHeldRef.current=true;if(state.neptune&&state.gamePhase==='playing')beginNeptuneChorusPress(state,'mouse');else activateMapSkill(state);}
       return;
     }
     if (!state || showRules || state.gamePhase !== 'playing') return;
@@ -6659,7 +6760,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
   const handleMouseUp = (e: React.MouseEvent) => {
     const action=mouseControl(e.button);
-    if(action==='mapSkill'){snowballMouseHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);rerender();return;}if(!snowballKeyHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
+    if(action==='mapSkill'){snowballMouseHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);rerender();return;}if(finishNeptuneChorusPress('mouse'))return;if(!snowballKeyHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
     if(action==='heal'&&stateRef.current?.sun)stateRef.current.sun.charging=false;
     if (action === 'bullet') { rightMouseHeldRef.current = false; if (stateRef.current?.gambit) { releaseSlot(stateRef.current, 1); rerender(); } return; }
     if (action !== 'laser') return;
@@ -6710,7 +6811,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     const s = createModeState(mode, trialInfo?.boss);
     s.godMode = stateRef.current?.godMode ?? false;
     s.immortal = stateRef.current?.immortal ?? false;
+    s.noFreeze = stateRef.current?.noFreeze ?? false;
     s.noMobs = stateRef.current?.noMobs ?? false;
+    godSetNoMeteors(s,stateRef.current?.noMeteors??false);
     if (s.trial?.boss === 'blind_prayer' && !s.sirius) {
       s.trial.siriusLight = stateRef.current?.trial?.siriusLight ?? false;
       s.trial.siriusLightBlend = stateRef.current?.trial?.siriusLightBlend ?? (s.trial.siriusLight ? 1 : 0);
@@ -6761,7 +6864,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     if(state.playerFrozenTicks>0&&state.playerStunned)playerStatuses.push({key:'stunned',label:'STUNNED',color:'#ffe680',progress:state.playerFrozenTicks/COMET.stunTicks});
     else if(state.playerFrozenTicks>0)playerStatuses.push({key:'frozen',label:'FROZEN',color:'#b4eaff',progress:state.playerFrozenTicks/90});
     else if(isPlayerChilled(state))playerStatuses.push({key:'chilled',label:'CHILLED · MOVE & ATTACK SLOW',color:'#8ecfe9'});
-    if((state.jupiter?.slowTicks??0)>0)playerStatuses.push({key:'static',label:'STATIC · SLOWED',color:'#9fd8ff',progress:state.jupiter!.slowTicks/JUPITER.shockSlowTicks});
+    if(Math.max(state.jupiter?.slowTicks??0,state.jupiter?.trailSlowTicks??0)>0)playerStatuses.push({key:'static',label:'STATIC · SLOWED',color:'#9fd8ff',progress:Math.max((state.jupiter?.slowTicks??0)/JUPITER.shockSlowTicks,(state.jupiter?.trailSlowTicks??0)/JUPITER.trailSlowTicks)});
     if(isMovementReversed(state))playerStatuses.push({key:'reversed',label:'CONTROLS REVERSED',color:'#ffe477'});
     if((state.laserStunTicks??0)>0)playerStatuses.push({key:'laser-stun',label:'LASER STUN',color:'#ff8aa6',progress:state.laserStunTicks!/LANCER.rewardTicks});
     if(state.build.decoy)playerStatuses.push({key:'pyxis-decoy',label:'DECOY · '+CHAMBER_LABELS[chamberOfTile(state.build.decoy.tileX,state.build.decoy.tileY)],color:'#c6b8ff',progress:state.build.decoy.ticks/360});
@@ -6914,7 +7017,6 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-rage-track { display: flex; align-items: flex-end; width: 14px; height: 34px; padding: 2px; box-sizing: border-box; border: 2px solid currentColor; background: #0b1020; }
         .rs-rage-fill { display: block; width: 100%; background: currentColor; box-shadow: 0 0 5px currentColor; transition: height 160ms linear; }
         .rs-rage-value { font-family: var(--font-mono); font-size: 9px; line-height: 1; }
-        .rs-sun-extinguished { display: block; margin-top: 3px; font-family: var(--font-mono); font-size: 10px; color: #d5eff5; }
         .rs-stage > span { display: block; color: #dfc4ff; font-size: 12px; font-weight: 700; letter-spacing: .22em; margin-bottom: 5px; }
         .rs-stage > strong { display: block; font-family: var(--font-pixel); font-size: 30px; line-height: 1.15; color: #f4e7ff; text-shadow: 0 0 14px #bb75ff99; }
         @media (max-width: 1279px) { .rs-gambit-hud { --batt-w: 54px; } } /* room for Glint beside the energy bar */
@@ -7002,12 +7104,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
       <style>{`.rs-pause-panel .btn{width:100%;text-align:left;justify-content:flex-start;font-family:var(--font-pixel);font-size:10px;line-height:1.6;padding:9px 12px;background:#10192be8;border:1px solid #6f93ad;box-shadow:inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c;letter-spacing:.08em;color:#dfedf5}.rs-pause-panel .btn:hover{background:#172741;border-color:#a8d8ea}`}</style>
       {(showPause||resumePrompt)&&<div role="dialog" aria-modal="true" aria-label={resumePrompt?'Resume saved run':'Paused'} onClick={e=>{if(e.target===e.currentTarget&&!resumePrompt){playUiSfx('close');setShowPause(false);setShowRules(false);rerender();}}} style={{position:'fixed',inset:0,zIndex:300,background:'#050810ed',display:'grid',placeItems:'center'}} onKeyDown={e=>e.stopPropagation()}>
-        <div className="rs-pause-panel" style={{border:'2px solid #9aa8ff',background:'#10131f',padding:28,color:'#e7e9f6',width:440,maxWidth:"calc(100vw - 48px)",boxSizing:"border-box",fontFamily:"var(--font-pixel)",textAlign:"left",display:'grid',gap:12}}>
+        <div className="rs-pause-panel" style={{border:'2px solid #9aa8ff',background:'#10131f',padding:28,color:'#e7e9f6',width:440,maxWidth:"calc(100vw - 48px)",maxHeight:"calc(100vh - 48px)",overflowY:'auto',boxSizing:"border-box",fontFamily:"var(--font-pixel)",textAlign:"left",display:'grid',gap:12}}>
           <h2 style={{fontSize:16,margin:"0 0 4px",color:'#ff6f9f'}}>{resumePrompt?'SAVED ORBIT':'PAUSED'}</h2>
           <MenuButton autoFocus className="btn" onClick={()=>{if(resumePrompt){const saved=restoreRun(mode,trialId);if(saved)stateRef.current=saved;}resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(false);rerender();}}>{resumePrompt?'RESUME SAVED RUN':'CONTINUE'}</MenuButton>
           {resumePrompt?<MenuButton className="btn" onClick={()=>{updateProfile(p=>{delete p.resumes[resumeKey(mode,trialId)];});resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(!!trialInfo);}}>START NEW RUN</MenuButton>:<>
             <MenuButton className="btn" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void flushProfile().then(()=>router.push('/'));}}>SAVE & RETURN TO LOBBY</MenuButton>
             <AudioSliders/>
+            <DisplaySettings/>
             <MenuButton className="btn" sound="page" onClick={()=>setShowControlSettings(true)}>CONTROLS</MenuButton>
             <MenuButton className="btn" onClick={()=>void window.rubyDesktop?.fullscreen()}>FULLSCREEN / WINDOW · F11</MenuButton>
             <MenuButton className="btn" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void window.rubyDesktop?.quit();}}>SAVE & QUIT</MenuButton>
@@ -7109,27 +7212,27 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
                 <path d="M7 1H9V6H14V8H9V15H7V8H2V6H7Z" fill={full ? '#fff6d0' : '#ffe27a'} />
               </svg>
-              <div style={{ width: 'calc(var(--batt-w) * .8)', height: 'var(--batt-h)', border: `1px solid ${full ? '#fff6d0' : 'rgba(255,226,122,.45)'}`,
-                borderRadius: '2px', background: 'rgba(0,0,0,0.4)', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${holy * 100}%`, background: full ? '#fff6d0' : '#e8c45c',
+              <div className="battery" style={{ width: 'var(--batt-w)', height: 'var(--batt-h)', borderColor: full ? '#fff6d0' : 'rgba(255,226,122,.45)' }}>
+                <div className="battery-fill" style={{ width: `${holy * 100}%`, background: full ? '#fff6d0' : '#e8c45c',
                   boxShadow: full ? '0 0 10px #ffe27a' : 'none', animation: full ? 'pulseGlow 0.8s ease-in-out infinite' : undefined }} />
+                <div className="battery-nub" style={{ background: full ? '#fff6d0' : 'rgba(255,226,122,.45)' }} />
               </div>
               {full && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: '#fff6d0' }}><MapSpecialSkillHint/></span>}
             </div>;
           })()}
           {state?.neptune && (() => {
-            const charge = state.neptune.healCharge / NEPTUNE_HEAL_CHARGE_MAX, ready = charge >= 1;
-            return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} role="meter" aria-label="Trident charge"
-              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(charge * 100)} title={ready ? 'Trident ready — '+bindingLabel('mapSkill') : 'Healing charges the Trident'}>
+            const charge = state.neptune.healCharge / NEPTUNE_HEAL_CHARGE_MAX, ready = canOpenSkyLaser(state);
+            return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} role="meter" aria-label="Ocean’s Chorus charge"
+              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(charge * 100)} title={ready ? 'Hold '+bindingLabel('mapSkill')+' — Ocean’s Chorus ready' : 'Ocean’s Melody — tap to play a note; healing charges Ocean’s Chorus'}>
               <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
                 <path d="M7 1H9V4H11V7H13V12H11V14H5V12H3V7H5V4H7Z" fill={ready ? '#e8fbff' : '#59c8ff'} />
               </svg>
-              <div style={{ width: 'calc(var(--batt-w) * .8)', height: 'var(--batt-h)', border: `1px solid ${ready ? '#e8fbff' : 'rgba(89,200,255,.45)'}`,
-                borderRadius: '2px', background: 'rgba(0,0,0,0.4)', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${charge * 100}%`, background: ready ? '#e8fbff' : '#2f9be0',
+              <div className="battery" style={{ width: 'var(--batt-w)', height: 'var(--batt-h)', borderColor: ready ? '#e8fbff' : 'rgba(89,200,255,.45)' }}>
+                <div className="battery-fill" style={{ width: `${charge * 100}%`, background: ready ? '#e8fbff' : '#2f9be0',
                   boxShadow: ready ? '0 0 10px #9fe4ff' : 'none', animation: ready ? 'pulseGlow 0.8s ease-in-out infinite' : undefined }} />
+                {ready && <span aria-hidden="true" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1, fontFamily: 'var(--font-pixel)', fontSize: 8, fontWeight: 900, lineHeight: 1, color: '#102434' }}>HOLD</span>}
+                <div className="battery-nub" style={{ background: ready ? '#e8fbff' : 'rgba(89,200,255,.45)' }} />
               </div>
-              {ready && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: '#e8fbff' }}><MapSpecialSkillHint/></span>}
             </div>;
           })()}
 
@@ -7140,10 +7243,10 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
                 <path d="M7 0H9V3H7ZM7 13H9V16H7ZM0 7H3V9H0ZM13 7H16V9H13ZM5 4H11V5H12V11H11V12H5V11H4V5H5Z" fill={ready ? '#fff3b8' : '#ffd36a'} />
               </svg>
-              <div style={{ width: 'calc(var(--batt-w) * .8)', height: 'var(--batt-h)', border: `1px solid ${ready ? '#fff3b8' : 'rgba(255,211,106,.45)'}`,
-                borderRadius: '2px', background: 'rgba(0,0,0,0.4)', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${charge * 100}%`, background: ready ? '#fff3b8' : '#e0a83a',
+              <div className="battery" style={{ width: 'var(--batt-w)', height: 'var(--batt-h)', borderColor: ready ? '#fff3b8' : 'rgba(255,211,106,.45)' }}>
+                <div className="battery-fill" style={{ width: `${charge * 100}%`, background: ready ? '#fff3b8' : '#e0a83a',
                   boxShadow: ready ? '0 0 10px #ffd36a' : 'none', animation: ready ? 'pulseGlow 0.8s ease-in-out infinite' : undefined }} />
+                <div className="battery-nub" style={{ background: ready ? '#fff3b8' : 'rgba(255,211,106,.45)' }} />
               </div>
               {usable && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: ready ? '#fff3b8' : '#c9a24a' }}><MapSpecialSkillHint/></span>}
             </div>;
@@ -7152,19 +7255,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {/* Star energy */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <HudIcon kind="energy" powered={powered} />
-            <div style={{
-              width: 'var(--batt-w)', height: 'var(--batt-h)', border: `1px solid ${powered ? '#00ffff' : 'rgba(255,255,255,0.2)'}`,
-              borderRadius: '2px', background: 'rgba(0,0,0,0.4)', position: 'relative', overflow: 'hidden'
-            }}>
-              <div style={{
-                height: '100%', width: `${energyPct}%`,
+            <div className="battery" style={{ width: 'var(--batt-w)', height: 'var(--batt-h)', borderColor: powered ? '#00ffff' : 'rgba(255,255,255,0.2)' }}>
+              <div className="battery-fill" style={{
+                width: `${energyPct}%`,
                 background: powered ? '#ffffff' : '#66aaff',
                 boxShadow: powered ? '0 0 10px #00ffff' : '0 0 8px #4488ff66', transition: 'background 0.3s'
               }} />
-              <div style={{
-                position: 'absolute', right: -2, top: '25%', width: 4, height: '50%',
-                background: powered ? '#ffffff' : 'rgba(255,255,255,0.2)', borderRadius: '0 2px 2px 0'
-              }} />
+              <div className="battery-nub" style={{ background: powered ? '#ffffff' : 'rgba(255,255,255,0.2)' }} />
             </div>
             {state?.saturn&&<ShieldAmount amount={state.playerShieldHP}/>}
           </div>
@@ -7199,7 +7296,6 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.saturn && <TimeStopStatus cooldown={state.saturn.cooldown} totalCooldown={SATURN.cooldown} flip={state.saturn.castTicks} />}
           {state?.jupiter && <VoltFenceStatus cooldown={state.jupiter.wallCooldown} />}
           {state?.sun && <CoolingWaveStatus cooldown={state.sun.waveCooldown} empowered={state.sun.quenchedTicks > 0} casts={state.sun.empoweredCasts} />}
-          {state?.trial?.devourer && <TetherStatus charge={SINGULARITY_CHALLENGE.hook.cooldown - (state.trial.devourer.hookCooldown ?? 0)} max={SINGULARITY_CHALLENGE.hook.cooldown} active={!!state.trial.devourer.hook} />}
           {state?.moon && <MoonMarkStatus cooldown={state.moon.markCooldown} totalCooldown={MOON_MARK_COOLDOWN} />}
           {state?.sirius && <HaloStatus cooldown={state.sirius.haloCooldown} totalCooldown={SIRIUS.haloCooldown} floating={state.sirius.halo > 0} full={state.sirius.holy >= 100} />}
           {state?.venus && <SandSweepStatus cooldown={state.venus.sweepCooldown} totalCooldown={VENUS.sweepCooldown} />}
@@ -7273,6 +7369,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               style={{background:state?.godMode?'#59d8a1':'#25382f',color:state?.godMode?'#10251c':'#c6f4dc',border:'2px solid #65bd91',cursor:'pointer'}}
               onClick={() => { const current=stateRef.current;if(current){current.godMode=!current.godMode;if(current.godMode)current.immortal=false;}rerender(); }}>Invincible</button>
           </div>
+          {state?.saturn && <button type="button" aria-pressed={state?.noFreeze ?? false} title="Prevent ice freezes and thaw immediately"
+            style={{width:'100%',marginBottom:4,background:state?.noFreeze?'#9bdde8':'#173b4c',color:state?.noFreeze?'#102632':'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}}
+            onClick={()=>{const current=stateRef.current;if(current)godSetNoFreeze(current,!current.noFreeze);rerender();}}>No Freeze</button>}
           <div className="rs-god-actions" role="group" aria-label="Restore health and energy">
             <button type="button" disabled={phase === 'lost'}
               style={{cursor:phase==='lost'?'default':'pointer',background:'#203e34',color:'#bdffda',border:'2px solid #68cd96',fontWeight:700,opacity:phase==='lost'?.5:1}}
@@ -7284,15 +7383,25 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.trial && <button type="button" title="Give the celestial skill back now, skipping its cooldown"
             style={{background:'#2c2347',color:'#e6dcff',border:'2px solid #a58cff',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={() => {const current=stateRef.current;if(current?.trial){current.trial.cooldown=0;current.specialLockTicks=0;if(!current.specialSkill){current.specialSkill=current.trial.skill;playUiSfx('celestialReady');}}rerender();}}>Skill Ready</button>}
+          {state?.sirius && <button type="button" title="Recharge Sacred Halo now"
+            style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',padding:'7px',fontWeight:700,cursor:'pointer'}}
+            onClick={()=>{const current=stateRef.current;if(current?.sirius&&current.sirius.haloCooldown>0){current.sirius.haloCooldown=0;playUiSfx('fenceReady');}rerender();}}>Sacred Halo Ready</button>}
           {state?.saturn && <button type="button" title="Recharge Absolute Zero now"
             style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={()=>{const s=stateRef.current;if(s?.saturn&&s.saturn.cooldown>0){s.saturn.cooldown=0;playUiSfx('markReady');}rerender();}}>Zero Ready</button>}
           {state?.jupiter && <button type="button" title="Recharge Volt Fence now"
             style={{background:'#173b38',color:'#d7fff0',border:'2px solid #68dcb9',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={()=>{if(stateRef.current?.jupiter&&stateRef.current.jupiter.wallCooldown>0){stateRef.current.jupiter.wallCooldown=0;playUiSfx('fenceReady');}rerender();}}>Fence Ready</button>}
-          {state?.neptune && <button type="button" title="Fill the healing bar so C fires the Trident"
+          {state?.neptune && <button type="button" disabled={phase!=='playing'} title="Start or restart a song without spawning a boss or spending Chorus charge"
+            style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',padding:7,cursor:'pointer'}}
+            onClick={()=>{const current=stateRef.current;if(current)godStartOceanMelody(current);rerender();}}>Start Song</button>}
+          {state?.neptune && <button type="button" title="Fill the healing bar so C fires the Ocean’s Chorus"
             style={{background:'#123a52',color:'#c9f2ff',border:'2px solid #59c8ff',padding:'7px',fontWeight:700,cursor:'pointer'}}
-            onClick={() => {const current=stateRef.current;if(current?.neptune){if(current.neptune.healCharge<NEPTUNE_HEAL_CHARGE_MAX)playStrikeCharged();current.neptune.healCharge=NEPTUNE_HEAL_CHARGE_MAX;}rerender();}}>Full Trident</button>}
+            onClick={() => {const current=stateRef.current;if(current?.neptune)fillNeptuneCharge(current);rerender();}}>Full Chorus</button>}
+          {state?.neptune && <button type="button" title="Set the Sea Chanter to the next lower dive HP threshold"
+            disabled={phase!=='playing'||!!state.neptune.dive||!state.enemies.some(enemy=>enemy.id===state.neptune?.bossId&&enemy.hp>0)}
+            style={{background:'#123a52',color:'#c9f2ff',border:'2px solid #59c8ff',padding:'7px',fontWeight:700,cursor:'pointer'}}
+            onClick={() => {const current=stateRef.current;if(current)godDiveToNextThreshold(current);rerender();}}>Next Dive</button>}
           {state?.gaia && <button type="button" title="Fill the Sunfire bar so C picks a room to burn"
             style={{background:'#3a2f12',color:'#fff3b8',border:'2px solid #ffd36a',padding:'7px',fontWeight:700,cursor:'pointer'}}
             onClick={() => {const current=stateRef.current;if(current?.gaia){if(current.gaia.sunCharge<GAIA_SUN_MAX)playStrikeCharged();current.gaia.sunCharge=GAIA_SUN_MAX;}rerender();}}>Full Sunfire</button>}
@@ -7326,7 +7435,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSiriusRune(stateRef.current);rerender();}}>Cast Rune</button>
               <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSiriusRitual(stateRef.current);rerender();}}>Ruby Ritual</button>
               <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{const current=stateRef.current;if(current)godFillHolyLight(current);rerender();}}>Full Holy Light</button>
-              <button type="button" style={{background:'#292537',color:'#f3dda0',border:'2px solid #cbb16d',cursor:'pointer'}} onClick={()=>{const current=stateRef.current;if(current?.sirius&&current.sirius.haloCooldown>0){current.sirius.haloCooldown=0;playUiSfx('fenceReady');}rerender();}}>Sacred Halo Ready</button>
+
               <div role="status" style={{gridColumn:'1 / -1',textAlign:'center',fontSize:12,padding:'3px 0',color:state.sirius.ritual?'#ff9fbf':'#8a7f63',border:'1px solid #6e6448'}}>{state.sirius.ritual?`RUBY → ${CHAMBER_LABELS[state.sirius.ritual.destination]}`:'NO RUBY RITUAL'}</div>
             </div>}
           </div>}
@@ -7357,10 +7466,12 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             <button type="button" title="Mark grant targets now" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSaturnGrant(stateRef.current);rerender();}}>Grant Now</button>
             <button type="button" title="Start the recall warning now" style={{background:'#173b4c',color:'#d7f5ff',border:'2px solid #8dcbdc',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSaturnRecall(stateRef.current);rerender();}}>Recall Now</button>
           </div>}
-          {state?.binary && <div className="rs-god-actions" role="group" aria-label="Binary Star controls" style={{gridTemplateColumns:'repeat(4, 1fr)'}}>
+          {state?.binary && <div className="rs-god-actions" role="group" aria-label="Binary Star controls" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
             {([1,2,3] as const).map(n=><button key={n} type="button" aria-pressed={state.binary?.phase===n} style={{background:state.binary?.phase===n?'#ffb7a6':'#3a2230',color:state.binary?.phase===n?'#2a1520':'#ffe2da',border:'2px solid #ff8f7a',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godSetBinaryPhase(stateRef.current,n);rerender();}}>Phase {n}</button>)}
+          </div>}
+          {state?.binary && <div className="rs-god-actions" role="group" aria-label="Binary Star encounter controls">
             <button type="button" title="Warn and jump both twins to the opposite chamber now" style={{background:'#1d2c44',color:'#dff3ff',border:'2px solid #83cfff',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godJumpTwins(stateRef.current);rerender();}}>Jump</button>
-            <button type="button" title="Move the twins together and crash them now" style={{gridColumn:'span 2',background:'#3a2230',color:'#fff1ea',border:'2px solid #ffffff',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godCollideTwins(stateRef.current);rerender();}}>Collide</button>
+            <button type="button" title="Move the twins together and crash them now" style={{background:'#3a2230',color:'#fff1ea',border:'2px solid #ffffff',cursor:'pointer'}} onClick={()=>{if(stateRef.current)godCollideTwins(stateRef.current);rerender();}}>Collide</button>
           </div>}
           {state?.jupiter && <>
             <div className="rs-god-actions" role="group" aria-label="Jupiter controls" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
@@ -7379,6 +7490,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               style={{background:'#153b46',color:'#d8fbff',border:'2px solid #83dce9',cursor:phase==='playing'?'pointer':'default',opacity:phase==='playing'?1:.5}}
               onClick={() => {const current=stateRef.current;if(current)godAdjustSunHeat(current,-10);rerender();}}>Cool Down</button>
           </div>}
+          {state?.sun && <button type="button" title="Start a Sunburst in your chamber" disabled={phase!=='playing'||state.sun.quenchedTicks>0}
+            style={{background:'#49301d',color:'#ffe778',border:'2px solid #edbb5b',cursor:phase==='playing'?'pointer':'default',opacity:phase==='playing'&&state.sun.quenchedTicks<=0?1:.5}}
+            onClick={()=>{if(stateRef.current)godSunburst(stateRef.current);rerender();}}>Sunburst</button>}
           {state?.sun && <div className="rs-god-actions" role="group" aria-label="Guardian phase" style={{gridTemplateColumns:'repeat(3, 1fr)'}}>
             {([1, 2, 3] as const).map(phase => <button key={phase} type="button" aria-pressed={state.sun?.phase === phase}
               style={{background:state.sun?.phase===phase?'#e6ad62':'#36251f',color:state.sun?.phase===phase?'#251609':'#ffe1b6',border:'2px solid #e8b878',cursor:'pointer'}}
@@ -7422,15 +7536,22 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               style={{background:'#352949',color:'#e8d6ff',border:'2px solid #b68ee9',fontWeight:700,cursor:'pointer'}}
               onClick={()=>{if(stateRef.current)openGodBlessings(stateRef.current);rerender();}}>Blessings</button>
           </div>}
-          <div className="rs-god-actions" style={{gridTemplateColumns:trialInfo?undefined:"repeat(3,minmax(0,1fr))"}}>
+          {!trialInfo&&<div className="rs-god-actions" style={{gridTemplateColumns:"repeat(2,minmax(0,1fr))"}}>
             {!trialInfo && <button type="button" disabled={phase !== 'playing' || !!state?.constellationChoices.length}
               style={{ cursor: phase === 'playing' ? 'pointer' : 'default', background: '#243148', color: '#bce2ff', border: '2px solid #72baff', opacity: phase === 'playing' ? 1 : 0.5 }}
               onClick={() => { if (stateRef.current) godAdvanceStage(stateRef.current); rerender(); }}>Stage +1</button>}
             {(mode==='endless'||mode==='ascension')&&<button type="button" disabled={phase!=='playing'||!!state?.constellationChoices.length||(state?.bossesKilled??0)>=20}
               title="Jump to Stage 20 while keeping the current run" style={{background:'#243148',color:'#bce2ff',border:'2px solid #72baff',cursor:'pointer'}}
               onMouseEnter={()=>playUiSfx('hover')} onClick={()=>{playUiSfx('ascension');if(stateRef.current)godJumpStage20(stateRef.current);rerender();}}>STAGE 20</button>}
+
+          </div>}
+          <div className="rs-god-actions" role="group" aria-label="Reset and hazards" style={{gridTemplateColumns:(mode==='endless'||mode==='ascension')?'repeat(1,minmax(0,1fr))':'repeat(2,minmax(0,1fr))'}}>
             <button type="button" aria-label="Reset game" onClick={handleRestart}
               style={{ background: '#422936', color: '#ffd3dc', border: '2px solid #e895ac', cursor: 'pointer' }}>RESET</button>
+            {mode!=='endless'&&mode!=='ascension'&&<>
+            <button type="button" aria-pressed={state?.noMeteors??false} title="Stop meteor warnings and strikes"
+              style={{fontSize:'.65rem',background:state?.noMeteors?'#a36131':'#333',color:'#fff',border:'2px solid #e8a36d',cursor:'pointer'}}
+              onClick={()=>{if(stateRef.current)godSetNoMeteors(stateRef.current,!stateRef.current.noMeteors);rerender();}}>No Meteors</button></>}
           </div>
 
           {mode === 'gambit' && <button type="button" aria-label="Choose weapons" title="Open the weapon loadout screen" style={{ width:'100%', background:'#2b2414', color:'#ffe6a6', border:'2px solid #ffd27a', cursor:'pointer', fontWeight:700 }}
@@ -7446,6 +7567,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             {mode !== 'tutorial' && <button type="button" aria-label="Create Comet" style={{ color: '#8fd8ff', borderColor: '#8fd8ff' }}
               disabled={phase !== 'playing' || !!state?.comet?.target}
               onClick={() => { if (stateRef.current) godTriggerComet(stateRef.current); rerender(); }}>COMET</button>}
+            {(mode==='endless'||mode==='ascension')&&<button type="button" aria-pressed={state?.noMeteors??false} title="Stop meteor warnings and strikes"
+              style={{color:'#ffe0bb',borderColor:'#e8a36d',background:state?.noMeteors?'#a36131':undefined}}
+              onClick={()=>{if(stateRef.current)godSetNoMeteors(stateRef.current,!stateRef.current.noMeteors);rerender();}}>No Meteors</button>}
           </div>}
 
           {!trialInfo && mode !== 'gambit' && <>
@@ -7519,7 +7643,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               `}</style>
             </>}
             <p style={{ fontFamily: 'var(--font-pixel)', fontSize: '1rem', color: state.sirius ? '#ff9fbf' : state.gaia ? '#ffe680' : '#9fe4ff', textShadow: `0 0 16px ${state.sirius ? '#ff6fa8' : state.gaia ? '#ffd36a' : '#59c8ff'}`, letterSpacing: '0.12em' }}>
-              {state.sirius ? 'WHERE WILL RUBY GO?' : `${state.gaia ? 'SUNFIRE' : 'TRIDENT'} — CHOOSE A ROOM`}
+              {state.sirius ? 'WHERE WILL RUBY GO?' : `${state.gaia ? 'SUNFIRE' : 'OCEAN’S CHORUS'} — CHOOSE A ROOM`}
             </p>
             {state.sirius?.ritual && isGodQuery && <p style={{ fontFamily: 'var(--font-pixel)', fontSize: 10, color: '#ffcc00', marginTop: -14 }}>GOD: RUBY GOES TO {CHAMBER_LABELS[state.sirius.ritual.destination]}</p>}
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#b9bdd6', marginTop: -10 }}>{state.sirius ? 'A right guess adds rune time and fills your energy; a wrong one costs two seconds.' : state.gaia ? 'It burns 3s later. Get yourself and Ruby out of that room!' : 'It strikes 3s later. Get out of that room!'}</p>
@@ -7616,7 +7740,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           </div>
         )}
 
-        {!showRules && (phase === 'playing' || phase === 'teleporting' || phase === 'laserTarget') && (state?.meteoriteWarning ?? -1) < 0 && state && !state.tutorial && !state.trial?.mapOnly && !state.gambit && (
+        {!showRules && (phase === 'playing' || phase === 'teleporting' || phase === 'laserTarget') && (state?.meteoriteWarning ?? -1) < 0 && state && !state.noMeteors && !state.tutorial && !state.trial?.mapOnly && !state.gambit && (
           <div style={{
             position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 110,
             background: 'rgba(5,0,0,0.7)', border: '1px solid #884400',

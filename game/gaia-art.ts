@@ -1,12 +1,71 @@
-import { drawPrimalAftershock } from './primal-impact-art';
 import { drawEnemyHealthBar } from './enemy-health-art';
-import { TILE_SIZE, MAP_COLS, MAP_ROWS, CHAMBER_BOUNDS, T_FLOOR, GAIA_POD_FUSE, GAIA_SUN_WARNING, GAIA_SCORCH_TICKS, GAIA_STONE_TRAVEL, GAIA_STONE_RELIGHT,
-  GAIA_STONE_DRIFT_TICKS, GAIA_RING_RADIUS, GAIA_RING_WARN, GAIA_WARD_RADIUS, GAIA_SPORE_RADIUS, GAIA_SPORE_TICKS, GAIA_WITHER_TICKS, GAIA_SNARE_ROOT } from './constants';
+import { TILE_SIZE, MAP_COLS, MAP_ROWS, CHAMBER_BOUNDS, T_FLOOR, GAIA_POD_FUSE, GAIA_SUN_WARNING, GAIA_SCORCH_TICKS, GAIA_STONE_TRAVEL, GAIA_STONE_BLOOM_TICKS, GAIA_STONE_RELIGHT,
+  GAIA_STONE_DRIFT_TICKS, GAIA_RING_RADIUS, GAIA_RING_WARN, GAIA_WARD_RADIUS, GAIA_SPORE_RADIUS, GAIA_SPORE_TICKS, GAIA_SNARE_ROOT, GAIA_BLOSSOM_PULSE } from './constants';
 import { ENEMY_CONFIGS } from './constants';
 import type { Enemy, GameState } from './engine';
 
 // Blocky neon-vector art for the Gaia challenge: overgrowth, Sunstones, her plants and aliens, root snares,
 // Sunfire and the forest backdrop.
+
+/** The original corner-vine motif, enriched with more growth and drifting pollen. */
+export function drawGaiaSunfireReady(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,w:number,h:number){
+  const g=state.gaia;if(!g)return;
+  const blend=g.sunReadyFade??0;if(blend<=0)return;
+  const envelope=blend*blend*(3-2*blend);
+  const tick=state.gameTick,breath=(.8+.2*Math.sin(tick*.025))*envelope;
+  ctx.save();ctx.shadowBlur=0;
+  for(let edge=0;edge<4;edge++){
+    ctx.save();if(edge===1){ctx.translate(w,0);ctx.rotate(Math.PI/2);}else if(edge===2){ctx.translate(w,h);ctx.rotate(Math.PI);}else if(edge===3){ctx.translate(0,h);ctx.rotate(-Math.PI/2);}
+    const span=edge%2?h:w,depth=Math.min(w,h)*.19,wash=ctx.createLinearGradient(0,0,0,depth);
+    wash.addColorStop(0,'rgba(159,201,68,.28)');wash.addColorStop(.4,'rgba(246,209,105,.085)');wash.addColorStop(1,'rgba(103,169,57,0)');
+    ctx.globalAlpha=breath;ctx.fillStyle=wash;ctx.fillRect(0,0,span,depth);ctx.restore();
+  }
+  for(let corner=0;corner<4;corner++){
+    ctx.save();ctx.translate(corner%2?w:0,corner>1?h:0);ctx.scale(corner%2?-1:1,corner>1?-1:1);
+    const points=[[0,174],[25,174],[25,120],[62,120],[62,70],[140,70],[140,28],[235,28]];
+    for(const [width,color,alpha] of [[4,'#617d3c',.7],[2,'#bdcc7a',.6]] as const){
+      ctx.globalAlpha=breath*alpha;ctx.strokeStyle=color;ctx.lineWidth=width;
+      ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();
+    }
+    ctx.globalAlpha=breath*.4;ctx.strokeStyle='#a5b86b';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(25,150);ctx.lineTo(45,150);ctx.lineTo(45,188);ctx.lineTo(70,188);ctx.moveTo(105,70);ctx.lineTo(105,100);ctx.lineTo(135,100);ctx.moveTo(190,28);ctx.lineTo(190,51);ctx.lineTo(218,51);ctx.stroke();
+    const leaves=[[20,153],[33,127],[51,115],[67,87],[80,69],[102,73],[130,68],[142,46],[160,28],[184,29],[210,28],[46,170],[65,185],[116,99],[204,51]];
+    for(const [i,[x,y]] of leaves.entries()){
+      const size=12+i%4*3,angle=(i%2?1:-1)*Math.PI/4+Math.sin(tick*.018+i)*.045;
+      ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.globalAlpha=breath*(i%3?.65:.8);
+      ctx.fillStyle=i%2?'#b8d56c':'#819f4a';ctx.fillRect(-3,-size*.65,6,size*1.3);
+      ctx.globalAlpha=breath*.7;ctx.fillStyle='#e8e6a0';ctx.fillRect(-1,-size*.5,1,size);ctx.restore();
+    }
+    for(const [i,[x,y]] of [[30,126],[108,70],[211,29],[65,186]].entries()){
+      const size=9+i%2*2;
+      ctx.globalAlpha=breath*.75;ctx.fillStyle='#f3d78d';ctx.fillRect(x-size,y-3,size*2,6);ctx.fillRect(x-3,y-size,6,size*2);
+      ctx.fillStyle='#fff5c7';ctx.fillRect(x-4,y-4,8,8);ctx.fillStyle='#bc9a45';ctx.fillRect(x-2,y-2,4,4);
+      const glint=Math.pow(Math.max(0,Math.sin(tick*.035+i+corner)),5)*envelope;
+      ctx.globalAlpha=glint*.65;ctx.fillStyle='#fff9d8';ctx.fillRect(x-1,y-size-6,2,4);
+    }
+    ctx.restore();
+  }
+  for(let i=0;i<84;i++){
+    const side=i%4,along=((i*193+tick*(.12+i%3*.04))%997)/997,depth=16+(i*47%105)+Math.sin(tick*.018+i)*9;
+    const x=side===0?along*w:side===1?w-depth:side===2?(1-along)*w:depth;
+    const y=side===0?depth:side===1?along*h:side===2?h-depth:(1-along)*h;
+    const glint=(.2+.8*Math.pow(Math.max(0,Math.sin(tick*.035+i*1.7)),3))*envelope;
+    ctx.globalAlpha=glint*.6;ctx.fillStyle=i%3?'#e8ecac':'#fff6d0';ctx.fillRect(Math.round(x),Math.round(y),i%5?2:4,i%5?3:4);
+    if(i%11===0){ctx.save();ctx.translate(x+7,y+12);ctx.rotate(tick*.006+i);ctx.globalAlpha=glint*.35;ctx.fillStyle='#b8d56c';ctx.fillRect(-2,-5,4,10);ctx.restore();}
+  }
+  // Loose block-built leaves ride a gentle breeze through the full viewport.
+  for(let i=0;i<22;i++){
+    const travel=((tick*(.8+i%4*.2)+i*97)%(w+160))/(w+160);
+    const x=-80+travel*(w+160),y=((i*137+39)%h+Math.sin(travel*Math.PI*2+i)*24-travel*65+h)%h;
+    const size=6+i%4*2,alpha=envelope*Math.sin(travel*Math.PI)*(.25+i%3*.06);
+    ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.rotate(.65+Math.sin(tick*.014+i)*.35+i%3*.4);
+    ctx.globalAlpha=alpha;ctx.fillStyle=i%4?'#a9ca73':'#d9df9b';
+    ctx.fillRect(-size*.25,-size*.8,size*.5,size*1.6);ctx.fillRect(-size*.4,-size*.35,size*.8,size*.7);
+    ctx.globalAlpha=alpha*.8;ctx.fillStyle='#edf0ba';ctx.fillRect(-.5,-size*.6,1,size*1.2);
+    ctx.restore();
+  }
+  ctx.restore();
+}
 
 export const GAIA_CHAMBER_COLORS = ['#8fdc4a', '#e0c44a', '#4fd49a', '#c7e05a'] as const;
 
@@ -149,6 +208,67 @@ export function drawSporeBurst(ctx: CanvasRenderingContext2D, x: number, y: numb
   ctx.strokeStyle='#b9a8ff';ctx.lineWidth=3;const r=8+p*40;ctx.strokeRect(x-r,y-r,r*2,r*2);ctx.restore();
 }
 
+const sunfireBloomPalette:Record<string,string>={
+  '#d4cc77':'#e8b32f','#b7b26e':'#d6a744','#e3c878':'#f3ba3d','#fff4c9':'#ffe594',
+  '#dfca80':'#e8b84d','#d4c579':'#d9ad43','#bcc47c':'#c5ab49','#a9bb70':'#bdac49',
+  '#c7cf85':'#dfb54e','#e3d396':'#efc25e','#93ad64':'#b0a34d','#9db56c':'#b9ac50',
+  '#ead397':'#f2bc48','#fff0be':'#ffdc80','#d6e3a4':'#e7c66b','#fff8db':'#ffeba5',
+  '#b8af63':'#b69b48','#e3d284':'#edbb49','#fff3b8':'#ffe5a1'
+};
+
+/** Sunstone impact: open rectangular light bands with square botanical fragments. */
+export function drawSunstoneBloom(ctx:CanvasRenderingContext2D,x:number,y:number,progress:number,scale=2,strength=1,particles=48,solar=false,rotation=0){
+  const p=Math.max(0,Math.min(1,progress));if(p>=1)return;
+  const ink=(base:string)=>solar?(sunfireBloomPalette[base]??base):base;
+  const artScale=scale,seedReach=12;
+  const ease=(t:number)=>1-(1-t)*(1-t);
+  const fade=Math.min(1,(1-p)*2.5)*strength,reach=seedReach+ease(p)*(76-seedReach);
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.rotate(rotation);ctx.shadowBlur=0;
+  // Every part keeps the original bloom proportions as the complete pattern expands.
+  for(let layer=0;layer<3;layer++){
+    const q=solar?(p-layer*.1)/(1-layer*.1):p-layer*.1;if(q<0)continue;
+    const r=(seedReach+ease(q)*(76-seedReach))*.92,length=14+r*.3,alpha=fade*(1-layer*.3);
+    for(let side=0;side<4;side++){
+      ctx.save();ctx.rotate(side*Math.PI/2);ctx.translate(0,-r*scale);ctx.scale(artScale,artScale);
+      ctx.globalAlpha=alpha*.1;block(ctx,-length*.6,-5,length*1.2,11,ink('#d4cc77'));
+      ctx.globalAlpha=alpha*.8;block(ctx,-length/2,-2,length,5,layer?ink('#b7b26e'):ink('#e3c878'));
+      ctx.globalAlpha=alpha;block(ctx,-length*.38,-1,length*.76,2,ink('#fff4c9'));
+      if(layer===0){
+        ctx.globalAlpha=fade*.16;block(ctx,-length*.43,3,length*.86,5,ink('#dfca80'));
+        block(ctx,-length*.3,8,length*.6,5,ink('#d4c579'));block(ctx,-length*.16,13,length*.32,4,ink('#bcc47c'));
+        ctx.globalAlpha=fade*.55;block(ctx,-length*.43,3,2,5,ink('#f3e7b0'));block(ctx,length*.43-2,3,2,5,ink('#f3e7b0'));
+        ctx.globalAlpha=fade*.6;block(ctx,-length/2,5,length*.25,2,ink('#a9bb70'));block(ctx,length*.25,5,length*.25,2,ink('#a9bb70'));
+      }
+      ctx.restore();
+    }
+  }
+  for(let i=0;i<4;i++){
+    const angle=Math.PI/4+i*Math.PI/2,d=reach*.9;
+    ctx.save();ctx.rotate(angle);ctx.translate(0,-d*scale);ctx.scale(artScale,artScale);
+    ctx.globalAlpha=fade*.55;block(ctx,-8,-4,16,12,ink('#c7cf85'));block(ctx,-5,-8,10,4,ink('#e3d396'));
+    ctx.globalAlpha=fade*.8;block(ctx,-4,-6,8,2,ink('#fff5cb'));block(ctx,-1,-4,2,8,ink('#fff5cb'));
+    ctx.globalAlpha=fade*.35;block(ctx,-3,d*.24,6,10,ink('#93ad64'));ctx.restore();
+  }
+  for(let i=0;i<8;i++){
+    const a=i*Math.PI/4+.12,d=reach*(.67+i%3*.08);
+    ctx.save();ctx.rotate(a);ctx.translate(d*scale,0);ctx.scale(artScale,artScale);
+    ctx.globalAlpha=fade*.45;block(ctx,-7,-1,7,2,i%2?ink('#baca7d'):ink('#f5e8b1'));ctx.restore();
+  }
+  for(let i=0;i<particles;i++){
+    const angle=i*2.39996+.2,d=Math.min(14,28/scale)+Math.pow(p,.7)*(60+i%6*12),lift=p*p*(10+i%4*6),isLeaf=i%2===0;
+    const particleFade=Math.pow(1-p,.85)*(.4+i%3*.12)*strength,size=3+i%3;
+    ctx.save();ctx.translate(Math.cos(angle)*d*scale,(Math.sin(angle)*d+lift)*scale);ctx.rotate(angle+p*(i%2?1:-1)*1.1);ctx.scale(Math.min(scale,3.5),Math.min(scale,3.5));
+    ctx.globalAlpha=particleFade;ctx.fillStyle=isLeaf?ink('#9db56c'):i%3?ink('#ead397'):ink('#fff0be');
+    ctx.fillRect(-size*.4,-size,size*.8,size*2);ctx.fillRect(-size*.65,-size*.4,size*1.3,size*.8);
+    ctx.globalAlpha=particleFade*.8;ctx.fillStyle=isLeaf?ink('#d6e3a4'):ink('#fff8db');ctx.fillRect(-.5,-size*.7,1,size*1.4);ctx.restore();
+  }
+  ctx.save();ctx.scale(artScale,artScale);
+  const flash=Math.max(0,1-p/.3)*strength;
+  ctx.globalAlpha=flash*.75;block(ctx,-7,-7,14,14,ink('#b8af63'));block(ctx,-5,-5,10,10,ink('#e3d284'));block(ctx,-2,-2,4,4,ink('#fff8db'));
+  for(const dx of [-1,1])for(const dy of [-1,1])block(ctx,dx*4-1,dy*4-1,2,2,ink('#fff3b8'));
+  ctx.restore();ctx.restore();
+}
+
 // Above actors: spores, pollen drift, blossom shots, Sunstone burns, root binds and Sunfire.
 export function drawGaiaOverlay(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, tick: number) {
   const gaia = state.gaia; if (!gaia) return;
@@ -179,25 +299,27 @@ export function drawGaiaOverlay(ctx: CanvasRenderingContext2D, state: Readonly<G
       ctx.globalAlpha = 1 - k * .2; block(ctx, bolt.fromX + (bolt.toX - bolt.fromX) * u - camX - 5, bolt.fromY + (bolt.toY - bolt.fromY) * u - camY - 5, 10, 10, k ? '#ffb7dc' : '#fff0f8');
     }
   }
+  // Blossom pulse: expanding stepped rings from a burst.
+  for (const p of gaia.blossomPulses ?? []) {
+    const t = 1 - p.ticks / GAIA_BLOSSOM_PULSE.ringTicks, reach = (GAIA_BLOSSOM_PULSE.radius + .5) * s, x = p.x - camX, y = p.y - camY;
+    for (let k = 0; k < 3; k++) {
+      const u = t - k * .14; if (u <= 0 || u >= 1) continue;
+      const half = Math.round((10 + u * reach) / 6) * 6;
+      ctx.globalAlpha = (1 - u) * .85; ctx.strokeStyle = k === 1 ? '#ff8fc8' : '#ffd6ec'; ctx.lineWidth = k === 1 ? 6 : 3;
+      ctx.strokeRect(x - half, y - half, half * 2, half * 2);
+    }
+  }
   for (const flash of gaia.stoneFlashes) {
-    const t = flash.ticks / 30, sx = (flash.x + .5) * s - camX, sy = (flash.y + .5) * s - camY, ex = (flash.toX + .5) * s - camX, ey = (flash.toY + .5) * s - camY;
-    ctx.globalAlpha = t; ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 6; ctx.shadowColor = '#ffd36a'; ctx.shadowBlur = 6;
+    const t = flash.ticks / GAIA_STONE_BLOOM_TICKS, sx = (flash.x + .5) * s - camX, sy = (flash.y + .5) * s - camY, ex = (flash.toX + .5) * s - camX, ey = (flash.toY + .5) * s - camY;
+    ctx.globalAlpha = t*.65; ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 3; ctx.shadowColor = '#ffd36a'; ctx.shadowBlur = 2;
     ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke(); ctx.shadowBlur = 0;
-    const burst = (1 - t) * 3 * s;
-    ctx.strokeStyle = '#fff3b8'; ctx.lineWidth = 4; ctx.strokeRect(sx - burst / 2, sy - burst / 2, burst, burst);
-    for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; block(ctx, sx + Math.cos(a) * burst * .6 - 4, sy + Math.sin(a) * burst * .6 - 4, 8, 8, '#ffd36a'); }
+    drawSunstoneBloom(ctx,sx,sy,1-t);
   }
   // Roots holding you after a snare, and Ruby after a snare or while a closed ring squeezes it.
   if (gaia.snaredTicks > 0) drawRootBind(ctx, state.playerX - camX, state.playerY - camY, gaia.snaredTicks / GAIA_SNARE_ROOT, tick);
   if (state.rubyTileX !== -1 && (gaia.rubyRootTicks > 0 || gaia.ringClosure >= 1)) {
     const rx = (state.rubyTileX + .5) * s - camX, ry = (state.rubyTileY + .5) * s - camY;
     drawRootBind(ctx, rx, ry, gaia.rubyRootTicks > 0 ? gaia.rubyRootTicks / GAIA_SNARE_ROOT : 1, tick, gaia.rubyRootTicks <= 0);
-  }
-  const boss = state.enemies.find(e => e.id === gaia.bossId && e.hp > 0);
-  if (boss && gaia.wither > 0) { // she sinks into a mound of soil, then rises in the next phase
-    const t = gaia.wither / GAIA_WITHER_TICKS, x = boss.x - camX, y = boss.y - camY;
-    ctx.globalAlpha = .9; block(ctx, x - 30, y + 10, 60, 16, '#4a3420'); block(ctx, x - 22, y + 4, 44, 8, '#6a4a2c');
-    for (let k = 0; k < 5; k++) { ctx.globalAlpha = t; block(ctx, x - 24 + k * 12, y + 2 - ((tick + k * 9) % 30), 4, 4, '#8fdc4a'); }
   }
   // Sunfire: the chosen room glows gold with a narrowing column, then the sun strikes.
   if (gaia.sunfire) {
@@ -206,35 +328,28 @@ export function drawGaiaOverlay(ctx: CanvasRenderingContext2D, state: Readonly<G
     ctx.globalAlpha = .12 + .14 * Math.abs(Math.sin(tick * .2)); block(ctx, x, y, w, h, '#ffd36a');
     const col = Math.max(16, w * (1 - t) * .5);
     ctx.globalAlpha = .25 + t * .35; block(ctx, x + w / 2 - col / 2, y - 600, col, h / 2 + 600, '#ffe680');
-    ctx.globalAlpha = 1; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff3b8';
-    ctx.fillText('SUNFIRE ' + Math.ceil(gaia.sunfire.ticks / 60), x + w / 2, y + 40);
+    ctx.globalAlpha = 1;
   }
-  if (gaia.sunBurst) { // partial Sunfire: a gold burst around where you stood
-    const burst = gaia.sunBurst, age = 36 - burst.ticks, t = age / 36, x = burst.x - camX, y = burst.y - camY, reach = burst.radius * s;
-    ctx.globalAlpha = Math.max(0, 1 - age / 10) * .45; block(ctx, x - reach, y - reach, reach * 2, reach * 2, '#fff3b8');
-    for (let k = 0; k < 3; k++) {
-      const u = t - k * .15; if (u <= 0 || u >= 1) continue;
-      const half = Math.round((12 + u * reach) / 6) * 6;
-      ctx.globalAlpha = (1 - u) * .9; ctx.strokeStyle = k % 2 ? '#ffb84a' : '#fff3b8'; ctx.lineWidth = k % 2 ? 4 : 8;
-      ctx.strokeRect(x - half, y - half, half * 2, half * 2);
-    }
-    for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; ctx.globalAlpha = 1 - t; block(ctx, x + Math.cos(a) * reach * t - 5, y + Math.sin(a) * reach * t - 5, 10, 10, '#ffd36a'); }
+  if (gaia.sunBurst) {
+    const burst=gaia.sunBurst,p=1-burst.ticks/36,x=burst.x-camX,y=burst.y-camY;
+    // The same tiered square-petal wave as Sunstones, scaled to this cast's real radius.
+    drawSunstoneBloom(ctx,x,y,p,burst.radius*s/76,1,48,true);
   }
   if (gaia.sunImpact) {
-    const [r1, c1, r2, c2] = CHAMBER_BOUNDS[gaia.sunImpact.chamber];
-    const x = c1 * s - camX, y = r1 * s - camY, w = (c2 - c1 + 1) * s, h = (r2 - r1 + 1) * s, age = 120 - gaia.sunImpact.ticks;
-    drawPrimalAftershock(ctx,state,camX,camY,gaia.sunImpact.chamber,age,'#ffb84a','#fff3b8');
-    ctx.globalAlpha = Math.max(0, 1 - age / 14) * .6; block(ctx, x, y, w, h, '#fff8d8');
-    const beam = Math.max(12, w * .8 * Math.max(0, 1 - age / 24)), fade = Math.max(0, 1 - Math.max(0, age - 24) / 30);
-    ctx.globalAlpha = .45 * fade; block(ctx, x + w / 2 - beam / 2 - 16, y - 900, beam + 32, h / 2 + 900, '#ffb84a');
-    ctx.globalAlpha = .85 * fade; block(ctx, x + w / 2 - beam / 2, y - 900, beam, h / 2 + 900, '#ffe680');
-    ctx.globalAlpha = fade; block(ctx, x + w / 2 - beam / 6, y - 900, beam / 3, h / 2 + 900, '#ffffff');
-    for (let k = 0; k < 4; k++) {
-      const u = (age - k * 6) / 36; if (u <= 0 || u >= 1) continue;
-      const half = Math.round((20 + u * w * .55) / 8) * 8;
-      ctx.globalAlpha = (1 - u) * .8; ctx.strokeStyle = k % 2 ? '#ffb84a' : '#fff3b8'; ctx.lineWidth = k % 2 ? 4 : 8;
-      ctx.strokeRect(x + w / 2 - half, y + h / 2 - half, half * 2, half * 2);
+    const [r1,c1,r2,c2]=CHAMBER_BOUNDS[gaia.sunImpact.chamber];
+    const x=c1*s-camX,y=r1*s-camY,w=(c2-c1+1)*s,h=(r2-r1+1)*s,age=120-gaia.sunImpact.ticks;
+    const cx=x+w/2,cy=y+h/2;
+    ctx.globalAlpha=Math.max(0,1-age/12)*.22;block(ctx,x,y,w,h,'#fff4ce');
+    // Both layers launch together; the softer lower wave travels beyond the chamber.
+    const follow=age/84;
+    if(follow>=0&&follow<1){
+      const far=Math.max(...[[0,0],[MAP_COLS*s,0],[0,MAP_ROWS*s],[MAP_COLS*s,MAP_ROWS*s]].map(([px,py])=>Math.hypot(px-(cx+camX),py-(cy+camY))));
+      const start=Math.min(w,h)*.66/76,growth=follow*follow*(3-2*follow);
+      drawSunstoneBloom(ctx,cx,cy,follow,start+(far*1.25/76-start)*growth,.55,48,true);
     }
+    // Keep the original chamber-sized flower: its fronts expand, its petals do not zoom.
+    const progress=age/84,bloomScale=Math.min(w,h)*.66/76;
+    if(progress<1)drawSunstoneBloom(ctx,cx,cy,progress,bloomScale,1,64,true);
   }
   ctx.restore();
 }

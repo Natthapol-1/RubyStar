@@ -1,8 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useLoadingRouter as useRouter } from './NavigationProvider';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CutscenePlayer from './CutscenePlayer';
+import LoadingScreen from './LoadingScreen';
 import RubyStarGame from './RubyStarGame';
 import { arrivalSeen, canEnter, challengeCleared, getProfile, markArrivalSeen } from './profile';
 import { challengeArrival } from './challenge-arrival';
@@ -37,5 +38,5 @@ export default function ChallengeEntry({ trial }: { trial: Trial }) {
     return <CutscenePlayer {...arrival} onDone={enter} />;
   }
   if (stage === 'challenge') return <RubyStarGame mode="trial" trialId={trial.id} />;
-  return <main style={{ minHeight: '100dvh', background: '#000' }} />;
+  return <LoadingScreen />;
 }

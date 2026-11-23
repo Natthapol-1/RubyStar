@@ -1,10 +1,32 @@
-import { TILE_SIZE } from './constants';
+import { TILE_SIZE, MAP_COLS, MAP_ROWS } from './constants';
 import type { Enemy, GameState } from './engine';
 import { RUNES, RUNE_STEP, SIRIUS, SIRIUS_BURST_TICKS, runeProgress, type Rune } from './sirius';
 
 // Sirius challenge art: the walked trail, rune strikes, the two sanctuary aliens and their tells, and screen flashes.
 export const RUNE_GOLD = '#ffe27a', WRATH_RED = '#ff6a4d', TRAIL_GOLD = '#e8c45c';
 const panel = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string) => { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
+
+/** An inlaid sanctuary crest: open gold tracery and an ivory light, with floor visible between the lines. */
+export function drawSanctuarySeal(ctx: CanvasRenderingContext2D, x: number, y: number, tick: number, covered: boolean, size = TILE_SIZE, light = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(size / TILE_SIZE, size / TILE_SIZE);
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  const gold = covered ? '#ffd057' : light > .5 ? '#77736b' : '#686471';
+  ctx.strokeStyle = gold; ctx.lineWidth = covered ? 2 : 1.3;
+  ctx.beginPath(); ctx.moveTo(-9, -19); ctx.lineTo(9, -19); ctx.lineTo(19, -9); ctx.lineTo(19, 9);
+  ctx.lineTo(9, 19); ctx.lineTo(-9, 19); ctx.lineTo(-19, 9); ctx.lineTo(-19, -9); ctx.closePath(); ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    ctx.save(); ctx.rotate(i * Math.PI / 2);
+    panel(ctx, -1, -22, 2, 6, gold); panel(ctx, -5, -17, 10, 2, gold);
+    ctx.restore();
+  }
+  ctx.shadowColor = '#ffd057'; ctx.shadowBlur = covered ? 4 + Math.sin(tick * .045) : 0;
+  ctx.fillStyle = covered ? '#fff9d6' : light > .5 ? '#8b8578' : '#8a8591';
+  ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(4, -4); ctx.lineTo(14, 0); ctx.lineTo(4, 4);
+  ctx.lineTo(0, 14); ctx.lineTo(-4, 4); ctx.lineTo(-14, 0); ctx.lineTo(-4, -4); ctx.closePath(); ctx.fill();
+  if (covered) { ctx.strokeStyle = '#ffdb72'; ctx.lineWidth = 1.5; ctx.stroke(); }
+  ctx.shadowBlur = 0; panel(ctx, -2, -2, 4, 4, covered ? '#ffd057' : '#34343c');
+  ctx.restore();
+}
 
 /** The rune as the tiles you walk: the start tile, then one tile per step. */
 export function runeCells(rune: Rune): [number, number][] {
@@ -14,7 +36,7 @@ export function runeCells(rune: Rune): [number, number][] {
   return cells;
 }
 
-/** Draws a rune as clear tiles fitted into a box: dim untraced tiles, bright traced ones, an outlined start tile. */
+/** Tile-counted rune with a continuous centerline following the exact stroke order, and an outlined start tile. */
 export function drawRuneTiles(ctx: CanvasRenderingContext2D, rune: Rune, cx: number, cy: number, box: number, traced: number) {
   const cells = runeCells(rune), xs = cells.map(c => c[0]), ys = cells.map(c => c[1]);
   const minX = Math.min(...xs), minY = Math.min(...ys), cols = Math.max(...xs) - minX + 1, rows = Math.max(...ys) - minY + 1;
@@ -25,6 +47,19 @@ export function drawRuneTiles(ctx: CanvasRenderingContext2D, rune: Rune, cx: num
     if (!lit) panel(ctx, px + 3, py + 3, size - 6, size - 6, '#a88d45');
     if (i === 0) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, size - 2, size - 2); }
   });
+  ctx.save(); ctx.shadowBlur = 0; ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
+  ctx.beginPath();
+  cells.forEach(([x, y], i) => {
+    const px = ox + (x - minX + .5) * size, py = oy + (y - minY + .5) * size;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.strokeStyle = '#fff3c4'; ctx.lineWidth = Math.max(1.25, size * .12); ctx.stroke();
+  const markerSize = Math.max(2, Math.round(size * .24));
+  for (const [x, y] of [cells[0], cells[cells.length - 1]]) {
+    const px = ox + (x - minX + .5) * size, py = oy + (y - minY + .5) * size;
+    panel(ctx, px - markerSize / 2, py - markerSize / 2, markerSize, markerSize, '#fff3c4');
+  }
+  ctx.restore();
 }
 
 /** Your trail on the floor: a gold line through the tiles you walked; the part that already matches the rune glows. */
@@ -33,6 +68,11 @@ export function drawSiriusGround(ctx: CanvasRenderingContext2D, state: Readonly<
   ctx.save(); ctx.shadowBlur = 0;
   const rune = t.rune && t.rune.cast <= 0 ? RUNES[t.rune.index] : null;
   const matched = rune ? runeProgress(t.steps, rune).tiles : 0, first = t.trail.length - 1 - matched;
+  const shape = matched > 0 ? t.trail.slice(first) : [];
+  if (t.phase >= 3 && t.rune) for (const seal of t.sanctuarySeals ?? []) {
+    const covered = shape.some(p => p.x === seal.x && p.y === seal.y);
+    drawSanctuarySeal(ctx, (seal.x + .5) * TILE_SIZE - camX, (seal.y + .5) * TILE_SIZE - camY, tick, covered, TILE_SIZE, state.trial?.siriusLightBlend ?? 0);
+  }
   for (let i = 0; i < t.trail.length; i++) {
     const p = t.trail[i], age = (t.trail.length - 1 - i) / Math.max(1, SIRIUS.trailMax), lit = i >= first && matched > 0;
     const x = (p.x + .5) * TILE_SIZE - camX, y = (p.y + .5) * TILE_SIZE - camY;
@@ -79,36 +119,124 @@ export function drawSiriusGround(ctx: CanvasRenderingContext2D, state: Readonly<
   ctx.restore();
 }
 
-/** Effects over the battlefield: Bellringer pulses, rune strikes on the Prayer and the wrath aura on aliens. */
+/** Sacred Halo: layered open light fronts and sanctuary tracery, shared with the guide. */
+export function drawHaloKnockbackWave(ctx: CanvasRenderingContext2D, x: number, y: number, progress: number, radius: number, full = false) {
+  const p = Math.max(0, Math.min(1, progress));
+  if(p>=1)return;
+  const fade=Math.min(1,(1-p)*3),ease=1-(1-p)*(1-p),reach=radius*(full?p:.08+.92*ease),weight=full?2.5:1;
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;
+  // Full Holy Light adds two trailing fronts to the normal three cardinal bands.
+  for(let layer=0;layer<(full?5:3);layer++){
+    const q=p-layer*.085;if(q<0)continue;
+    const r=radius*(full?q:.08+.92*(1-(1-q)*(1-q))),length=Math.max(18,r*.56),strength=fade*(1-layer*(full?.18:.3));
+    for(let i=0;i<4;i++){
+      ctx.save();ctx.rotate(i*Math.PI/2);
+      ctx.globalAlpha=strength*(full?.2:.13);panel(ctx,-length*.56,-r-7*weight,length*1.12,15*weight,RUNE_GOLD);
+      ctx.globalAlpha=strength*.9;panel(ctx,-length/2,-r-3*weight,length,6*weight,layer?'#d1ad55':RUNE_GOLD);
+      ctx.globalAlpha=strength;panel(ctx,-length*.4,-r-weight,length*.8,2*weight,'#fff8de');
+      // Paired inset rails and squared tips echo the sanctuary's gilded stonework.
+      if(layer===0){
+        ctx.globalAlpha=fade*.65;
+        panel(ctx,-length/2,-r+5*weight,length*.28,2*weight,'#e8c45c');panel(ctx,length*.22,-r+5*weight,length*.28,2*weight,'#e8c45c');
+        panel(ctx,-length/2-2*weight,-r-7*weight,3*weight,14*weight,'#fff0b5');panel(ctx,length/2-weight,-r-7*weight,3*weight,14*weight,'#fff0b5');
+      }
+      ctx.restore();
+    }
+  }
+  // Four detached corner crests travel with the leading front, inside the real reach.
+  for(let i=0;i<4;i++){
+    ctx.save();ctx.rotate(i*Math.PI/2);
+    const d=reach*.69,arm=(10+ease*9)*weight;
+    ctx.globalAlpha=fade*.75;panel(ctx,d-arm,-d,arm,3*weight,RUNE_GOLD);panel(ctx,d-3*weight,-d,3*weight,arm,RUNE_GOLD);
+    ctx.globalAlpha=fade;panel(ctx,d-4*weight,-d+weight,3*weight,3*weight,'#fff8de');
+    ctx.restore();
+  }
+  // Short rays and drifting square lights, with stable positions rather than random flicker.
+  for(let i=0;i<16;i++){
+    const angle=i*Math.PI/8,travel=reach*(.64+(i%3)*.11),length=(8+i%4*5)*(1-p*.5);
+    ctx.save();ctx.rotate(angle);ctx.globalAlpha=fade*(i%2?.5:.8);
+    panel(ctx,travel-length*weight,-weight,length*weight,2*weight,i%2?'#e8c45c':'#fff5cc');
+    if(i%2===0){ctx.globalAlpha=fade*.8;panel(ctx,travel+5,-2,4,4,RUNE_GOLD);}
+    ctx.restore();
+  }
+  // A brief luminous sanctuary seal anchors the release to the cast position.
+  const flash=Math.max(0,1-p/.55),core=12+p*30;
+  if(flash>0){
+    ctx.globalAlpha=flash*.8;ctx.strokeStyle=RUNE_GOLD;ctx.lineWidth=2;ctx.strokeRect(-core,-core,core*2,core*2);
+    ctx.globalAlpha=flash;panel(ctx,-core-9,-2,core*2+18,4,'#fff8de');
+    ctx.globalAlpha=flash*.9;panel(ctx,-5,-5,10,10,RUNE_GOLD);panel(ctx,-2,-2,4,4,'#ffffff');
+  }
+  ctx.restore();
+}
+
+/** Holy Light shafts render below the player shell, following its floating position. */
+export function drawSiriusHolyRays(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,camX:number,camY:number,tick:number){
+  const t=state.sirius;if(!t||t.burst<=0)return;
+  const p=1-t.burst/SIRIUS_BURST_TICKS;
+  const reach=Math.max(...[[0,0],[MAP_COLS*TILE_SIZE,0],[0,MAP_ROWS*TILE_SIZE],[MAP_COLS*TILE_SIZE,MAP_ROWS*TILE_SIZE]].map(([x,y])=>Math.hypot(x-t.burstAt.x,y-t.burstAt.y)));
+  ctx.save();ctx.shadowBlur=0;
+    // Narrow cathedral shafts shine from the player, with the light overlay's feathered sides.
+    const beamIn=Math.min(1,p*15);
+    const beamFade=beamIn*beamIn*(3-2*beamIn)*(.5+.5*Math.cos(p*Math.PI)),beamLength=reach*Math.min(1,p*5);
+    if(beamLength>0){
+      ctx.save();ctx.translate(state.playerX-camX,state.playerY-camY-siriusFloatLift(state,tick));
+      for(let i=0;i<8;i++){
+        ctx.save();ctx.rotate(i*Math.PI/4+.08);
+        const shaft=ctx.createLinearGradient(0,0,beamLength,0);
+        for(let stop=0;stop<=24;stop++){
+          const distance=stop/24,alpha=.5+.5*Math.cos(distance*Math.PI);
+          shaft.addColorStop(distance,`rgba(${Math.round(255-distance*17)},${Math.round(252-distance*39)},${Math.round(231-distance*83)},${alpha})`);
+        }
+        ctx.fillStyle=shaft;
+        const near=4,far=beamLength*(i%2?.03:.046);
+        // Adjacent feather strips avoid the uneven accumulated opacity of nested cones.
+        for(let strip=0;strip<96;strip++){
+          const left=strip/48-1,right=(strip+1)/48-1,middle=(left+right)/2;
+          ctx.globalAlpha=beamFade*.34*(.5+.5*Math.cos(middle*Math.PI));
+          ctx.beginPath();ctx.moveTo(0,left*near);ctx.lineTo(0,right*near);ctx.lineTo(beamLength,right*far);ctx.lineTo(beamLength,left*far);ctx.closePath();ctx.fill();
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  ctx.restore();
+}
+
+/** Effects over the battlefield: Halo wave, Bellringer pulses, rune strikes and wrath. */
 export function drawSiriusEffects(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, tick: number) {
   const t = state.sirius; if (!t) return;
   ctx.save(); ctx.shadowBlur = 0;
+  if (t.haloWave) drawHaloKnockbackWave(ctx, t.haloWave.x - camX, t.haloWave.y - camY, 1 - t.haloWave.ticks / SIRIUS.haloWaveTicks, SIRIUS.haloWaveRadius * TILE_SIZE);
   for (const ring of t.rings) {
     const p = 1 - ring.ticks / 30, r = ring.radius * TILE_SIZE * (.4 + .6 * p);
     ctx.globalAlpha = (1 - p) * .8; ctx.strokeStyle = RUNE_GOLD; ctx.lineWidth = 6 - p * 4;
     ctx.strokeRect(ring.x - camX - r, ring.y - camY - r, r * 2, r * 2);
   }
-  // The Holy Light burst in the world: a turning starburst of rays and three shock squares rolling out from where
-  // you released it, with sparks thrown outward.
+  // Full Holy Light shares Sacred Halo's open sanctuary wave, at arena scale.
   if (t.burst > 0) {
-    const p = 1 - t.burst / SIRIUS_BURST_TICKS, cx = t.burstAt.x - camX, cy = t.burstAt.y - camY, out = Math.sin(Math.min(1, p * 3) * Math.PI / 2);
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(p * .9);
-    for (let k = 0; k < 16; k++) {
-      ctx.save(); ctx.rotate(k / 16 * Math.PI * 2);
-      const len = 1600 * out, wide = (k % 2 ? 10 : 26) * (1 - p * .6);
-      ctx.globalAlpha = (1 - p) * (k % 2 ? .35 : .55); panel(ctx, 0, -wide / 2, len, wide, k % 4 === 0 ? '#ffffff' : RUNE_GOLD);
+    const p=1-t.burst/SIRIUS_BURST_TICKS,cx=t.burstAt.x-camX,cy=t.burstAt.y-camY;
+    const reach=Math.max(...[[0,0],[MAP_COLS*TILE_SIZE,0],[0,MAP_ROWS*TILE_SIZE],[MAP_COLS*TILE_SIZE,MAP_ROWS*TILE_SIZE]].map(([x,y])=>Math.hypot(x-t.burstAt.x,y-t.burstAt.y)));
+    // Broad, feathered square light is richer gold at its outer front and paler in its inner trail.
+    const front=p*reach,wake=Math.min(front,Math.max(120,front*.36)),step=wake/32;
+    if(step>0){
+      ctx.save();ctx.lineJoin='miter';
+      for(let i=0;i<32;i++){
+        const u=(i+.5)/32,r=front-u*wake;
+        ctx.globalAlpha=Math.sin(u*Math.PI)*Math.min(1,(1-p)*3)*.34;
+        const gold=1-u;
+        ctx.strokeStyle=`rgb(255,${Math.round(245-gold*59)},${Math.round(207-gold*123)})`;
+        ctx.globalAlpha*=.65+.95*gold;
+        ctx.lineWidth=step+.5;ctx.strokeRect(cx-r,cy-r,r*2,r*2);
+      }
       ctx.restore();
     }
-    ctx.restore();
-    for (let k = 0; k < 3; k++) {
-      const q = Math.max(0, p * 1.4 - k * .18); if (q <= 0 || q >= 1) continue;
-      const r = q * 1500; ctx.globalAlpha = (1 - q) * .9; ctx.strokeStyle = k ? RUNE_GOLD : '#ffffff'; ctx.lineWidth = 26 - k * 7;
-      ctx.strokeRect(cx - r, cy - r, r * 2, r * 2);
-    }
-    const core = Math.max(0, 1 - p * 2.5); ctx.globalAlpha = core; panel(ctx, cx - 60 * core - 20, cy - 60 * core - 20, 120 * core + 40, 120 * core + 40, '#fff6d0');
-    for (let i = 0; i < 48; i++) {
-      const a = i * 2.399, d = p * (300 + (i % 7) * 120), sz = i % 3 ? 4 : 7;
-      ctx.globalAlpha = (1 - p) * .9; panel(ctx, cx + Math.cos(a) * d, cy + Math.sin(a) * d - p * 40, sz, sz, i % 4 ? RUNE_GOLD : '#ffffff');
+    drawHaloKnockbackWave(ctx,cx,cy,p,reach,true);
+    // Quiet square prayer lights accompany the open bands rather than filling the centre.
+    for(let i=0;i<48;i++){
+      const angle=i*2.39996,travel=reach*p*(.6+i%5*.08);
+      const shimmer=.35+.65*Math.pow(Math.max(0,Math.sin(p*18+i)),3),size=i%3?3:5;
+      ctx.globalAlpha=(1-p)*shimmer*.55;
+      panel(ctx,cx+Math.cos(angle)*travel,cy+Math.sin(angle)*travel,size,size,i%3?RUNE_GOLD:'#fff8de');
     }
   }
   for (const bolt of t.bolts) {
@@ -128,6 +256,45 @@ export function drawSiriusEffects(ctx: CanvasRenderingContext2D, state: Readonly
     const x = e.x - camX, y = e.y - camY, r = 22 + Math.sin(tick * .2 + e.id) * 2;
     ctx.globalAlpha = .55; ctx.strokeStyle = WRATH_RED; ctx.lineWidth = 3; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
     ctx.globalAlpha = .18; panel(ctx, x - r, y - r, r * 2, r * 2, WRATH_RED);
+  }
+  ctx.restore();
+}
+
+/** Cathedral tracery gathers at the view edges before the sanctuary changes its light. */
+export function drawSiriusSwapWarning(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,w:number,h:number){
+  const t=state.sirius;
+  if(!t||t.lightTimer<=0||t.lightTimer>SIRIUS.swapWarning||state.gamePhase==='won'||state.gamePhase==='lost')return;
+  const p=1-t.lightTimer/SIRIUS.swapWarning,a=Math.min(1,p*5)*(.72+.28*p)*(t.light?.95:.8);if(a<=0)return;
+  const incomingLight=!t.light,core=incomingLight?'#fff5cf':'#dbc5ef',rim=incomingLight?'#e8c86b':'#b39bc9',shade=incomingLight?'#7b6132':'#33233f';
+  ctx.save();ctx.shadowBlur=0;ctx.lineJoin='miter';
+  const edge=ctx.createRadialGradient(w/2,h/2,Math.min(w,h)*.32,w/2,h/2,Math.max(w,h)*.65);
+  edge.addColorStop(0,incomingLight?'#b9904200':'#27193600');edge.addColorStop(1,incomingLight?'#b99042':'#271936');
+  ctx.globalAlpha=a*.66;ctx.fillStyle=edge;ctx.fillRect(0,0,w,h);
+  const band=Math.min(180,w*.15);
+  for(const side of [0,1]){
+    ctx.save();if(side){ctx.translate(w,0);ctx.scale(-1,1);}
+    const curtain=ctx.createLinearGradient(0,0,band,0);
+    curtain.addColorStop(0,incomingLight?'#ffe8a0':'#261337');curtain.addColorStop(.35,incomingLight?'#b68b46':'#705087');curtain.addColorStop(1,incomingLight?'#b68b4600':'#70508700');
+    ctx.globalAlpha=a*.64;ctx.fillStyle=curtain;ctx.fillRect(0,0,band,h);
+    ctx.globalAlpha=a*.65;ctx.strokeStyle=rim;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(8,h);ctx.stroke();
+    ctx.globalAlpha=a*.35;ctx.strokeStyle=core;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(20,0);ctx.lineTo(20,h);ctx.stroke();
+    ctx.restore();
+  }
+  const depth=Math.min(w*.2,225)*( .8+.2*p),rise=Math.min(h*.32,230);
+  for(const [x,y,sx,sy] of [[0,0,1,1],[w,0,-1,1],[0,h,1,-1],[w,h,-1,-1]]){
+    ctx.save();ctx.translate(x,y);ctx.scale(sx,sy);
+    ctx.globalAlpha=a*.72;ctx.fillStyle=shade;
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(depth,0);ctx.lineTo(depth,16);ctx.lineTo(depth*.65,16);ctx.lineTo(depth*.65,36);ctx.lineTo(36,36);ctx.lineTo(36,rise*.7);ctx.lineTo(16,rise*.7);ctx.lineTo(16,rise);ctx.lineTo(0,rise);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=a*.95;ctx.strokeStyle=rim;ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(10,rise);ctx.lineTo(10,28);ctx.lineTo(28,28);ctx.lineTo(28,10);ctx.lineTo(depth,10);ctx.stroke();
+    ctx.globalAlpha=a*.95;panel(ctx,23,23,10,10,core);panel(ctx,44,14,Math.max(12,depth-68),3,rim);
+    ctx.restore();
+  }
+  // Sparse prayer lights remain at the sides, leaving the rune and player clear.
+  for(let i=0;i<14;i++){
+    const left=i%2===0,x=left?18+(i%4)*15:w-18-(i%4)*15;
+    const y=(i*.173*h+(incomingLight?-1:1)*p*55+h)%h;
+    ctx.globalAlpha=a*(.25+(i%3)*.09);panel(ctx,x,y,2,i%3?7:12,i%3?rim:core);
   }
   ctx.restore();
 }
@@ -250,16 +417,45 @@ export function drawSiriusHalo(ctx: CanvasRenderingContext2D, state: Readonly<Ga
   ctx.restore();
 }
 
-/** The Holy Light burst: a gold wash and expanding frame across the whole view. */
+/** Full Holy Light: separated sanctuary edge bands and detached ivory/gold crests. */
+/** Rich gold illumination belongs below the player shell, not in the final screen wash. */
+export function drawSiriusBurstGlow(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,w:number,h:number,x:number,y:number){
+  const t=state.sirius;if(!t||t.burst<=0)return;
+  const p=1-t.burst/SIRIUS_BURST_TICKS,fade=Math.pow(1-p,1.3),rise=Math.min(1,p*15);
+  const gold=ctx.createRadialGradient(x,y,0,x,y,Math.hypot(w,h)*.65);
+  gold.addColorStop(0,'rgba(239,164,12,.55)');gold.addColorStop(.12,'rgba(242,178,28,.43)');gold.addColorStop(.3,'rgba(243,194,73,.21)');gold.addColorStop(1,'rgba(255,224,150,0)');
+  ctx.save();ctx.globalAlpha=fade*rise*rise*(3-2*rise);ctx.fillStyle=gold;ctx.fillRect(0,0,w,h);ctx.restore();
+}
+
 export function drawSiriusBurst(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, w: number, h: number) {
-  const t = state.sirius; if (!t || t.burst <= 0) return;
-  const p = 1 - t.burst / SIRIUS_BURST_TICKS;
-  ctx.save();
-  // A white flash, then a gold wash that lingers, and a thick golden frame that pulses as it fades.
-  if (p < .12) { ctx.globalAlpha = (1 - p / .12) * .85; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
-  ctx.globalAlpha = Math.max(0, 1 - p) * .35; ctx.fillStyle = '#fff2b0'; ctx.fillRect(0, 0, w, h);
-  const frame = 22 + 10 * Math.sin(p * Math.PI * 6);
-  ctx.globalAlpha = (1 - p) * .9; ctx.strokeStyle = RUNE_GOLD; ctx.lineWidth = frame; ctx.strokeRect(frame / 2, frame / 2, w - frame, h - frame);
-  ctx.globalAlpha = (1 - p) * .6; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.strokeRect(frame + 6, frame + 6, w - frame * 2 - 12, h - frame * 2 - 12);
+  const t=state.sirius;if(!t||t.burst<=0)return;
+  const p=1-t.burst/SIRIUS_BURST_TICKS,fade=Math.pow(1-p,1.3),open=1-(1-p)*(1-p);
+  ctx.save();ctx.shadowBlur=0;
+  if(p<.1){ctx.globalAlpha=(1-p/.1)*.6;panel(ctx,0,0,w,h,'#fff8de');}
+  ctx.globalAlpha=fade*.14;panel(ctx,0,0,w,h,'#fff2b0');
+  // Small flat feathers peel outward, rotating as whole block-built silhouettes.
+  for(let i=0;i<26;i++){
+    const angle=i*2.39996,travel=18+Math.min(w,h)*(.22+i%5*.045)*open;
+    const fx=w/2+Math.cos(angle)*travel,fy=h/2+Math.sin(angle)*travel;
+    ctx.save();ctx.translate(fx,fy);ctx.rotate(angle+Math.PI/2+p*(i%2?1:-1)*.7);ctx.scale(.7+i%3*.13,.7+i%3*.13);
+    ctx.globalAlpha=fade*(.14+i%3*.035);ctx.fillStyle=i%3?'#fff2c5':'#eac565';
+    for(const [row,width]of [4,8,12,10,7,4].entries())ctx.fillRect(-width/2,-9+row*3,width,2);
+    ctx.globalAlpha=fade*.24;panel(ctx,-.5,-10,1,20,'#fff9df');ctx.restore();
+  }
+  for(let side=0;side<4;side++){
+    ctx.save();ctx.translate(w/2,h/2);ctx.rotate(side*Math.PI/2);
+    const vertical=side%2===0,span=(vertical?w:h)*.42,edge=(vertical?h:w)/2-12-open*10;
+    ctx.globalAlpha=fade*.13;panel(ctx,-span/2-8,-edge-6,span+16,28,RUNE_GOLD);
+    ctx.globalAlpha=fade*.7;panel(ctx,-span/2,-edge,span,10,RUNE_GOLD);
+    ctx.globalAlpha=fade*.85;panel(ctx,-span*.4,-edge+1,span*.8,4,'#fff8de');
+    ctx.globalAlpha=fade*.45;panel(ctx,-span/2,-edge+9,span*.27,2,'#e8c45c');panel(ctx,span*.23,-edge+9,span*.27,2,'#e8c45c');
+    ctx.restore();
+  }
+  for(const dx of [-1,1])for(const dy of [-1,1]){
+    ctx.save();ctx.translate(dx<0?22:w-22,dy<0?22:h-22);ctx.scale(-dx,-dy);
+    const arm=42+open*32;ctx.globalAlpha=fade*.65;
+    panel(ctx,0,0,arm,7,RUNE_GOLD);panel(ctx,0,0,7,arm,RUNE_GOLD);
+    ctx.globalAlpha=fade*.85;panel(ctx,1,1,8,2,'#fff8de');panel(ctx,1,1,2,8,'#fff8de');ctx.restore();
+  }
   ctx.restore();
 }

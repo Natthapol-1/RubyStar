@@ -143,48 +143,8 @@ export function drawBinaryEffects(ctx: CanvasRenderingContext2D, s: GameState, c
     ctx.save(); ctx.globalAlpha = .8; ctx.strokeStyle = '#9aa3b5'; ctx.lineWidth = 3; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
     ctx.fillStyle = '#c6ccd8'; for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) ctx.fillRect(x + sx * r - 5, y + sy * r - 5, 10, 10); ctx.restore();
   }
-  // Binary Collision, 1.5s: the screen splits coral and blue around a white-hot core, a cross of light seams sweeps the
-  // whole view, four layered stepped shock fronts and eight straight light rays burst out, chunky debris flies and
-  // falls, and a scorched coral/blue ring lingers on the floor. A Lodestone burst reuses it smaller and without the
-  // screen-wide parts.
-  for (const c of b.collisions ?? []) {
-    const total = c.small ? 50 : 90, p = 1 - c.ticks / total, x = Math.round(c.x - camX), y = Math.round(c.y - camY), ease = 1 - (1 - p) ** 3;
-    const [coral, blue] = BINARY_TWIN_COLORS;
-    ctx.save();
-    if (!c.small) {
-      if (p < .22) { // split flash: coral left, blue right, white over everything at the first instant
-        const f = 1 - p / .22; ctx.globalAlpha = .45 * f; ctx.fillStyle = coral; ctx.fillRect(x - 4000, y - 4000, 4000, 8000); ctx.fillStyle = blue; ctx.fillRect(x, y - 4000, 4000, 8000);
-        ctx.globalAlpha = .7 * f * f; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 4000, y - 4000, 8000, 8000);
-      }
-      if (p < .45) { // a cross of light seams across the whole view
-        const f = 1 - p / .45, w = Math.round(28 * f) + 2; ctx.globalAlpha = .85 * f;
-        ctx.fillStyle = coral; ctx.fillRect(x - 4000, y - w, 4000, w * 2); ctx.fillStyle = blue; ctx.fillRect(x, y - w, 4000, w * 2);
-        ctx.fillStyle = coral; ctx.fillRect(x - w, y - 4000, w * 2, 4000); ctx.fillStyle = blue; ctx.fillRect(x - w, y, w * 2, 4000);
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 4000, y - Math.max(1, w / 4), 8000, Math.max(2, w / 2)); ctx.fillRect(x - Math.max(1, w / 4), y - 4000, Math.max(2, w / 2), 8000);
-      }
-      // a scorched ring on the floor, fading over the last half
-      const ring = 90; ctx.globalAlpha = Math.min(1, (1 - p) * 2) * .5; ctx.strokeStyle = coral; ctx.lineWidth = 6; ctx.strokeRect(x - ring, y - ring, ring, ring * 2); ctx.strokeStyle = blue; ctx.strokeRect(x, y - ring, ring, ring * 2);
-    } else { ctx.translate(x, y); ctx.scale(.45, .45); ctx.translate(-x, -y); }
-    // eight straight light rays, each one solid band turned as a whole
-    if (p < .55) for (let k = 0; k < 8; k++) {
-      const f = 1 - p / .55, len = 60 + 260 * ease; ctx.save(); ctx.translate(x, y); ctx.rotate(k * Math.PI / 4 + .2);
-      ctx.globalAlpha = .8 * f; ctx.fillStyle = k % 2 ? blue : coral; ctx.fillRect(0, -7 * f - 1, len, 14 * f + 2);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, -2 * f - 1, len * .8, 4 * f + 2); ctx.restore();
-    }
-    // four stepped shock fronts: white, coral, blue, white
-    for (const [k, col] of [[0, '#ffffff'], [1, coral], [2, blue], [3, '#ffffff']] as const) {
-      const r = 24 + (300 - k * 55) * Math.max(0, ease - k * .07); ctx.globalAlpha = (1 - p) * (k === 3 ? .5 : 1); ctx.strokeStyle = col; ctx.lineWidth = 16 - k * 3;
-      ctx.strokeRect(x - r, y - r, r * 2, r * 2); ctx.strokeRect(x - r + 8, y - r + 8, r * 2 - 16, r * 2 - 16);
-    }
-    // chunky debris thrown out and falling
-    for (let k = 0; k < 30; k++) {
-      const ang = k * 2.39996, speed = .6 + (k % 5) * .15, d = 30 + 260 * ease * speed, fall = p * p * 140 * (.5 + (k % 3) * .3), sz = k % 4 === 0 ? 16 : k % 3 ? 8 : 11;
-      ctx.globalAlpha = 1 - p; ctx.fillStyle = k % 5 === 0 ? '#ffffff' : k % 2 ? coral : blue;
-      ctx.fillRect(Math.round(x + Math.cos(ang) * d - sz / 2), Math.round(y + Math.sin(ang) * d + fall - sz / 2), sz, sz);
-    }
-    if (p < .4) { const s2 = 70 * (1 - p / .4); ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - s2 / 2, y - s2 / 2, s2, s2); ctx.fillStyle = coral; ctx.fillRect(x - s2 / 2, y - s2 / 2, s2 / 2, 4); ctx.fillStyle = blue; ctx.fillRect(x, y + s2 / 2 - 4, s2 / 2, 4); }
-    ctx.restore();
-  }
+  // Collisions split into paired magnetic pressure fronts, with transparent motion sheets.
+  for(const collision of b.collisions??[])if(collision.small)drawBinaryCollision(ctx,collision.x-camX,collision.y-camY,1-collision.ticks/50,true);
   // Swap surge: a stepped bolt of blocks from you to the enemy it jolts, and a square burst on it.
   for (const z of b.zaps) {
     const age = 1 - z.ticks / 24, tx = Math.round(z.x - camX), ty = Math.round(z.y - camY), px = (z.fromX ?? s.playerX) - camX, py = (z.fromY ?? s.playerY) - camY;
@@ -268,15 +228,133 @@ function drawTwinMoves(ctx: CanvasRenderingContext2D, s: GameState, camX: number
   }
 }
 
+/** Open halves leave a pale seam between the two opposing magnetic colors. */
+function traceBinaryPressure(ctx:CanvasRenderingContext2D,r:number,side:number){
+  ctx.beginPath();ctx.moveTo(side*r*.06,-r);ctx.lineTo(side*r*.6,-r);ctx.lineTo(side*r*.6,-r*.76);
+  ctx.lineTo(side*r,-r*.76);ctx.lineTo(side*r,r*.76);ctx.lineTo(side*r*.6,r*.76);ctx.lineTo(side*r*.6,r);ctx.lineTo(side*r*.06,r);
+}
+function drawBinaryCollision(ctx:CanvasRenderingContext2D,x:number,y:number,p:number,small:boolean,reach=410){
+  const wide=reach>410,scale=reach/410;
+  const fade=.5+.5*Math.cos(p*Math.PI),[coral,blue]=BINARY_TWIN_COLORS;
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));if(small)ctx.scale(.45,.45);ctx.shadowBlur=0;ctx.lineJoin='miter';
+  if(!small){
+    // Twin light overlaps, rather than becoming a white screen or a raised panel.
+    for(const [side,color]of [[-1,coral],[1,blue]] as const){
+      const wash=ctx.createRadialGradient(side*55,0,0,side*55,0,reach*1.1);
+      wash.addColorStop(0,color+(wide?'80':'50'));wash.addColorStop(.5,color+(wide?'30':'18'));wash.addColorStop(1,color+'00');
+      ctx.globalAlpha=fade;ctx.fillStyle=wash;ctx.fillRect(-reach*1.3,-reach*1.3,reach*2.6,reach*2.6);
+    }
+  }
+  for(let echo=0;echo<(wide?5:4);echo++){
+    const q=p-echo*.065;if(q<0)continue;
+    const r=18+Math.min(1,q*1.55)*reach,strength=fade*(1-echo*.19),tail=Math.min(r*.4,wide?125:70);
+    for(const side of [-1,1]){
+      const color=side<0?coral:blue,pale=side<0?'#ffe1d6':'#e2f5ff';
+      for(let sheet=17;sheet>=0;sheet--){
+        const u=sheet/17;traceBinaryPressure(ctx,r-tail*u,side);
+        ctx.globalAlpha=strength*.32*Math.pow(1-u,1.2);ctx.strokeStyle=color;ctx.lineWidth=tail/17+1;ctx.stroke();
+      }
+      traceBinaryPressure(ctx,r,side);ctx.globalAlpha=strength*.72;ctx.strokeStyle=color;ctx.lineWidth=echo?(wide?18:12):(wide?34:22);ctx.stroke();
+      ctx.globalAlpha=strength*.95;ctx.strokeStyle=pale;ctx.lineWidth=echo?2:wide?5:4;ctx.stroke();
+    }
+  }
+  for(let i=0;i<(wide?88:48);i++){
+    const a=i*2.39996,d=22+(1-(1-p)*(1-p))*(95+i%6*33)*scale,size=(wide?4:3)+i%4*2;
+    const px=Math.cos(a)*d,py=Math.sin(a)*d,color=i%2?coral:blue;
+    ctx.save();ctx.translate(px,py);ctx.rotate(a+p*.6);
+    const traceShard=()=>{
+      ctx.beginPath();
+      if(i%3===0){ctx.moveTo(-size,0);ctx.lineTo(-size*.18,-size*.3);ctx.lineTo(size*.75,0);ctx.lineTo(size*.1,size*.3);}
+      else{ctx.moveTo(-size,-size*.35);ctx.lineTo(size*.4,-size*.35);ctx.lineTo(size,size*.18);ctx.lineTo(size*.15,size*.18);ctx.lineTo(-size*.15,size*.6);ctx.lineTo(-size,size*.6);}
+      ctx.closePath();
+    };
+    ctx.save();ctx.translate(-4,2);ctx.globalAlpha=fade*.14;ctx.fillStyle=color;traceShard();ctx.fill();ctx.restore();
+    ctx.globalAlpha=fade*.48;ctx.fillStyle=color;traceShard();ctx.fill();
+    ctx.globalAlpha=fade*.55;ctx.strokeStyle=i%2?'#ffe4d9':'#e4f5ff';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-size*.8,-size*.28);ctx.lineTo(size*.35,-size*.28);ctx.stroke();ctx.restore();
+    if(i%2===0){const shine=Math.pow(Math.max(0,Math.sin(p*24+i*1.7)),4);ctx.globalAlpha=fade*(.1+shine*.65);ctx.fillStyle='#f1f8ff';ctx.fillRect(px-4,py,9,1);ctx.fillRect(px,py-4,1,9);}
+  }
+  const flash=Math.max(0,1-p/.25);
+  for(const side of [-1,1]){
+    ctx.globalAlpha=flash*.55;ctx.fillStyle=side<0?coral:blue;ctx.fillRect(side<0?-29:17,-14,12,28);
+    ctx.globalAlpha=flash*.8;ctx.fillStyle='#f5faff';ctx.fillRect(side<0?-29:17,-14,12,3);ctx.fillRect(side<0?-29:17,11,12,3);
+  }
+  ctx.restore();
+}
+
+/** Full twin collisions fill every camera view; Lodestones retain their small world-space burst. */
+export function drawBinaryCollisionScreen(ctx:CanvasRenderingContext2D,s:Readonly<GameState>,w:number,h:number,camX:number,camY:number,zoom=1){
+  for(const collision of s.binary?.collisions??[]){
+    if(collision.small)continue;
+    const p=1-collision.ticks/90,fade=.5+.5*Math.cos(p*Math.PI),px=(collision.x-camX)*zoom,py=(collision.y-camY)*zoom;
+    const dx=px-w/2,dy=py-h/2,outside=px<0||px>w||py<0||py>h;
+    const edge=outside?Math.min(w/2/Math.abs(dx),h/2/Math.abs(dy)):1,x=outside?w/2+dx*edge:px,y=outside?h/2+dy*edge:py;
+    const reach=Math.max(...[[0,0],[w,0],[0,h],[w,h]].map(([cx,cy])=>Math.hypot(cx-x,cy-y)))*1.06;
+    ctx.save();ctx.shadowBlur=0;
+    const tint=ctx.createLinearGradient(0,0,w,0);tint.addColorStop(0,'#ff8f7a');tint.addColorStop(.48,'#b7b5dc');tint.addColorStop(1,'#8fb8ff');
+    ctx.globalAlpha=fade*.18;ctx.fillStyle=tint;ctx.fillRect(0,0,w,h);
+    drawBinaryCollision(ctx,x,y,p,false,Math.max(420,reach));
+    // Layered magnetic corner contacts frame the screen without large raised plates.
+    for(const side of [-1,1])for(const vertical of [-1,1]){
+      const cx=side<0?12:w-12,cy=vertical<0?12:h-12,color=side<0?BINARY_TWIN_COLORS[0]:BINARY_TWIN_COLORS[1];
+      for(let layer=2;layer>=0;layer--){
+        const inset=layer*10,span=30+Math.min(1,p*5)*55;
+        ctx.globalAlpha=fade*(layer?.12:.65);ctx.strokeStyle=color;ctx.lineWidth=layer?12:5;
+        ctx.beginPath();ctx.moveTo(cx-side*span,cy-vertical*inset);ctx.lineTo(cx-side*inset,cy-vertical*inset);ctx.lineTo(cx-side*inset,cy-vertical*span);ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+}
+
 /** Your current pole: a square frame in its colour around the player, flaring when you swap. */
 export function drawPoleFrame(ctx: CanvasRenderingContext2D, s: GameState, x: number, y: number, pole = s.binary?.pole) {
-  const b = s.binary; if (!b || !pole) return;
-  const c = POLE_COLORS[pole], flare = b.swapFlashTicks / 18, r = Math.round(30 + flare * 10);
-  x = Math.round(x); y = Math.round(y);
-  ctx.save(); ctx.globalAlpha = .55 + .45 * flare; ctx.shadowColor = c; ctx.shadowBlur = 4;
-  ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
-  ctx.shadowBlur = 0; ctx.fillStyle = POLE_PALE[pole];
-  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) ctx.fillRect(x + sx * r - 3, y + sy * r - 3, 6, 6);
+  const b=s.binary;if(!b||!pole)return;
+  const c=POLE_COLORS[pole],pale=POLE_PALE[pole],flare=Math.min(1,b.swapFlashTicks/BINARY.swapVisualTicks),r=30+flare*10;
+  x=Math.round(x);y=Math.round(y);ctx.save();ctx.translate(x,y);ctx.shadowBlur=0;ctx.lineJoin='miter';
+  // The player's pole remains a square instrument frame, with a soft inward light sheet.
+  for(let sheet=7;sheet>=0;sheet--){
+    const inset=sheet*1.2;ctx.globalAlpha=(.055+flare*.02)*(1-sheet/8);ctx.strokeStyle=c;ctx.lineWidth=1.5;ctx.strokeRect(-r+inset,-r+inset,(r-inset)*2,(r-inset)*2);
+  }
+  ctx.globalAlpha=.5+flare*.3;ctx.strokeStyle=c;ctx.lineWidth=5;ctx.strokeRect(-r,-r,r*2,r*2);
+  // Swapping lights the existing square rim, with colored shoulders and a pale core.
+  if(flare>0){
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    for(const [width,alpha]of [[10,.012],[8,.03],[6,.1]]){
+      ctx.globalAlpha=Math.pow(flare,1.25)*alpha;ctx.strokeStyle=c;ctx.lineWidth=width;ctx.strokeRect(-r,-r,r*2,r*2);
+    }
+    ctx.globalAlpha=Math.pow(flare,1.25)*.95;ctx.strokeStyle=pale;ctx.lineWidth=3.8;ctx.shadowColor=c;ctx.shadowBlur=0;ctx.strokeRect(-r,-r,r*2,r*2);
+    ctx.restore();
+  }
+  for(const [sx,sy]of [[-1,-1],[1,-1],[-1,1],[1,1]]){
+    ctx.globalAlpha=.65+flare*.25;ctx.fillStyle=pale;ctx.fillRect(sx*r-3,sy*r-3,6,6);
+  }
+  if(b.swapFlashTicks>0){
+    const p=1-flare,ease=1-(1-p)*(1-p),other=pole==='north'?'south':'north';
+    // Soft square light surrounds the ship, without solid side contacts over its model.
+    for(let sheet=15;sheet>=0;sheet--){
+      const u=sheet/15,extent=24+u*31;
+      ctx.globalAlpha=flare*.035*Math.pow(1-u,1.35);ctx.strokeStyle=c;ctx.lineWidth=2.6;ctx.strokeRect(-extent,-extent,extent*2,extent*2);
+    }
+    // Broad horseshoe rails reverse past each other with a short translucent magnetic wake.
+    for(let side=0;side<2;side++){
+      const col=side?POLE_COLORS[other]:c,tip=side?POLE_PALE[other]:pale;
+      ctx.save();ctx.rotate((side?Math.PI:0)+(pole==='north'?1:-1)*ease*Math.PI*.7);
+      const d=40+ease*40,h=22+ease*12;
+      const trace=(offset:number)=>{ctx.beginPath();ctx.moveTo(-d+18,-h-offset*.25);ctx.lineTo(-d-offset,-h-offset*.25);ctx.lineTo(-d-offset,h+offset*.25);ctx.lineTo(-d+18,h+offset*.25);};
+      for(let sheet=11;sheet>=0;sheet--){const u=sheet/11;trace(u*20);ctx.globalAlpha=flare*.3*Math.pow(1-u,1.2);ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.stroke();}
+      trace(0);ctx.globalAlpha=flare*.85;ctx.strokeStyle=col;ctx.lineWidth=7;ctx.stroke();
+      ctx.globalAlpha=flare*.9;ctx.strokeStyle=tip;ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle=tip;ctx.fillRect(-d+12,-h-3,9,6);ctx.fillRect(-d+12,h-3,9,6);ctx.restore();
+    }
+    for(let i=0;i<36;i++){
+      const outgoing=i%2===0,t=(p+i%5*.12)%1,a=i*2.39996+(outgoing?ease:-ease)*.65,d=outgoing?32+t*90:28+(1-t)*90;
+      const alpha=flare*Math.sin(Math.PI*t),size=3+i%3*2;
+      ctx.save();ctx.rotate(a);ctx.globalAlpha=alpha*.18;ctx.fillStyle=outgoing?c:POLE_COLORS[other];ctx.fillRect(d-3,-size/2+2,size,size);
+      ctx.globalAlpha=alpha*.6;ctx.fillRect(d,-size/2,size,size);
+      if(i%5===0){ctx.globalAlpha=alpha*.8;ctx.fillStyle=outgoing?pale:POLE_PALE[other];ctx.fillRect(d-3,0,9,1);ctx.fillRect(d+1,-4,1,9);}ctx.restore();
+    }
+
+  }
   ctx.restore();
 }
 
@@ -358,22 +436,27 @@ function drawGrounder(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: num
 }
 
 /** Pulsar: a small diamond-cut block in its pole's colour with a bright beating core and four corner sparks. */
+// Pulsar: a pulsing star, kept unlike the horned Lodestone. A small upright square body in its pole's colour with a
+// dark inset, pale eyes and a white core that swells with its beat, and four short ray blocks, one on each side, that
+// push out and pull back with the beat (staggered, like the full-energy aura's cardinal rays).
 function drawPulsar(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number) {
   const pole = e.pole!, c = POLE_COLORS[pole], dark = POLE_DARK[pole], pale = POLE_PALE[pole], flash = e.flashTicks > 0;
   const x = Math.round(sx), y = Math.round(sy) + Math.floor(tick / 8 + e.id) % 2, beat = Math.abs(Math.sin(tick * .18 + e.id));
-  ctx.save();
-  // antenna: a short stalk with a square tip that blinks with the beat
-  ctx.fillStyle = flash ? '#ffffff' : c; ctx.fillRect(x - 2, y - 21, 4, 8);
-  ctx.fillStyle = beat > .7 ? '#ffffff' : pale; ctx.fillRect(x - 3, y - 25, 6, 5);
-  // body: glowing square rim in its pole's colour, dark inset
-  ctx.shadowColor = c; ctx.shadowBlur = 5; ctx.fillStyle = flash ? '#ffffff' : c; ctx.fillRect(x - 14, y - 13, 28, 27); ctx.shadowBlur = 0;
+  ctx.save(); ctx.translate(x, y);
+  // four cardinal rays: a solid bar with a pale tip, the side pair a little behind the top/bottom pair
+  for (const [dx, dy, lag] of [[0, -1, 0], [0, 1, 0], [-1, 0, .5], [1, 0, .5]] as const) {
+    const b = Math.abs(Math.sin(tick * .18 + e.id + lag)), len = 4 + Math.round(b * 6), at = 13;
+    const rx = dx ? (dx > 0 ? at : -at - len) : -2, ry = dy ? (dy > 0 ? at : -at - len) : -2;
+    const w = dx ? len : 4, h = dy ? len : 4;
+    ctx.fillStyle = flash ? '#ffffff' : c; ctx.fillRect(rx, ry, w, h);
+    ctx.fillStyle = flash ? '#ffffff' : pale; ctx.fillRect(dx > 0 ? rx + w - 2 : rx, dy > 0 ? ry + h - 2 : ry, dx ? 2 : w, dy ? 2 : h);
+  }
+  // the body
+  ctx.shadowColor = c; ctx.shadowBlur = 5; ctx.fillStyle = flash ? '#ffffff' : c; ctx.fillRect(-11, -11, 22, 22); ctx.shadowBlur = 0;
   if (!flash) {
-    ctx.fillStyle = dark; ctx.fillRect(x - 11, y - 10, 22, 21);
-    // two pale eyes over a square reactor window whose core swells with the beat
-    ctx.fillStyle = pale; ctx.fillRect(x - 7, y - 7, 4, 3); ctx.fillRect(x + 3, y - 7, 4, 3);
-    ctx.fillStyle = '#0b0918'; ctx.fillRect(x - 6, y - 1, 12, 9);
-    const k = 2 + Math.round(beat * 2); ctx.fillStyle = c; ctx.fillRect(x - k, y + 3 - k, k * 2, k * 2);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 1, y + 2, 2, 2);
+    ctx.fillStyle = dark; ctx.fillRect(-8, -8, 16, 16);
+    ctx.fillStyle = pale; ctx.fillRect(-6, -5, 3, 3); ctx.fillRect(3, -5, 3, 3); // eyes
+    const k = 1 + Math.round(beat * 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(-k, 3 - k, k * 2, k * 2); // core, swelling with the beat
   }
   ctx.restore();
   drawEnemyHealthBar(ctx, e, sx, sy);

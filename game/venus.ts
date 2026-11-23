@@ -73,6 +73,8 @@ interface VenusNest { tx: number; ty: number; totemId?: number }
 /** A successful counter resets the Sand Swirl cooldown, and its shockwave hits every enemy within counterBlastRadius of you, visible totems included (not the boss, relics or
  * his core; buried units are untouchable as usual). */
 function counterBlast(s: GameState, skip?: Enemy) {
+  playAudioOneShot('/sounds/shield.mp3', .9); playAudioOneShot('/sounds/ice.mp3', .55);
+  s.screenShakeTicks = Math.max(s.screenShakeTicks, 24); s.screenShakeAmt = Math.max(s.screenShakeAmt, 10);
   if (s.venus && s.venus.sweepCooldown > 1) s.venus.sweepCooldown = 1; // a successful counter readies Sand Swirl again (its ready chime plays next tick)
   const r = VENUS.counterBlastRadius * TILE_SIZE;
   for (const e of [...s.enemies]) {
@@ -113,7 +115,7 @@ export interface VenusState {
   lance: { ticks: number; dx: number; dy: number } | null; lanceTimer: number;
   stun: number;
   sweeps: { x: number; y: number; ticks: number }[];
-  blasts: { x: number; y: number; ticks: number }[];
+  blasts: { x: number; y: number; ticks: number; kind?: 'totemBreak' | 'overload' }[];
   beams: { x: number; y: number; dx: number; dy: number; ticks: number; parried?: boolean }[];
   impacts: { x: number; y: number; ticks: number }[];
   parries: { x: number; y: number; ticks: number }[];
@@ -272,7 +274,7 @@ function reflectBlast(s: GameState, room: number) {
 function explode(s: GameState, p: VenusTotem) {
   const t = s.venus!, x = p.enemy.x, y = p.enemy.y, room = chamberOfTile(p.enemy.tileX, p.enemy.tileY);
   p.overload = 0; p.enemy.totem = undefined; p.intro = false;
-  t.blasts.push({ x, y, ticks: 30 });
+  t.blasts.push({ x, y, ticks: 30, kind: 'overload' });
   encounterEffect(s, 'totem-overload', p.enemy, x, y, 36, '#ffce8a');
   if (room >= 0 && chamberOfTile(s.playerTileX, s.playerTileY) === room) {
     // The Sand Swirl guard counters the blast too: it blocks all of it and heals you.
@@ -307,7 +309,7 @@ export function venusTotemDestroyed(s: GameState, e: Enemy) {
   healPlayer(s, VENUS.totemHeal); healCore(s, VENUS.totemHeal); // breaking one in order heals you and Ruby a little
   t.nests = t.nests.filter(n => n.totemId !== e.id);
   if (t.core) (t.core.clues ??= []).push({ tileX: e.tileX, tileY: e.tileY, ticks: VENUS.clueTicks });
-  t.blasts.push({ x: e.x, y: e.y, ticks: 20 });
+  t.blasts.push({ x: e.x, y: e.y, ticks: 36, kind: 'totemBreak' });
   playAudioOneShot('/sounds/aegis-shield-break.wav', .6, 1.2);
   const boss = venusBoss(s);
   if (boss?.aegis) boss.aegis.constructsLeft = t.total - t.next;
@@ -358,6 +360,7 @@ export function venusSweepCovers(dx: number, dy: number) {
 export function useSandSweep(s: GameState): boolean {
   const t = s.venus;
   if (!t || s.gamePhase !== 'playing' || t.sweepCooldown > 0) return false;
+  s.playerCastTicks = 24; s.playerCastKind = 'aegis_sentinel'; s.playerPrimalCast = true;
   t.sweepCooldown = VENUS.sweepCooldown; t.parryUntil = s.gameTick + VENUS.parryWindow; t.guardUntil = s.gameTick + VENUS.guardTicks;
   const cx = Math.floor(s.playerX / S), cy = Math.floor(s.playerY / S), x = (cx + .5) * S, y = (cy + .5) * S;
   const inSweep = (tx: number, ty: number) => venusSweepCovers(tx - cx, ty - cy);
@@ -402,7 +405,6 @@ function parried(s: GameState, boss: Enemy, x: number, y: number, stun: number =
   const scratch = boss.aegis?.shielded ? AEGIS_DAMAGE_MULT : 1; // full damage only while his shield is broken
   boss.hp = Math.max(floor, boss.hp - venusBand(t.phase) * VENUS.parryDamage * scratch); boss.flashTicks = 16;
   if (boss.hp <= 0) killEnemy(s, s.enemies.indexOf(boss));
-  playAudioOneShot('/sounds/aegis-attack.mp3', .9, 1.5); playAudioOneShot('/sounds/aegis-shield-break.wav', .5, 1.8);
   s.screenShakeTicks = Math.max(s.screenShakeTicks, 12); s.screenShakeAmt = Math.max(s.screenShakeAmt, 5);
   return true;
 }
@@ -419,7 +421,10 @@ function updateLeap(s: GameState, boss: Enemy) {
   }
   const l = t.leap;
   if (l.stage === 'aim') { l.tx = s.playerTileX; l.ty = s.playerTileY; if (--l.ticks <= 0) { l.stage = 'lock'; l.ticks = VENUS.leapLock; } return; }
-  if (--l.ticks > 0) return;
+  if (--l.ticks > 0) {
+    if (l.ticks === 45) playAudioOneShot('/sounds/falling-thing.wav', .85);
+    return;
+  }
   // Land: on the locked tile (or the nearest open one), hurting and shoving anyone close.
   t.leap = null; t.leapTimer = t.leapTotal = attackGap(s, VENUS.leapGap); t.leapSlow = VENUS.leapSlow; // he lumbers for a moment after landing
   const x = isFloorTile(s.map, l.tx, l.ty) ? l.tx : boss.tileX, y = isFloorTile(s.map, l.tx, l.ty) ? l.ty : boss.tileY;

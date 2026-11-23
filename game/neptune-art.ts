@@ -1,4 +1,5 @@
-import { drawPrimalAftershock } from './primal-impact-art';
+import { drawPrimalAftershock, tracePrimalPressureFront } from './primal-impact-art';
+import { NEPTUNE_CLAM, NEPTUNE_CORRUPTED_CLAM } from './constants';
 import { drawEnemyHealthBar } from './enemy-health-art';
 import { TILE_SIZE, CHAMBER_BOUNDS, MAP_COLS, MAP_ROWS, T_WALL, T_FLOOR, chamberOfTile, ENEMY_CONFIGS, NEPTUNE_PUFF_TICKS, NEPTUNE_BOMB_FUSE, NEPTUNE_BOMB_RADIUS, NEPTUNE_LASER_WARNING, NEPTUNE_CLONE_HEAL_FX_TICKS } from './constants';
 import type { Enemy, GameState } from './engine';
@@ -268,7 +269,8 @@ function drawStinger(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: nu
 // Water clone: a smaller, see-through echo of the Sea Chanter's silhouette (square shell, stepped fan fins,
 // crest and fluke, pearl eyes) built from a few flat water-tone blocks, without her scales, gills or lashes.
 function drawClone(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
-  const shimmer = .55 + .12 * Math.sin(tick * .12 + e.id), edge = '#4f7fc4', water = '#6fc7ff', pale = '#d8f2ff';
+  const taunted=(e.neptuneTauntTicks??0)>0;
+  const shimmer = (taunted?.72:.55) + .12 * Math.sin(tick * .12 + e.id), edge = taunted?'#519aaf':'#4f7fc4', water = taunted?'#a5fff2':'#6fc7ff', pale = taunted?'#effffb':'#d8f2ff';
   ctx.save(); ctx.globalAlpha = shimmer; ctx.translate(0, Math.round(Math.sin(tick * .06 + e.id) * 2)); ctx.scale(.75, .75);
   for (const side of [-1, 1]) {
     block(ctx, side * 27 - 5, -22, 10, 34, edge); block(ctx, side * 36 - 4, -28, 8, 28, edge);
@@ -379,11 +381,70 @@ export function drawNeptuneUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy
   return true;
 }
 
+/** Pearl shell with a hinged upper valve; the same model is used in the rule sheet. */
+export function drawNeptuneClam(ctx:CanvasRenderingContext2D,x:number,y:number,openTicks:number,tick:number,corrupted=false){
+  const openDuration=corrupted?NEPTUNE_CORRUPTED_CLAM.openTicks:NEPTUNE_CLAM.openTicks;
+  const opening=openTicks>0?Math.min(1,(openDuration-openTicks)/10,openTicks/12):0;
+  const palette:Record<string,string>={'#456978':'#563347','#294854':'#302336','#9bb5bd':'#b87999','#658b9c':'#78465f','#243747':'#271d31','#786a8f':'#753c67','#b6e7df':'#f58caf','#f0fff3':'#ffe0e7','#496c83':'#673750','#92adbf':'#a86887','#bed0d7':'#c18aa4','#dce5df':'#efbbcd','#687f9f':'#713c61','#6b88a2':'#864a6a','#9babc8':'#9a557a','#a2b5c8':'#b17492','#c3f6e6':'#ffaccd','#587b8c':'#dc7ca0','#bff5e8':'#ffb5cd'};
+  const paint=(ctx:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,color:string)=>block(ctx,x,y,w,h,corrupted?(palette[color]??color):color);
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));
+  paint(ctx,-22,11,44,7,'#071c2b');
+  paint(ctx,-20,0,40,14,'#456978');paint(ctx,-15,11,30,6,'#294854');
+  paint(ctx,-18,-1,36,9,'#9bb5bd');paint(ctx,-13,7,26,5,'#658b9c');
+  if(opening>0){
+    paint(ctx,-16,-2-opening*8,32,8+opening*8,'#243747');
+    paint(ctx,-12,0,24,7,'#786a8f');
+    ctx.shadowColor=corrupted?'#ee80ab':'#bff5e8';ctx.shadowBlur=opening*5;
+    paint(ctx,-5,-3,10,10,'#b6e7df');paint(ctx,-3,-4,6,8,'#f0fff3');ctx.shadowBlur=0;
+  }
+  ctx.save();ctx.translate(0,-opening*17);
+  paint(ctx,-21,-5,42,9,'#496c83');paint(ctx,-17,-12,34,16,'#92adbf');
+  paint(ctx,-12,-17,24,21,'#bed0d7');paint(ctx,-5,-20,10,24,'#dce5df');
+  paint(ctx,-16,-10,4,10,'#687f9f');paint(ctx,12,-10,4,10,'#6b88a2');
+  paint(ctx,-9,-15,3,14,'#9babc8');paint(ctx,6,-15,3,14,'#a2b5c8');
+  paint(ctx,-17,1,34,3,opening>0?'#c3f6e6':'#587b8c');
+  ctx.restore();
+  if(opening>0){ctx.globalAlpha=opening*(.55+.15*Math.sin(tick*.08));paint(ctx,-3,9,6,3,'#bff5e8');}
+  ctx.restore();
+}
+
+export function drawNeptuneClamWave(ctx:CanvasRenderingContext2D,x:number,y:number,waveTicks:number,corrupted=false){
+  if(waveTicks<=0)return;
+  const p=1-waveTicks/NEPTUNE_CLAM.waveTicks,r=(corrupted?NEPTUNE_CORRUPTED_CLAM.radius:NEPTUNE_CLAM.radius)*TILE_SIZE*p,fade=Math.min(1,(1-p)*4);
+  ctx.save();ctx.lineJoin='miter';
+  if(corrupted){
+    tracePrimalPressureFront(ctx,x,y,r*.97);ctx.globalAlpha=fade*.6;ctx.strokeStyle='#24162e';ctx.lineWidth=23;ctx.stroke();
+    ctx.save();ctx.translate(x,y);ctx.scale(.97+.025*Math.sin(p*18),.97+.025*Math.cos(p*21));
+    tracePrimalPressureFront(ctx,0,0,r*.9);ctx.setLineDash([22,10,6,14]);ctx.lineDashOffset=-p*65;
+    ctx.globalAlpha=fade*.75;ctx.strokeStyle='#ad4b84';ctx.lineWidth=6;ctx.stroke();ctx.restore();
+    for(let i=0;i<12;i++){
+      const angle=i*Math.PI/6,travel=r*(.78+.12*Math.sin(i*2.3+p*8));
+      ctx.save();ctx.translate(x+Math.cos(angle)*travel,y+Math.sin(angle)*travel);ctx.rotate(angle+.3*Math.sin(i+p*9));
+      ctx.globalAlpha=fade*.7;ctx.fillStyle='#66365f';ctx.fillRect(-22,-4,32,8);
+      ctx.globalAlpha=fade*.9;ctx.fillStyle=i%3?'#d86ca5':'#ffd4e4';ctx.fillRect(-14,-2,22,3);ctx.restore();
+    }
+  }
+  for(const [scale,color,width,alpha] of [[1,corrupted?'#f7a2c5':'#baf7eb',4,.8],[.94,corrupted?'#a14a7c':'#639fb7',10,.28],[.84,corrupted?'#d07da7':'#92cbdc',2,.35]] as const){
+    tracePrimalPressureFront(ctx,x,y,r*scale);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.globalAlpha=fade*alpha;ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // Floor layer: tides flowing through a room and the sky laser's countdown on its chosen room.
 export function drawNeptuneOverlay(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, tick: number) {
   const neptune = state.neptune;
   if (!neptune) return;
   ctx.save();
+  for(const clam of neptune.clams??[]){
+    if(clam.waveTicks>0){
+      ctx.save();ctx.beginPath();
+      for(let ty=clam.tileY-NEPTUNE_CLAM.radius;ty<=clam.tileY+NEPTUNE_CLAM.radius;ty++)for(let tx=clam.tileX-NEPTUNE_CLAM.radius;tx<=clam.tileX+NEPTUNE_CLAM.radius;tx++){
+        if(state.map[ty]?.[tx]===T_FLOOR)ctx.rect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
+      }
+      ctx.clip();drawNeptuneClamWave(ctx,(clam.tileX+.5)*TILE_SIZE-camX,(clam.tileY+.5)*TILE_SIZE-camY,clam.waveTicks,clam.corrupted);ctx.restore();
+    }
+    drawNeptuneClam(ctx,(clam.tileX+.5)*TILE_SIZE-camX,(clam.tileY+.5)*TILE_SIZE-camY,clam.openTicks,tick,clam.corrupted);
+  }
   for (const tide of neptune.tides) {
     const [r1, c1, r2, c2] = CHAMBER_BOUNDS[tide.chamber];
     const x = c1 * TILE_SIZE - camX, y = r1 * TILE_SIZE - camY, w = (c2 - c1 + 1) * TILE_SIZE, h = (r2 - r1 + 1) * TILE_SIZE;
@@ -436,15 +497,11 @@ export function drawNeptuneOverlay(ctx: CanvasRenderingContext2D, state: Readonl
   if (laser) {
     const [r1, c1, r2, c2] = CHAMBER_BOUNDS[laser.chamber], progress = 1 - laser.ticks / NEPTUNE_LASER_WARNING;
     const x = c1 * TILE_SIZE - camX, y = r1 * TILE_SIZE - camY, w = (c2 - c1 + 1) * TILE_SIZE, h = (r2 - r1 + 1) * TILE_SIZE;
-    const pulse = Math.abs(Math.sin(tick * (.15 + progress * .25)));
-    ctx.globalAlpha = .05 + pulse * (.08 + progress * .12); ctx.fillStyle = '#c9f2ff'; ctx.fillRect(x, y, w, h);
-    ctx.globalAlpha = .6 + pulse * .35; ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = 4; ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
-    // A narrowing targeting column marks the strike centre.
-    const cx = x + w / 2, cy = y + h / 2, beam = Math.round(w * (.5 - progress * .42));
-    ctx.globalAlpha = .18 + progress * .35; ctx.fillStyle = '#9fe4ff'; ctx.fillRect(cx - beam / 2, y, beam, h);
-    ctx.globalAlpha = .9; ctx.fillStyle = '#ffffff';
-    ctx.font = '700 22px var(--font-pixel), monospace'; ctx.textAlign = 'center';
-    ctx.fillText(`TRIDENT ${Math.ceil(laser.ticks / 60)}s`, cx, cy);
+    const pulse=.5+.5*Math.sin(tick*(.1+progress*.12));
+    ctx.globalAlpha=.05+pulse*(.06+progress*.08);ctx.fillStyle='#b7f2ed';ctx.fillRect(x,y,w,h);
+    ctx.globalAlpha=.55+pulse*.25;ctx.strokeStyle='#d5fff6';ctx.lineWidth=3;ctx.strokeRect(x+2,y+2,w-4,h-4);
+    const cx=x+w/2,beam=Math.round(w*(.5-progress*.42));
+    ctx.globalAlpha=.14+progress*.24;ctx.fillStyle='#8edbe9';ctx.fillRect(cx-beam/2,y,beam,h);
   }
   ctx.restore();
 }
@@ -483,49 +540,109 @@ export function drawWaterBurst(ctx: CanvasRenderingContext2D, x: number, y: numb
   ctx.restore();
 }
 
-// Sky laser impact (drawn above actors): a white-cyan beam slams down over the whole room and narrows to a core,
-// square water shockwaves ripple out from the centre, and blocky droplets splash up and fall back.
-export function drawSkyLaserImpact(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
-  const impact = state.neptune?.laserImpact;
-  if (!impact) return;
-  const total = 120, age = total - impact.ticks, progress = age / total;
-  const [r1, c1, r2, c2] = CHAMBER_BOUNDS[impact.chamber];
-  const left = c1 * TILE_SIZE - camX, top = r1 * TILE_SIZE - camY, width = (c2 - c1 + 1) * TILE_SIZE, height = (r2 - r1 + 1) * TILE_SIZE;
-  const cx = left + width / 2, cy = top + height / 2;
-  drawPrimalAftershock(ctx,state,camX,camY,impact.chamber,age,'#59c8ff','#e8fbff');
-  ctx.save();
-  // Room-wide flash.
-  ctx.globalAlpha = Math.max(0, 1 - age / 12) * .55; ctx.fillStyle = '#e8fbff'; ctx.fillRect(left, top, width, height);
-  // The beam: full room width at impact, shrinking to a thin bright core, reaching from far above the room.
-  const beam = Math.max(10, width * Math.max(0, 1 - age / 26)), fade = Math.max(0, 1 - Math.max(0, age - 26) / 30);
-  const beamTop = top - 900;
-  ctx.globalAlpha = .35 * fade; ctx.fillStyle = '#59c8ff'; ctx.fillRect(Math.round(cx - beam / 2 - 18), beamTop, Math.round(beam + 36), cy - beamTop);
-  ctx.globalAlpha = .75 * fade; ctx.fillStyle = '#9fe4ff'; ctx.fillRect(Math.round(cx - beam / 2), beamTop, Math.round(beam), cy - beamTop);
-  ctx.globalAlpha = fade; ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(cx - beam / 6), beamTop, Math.round(beam / 3), cy - beamTop);
-  ctx.beginPath(); ctx.rect(left, top, width, height); ctx.clip();
-  // Square shockwaves rippling out across the water.
-  for (let i = 0; i < 4; i++) {
-    const t = (age - i * 7) / 45;
-    if (t <= 0 || t >= 1) continue;
-    const half = Math.round((20 + t * width * .6) / 8) * 8;
-    ctx.globalAlpha = (1 - t) * (i % 2 ? .45 : .85); ctx.strokeStyle = i % 2 ? '#59c8ff' : '#e8fbff'; ctx.lineWidth = i % 2 ? 4 : 7;
-    ctx.shadowColor = '#9fe4ff'; ctx.shadowBlur = i % 2 ? 0 : 10;
-    ctx.strokeRect(cx - half, cy - half, half * 2, half * 2); ctx.shadowBlur = 0;
-  }
-  // Splash: blocky droplets thrown outward and upward, falling back with gravity.
-  for (let i = 0; i < 72; i++) {
-    const angle = i * 2.39996, speed = 3 + (i % 6), lift = 5 + (i % 4) * 2;
-    const x = cx + Math.cos(angle) * speed * age, y = cy + Math.sin(angle) * speed * age * .55 - lift * age + .18 * age * age;
-    ctx.globalAlpha = (1 - progress) * (i % 3 ? .85 : .55);
-    ctx.fillStyle = i % 4 ? '#9fe4ff' : '#ffffff';
-    const size = 5 + (i % 3) * 3; ctx.fillRect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, size, size + 2);
+// Ocean’s Chorus retains the broad column, narrowing core and square water shockwaves.
+/** Coherent arcing sprays keep Chorus's water readable beyond the bright impact column. */
+/** Hollow water bubbles and pearl glitter scatter with the outgoing stepped wave. */
+function drawChorusWaveScatter(ctx:CanvasRenderingContext2D,cx:number,cy:number,reach:number,age:number){
+  const rim=[[-.44,-1],[.44,-1],[.44,-.78],[.78,-.78],[.78,-.44],[1,-.44],[1,.44],[.78,.44],[.78,.78],[.44,.78],[.44,1],[-.44,1],[-.44,.78],[-.78,.78],[-.78,.44],[-1,.44],[-1,-.44],[-.78,-.44],[-.78,-.78],[-.44,-.78]];
+  ctx.save();ctx.shadowBlur=0;
+  for(let echo=0;echo<2;echo++){
+    const p=(age-6-echo*9)/95;if(p<=0||p>=1)continue;
+    const radius=p*reach,fade=Math.min(1,p*12,(1-p)*5)*(echo?.65:1),count=echo?112:168;
+    for(let i=0;i<count;i++){
+      const segment=i%rim.length,t=(i*.618034+echo*.31)%1,a=rim[segment],b=rim[(segment+1)%rim.length];
+      const spread=.9+(i%9)*.018,dx=(a[0]+(b[0]-a[0])*t)*radius*spread,dy=(a[1]+(b[1]-a[1])*t)*radius*spread;
+      const x=Math.round(cx+dx),y=Math.round(cy+dy-Math.sin(p*Math.PI)*(i%4)*4);
+      if(i%3!==0){
+        const size=4+i%3; // 10–12px hollow bubbles; the battlefield stays visible inside.
+        tracePrimalPressureFront(ctx,x,y,size);
+        ctx.globalAlpha=fade*.085;ctx.fillStyle='#83dce8';ctx.fill();
+        ctx.globalAlpha=fade*.55;ctx.strokeStyle='#d1fff6';ctx.lineWidth=1.5;ctx.stroke();
+        ctx.globalAlpha=fade*.8;block(ctx,x-size+1,y-2,1,3,'#effff9');block(ctx,x-1,y-size+1,3,1,'#effff9');
+      }else{
+        const shine=Math.pow(Math.max(0,Math.sin(age*.16+i*1.7+echo)),3),size=4+i%4;
+        ctx.globalAlpha=fade*(.28+shine*.65);
+        block(ctx,x-size,y,size*2+1,1,'#dcfff6');block(ctx,x,y-size,1,size*2+1,'#dcfff6');
+        ctx.globalAlpha=fade*(.4+shine*.6);block(ctx,x-1,y-1,3,3,'#ffffff');
+      }
+    }
   }
   ctx.restore();
 }
 
-/** A screen-wide tide flowing toward the Sea Chanter when surviving clones heal her. */
-export function drawNeptuneCloneHeal(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, width: number, height: number, camX: number, camY: number, zoom: number) {
-  const remaining = state.neptune?.cloneHealTicks ?? 0;
+function drawChorusPearlSpray(ctx:CanvasRenderingContext2D,cx:number,cy:number,width:number,height:number,age:number){
+  ctx.save();ctx.shadowBlur=0;
+  for(let i=0;i<48;i++){
+    const p=(age-i%6*2)/(66+i%4*5);if(p<=0||p>=1)continue;
+    const angle=i*2.39996+.2,reach=width*(.44+i%5*.055),lift=height*(.14+i%3*.045);
+    const at=(t:number)=>{const d=reach*(1-(1-t)*(1-t));return[Math.cos(angle)*d,Math.sin(angle)*d*.65-Math.sin(t*Math.PI)*lift+t*t*height*.1];};
+    const [x,y]=at(p),[px,py]=at(Math.max(0,p-.025)),turn=Math.atan2(y-py,x-px),fade=Math.sin(p*Math.PI)*Math.pow(1-p,.35)*.3,size=6+i%4*2;
+    ctx.save();ctx.translate(Math.round(cx+x),Math.round(cy+y));ctx.rotate(turn);ctx.scale(.4,.4);
+    ctx.globalAlpha=fade*.8;block(ctx,-size/2,-size*.35,size,size*.7,'#459abb');
+    block(ctx,-size/2,-size*.35,size,3,i%3?'#a7eee8':'#effff8');
+    ctx.globalAlpha=fade;block(ctx,size*.12,-1,size*.28,2,'#f5fff9');ctx.restore();
+    if(i%4===0){
+      const shine=fade*(.35+.65*Math.pow(Math.max(0,Math.sin(age*.13+i)),3));
+      ctx.globalAlpha=shine*.6;block(ctx,cx+x-3,cy+y-.5,6,1,'#dffff5');block(ctx,cx+x-.5,cy+y-3,1,6,'#dffff5');
+    }
+  }
+  ctx.restore();
+}
+
+export function drawSkyLaserImpact(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
+  const impact=state.neptune?.laserImpact;if(!impact)return;
+  const total=120,age=total-impact.ticks,progress=age/total;
+  const [r1,c1,r2,c2]=CHAMBER_BOUNDS[impact.chamber];
+  const left=c1*TILE_SIZE-camX,top=r1*TILE_SIZE-camY,width=(c2-c1+1)*TILE_SIZE,height=(r2-r1+1)*TILE_SIZE,cx=left+width/2,cy=top+height/2;
+  drawPrimalAftershock(ctx,state,camX,camY,impact.chamber,age,'#54bad3','#dffff5',false);
+  ctx.save();ctx.shadowBlur=0;
+  ctx.globalAlpha=Math.max(0,1-age/12)*.36;ctx.fillStyle='#ddfff7';ctx.fillRect(left,top,width,height);
+  // Preserve the original broad strike and narrowing core, with cool pearl water layers.
+  const beam=Math.max(10,width*Math.max(0,1-age/26)),fade=Math.max(0,1-Math.max(0,age-26)/30),beamTop=top-900;
+  ctx.globalAlpha=.25*fade;ctx.fillStyle='#3e9fc3';ctx.fillRect(Math.round(cx-beam/2-18),beamTop,Math.round(beam+36),cy-beamTop);
+  ctx.globalAlpha=.65*fade;ctx.fillStyle='#8bdbe5';ctx.fillRect(Math.round(cx-beam/2),beamTop,Math.round(beam),cy-beamTop);
+  ctx.globalAlpha=fade;ctx.fillStyle='#e6fff8';ctx.fillRect(Math.round(cx-beam/6),beamTop,Math.round(beam/3),cy-beamTop);
+  // Fine refractions remain inside the same column silhouette.
+  for(const side of [-1,1]){ctx.globalAlpha=fade*.7;ctx.fillStyle='#bafff5';ctx.fillRect(Math.round(cx+side*beam*.39),beamTop,2,cy-beamTop);}
+  // Pearl refractions flow inside the original column, preserving its silhouette.
+  for(let i=0;i<6;i++){
+    const f=(i-2.5)/6,xx=cx+beam*f*.85,travel=(age*31+i*149)%Math.max(1,cy-beamTop);
+    ctx.globalAlpha=fade*(i%2?.22:.4);ctx.fillStyle=i%2?'#53b9d4':'#c6fff3';
+    ctx.fillRect(Math.round(xx),beamTop,2,cy-beamTop);
+    ctx.globalAlpha=fade*.8;ctx.fillStyle='#f2fff8';ctx.fillRect(Math.round(xx)-1,beamTop+travel,4,18+i%3*8);
+  }
+  drawChorusPearlSpray(ctx,cx,cy,width,height,age);
+  const reach=Math.max(...[[0,0],[MAP_COLS*TILE_SIZE,0],[0,MAP_ROWS*TILE_SIZE],[MAP_COLS*TILE_SIZE,MAP_ROWS*TILE_SIZE]].map(([x,y])=>Math.hypot(x-(cx+camX),y-(cy+camY))));
+  drawChorusWaveScatter(ctx,cx,cy,reach,age);
+  ctx.beginPath();ctx.rect(left,top,width,height);ctx.clip();
+  for(let i=0;i<4;i++){
+    const t=(age-i*7)/45;if(t<=0||t>=1)continue;
+    const half=Math.round((20+t*width*.6)/8)*8;
+    ctx.globalAlpha=(1-t)*(i%2?.3:.7);ctx.strokeStyle=i%2?'#54bad3':'#dffff5';ctx.lineWidth=i%2?3:5;
+    ctx.shadowColor='#a5f3ed';ctx.shadowBlur=i%2?0:4;ctx.strokeRect(cx-half,cy-half,half*2,half*2);ctx.shadowBlur=0;
+  }
+  // Large shaded water drops, each with a pale face and a blue underside.
+  for(let i=0;i<64;i++){
+    const angle=i*2.39996,speed=3+i%6,lift=5+i%4*2;
+    const x=cx+Math.cos(angle)*speed*age,y=cy+Math.sin(angle)*speed*age*.55-lift*age+.18*age*age,size=4+i%4;
+    ctx.globalAlpha=(1-progress)*(i%3?.18:.24);ctx.fillStyle='#58afcf';ctx.fillRect(Math.round(x),Math.round(y),size,size+2);
+    ctx.fillStyle=i%3?'#adefe9':'#eafff7';ctx.fillRect(Math.round(x),Math.round(y),size,2);
+    ctx.globalAlpha*=.75;ctx.fillStyle='#dcfff5';ctx.fillRect(Math.round(x)+2,Math.round(y)+2,1,Math.max(2,size-2));
+  }
+  // Prominent pearl glints follow the splash with a clean, staggered shimmer.
+  for(let i=0;i<24;i++){
+    const angle=i*2.39996,r=age*(2+i%3),xx=cx+Math.cos(angle)*r,yy=cy+Math.sin(angle)*r*.6-age*.7;
+    const shine=Math.max(0,Math.sin(age*.16+i));ctx.globalAlpha=(1-progress)*shine*.2;ctx.fillStyle='#e6fff6';
+    const size=3+i%3*.5;
+    ctx.fillRect(Math.round(xx)-size,Math.round(yy)-1,size*2,1.5);ctx.fillRect(Math.round(xx)-1,Math.round(yy)-size,1.5,size*2);
+    ctx.globalAlpha=(1-progress)*shine*.3;ctx.fillStyle='#ffffff';ctx.fillRect(Math.round(xx)-1,Math.round(yy)-1,2,2);
+  }
+  ctx.restore();
+}
+
+/** A screen-wide tide flows toward the Sea Chanter as she resurfaces. */
+export function drawNeptuneResurfaceEffect(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, width: number, height: number, camX: number, camY: number, zoom: number) {
+  const remaining = state.neptune?.resurfaceEffectTicks ?? 0;
   if (remaining <= 0) return;
   const boss = state.enemies.find(enemy => enemy.id === state.neptune?.bossId && enemy.hp > 0);
   if (!boss) return;
@@ -583,7 +700,7 @@ export function drawNeptuneCloneHeal(ctx: CanvasRenderingContext2D, state: Reado
     ctx.restore();
   }
 
-  if (bossX === x && bossY === y && age >= 28) {
+  if (state.neptune?.resurfaceHealed && bossX === x && bossY === y && age >= 28) {
     const life = (age - 28) / (NEPTUNE_CLONE_HEAL_FX_TICKS - 28);
     for (let i = 0; i < 6; i++) {
       const px = x + (i - 2.5) * 17;

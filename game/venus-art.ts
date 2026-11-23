@@ -18,25 +18,16 @@ export function drawVenusNest(ctx: CanvasRenderingContext2D, x: number, y: numbe
 }
 
 /** Draw an open, turning ribbon of sand as solid streaks aligned with the wind. */
-/** Sand Swirl at any scale, for the rule sheet: the same blocky octagon footprint (a warm tint and a thick sandy border)
+/** Sand Swirl at any scale, for the rule sheet: the same blocky octagon footprint (a warm tint with no border)
  * and the same three turning ribbons and grit as in play. progress runs 0–1 over the sweep; tile is the tile size in px. */
 export function drawSandSwirlPreview(ctx: CanvasRenderingContext2D, x: number, y: number, tile: number, progress: number) {
   const r = VENUS.sweepRadius, opacity = (1 - progress) ** .7;
   ctx.save();
-  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-    if (!venusSweepCovers(dx, dy)) continue;
-    const cx = x + (dx - .5) * tile, cy = y + (dy - .5) * tile;
-    ctx.globalAlpha = opacity * .22; block(ctx, cx, cy, tile, tile, SAND);
-    for (const [ex, ey, bx, by, bw, bh] of [[0, -1, 0, 0, tile, 3], [0, 1, 0, tile - 3, tile, 3], [-1, 0, 0, 0, 3, tile], [1, 0, tile - 3, 0, 3, tile]] as const) {
-      if (venusSweepCovers(dx + ex, dy + ey)) continue; // only the outer edge gets the border
-      ctx.globalAlpha = opacity * .75; block(ctx, cx + bx, cy + by, bw, bh, '#6e4e2a');
-      ctx.globalAlpha = opacity; block(ctx, cx + bx + (bw > 3 ? 0 : 1), cy + by + (bh > 3 ? 0 : 1), bw > 3 ? bw : 1, bh > 3 ? bh : 1, '#fff0c8');
-    }
-  }
+  drawSandFeather(ctx,x,y,tile,opacity);
   const radius = r * tile, reach = tile * .75 + (radius - tile * .75) * (1 - (1 - progress) ** 2), rotation = progress * Math.PI * 1.65;
-  for (let arm = 0; arm < 3; arm++) drawSandRibbon(ctx, x, y, rotation + arm * Math.PI * 2 / 3, reach * (1 - arm * .035), opacity, 12);
-  for (let i = 0; i < 40; i++) {
-    const angle = i * 2.39996 + rotation * (1 + i % 5 * .1), d = reach * (.32 + (i * 37 % 59) / 90), size = 2 + i % 2;
+  for (let arm = 0; arm < 3; arm++) drawSandRibbon(ctx, x, y, rotation + arm * Math.PI * 2 / 3, reach * (1 - arm * .035), opacity, 18);
+  for (let i = 0; i < 110; i++) {
+    const angle = i * 2.39996 + rotation * (1 + i % 5 * .1), d = reach * (.08 + Math.pow((i * 37 % 67) / 67,1.7)*.88), size = 2 + i % 2;
     ctx.globalAlpha = opacity * (.36 + i % 4 * .14); block(ctx, x + Math.cos(angle) * d, y + Math.sin(angle) * d, size, size, i % 4 === 0 ? '#ffe3b5' : i % 3 === 0 ? '#bd8757' : SAND);
   }
   ctx.restore();
@@ -51,16 +42,67 @@ function drawSandRibbon(ctx: CanvasRenderingContext2D, x: number, y: number, ang
     ctx.save();
     ctx.translate(x + Math.cos(direction) * radius, y + Math.sin(direction) * radius);
     ctx.rotate(direction + 1.23);
+    ctx.globalAlpha=opacity*Math.pow(1-tail,1.5)*.1;
+    block(ctx,-length*.8,-width*.8,length*1.6,width*1.8,'#ecc789');
     ctx.globalAlpha = opacity * (1 - tail) * .48;
     block(ctx, -length / 2 - 4, -width / 2, length + 8, width + 4, '#ae7749');
     ctx.globalAlpha = opacity * (1 - tail) * .82;
     block(ctx, -length / 2, -width / 2, length, width, SAND);
-    if (i % 3 === 0) {
+    if (i % 2 === 0) {
       ctx.globalAlpha = opacity * (1 - tail) * .9;
       block(ctx, -length / 3, -width / 2 - 1, length * .7, 2, '#ffdfaa');
     }
+    if(i===0){
+      ctx.globalAlpha=opacity*.8;block(ctx,length*.2,-width/2-3,6,6,'#fff0ca');
+      ctx.globalAlpha=opacity*.45;block(ctx,-length*.6,width*.7,4,3,'#e6ba79');
+    }
     ctx.restore();
   }
+}
+
+let sandSweepContour:number[][]|undefined;
+function sandTileContour(){
+  if(sandSweepContour)return sandSweepContour;
+  const r=VENUS.sweepRadius,edges:number[][][]=[];
+  for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+    if(!venusSweepCovers(dx,dy))continue;
+    const l=dx*2-1,t=dy*2-1,rr=l+2,b=t+2;
+    if(!venusSweepCovers(dx,dy-1))edges.push([[l,t],[rr,t]]);
+    if(!venusSweepCovers(dx+1,dy))edges.push([[rr,t],[rr,b]]);
+    if(!venusSweepCovers(dx,dy+1))edges.push([[rr,b],[l,b]]);
+    if(!venusSweepCovers(dx-1,dy))edges.push([[l,b],[l,t]]);
+  }
+  const next=new Map(edges.map(edge=>[edge[0].join(','),edge[1]])),points:number[][]=[];
+  const start=edges[0][0];let at=start;
+  do{points.push(at);at=next.get(at.join(','))!;}while(at&&at.join(',')!==start.join(',')&&points.length<=edges.length);
+  sandSweepContour=points.filter((p,i)=>{const a=points[(i+points.length-1)%points.length],b=points[(i+1)%points.length];return(p[0]-a[0])*(b[1]-p[1])!==(p[1]-a[1])*(b[0]-p[0]);}).map(([x,y])=>[x/2,y/2]);
+  return sandSweepContour;
+}
+
+/** The tile-shaped contour stays readable while its enlarged outer margin blends away. */
+function drawSandFeather(ctx:CanvasRenderingContext2D,x:number,y:number,tile:number,opacity:number,floor?:(dx:number,dy:number)=>boolean){
+  ctx.save();
+  const r=VENUS.sweepRadius,depth=tile*.8,expand=-tile*.4,points=sandTileContour();
+  if(floor){
+    ctx.beginPath();for(let dy=-r-1;dy<=r+1;dy++)for(let dx=-r-1;dx<=r+1;dx++)if(floor(dx,dy))ctx.rect(x+(dx-.5)*tile,y+(dy-.5)*tile,tile,tile);ctx.clip();
+  }
+  const trace=(margin:number)=>{
+    const offset=expand+margin;
+    points.forEach((p,i)=>{
+      const prev=points[(i+points.length-1)%points.length],next=points[(i+1)%points.length];
+      const nx=Math.sign(p[1]-prev[1])+Math.sign(next[1]-p[1]),ny=-Math.sign(p[0]-prev[0])-Math.sign(next[0]-p[0]);
+      const px=x+p[0]*tile+nx*offset,py=y+p[1]*tile+ny*offset;
+      if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);
+    });ctx.closePath();
+  };
+  const sand=ctx.createRadialGradient(x,y,0,x,y,(r+.9)*tile);
+  sand.addColorStop(0,'#a95720');sand.addColorStop(.32,'#cf8a35');sand.addColorStop(.65,'#edba68');sand.addColorStop(1,'#fff1c8');
+  ctx.fillStyle=sand;ctx.globalAlpha=opacity*.28;ctx.beginPath();trace(0);ctx.fill();
+  for(let band=0;band<28;band++){
+    ctx.globalAlpha=opacity*.28*(1-(band+.5)/28);
+    ctx.beginPath();trace(depth*(band+1)/28);trace(depth*band/28);ctx.fill('evenodd');
+  }
+  ctx.restore();
 }
 
 /** Trace the fixed tile footprint and tint its floor. */
@@ -71,18 +113,14 @@ function drawSandSweepRange(ctx: CanvasRenderingContext2D, state: Readonly<GameS
   const sandTiles: [number, number, number, number][] = [];
 
   ctx.save();
+  drawSandFeather(ctx,(centerTileX+.5)*S-camX,(centerTileY+.5)*S-camY,S,opacity,(dx,dy)=>state.map[centerTileY+dy]?.[centerTileX+dx]===T_FLOOR);
   ctx.fillStyle = '#dcad72';
   ctx.globalAlpha = opacity * .16;
-  ctx.beginPath();
   for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
     if (!inRange(dx, dy)) continue;
     const tx = centerTileX + dx, ty = centerTileY + dy;
     const x = tx * S - camX, y = ty * S - camY;
-    if (state.map[ty]?.[tx] === T_FLOOR) { ctx.fillRect(x, y, S, S); sandTiles.push([tx, ty, x, y]); }
-    if (!inRange(dx, dy - 1)) { ctx.moveTo(x, y); ctx.lineTo(x + S, y); }
-    if (!inRange(dx + 1, dy)) { ctx.moveTo(x + S, y); ctx.lineTo(x + S, y + S); }
-    if (!inRange(dx, dy + 1)) { ctx.moveTo(x + S, y + S); ctx.lineTo(x, y + S); }
-    if (!inRange(dx - 1, dy)) { ctx.moveTo(x, y + S); ctx.lineTo(x, y); }
+    if (state.map[ty]?.[tx] === T_FLOOR) sandTiles.push([tx, ty, x, y]);
   }
   // The swept floor looks sandy: shallow wind ripples and scattered grains on every tile in reach.
   const grain = (tx: number, ty: number, k: number) => { const n = Math.sin(tx * 127.1 + ty * 311.7 + k * 74.7) * 43758.5453; return n - Math.floor(n); };
@@ -92,30 +130,12 @@ function drawSandSweepRange(ctx: CanvasRenderingContext2D, state: Readonly<GameS
       ctx.globalAlpha = opacity * .18; block(ctx, rx, ry, len, 1, '#f1d29a');
       ctx.globalAlpha = opacity * .12; block(ctx, rx + 2, ry + 1, len - 2, 1, '#8a6338');
     }
-    for (let g = 0; g < 5; g++) { // a few grains
+    const centerWeight=Math.max(0,1-Math.hypot(tx-centerTileX,ty-centerTileY)/(radius+.5));
+    for (let g = 0; g < 5+Math.floor(centerWeight*19); g++) { // denser sand near the cast centre
       ctx.globalAlpha = opacity * (.15 + grain(tx, ty, g + 40) * .2);
       block(ctx, x + grain(tx, ty, g + 30) * (S - 3), y + grain(tx, ty, g + 50) * (S - 3), g % 3 ? 2 : 3, 2, g % 4 ? '#e8c48a' : '#a9784a');
     }
   }
-  ctx.beginPath(); // the edge path below is rebuilt after the grains
-  for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
-    if (!inRange(dx, dy)) continue;
-    const x = (centerTileX + dx) * S - camX, y = (centerTileY + dy) * S - camY;
-    if (!inRange(dx, dy - 1)) { ctx.moveTo(x, y); ctx.lineTo(x + S, y); }
-    if (!inRange(dx + 1, dy)) { ctx.moveTo(x + S, y); ctx.lineTo(x + S, y + S); }
-    if (!inRange(dx, dy + 1)) { ctx.moveTo(x + S, y + S); ctx.lineTo(x, y + S); }
-    if (!inRange(dx - 1, dy)) { ctx.moveTo(x, y + S); ctx.lineTo(x, y); }
-  }
-  // A thick edge marks the reach: a dark sandy underline, then the bright line on top.
-  ctx.lineCap = 'square';
-  ctx.globalAlpha = opacity * .55;
-  ctx.strokeStyle = '#7a5530';
-  ctx.lineWidth = 7;
-  ctx.stroke();
-  ctx.globalAlpha = opacity * .95;
-  ctx.strokeStyle = '#f3cd91';
-  ctx.lineWidth = 4;
-  ctx.stroke();
   ctx.restore();
 }
 
@@ -291,6 +311,22 @@ export function drawVenusGround(ctx: CanvasRenderingContext2D, state: Readonly<G
     ctx.globalAlpha = fade * .3; for (let k = 0; k < 3; k++) block(ctx, x - 12 + ((seed + k * 37) % 24), y - 7 + ((seed >> 2) + k * 23) % 14, 2, 2, SAND); // loose grains
   }
   ctx.globalAlpha = 1;
+  // Sand bursts stay on the floor underneath the small shield-wave release.
+  for(const burst of t.blasts){
+    if(burst.kind!=='totemBreak')continue;
+    const p=1-burst.ticks/36,fade=Math.pow(1-p,1.2),x=burst.x-camX,y=burst.y-camY;
+    for(let i=0;i<10;i++){
+      const angle=i*2.39996,d=Math.pow(p,.7)*(24+i%4*17),size=18+i%3*10;
+      ctx.globalAlpha=fade*.28;block(ctx,x+Math.cos(angle)*d-size/2,y+Math.sin(angle)*d*.3-3,size,size*.4,SAND);
+    }
+    for(let i=0;i<48;i++){
+      const angle=i*2.39996,d=Math.pow(p,.7)*(34+i%7*13),lift=Math.sin(p*Math.PI)*(10+i%4*8),size=3+i%4;
+      ctx.save();ctx.translate(x+Math.cos(angle)*d,y+Math.sin(angle)*d*.35-lift+p*p*12);ctx.rotate(angle+p*.5);
+      ctx.globalAlpha=fade*.85;block(ctx,-size/2,-size/2,size,size,i%3?SAND:GOLD);
+      ctx.globalAlpha=fade*.2;block(ctx,-size/2-2,-size/2+2,size,size,SAND);ctx.restore();
+    }
+  }
+  ctx.globalAlpha=1;
   const core = t.core;
   // Clue arrows: where a totem broke, a blocky, see-through cyan arrow with an outer glow points toward the core (snapped to one
   // of eight directions so its blocks stay crisp), nudging along it, then fading out after 2 seconds.
@@ -313,11 +349,11 @@ export function drawVenusGround(ctx: CanvasRenderingContext2D, state: Readonly<G
     const opacity = (1 - progress) ** .7;
     drawSandSweepRange(ctx, state, sweep.x, sweep.y, camX, camY, opacity);
     for (let arm = 0; arm < 3; arm++) {
-      drawSandRibbon(ctx, x, y, rotation + arm * Math.PI * 2 / 3, reach * (1 - arm * .035), opacity, 12);
+      drawSandRibbon(ctx, x, y, rotation + arm * Math.PI * 2 / 3, reach * (1 - arm * .035), opacity, 18);
     }
-    for (let i = 0; i < 66; i++) {
+    for (let i = 0; i < 110; i++) {
       const angle = i * 2.39996 + rotation * (1 + i % 5 * .1);
-      const radius = reach * (.32 + (i * 37 % 59) / 90);
+      const radius = reach * (.08 + Math.pow((i * 37 % 67) / 67,1.7)*.88);
       const size = 2 + i % 3;
       ctx.globalAlpha = opacity * (.36 + i % 4 * .14);
       block(ctx, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, size, i % 4 ? size : 2,
@@ -331,12 +367,20 @@ export function drawVenusGround(ctx: CanvasRenderingContext2D, state: Readonly<G
     const sw = Math.round(r * (.4 + .6 * fall) / 4) * 4, sh = Math.round(r * (.2 + .3 * fall) / 4) * 4; // a blocky shadow that grows as he falls
     ctx.globalAlpha = .25 + .45 * fall; block(ctx, x - sw, y + 6 - sh / 2, sw * 2, sh, '#000000'); block(ctx, x - sw + 4, y + 6 - sh / 2 - 4, sw * 2 - 8, sh + 8, '#000000');
     const blink = locked ? .6 + .4 * Math.abs(Math.sin(tick * .5)) : .5 + .3 * Math.abs(Math.sin(tick * .2));
+    for(let band=0;band<12;band++){
+      const inset=band*2;ctx.globalAlpha=blink*.13*(1-band/12);ctx.strokeStyle=locked?RED:GOLD;ctx.lineWidth=2;
+      ctx.strokeRect(x-r+inset,y-r+inset,(r-inset)*2,(r-inset)*2);
+    }
     ctx.globalAlpha = blink; ctx.strokeStyle = locked ? RED : GOLD; ctx.lineWidth = 3; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
     // Locked: an inner square grows steadily from the centre and fills the target exactly as he lands, so the drop is
     // easy to time. It turns white once a Sand Swirl would parry the landing.
     if (locked) {
       const q = Math.round(r * fall / 2) * 2, parry = l.ticks <= VENUS.parryWindow;
-      ctx.globalAlpha = .18 + .22 * fall; block(ctx, x - q, y - q, q * 2, q * 2, RED);
+      ctx.globalAlpha = .1 + .12 * fall; block(ctx, x - q, y - q, q * 2, q * 2, RED);
+      for(let band=0;band<10;band++){const inset=band*2;if(q<=inset)break;
+        ctx.globalAlpha=blink*.25*(1-band/10);ctx.strokeStyle=parry?'#fff1da':RED;ctx.lineWidth=2;
+        ctx.strokeRect(x-q+inset,y-q+inset,(q-inset)*2,(q-inset)*2);
+      }
       ctx.globalAlpha = .95; ctx.strokeStyle = parry ? '#ffffff' : RED; ctx.lineWidth = 3; if (q > 2) ctx.strokeRect(x - q, y - q, q * 2, q * 2);
     }
     for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { block(ctx, x + sx * (r + 6) - (sx < 0 ? 0 : 10), y + sy * (r + 6) - (sy < 0 ? 0 : 3), 10, 3, locked ? RED : GOLD); block(ctx, x + sx * (r + 6) - (sx < 0 ? 0 : 3), y + sy * (r + 6) - (sy < 0 ? 0 : 10), 3, 10, locked ? RED : GOLD); }
@@ -346,11 +390,14 @@ export function drawVenusGround(ctx: CanvasRenderingContext2D, state: Readonly<G
   if (t.lance && boss) {
     const l = t.lance, len = VENUS.lanceRange * S, w = VENUS.lanceHalfWidth * S, x = boss.x - camX, y = boss.y - camY, late = l.ticks <= VENUS.lanceLock;
     ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(l.dy, l.dx));
-    ctx.globalAlpha = late ? .35 + .3 * Math.abs(Math.sin(tick * .6)) : .18; block(ctx, 0, -w, len, w * 2, late ? '#ffffff' : GOLD);
-    ctx.globalAlpha = .9; ctx.strokeStyle = late ? '#ffffff' : GOLD; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.lineDashOffset = -tick * 2;
-    ctx.strokeRect(0, -w, len, w * 2);
-    ctx.setLineDash([]);
-    block(ctx, len - 2, -w, 2, w * 2, late ? '#ffffff' : GOLD);
+    const band=ctx.createLinearGradient(0,-w,0,w);
+    band.addColorStop(0,late?'#ffe9cd':'#ffd27a');band.addColorStop(.35,'#9d5629');band.addColorStop(.65,'#9d5629');band.addColorStop(1,late?'#ffe9cd':'#ffd27a');
+    ctx.globalAlpha=late?.3:.18;ctx.fillStyle=band;ctx.fillRect(0,-w,len,w*2);
+    for(const side of [-1,1])for(let sheet=0;sheet<10;sheet++){
+      ctx.globalAlpha=(late?.5:.3)*(1-sheet/10);block(ctx,0,side*w-side*sheet*2-1,len,2,late?'#fff1da':GOLD);
+    }
+    ctx.globalAlpha=.95;block(ctx,len-3,-w,3,w*2,late?'#ffffff':GOLD);
+    for(const side of [-1,1]){block(ctx,0,side*w-2,22,4,GOLD);block(ctx,len-22,side*w-2,22,4,GOLD);}
     // Timing: a solid charge fills the band from him outward and reaches its far end exactly as the lance fires, with a
     // bright front edge, so the counter is easy to time.
     const fill = Math.round(len * (1 - l.ticks / VENUS.lanceWindup) / 2) * 2;
@@ -455,6 +502,21 @@ export function drawVenusEffects(ctx: CanvasRenderingContext2D, state: Readonly<
   }
   // Totem blasts: a flash and a blocky cyan ring (the chamber-wide overload uses the shared totem effect too).
   for (const b of t.blasts) {
+    if(b.kind==='overload')continue; // the chamber-clipped shared effect draws the complete overload
+    if(b.kind==='totemBreak'){
+      const p=1-b.ticks/36,fade=.5+.5*Math.cos(p*Math.PI),x=b.x-camX,y=b.y-camY;
+      for(let echo=0;echo<2;echo++){
+        const q=(p-echo*.12)/(1-echo*.12);if(q<0)continue;
+        const radius=14+(1-(1-q)*(1-q))*S*2.65,strength=fade*(echo?.5:1),tail=Math.min(radius*.35,34);
+        for(let sheet=11;sheet>=0;sheet--){
+          const u=sheet/11;traceVenusShieldFront(ctx,x,y,radius-tail*u);
+          ctx.globalAlpha=strength*.3*Math.pow(1-u,1.2);ctx.strokeStyle=CYAN;ctx.lineWidth=tail/11*1.2+.3;ctx.stroke();
+        }
+        traceVenusShieldFront(ctx,x,y,radius);ctx.globalAlpha=strength*.8;ctx.strokeStyle=echo?GOLD:CYAN;ctx.lineWidth=6;ctx.stroke();
+        ctx.globalAlpha=strength;ctx.strokeStyle='#eafff7';ctx.lineWidth=2;ctx.stroke();
+      }
+      continue;
+    }
     const p = 1 - b.ticks / 30, r = 2 * S * Math.min(1, p * 1.6), x = b.x - camX, y = b.y - camY;
     if (p < .25) { ctx.globalAlpha = (.25 - p) * 3; block(ctx, x - 22, y - 22, 44, 44, '#e9ffff'); }
     ctx.globalAlpha = (1 - p) * .9; ctx.strokeStyle = CYAN; ctx.lineWidth = 5 * (1 - p) + 1; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
@@ -469,8 +531,25 @@ export function drawVenusEffects(ctx: CanvasRenderingContext2D, state: Readonly<
   if (state.gameTick <= t.guardUntil) {
     const left = (t.guardUntil - state.gameTick) / VENUS.guardTicks;
     const x = state.playerX - camX, y = state.playerY - camY;
+    const age=1-left,veil=Math.min(1,age*8+.25)*Math.min(1,left*5);
+    ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;
+    const mist=ctx.createLinearGradient(-34,0,34,0);
+    mist.addColorStop(0,'rgba(227,192,138,0)');mist.addColorStop(.35,'rgba(227,192,138,.1)');mist.addColorStop(.65,'rgba(255,224,174,.14)');mist.addColorStop(1,'rgba(227,192,138,0)');
+    ctx.globalAlpha=veil*.6;ctx.fillStyle=mist;ctx.fillRect(-34,-25,68,50);
+    // Short translucent sheets pass over the ship while gold grains orbit its guard.
+    for(let i=0;i<6;i++){
+      const a=age*2+i*Math.PI/3,px=Math.cos(a)*28,py=Math.sin(a)*21;
+      ctx.save();ctx.translate(px,py);ctx.rotate(a+.7);
+      ctx.globalAlpha=veil*.07;block(ctx,-13,-5,26,10,'#e3c08a');
+      ctx.globalAlpha=veil*.19;block(ctx,-10,-1,20,2,'#ffe3b5');ctx.restore();
+    }
+    for(let i=0;i<22;i++){
+      const a=i*2.39996+age*(1+i%3*.2),r=19+i%5*5;
+      ctx.globalAlpha=veil*(i%4?.24:.39);block(ctx,Math.cos(a)*r,Math.sin(a)*r*.8-(age*6.5+i*3)%9,2+i%2,2,i%4?SAND:'#fff0c9');
+    }
+    ctx.restore();
     for (let arm = 0; arm < 3; arm++) {
-      drawSandRibbon(ctx, x, y, tick * .23 + arm * Math.PI * 2 / 3, 44, (.25 + .6 * left) * Math.min(1, left * 6), 8);
+      drawSandRibbon(ctx, x, y, tick * .115 + arm * Math.PI * 2 / 3, 44, (.25 + .6 * left) * Math.min(1, left * 6)*.6, 8);
     }
   }
   for (const f of t.reflects) {
@@ -478,21 +557,36 @@ export function drawVenusEffects(ctx: CanvasRenderingContext2D, state: Readonly<
     ctx.beginPath(); ctx.moveTo(f.fromX - camX, f.fromY - camY); ctx.lineTo(f.toX - camX, f.toY - camY); ctx.stroke();
     block(ctx, f.toX - camX - 5, f.toY - camY - 5, 10, 10, '#fff1d0');
   }
-  // A successful counter: a white flash over the view, two diamond shockwaves racing out, a burst of sand and cyan
-  // shards, and a bright core where it was caught.
-  for (const q of t.parries) {
-    const p = 1 - q.ticks / 36, x = q.x - camX, y = q.y - camY, ease = 1 - (1 - p) ** 3;
-    if (p < .2) { ctx.globalAlpha = (.2 - p) * 1.1; block(ctx, x - 3000, y - 3000, 6000, 6000, '#fff8e8'); }
-    for (const [lag, col, lw, reach] of [[0, '#ffffff', 10, 170], [.12, CYAN, 7, 130], [.24, SAND, 5, 92]] as const) {
-      const k = Math.max(0, ease - lag), r = 14 + reach * k; if (k <= 0) continue;
-      ctx.globalAlpha = (1 - p) * .95; ctx.strokeStyle = col; ctx.lineWidth = lw * (1 - p) + 1;
-      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
+  // Counter: four open mirror-chevron fronts, pale cores and flat translucent wakes.
+  for(const q of t.parries){
+    const p=1-q.ticks/36,x=q.x-camX,y=q.y-camY,fade=.5+.5*Math.cos(p*Math.PI);
+    ctx.shadowBlur=0;ctx.lineJoin='miter';
+    for(let echo=0;echo<3;echo++){
+      const travel=(p-echo*.11)/(1-echo*.11);if(travel<0)continue;
+      const ease=1-(1-travel)*(1-travel),r=14+(VENUS.counterBlastRadius*S-14)*ease;
+      const strength=fade*(1-echo*.25),tail=Math.min(r*.4,42),color=echo===2?GOLD:CYAN;
+      for(let sheet=17;sheet>=0;sheet--){
+        const u=sheet/17;traceVenusCounterFront(ctx,x,y,r-tail*u);
+        ctx.globalAlpha=strength*.34*Math.pow(1-u,1.2);ctx.strokeStyle=color;ctx.lineWidth=tail/17+1;ctx.stroke();
+      }
+      traceVenusCounterFront(ctx,x,y,r);ctx.globalAlpha=strength*.8;ctx.strokeStyle=color;ctx.lineWidth=12;ctx.stroke();
+      ctx.globalAlpha=strength;ctx.strokeStyle=echo===2?'#fff0c4':'#eafff7';ctx.lineWidth=3;ctx.stroke();
     }
-    for (let k = 0; k < 16; k++) {
-      const a = k * Math.PI / 8 + .2, d = 18 + 130 * ease * (.6 + (k % 4) * .13), sz = k % 3 ? 7 : 11;
-      ctx.globalAlpha = (1 - p); block(ctx, x + Math.cos(a) * d - sz / 2, y + Math.sin(a) * d - sz / 2, sz, sz, k % 2 ? CYAN : k % 3 ? SAND : '#ffffff');
+    // Quiet overlapping glass and sand fragments retain the map's warm/cool contrast.
+    for(let i=0;i<38;i++){
+      const a=i*2.39996,d=18+(1-(1-p)*(1-p))*(44+i%6*16),size=3+i%3*2;
+      ctx.save();ctx.translate(x+Math.cos(a)*d,y+Math.sin(a)*d);ctx.rotate(a+p*.7);
+      const color=i%3?SAND:CYAN;
+      ctx.globalAlpha=fade*.2;block(ctx,-size/2-3,-size/2+2,size,size,color);
+      ctx.globalAlpha=fade*.55;block(ctx,-size/2,-size/2,size,size,color);
+      if(i%7===0){ctx.globalAlpha=fade*.8;block(ctx,-5,-1,10,2,'#fff3d5');block(ctx,-1,-5,2,10,'#fff3d5');}
+      ctx.restore();
     }
-    if (p < .35) { const c = 32 * (1 - p / .35); ctx.globalAlpha = 1; block(ctx, x - c / 2, y - c / 2, c, c, '#ffffff'); }
+    const flash=Math.max(0,1-p/.28),r=12+p*35;
+    for(const [dx,dy]of [[-1,-1],[1,-1],[1,1],[-1,1]]){
+      ctx.globalAlpha=flash*.8;block(ctx,x+dx*r-(dx>0?9:0),y+dy*r,9,3,'#eafff7');
+      block(ctx,x+dx*r,y+dy*r-(dy>0?9:0),3,9,'#eafff7');
+    }
   }
   // Relic finds: a bright ring in the relic's colour, with sparks rising.
   for (const f of t.finds) {
@@ -503,50 +597,118 @@ export function drawVenusEffects(ctx: CanvasRenderingContext2D, state: Readonly<
   ctx.restore();
 }
 
-/**
- * The shield breaking: his shield shatters across the whole screen, wherever you are. A cyan-white flash, the shield
- * dome bursting, thick cracks and three bold diamond shockwaves racing out from him, a storm of big outlined shards
- * that spin and fall, glitter and a cyan frame. Centred on him, held inside the screen when he is off it. Drawn in
- * screen space over the world, below the HUD; it only reads state.
- */
-export function drawVenusShatter(ctx: CanvasRenderingContext2D, s: Readonly<GameState>, w: number, h: number, camX: number, camY: number, zoom = 1, tick = 0) {
-  const q = s.venus?.shatter; if (!q) return;
-  const p = 1 - q.ticks / VENUS.shatterTicks, ease = 1 - (1 - p) ** 3, fade = (1 - p) ** .6, reach = Math.hypot(w, h);
-  const x = Math.max(w * .12, Math.min(w * .88, (q.x - camX) * zoom)), y = Math.max(h * .12, Math.min(h * .88, (q.y - camY) * zoom));
-  ctx.save(); ctx.shadowBlur = 0;
-  if (p < .18) { ctx.globalAlpha = (.18 - p) * 3.5; ctx.fillStyle = p < .04 ? '#ffffff' : '#c8fbff'; ctx.fillRect(0, 0, w, h); }
-  ctx.globalAlpha = fade * fade * .14; ctx.fillStyle = CYAN; ctx.fillRect(0, 0, w, h);
-  if (p < .35) { // the shield dome, cracking and bursting
-    const r = (44 + 30 * (p / .35)) * zoom; ctx.globalAlpha = (1 - p / .35) * .55; ctx.fillStyle = CYAN; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    ctx.globalAlpha = 1 - p / .35; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
-  }
-  for (let k = 0; k < 12; k++) { // thick cracks: a white core over a cyan edge
-    const a = k * Math.PI / 6 + .3, r = 40 + reach * (.35 + (k % 3) * .12) * ease, bend = (k % 2 ? .18 : -.18);
-    for (const [col, lw] of [[CYAN, 10], ['#ffffff', 4]] as const) {
-      ctx.globalAlpha = fade * .9; ctx.strokeStyle = col; ctx.lineWidth = lw;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a + bend) * r * .45, y + Math.sin(a + bend) * r * .45); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); ctx.stroke();
+/** Four separated mirror chevrons give counters a silhouette distinct from the shield break. */
+function traceVenusCounterFront(ctx:CanvasRenderingContext2D,x:number,y:number,r:number){
+  ctx.beginPath();
+  for(let side=0;side<4;side++){
+    const a=side*Math.PI/2,c=Math.cos(a),sn=Math.sin(a);
+    for(const [i,[lx,ly]]of [[-.52,-.56],[-.52,-.76],[0,-1],[.52,-.76],[.52,-.56]].entries()){
+      const px=x+(lx*c-ly*sn)*r,py=y+(lx*sn+ly*c)*r;
+      if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);
     }
   }
-  for (const [lag, col, lw, k0] of [[0, '#ffffff', 16, .6], [.08, CYAN, 12, .45], [.16, GOLD, 9, .3]] as const) { // diamond shockwaves
-    const k = Math.max(0, ease - lag), r = 20 + reach * k0 * k; if (k <= 0) continue;
-    ctx.globalAlpha = fade; ctx.strokeStyle = col; ctx.lineWidth = lw * (1 - p) + 2;
-    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
+}
+
+/** Open, stepped shield fronts keep Venus's armour identity without filling the centre. */
+function traceVenusShieldFront(ctx:CanvasRenderingContext2D,x:number,y:number,r:number){
+  ctx.beginPath();ctx.moveTo(x-r*.52,y-r*.84);ctx.lineTo(x+r*.52,y-r*.84);
+  for(const side of [-1,1]){
+    ctx.moveTo(x+side*r*.6,y-r*.84);ctx.lineTo(x+side*r*.74,y-r*.84);
+    ctx.lineTo(x+side*r*.74,y-r*.68);ctx.lineTo(x+side*r*.9,y-r*.68);ctx.lineTo(x+side*r*.9,y-r*.2);
+    ctx.moveTo(x+side*r*.9,y-r*.12);ctx.lineTo(x+side*r*.9,y+r*.2);
+    ctx.lineTo(x+side*r*.7,y+r*.2);ctx.lineTo(x+side*r*.7,y+r*.42);
+    ctx.moveTo(x+side*r*.62,y+r*.48);ctx.lineTo(x+side*r*.38,y+r*.48);
+    ctx.lineTo(x+side*r*.38,y+r*.7);ctx.lineTo(x+side*r*.06,y+r*.7);
   }
-  for (let k = 0; k < 34; k++) { // big shield shards: spinning slabs with a dark outline, flung out then falling
-    const a = k * 2.39996, d = 30 + reach * .4 * ease * (.4 + (k % 5) * .15), sz = (k % 3 ? 12 : 22) * Math.max(1, zoom * .8), fall = p * p * h * .3;
-    ctx.save(); ctx.translate(x + Math.cos(a) * d, y + Math.sin(a) * d * .8 + fall); ctx.rotate(p * 9 + k); ctx.globalAlpha = fade;
-    ctx.fillStyle = '#123a44'; ctx.fillRect(-sz / 2 - 2, -sz / 4 - 2, sz + 4, sz / 2 + 4);
-    ctx.fillStyle = k % 2 ? CYAN : k % 3 ? '#ffffff' : GOLD; ctx.fillRect(-sz / 2, -sz / 4, sz, sz / 2);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(-sz / 2, -sz / 4, sz / 2, 2);
+}
+
+/** Venus shield break: cyan glass pressure fronts, pale cores and fine gilded fragments. */
+export function drawVenusShatter(ctx: CanvasRenderingContext2D, s: Readonly<GameState>, w: number, h: number, camX: number, camY: number, zoom = 1, tick = 0) {
+  const q=s.venus?.shatter;if(!q)return;
+  const p=Math.max(0,Math.min(1,1-q.ticks/VENUS.shatterTicks)),age=p*VENUS.shatterTicks;
+  const fade=.5+.5*Math.cos(p*Math.PI),ease=1-(1-p)*(1-p),reach=Math.hypot(w,h)*1.1;
+  const px=(q.x-camX)*zoom,py=(q.y-camY)*zoom,dx=px-w/2,dy=py-h/2;
+  const offscreen=px<0||px>w||py<0||py>h;
+  const edgeScale=offscreen?Math.min(w/2/Math.abs(dx),h/2/Math.abs(dy)):1;
+  const x=offscreen?w/2+dx*edgeScale:px,y=offscreen?h/2+dy*edgeScale:py;
+  ctx.save();ctx.shadowBlur=0;ctx.lineJoin='miter';ctx.lineCap='butt';
+  ctx.globalAlpha=Math.pow(Math.max(0,1-age/11),2)*.34;block(ctx,0,0,w,h,'#effffe');
+  // Three open shield fronts, each with a short spatial sheet fading behind its bright edge.
+  for(let layer=0;layer<3;layer++){
+    const travel=(age-layer*7)/82;if(travel<0||travel>=1)continue;
+    const r=22+reach*(1-(1-travel)*(1-travel)),strength=fade*(1-layer*.28),tail=Math.min(r*.3,58+layer*5);
+    for(let wake=23;wake>=0;wake--){
+      const u=wake/23;traceVenusShieldFront(ctx,x,y,r-tail*u);
+      ctx.globalAlpha=strength*.2*Math.pow(1-u,1.3);ctx.strokeStyle=layer===2?'#e5cc92':CYAN;ctx.lineWidth=tail/23+1;ctx.stroke();
+    }
+    traceVenusShieldFront(ctx,x,y,r);
+    ctx.globalAlpha=strength*.85;ctx.strokeStyle=layer===2?GOLD:CYAN;ctx.lineWidth=9;ctx.stroke();
+    ctx.globalAlpha=strength;ctx.strokeStyle='#edfffa';ctx.lineWidth=3;ctx.stroke();
+    // Gilded inset plates accent the shield crown and its two shoulders.
+    for(const side of [-1,1]){
+      ctx.globalAlpha=strength*.65;
+      block(ctx,x+side*r*.34-14,y-r*.84+9,28,2,GOLD);
+      block(ctx,x+side*r*.9-2,y-r*.48,3,16,GOLD);
+    }
+    if(layer===0){
+      // Gilded armour crests travel as whole pieces on the shield's crown, sides and foot.
+      for(const [dx,dy,angle]of [[0,-.84,0],[.9,-.44,Math.PI/2],[-.9,-.44,-Math.PI/2],[.38,.7,Math.PI],[-.38,.7,Math.PI]]){
+        ctx.save();ctx.translate(x+dx*r,y+dy*r);ctx.rotate(angle);
+        ctx.globalAlpha=strength*.8;block(ctx,-21,-7,42,12,CYAN);
+        ctx.globalAlpha=strength*.95;block(ctx,-23,-9,3,18,GOLD);block(ctx,20,-9,3,18,GOLD);
+        block(ctx,-7,-10,14,3,GOLD);block(ctx,-4,-13,8,3,'#fff0bd');
+        ctx.globalAlpha=strength;block(ctx,-3,-3,6,6,'#fff5d4');block(ctx,-1,-1,2,2,'#ffffff');
+        ctx.restore();
+      }
+      // Detached shoulder shields give the silhouette depth without sealing its open gaps.
+      for(const side of [-1,1]){
+        ctx.save();ctx.translate(x+side*r*.74,y-r*.7);ctx.rotate(side*Math.PI/4);
+        ctx.globalAlpha=strength*.35;block(ctx,-14,-10,28,22,CYAN);
+        ctx.globalAlpha=strength*.8;block(ctx,-14,-7,3,14,GOLD);block(ctx,11,-7,3,14,GOLD);
+        block(ctx,-4,-4,8,8,'#fff0ba');ctx.restore();
+      }
+    }
+  }
+  // The broken shell opens as eight short glass plates, then settles away.
+  const release=Math.max(0,1-p/.3);
+  for(let i=0;i<8&&release>0;i++){
+    const angle=i*Math.PI/4,d=22+ease*170;
+    ctx.save();ctx.translate(x+Math.cos(angle)*d,y+Math.sin(angle)*d);ctx.rotate(angle);
+    ctx.globalAlpha=release*.55;block(ctx,-14,-6,28,12,i%3?CYAN:GOLD);ctx.restore();
+  }
+  // Overlapping translucent glass sheets build colour through alpha blending, never bevel shading.
+  for(let i=0;i<56;i++){
+    const angle=i*2.39996,d=26+reach*(.14+i%5*.065)*ease,fall=p*p*h*.13,size=6+i%4*2;
+    ctx.save();ctx.translate(Math.round(x+Math.cos(angle)*d),Math.round(y+Math.sin(angle)*d*.82+fall));ctx.rotate(angle+p*(i%2?1:-1)*1.8);
+    const ink=i%5?CYAN:GOLD;
+    for(let sheet=2;sheet>=0;sheet--){
+      ctx.save();ctx.translate(-sheet*size*.3,sheet*size*.12);ctx.rotate(sheet*.12);
+      ctx.globalAlpha=fade*(.3-sheet*.075);block(ctx,-size/2,-size*.35,size,size*.7,ink);ctx.restore();
+    }
     ctx.restore();
   }
-  for (let k = 0; k < 30; k++) { // fine glitter
-    const a = k * 1.7, d = 20 + reach * .3 * ease * (.3 + (k % 7) / 7);
-    ctx.globalAlpha = fade * (Math.floor(tick / 3 + k) % 2 ? 1 : .4); ctx.fillStyle = '#ffffff'; ctx.fillRect(x + Math.cos(a) * d - 2, y + Math.sin(a) * d - 2 + p * p * h * .2, 4, 4);
+  for(let i=0;i<48;i++){
+    const angle=i*2.39996+.5,d=30+reach*(.18+i%4*.075)*ease;
+    const gx=x+Math.cos(angle)*d,gy=y+Math.sin(angle)*d*.85+p*p*h*.08;
+    const shine=Math.pow(Math.max(0,Math.sin(age*.16+i*1.9)),4),size=3+i%3;
+    ctx.globalAlpha=fade*(.2+shine*.7);block(ctx,gx-size,gy,size*2+1,1,'#f2fff9');block(ctx,gx,gy-size,1,size*2+1,'#f2fff9');
+    ctx.globalAlpha=fade*shine;block(ctx,gx-1,gy-1,2,2,'#ffffff');
   }
-  if (p < .3) { const c = 70 * (1 - p / .3); ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - c / 2, y - c / 2, c, c); }
-  const edge = Math.round(Math.min(w, h) * (.07 * fade + .015)); // a cyan frame, thick at first and thinning out
-  ctx.globalAlpha = fade * .5; ctx.fillStyle = CYAN;
-  ctx.fillRect(0, 0, w, edge); ctx.fillRect(0, h - edge, w, edge); ctx.fillRect(0, 0, edge, h); ctx.fillRect(w - edge, 0, edge, h);
+  // Soft edge light and separated shield plates replace the solid cyan frame.
+  for(let side=0;side<4;side++){
+    ctx.save();if(side===1){ctx.translate(w,0);ctx.rotate(Math.PI/2);}else if(side===2){ctx.translate(w,h);ctx.rotate(Math.PI);}else if(side===3){ctx.translate(0,h);ctx.rotate(-Math.PI/2);}
+    const span=side%2?h:w,depth=Math.min(w,h)*.12;
+    const wash=ctx.createLinearGradient(0,0,0,depth);wash.addColorStop(0,'rgba(120,222,223,.24)');wash.addColorStop(1,'rgba(120,222,223,0)');
+    ctx.globalAlpha=fade;ctx.fillStyle=wash;ctx.fillRect(0,0,span,depth);
+    for(let plate=0;plate<3;plate++){
+      const px=span*(.2+plate*.3),length=span*.1;
+      ctx.globalAlpha=fade*.45;block(ctx,px-length/2,7,length,3,CYAN);
+      ctx.globalAlpha=fade*.65;block(ctx,px-length*.35,7,length*.7,1,'#effffe');
+      ctx.globalAlpha=fade*.45;block(ctx,px-5,14,10,2,GOLD);
+      ctx.globalAlpha=fade*.18;block(ctx,px-length*.35,12,length*.7,10,CYAN);block(ctx,px-length*.22,22,length*.44,7,CYAN);
+      ctx.globalAlpha=fade*.7;block(ctx,px-length/2-2,5,2,14,GOLD);block(ctx,px+length/2,5,2,14,GOLD);
+    }
+    ctx.restore();
+  }
   ctx.restore();
 }

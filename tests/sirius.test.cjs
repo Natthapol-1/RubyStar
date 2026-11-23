@@ -13,6 +13,117 @@ function fresh(){
 function walk(s,dirs){for(const d of dirs){const[dx,dy]=si.RUNE_STEP[d];player(s,s.playerTileX+dx,s.playerTileY+dy);si.updateSirius(s);}}
 const expand=rune=>rune.strokes.flatMap(([d,n])=>Array(n).fill(d));
 
+test('automatic light/dark warning tolls once at two seconds and manual swaps skip it',()=>{
+  const audio=require('../game/sirius-swap-audio.ts'),original=audio.playSiriusSwapBell;let calls=0;audio.playSiriusSwapBell=()=>calls++;
+  try{
+    for(const light of [false,true]){
+      const{s}=fresh();s.sirius.light=light;s.sirius.lightTimer=S.swapWarning+1;const before=calls;
+      si.updateSirius(s);assert.equal(calls,before+1);assert.equal(s.sirius.light,light);
+      si.updateSirius(s);assert.equal(calls,before+1);
+      si.godSiriusSwap(s);assert.equal(calls,before+1);assert.equal(s.sirius.light,!light);
+    }
+  }finally{audio.playSiriusSwapBell=original;}
+});
+
+test('swap overlay appears only in its warning window, keeps the center clear and draws no labels',()=>{
+  const {createCanvas}=require('@napi-rs/canvas'),{drawSiriusSwapWarning}=require('../game/sirius-art.ts'),{s}=fresh();
+  const cv=createCanvas(960,540),ctx=cv.getContext('2d');ctx.fillText=()=>{throw Error('warning must have no text');};
+  const pixels=()=>ctx.getImageData(0,0,960,540).data;
+  s.sirius.lightTimer=S.swapWarning+1;drawSiriusSwapWarning(ctx,s,960,540);assert.ok(pixels().every(v=>v===0));
+  for(const light of [false,true]){
+    ctx.clearRect(0,0,960,540);s.sirius.light=light;s.sirius.lightTimer=20;const before=JSON.stringify(s);
+    drawSiriusSwapWarning(ctx,s,960,540);assert.ok(pixels().some(v=>v>0));assert.equal(ctx.getImageData(480,270,1,1).data[3],0);assert.equal(JSON.stringify(s),before);
+  }
+  ctx.clearRect(0,0,960,540);si.godSiriusSwap(s);drawSiriusSwapWarning(ctx,s,960,540);assert.ok(pixels().every(v=>v===0));
+});
+
+test('manual light switch changes state immediately, including while paused, and resets the new state timer',()=>{
+  const{s}=fresh();
+  si.godSiriusSwap(s);
+  assert.equal(s.sirius.light,true);assert.equal(s.trial.siriusLight,true);
+  assert.equal(e.isMovementReversed(s),false);assert.equal(s.sirius.lightTimer,S.lightTicks);
+  s.gamePhase='paused';s.sirius.phase=3;
+  si.godSiriusSwap(s);
+  assert.equal(s.sirius.light,false);assert.equal(s.trial.siriusLight,false);
+  assert.equal(s.sirius.lightTimer,600);
+});
+
+test('phase 3 scatters reachable Sanctuary Seals with room for the rune and changes them each cast',()=>{
+  const {s}=fresh();si.godSetSiriusPhase(s,3);
+  let previous=[];
+  for(let n=0;n<30;n++){
+    s.sirius.rune=null;si.godSiriusRune(s);
+    const seals=s.sirius.sanctuarySeals;
+    assert.equal(seals.length,32);
+    for(let room=0;room<4;room++)assert.equal(seals.filter(p=>c.chamberOfTile(p.x,p.y)===room).length,8);
+    for(const seal of seals){
+      assert.ok(!previous.some(p=>p.x===seal.x&&p.y===seal.y),'each seal moves');
+      let{x,y}=seal;assert.ok(e.isFloorTile(s.map,x,y));
+      for(const dir of expand(si.RUNES[s.sirius.rune.index])){x+=si.RUNE_STEP[dir][0];y+=si.RUNE_STEP[dir][1];assert.ok(e.isFloorTile(s.map,x,y),'rune fits from seal');}
+    }
+    previous=seals;
+  }
+});
+
+test('phase 3 accepts a seal at the rune start, middle or end, but rejects an unrelated approach',()=>{
+  for(const location of ['approach','start','middle','end']){
+    const{s,boss}=fresh();si.godSetSiriusPhase(s,3);
+    const x=s.playerTileX,y=s.playerTileY;
+    s.sirius.rune={index:0,cast:0,ticks:500,total:500};
+    const seals={approach:{x,y},start:{x,y:y+1},middle:{x:x+2,y:y+1},end:{x:x+2,y:y+3}};
+    s.sirius.sanctuarySeals=[seals[location]];s.sirius.trail=[{x,y}];
+    const hp=boss.hp;walk(s,[1,...expand(si.RUNES[0])]);
+    const included=location!=='approach';
+    assert.equal(s.sirius.rune===null,included,location);assert.equal(hp-boss.hp,included?S.runeDamage:0,location);
+  }
+});
+
+test('extra first-stroke approach tiles do not count as part of the rune',()=>{
+  for(const included of [false,true]){
+    const{s,boss}=fresh();si.godSetSiriusPhase(s,3);const x=s.playerTileX,y=s.playerTileY;
+    s.sirius.rune={index:0,cast:0,ticks:500,total:500};s.sirius.trail=[{x,y}];
+    s.sirius.sanctuarySeals=[{x:x+(included?4:1),y}];
+    const hp=boss.hp;walk(s,[0,0,0,0,0,0,1,1,2]);
+    assert.equal(s.sirius.rune===null,included);assert.equal(hp-boss.hp,included?S.runeDamage:0);
+  }
+});
+
+test('seal coverage follows the currently matched rune, and disappears after an invalid turn or teleport',()=>{
+  const{s}=fresh();si.godSetSiriusPhase(s,3);const t=s.sirius,x=s.playerTileX,y=s.playerTileY;
+  t.rune={index:0,cast:0,ticks:500,total:500};t.sanctuarySeals=[{x,y}];t.trail=[{x,y}];
+  assert.equal(si.sanctuarySealInRune(t),false,'no tracing yet');
+  walk(s,[0,0]);assert.equal(si.sanctuarySealInRune(t),true);
+  walk(s,[1]);assert.equal(si.sanctuarySealInRune(t),false,'turning before the first stroke is complete loses the match');
+  assert.ok(t.trail.some(p=>p.x===x&&p.y===y),'seal remains in the unrelated trail');
+  walk(s,[0]);t.sanctuarySeals=[{x:s.playerTileX,y:s.playerTileY}];assert.equal(si.sanctuarySealInRune(t),true);
+  player(s,s.playerTileX+4,s.playerTileY);si.updateSirius(s);assert.equal(si.sanctuarySealInRune(t),false);
+});
+
+test('erasing the matched rune start removes seal coverage and casting never counts old trail tiles',()=>{
+  const{s}=fresh();si.godSetSiriusPhase(s,3);const t=s.sirius,x=s.playerTileX,y=s.playerTileY;
+  t.rune={index:0,cast:0,ticks:500,total:500};t.sanctuarySeals=[{x,y}];t.trail=[{x,y}];
+  walk(s,[0,0,0,1]);assert.equal(si.sanctuarySealInRune(t),true);
+  t.rune.cast=1;assert.equal(si.sanctuarySealInRune(t),false);t.rune.cast=0;
+  t.trail.shift();t.steps.shift();assert.equal(si.sanctuarySealInRune(t),false);
+});
+
+test('entering phase 3 during a rune and loading an older save both supply seals',()=>{
+  const{s,boss}=fresh();si.godSiriusRune(s);delete s.sirius.sanctuarySeals;boss.hp=S.phaseHP;si.updateSirius(s);
+  assert.equal(s.sirius.phase,3);assert.equal(s.sirius.sanctuarySeals.length,32);
+  const before=JSON.stringify(s.sirius.sanctuarySeals);s.gamePhase='paused';si.updateSirius(s);assert.equal(JSON.stringify(s.sirius.sanctuarySeals),before);
+  si.clearSiriusEncounter(s);assert.deepEqual(s.sirius.sanctuarySeals,[]);
+});
+
+test('Mason walls cannot cover a seal even if it moved into an already marked wall lane',()=>{
+  const{s}=fresh();for(let y=6;y<=14;y++)for(let x=6;x<=15;x++)s.map[y][x]=c.T_FLOOR;
+  player(s,9,9);s.playerDirX=1;s.playerDirY=0;s.rubyTileX=s.rubyTileY=30;
+  const m=e.createEncounterEnemy(s,'mason',6,9,60);s.enemies.push(m);m.attackTimer=0;
+  si.updateSiriusAlien(s,m);assert.equal(m.siriusAct.tiles.length,4);
+  s.sirius.sanctuarySeals=[{x:11,y:9}];
+  for(let i=0;i<S.mason.windup;i++)si.updateSiriusAlien(s,m);
+  assert.equal(s.map[9][11],c.T_FLOOR);assert.equal(s.sirius.walls.length,3);
+});
+
 test('Sirius is a real challenge: a 3-phase tanky Prayer, no map preview',()=>{
   const{s,boss}=fresh();
   assert.ok(!s.trial.mapOnly);assert.equal(boss.maxHp,S.phaseHP*3);assert.equal(s.specialSkill,'blind_prayer');
@@ -107,7 +218,7 @@ test('energy fills Holy Light; a traced rune gives full energy, a missed one dra
   walk(s,expand(si.RUNES[0]));
   assert.equal(s.starEnergy,100);assert.equal(Math.round(s.sirius.holy),40+Math.round(100*c.SIRIUS_HOLY_PER_ENERGY),'a traced rune counts as exactly one full bar');
   s.playerHP=80;s.rubyHP=80;s.sirius.rune={index:0,cast:0,ticks:1,total:S.runeTicks};const holy=s.sirius.holy;si.updateSirius(s);
-  assert.equal(s.starEnergy,0);assert.ok(s.playerHP<80&&s.rubyHP<80,'a miss hurts you and Ruby');assert.equal(s.sirius.holy,holy-S.holyFailLoss);
+  assert.equal(s.starEnergy,0);assert.equal(s.playerHP,80);assert.equal(s.rubyHP,80,'a miss does not hurt you or Ruby');assert.equal(s.sirius.holy,holy-S.holyFailLoss);
 });
 
 test('Halo floats you over walls and faster, then lands you on floor',()=>{
@@ -118,6 +229,46 @@ test('Halo floats you over walls and faster, then lands you on floor',()=>{
   assert.equal(si.siriusCanFloat(s,wall[0],wall[1]),true);assert.equal(si.siriusPlayerSpeed(s),S.haloSpeed);
   player(s,wall[0],wall[1]);s.sirius.halo=1;si.updateSirius(s);
   assert.equal(s.sirius.halo,0);assert.ok(e.isFloorTile(s.map,s.playerTileX,s.playerTileY),'landed on floor');
+});
+
+test('Halo knockback covers six tiles, pushes outward without damage, and skips the Prayer and dead aliens',()=>{
+  const{s,boss}=fresh();player(s,10,10);boss.x=s.playerX;boss.y=s.playerY;
+  const cases=[[13,10,true],[8,10,true],[10,7,true],[10,13,true],[14,14,true],[16,10,true],[16,11,false]];
+  const mobs=cases.map(([x,y])=>{const m=e.createEncounterEnemy(s,'normal',x,y,100);s.enemies.push(m);return m;});
+  const dead=e.createEncounterEnemy(s,'normal',11,10,100);dead.hp=0;s.enemies.push(dead);
+  const hp=boss.hp;assert.equal(si.useHalo(s),true);
+  cases.forEach(([x,y,hit],i)=>{const m=mobs[i];assert.equal(m.pushTiles,hit?5:0);assert.equal(m.haloStunTicks,hit?18:undefined);assert.equal(m.hp,100);if(hit)assert.ok((x-10)*m.pushDirX+(y-10)*m.pushDirY>0);});
+  assert.equal(boss.pushTiles,0);assert.equal(boss.hp,hp);assert.equal(dead.pushTiles,0);
+});
+
+test('Halo stuns only after five-tile knockback or an earlier wall collision, then enemies recover',()=>{
+  for(const wall of [false,true]){
+    const{s,boss}=fresh();player(s,10,10);
+    for(let y=7;y<=14;y++)for(let x=7;x<=20;x++)s.map[y][x]=c.T_FLOOR;
+    if(wall)s.map[10][15]=c.T_WALL;
+    Object.assign(boss,{tileX:39,targetTileX:39,tileY:39,targetTileY:39,x:39.5*c.TILE_SIZE,y:39.5*c.TILE_SIZE});
+    const m=e.createEncounterEnemy(s,'zealot',12,10,100);s.enemies.push(m);
+    m.siriusAct={ticks:5,tx:10,ty:10,dx:-1,dy:0,fromX:m.x,fromY:m.y,dashing:true};
+    assert.equal(si.useHalo(s),true);assert.equal(m.siriusAct,undefined);assert.ok(!m.buildStopUntil);
+    for(let i=0;i<(wall?3:5);i++)e.tick(s);
+    assert.equal(m.tileX,wall?14:17);assert.equal(m.pushTiles,0);assert.equal(m.haloStunTicks,undefined);
+    assert.equal(m.buildStopUntil-s.gameTick,18,'0.3s stun starts after displacement');
+    const x=m.x,y=m.y,until=m.buildStopUntil;
+    while(s.gameTick<until-1){e.tick(s);assert.equal(m.x,x);assert.equal(m.y,y);assert.equal(m.siriusAct,undefined);}
+    for(let i=0;i<8;i++)e.tick(s);
+    assert.ok(m.x!==x||m.y!==y||m.siriusAct,'enemy resumes after stun');
+  }
+});
+
+test('Halo wave has a fixed cast origin, pauses, expires and clears; blocked casts create no extra pulse',()=>{
+  const{s}=fresh();const x=s.playerX,y=s.playerY;
+  assert.equal(si.useHalo(s),true);assert.deepEqual(s.sirius.haloWave,{x,y,ticks:30});
+  assert.equal(si.useHalo(s),false);assert.equal(s.sirius.haloWave.ticks,30);
+  s.gamePhase='paused';si.updateSirius(s);assert.equal(s.sirius.haloWave.ticks,30);assert.equal(si.useHalo(s),false);
+  s.gamePhase='playing';player(s,s.playerTileX+1,s.playerTileY);
+  si.updateSirius(s);assert.equal(s.sirius.haloWave.x,x);assert.equal(s.sirius.haloWave.y,y);
+  for(let i=1;i<30;i++)si.updateSirius(s);assert.equal(s.sirius.haloWave,undefined);
+  s.sirius.haloCooldown=0;si.useHalo(s);si.clearSiriusEncounter(s);assert.equal(s.sirius.haloWave,undefined);
 });
 
 test('Halo with full Holy Light bursts: heavy unreduced damage to the Prayer, damage to every alien, Holy Light spent',()=>{
@@ -163,15 +314,31 @@ test('Masons join only from phase 2',()=>{
     assert.ok(s.enemies.some(x=>x.type==='mason'));}finally{Math.random=orig;}
 });
 
-test('phase 3 swaps light and dark faster',()=>{
-  const{s,boss}=fresh();si.godSetSiriusPhase(s,3);s.sirius.lightTimer=1;si.updateSirius(s);
-  assert.equal(s.sirius.lightTimer,Math.round(S.lightTicks*S.phase3Swap));
+test('phases 2 and 3 swap light and dark at the same faster rate',()=>{
+  for(const phase of [2,3]){
+  const{s}=fresh();si.godSetSiriusPhase(s,phase);s.sirius.lightTimer=1;si.updateSirius(s);
+  assert.equal(s.sirius.lightTimer,960);
+  }
 });
 
-test('rune tracing allows 20, 17 and 17 seconds across the three phases',()=>{
+test('later phase entry and older timers stay within the shorter light/dark duration without extending a nearly finished cycle',()=>{
+  for(const phase of [2,3])for(const light of [false,true])for(const left of [30,light?S.lightTicks:S.darkTicks]){
+    const{s,boss}=fresh();s.sirius.light=light;s.sirius.lightTimer=left;
+    si.godSetSiriusPhase(s,phase);
+    const duration=si.siriusLightDuration(s.sirius);
+    assert.equal(duration,light?960:600);
+    assert.equal(s.sirius.lightTimer,Math.min(left,duration));
+    s.sirius.lightTimer=light?S.lightTicks:S.darkTicks;si.updateSirius(s);
+    assert.equal(s.sirius.lightTimer,duration-1,'older timer is shortened on the first update');
+    s.sirius.phase=1;s.sirius.lightTimer=left;boss.hp=(4-phase)*S.phaseHP;si.updateSirius(s);
+    assert.equal(s.sirius.phase,phase);assert.equal(s.sirius.lightTimer,Math.min(left-1,duration));
+  }
+});
+
+test('rune tracing allows 20 seconds in phases 1–2 and 25 seconds in phase 3',()=>{
   const{s}=fresh();si.godSiriusRune(s);assert.equal(s.sirius.rune.total,S.runeTicks);
-  s.sirius.rune=null;s.sirius.phase=2;si.godSiriusRune(s);assert.equal(s.sirius.rune.total,17*60);
-  s.sirius.rune=null;s.sirius.phase=3;si.godSiriusRune(s);assert.equal(s.sirius.rune.total,17*60);
+  s.sirius.rune=null;s.sirius.phase=2;si.godSiriusRune(s);assert.equal(s.sirius.rune.total,20*60);
+  s.sirius.rune=null;s.sirius.phase=3;si.godSiriusRune(s);assert.equal(s.sirius.rune.total,25*60);
 });
 
 test('runes get harder by phase: tier 1 in phase 1, tiers 2–3 in phase 3',()=>{
@@ -253,4 +420,14 @@ test('expanded rune pools give every phase more variety while every pattern fits
   let x=0,y=0;const visited=new Set(['0,0']);
   for(const dir of steps){x+=si.RUNE_STEP[dir][0];y+=si.RUNE_STEP[dir][1];const tile=`${x},${y}`;assert.ok(!visited.has(tile),`${rune.name} cannot cross itself`);visited.add(tile);}
  }
+});
+
+test('rune centerline joins the actual route across tile gaps without joining touching strokes',()=>{
+  const {createCanvas}=require('@napi-rs/canvas'),art=require('../game/sirius-art.ts');
+  const canvas=createCanvas(160,160),ctx=canvas.getContext('2d');
+  const key=si.RUNES.find(r=>r.name==='KEY');
+  art.drawRuneTiles(ctx,key,80,80,128,0);
+  const connected=ctx.getImageData(128,48,1,1).data;
+  assert.ok(connected[0]>200&&connected[1]>200&&connected[3]===255,'line bridges the real downward turn');
+  assert.equal(ctx.getImageData(96,48,1,1).data[3],0,'adjacent strokes have no misleading shortcut');
 });

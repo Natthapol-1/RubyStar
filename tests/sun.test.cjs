@@ -578,3 +578,16 @@ test('Thermal Eruption and Sunburst each play their full-volume explosion layers
   for(const file of ['/sounds/sci-fi-explosion-09.mp3','/sounds/bombExplode.wav'])assert.equal(cues.filter(([f,v])=>f===file&&v===1).length,1);
  }finally{e.playAudioOneShot=original;}
 });
+
+test('God Sunburst runs one warning without a boss or phase change, pauses and can be defused',()=>{
+ const s=e.createModeState('trial','fiery_king');s.sun.noWisps=true;s.noMobs=true;s.enemies=[];
+ const phase=s.sun.phase;sun.godSunburst(s);
+ assert.equal(s.sun.phase,phase);assert.equal(s.enemies.length,0);assert.equal(s.sun.flare.ticks,c.SUN.flareWarning);
+ assert.equal(s.sun.flare.room,c.chamberOfTile(s.playerTileX,s.playerTileY));
+ s.gamePhase='paused';sun.updateSun(s);assert.equal(s.sun.flare.ticks,c.SUN.flareWarning);
+ s.gamePhase='playing';sun.updateSun(s);assert.equal(s.sun.flare.ticks,c.SUN.flareWarning-1);
+ sun.defuseSunFlare(s);assert.equal(s.sun.flare,null);assert.equal(s.sun.flareFlash.defused,true);
+ sun.godSunburst(s);s.sun.flare.ticks=1;s.playerHP=100;s.sun.heat=50;sun.updateSun(s);
+ assert.equal(s.sun.flare,null);assert.equal(s.sun.flareFlash.defused,false);assert.equal(s.playerHP,100-c.SUN.flareDamage);assert.equal(s.sun.heat,50+c.SUN.flareHeat);
+ s.sun.quenchedTicks=100;sun.godSunburst(s);assert.equal(s.sun.flare,null);
+});

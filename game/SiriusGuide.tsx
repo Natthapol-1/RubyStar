@@ -4,25 +4,26 @@ import { useEffect, useRef } from 'react';
 import { bindingLabel } from './controls';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
 import { drawGuidePlayer, drawGuideRuby } from './guide-art';
-import { drawSiriusUnit, drawRuneTiles, runeCells, RUNE_GOLD, WRATH_RED, TRAIL_GOLD } from './sirius-art';
+import { drawSiriusUnit, drawRuneTiles, runeCells, drawSanctuarySeal, drawHaloKnockbackWave, RUNE_GOLD, WRATH_RED, TRAIL_GOLD } from './sirius-art';
 import { RUNES } from './sirius';
 import type { Enemy } from './engine';
 
 const cards = [
   ['LIGHT AND DARK', 'The sanctuary swaps between light and dark. In the dark, your movement is reversed.'],
   ['RUNES', 'Walk the boss’s rune shape in one unbroken line before time runs out.'],
-  ['TRACED RUNE', 'Hurts the boss, heals you and Ruby, and fills your energy.'],
-  ['MISSED RUNE', 'Heals the boss slightly and hurts you and Ruby. Aliens become stronger for a while.'],
+  ['TRACED RUNE', 'Hurts the boss and fills your energy.'],
+  ['MISSED RUNE', 'Heals the boss and makes aliens stronger for a while.'],
   ['BROKEN TRAIL', 'Knockback or teleporting breaks your trail.'],
-  ['RUBY RITUAL', 'When he moves Ruby, guess its new chamber. A right guess gives rune time and energy.'],
+  ['RUBY RITUAL', 'When he moves Ruby, guess its new chamber.'],
   ['HOLY LIGHT', 'Fills as you gain energy.'],
-  ['PRIMAL SKILL', 'Sacred Halo: float over walls and move faster. With full Holy Light it bursts, hitting every enemy and the boss hard.'],
+  ['PRIMAL SKILL', 'Sacred Halo: stuns nearby aliens and lets you float over walls. With full Holy Light, it hits every enemy hard.'],
   ['BLIND PRAYER', 'Never attacks and resists most damage. Holy Light hurts him most.'],
   ['ZEALOT', 'Dashes in a straight line and knocks you far back.'],
   ['BELLRINGER', 'Its bell hurts you and pushes you away.'],
   ['MASON', 'Raises a stone wall in your path.'],
-  ['PENITENT', 'Follows and erases your trail, breaking it if it reaches you.'],
+  ['PENITENT', 'Follows and erases your trail.'],
   ['HARDER RUNES', 'Runes get longer.'],
+  ['SANCTUARY SEALS', 'Your rune shape must pass through a Sanctuary Seal.'],
 ] as const;
 
 const unit = (type: Enemy['type'], extra: Partial<Enemy> = {}) => ({ type, id: 1, hp: 20, maxHp: 20, icyShieldHP: 0, flashTicks: 0, shootTicks: 0, attackTimer: 99, ...extra }) as Enemy;
@@ -48,7 +49,14 @@ export default function SiriusGuide({ drawBoss, drawCelestial }: { drawBoss: (ct
         const cycle = tick % 240; // 4s loops: each idea plays, then holds briefly so it can be read
         ctx.save(); ctx.clearRect(0, 0, 200, 120);
         ctx.fillStyle = i === 0 && cycle >= 120 ? '#0d0b1a' : '#1c1a26'; ctx.fillRect(0, 0, 200, 120);
-        if (i === 0) { // light, then dark with the arrows reversed
+        if (i === 14) {
+          const cells = runeCells(HOOK), traced = Math.min(cells.length - 1, Math.floor(cycle / 20));
+          drawSanctuarySeal(ctx, 84, 42, tick, traced >= 2, 30);
+          drawSanctuarySeal(ctx, 163, 30, tick, false, 28);
+          ctx.strokeStyle = TRAIL_GOLD; ctx.lineWidth = 4;ctx.beginPath();
+          cells.slice(0, traced + 1).forEach(([x,y],j)=>{if(j===0)ctx.moveTo(40+x*22,42+y*22);else ctx.lineTo(40+x*22,42+y*22);});ctx.stroke();
+          const [x,y]=cells[traced];drawGuidePlayer(ctx,40+x*22,42+y*22);
+        } else if (i === 0) { // light, then dark with the arrows reversed
           const dark = cycle >= 120;
           if (!dark) { ctx.globalAlpha = .18; ctx.fillStyle = '#ffe9a8'; ctx.fillRect(0, 0, 200, 120); ctx.globalAlpha = 1; }
           drawGuidePlayer(ctx, 100, 62);
@@ -79,6 +87,11 @@ export default function SiriusGuide({ drawBoss, drawCelestial }: { drawBoss: (ct
           const fill = (cycle % 180) / 180; ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2; ctx.strokeRect(40, 54, 120, 14); ctx.fillStyle = fill > .95 ? '#fff6d0' : '#e8c45c'; ctx.fillRect(42, 56, 116 * fill, 10);
           ctx.fillStyle = '#ffe27a'; ctx.fillRect(97, 26, 6, 18); ctx.fillRect(91, 32, 18, 6);
         } else if (i === 7) { // Halo: floating over a wall, then the burst
+          if (cycle < 60) {
+            const p = Math.min(1, cycle / 30);
+            drawHaloKnockbackWave(ctx, 40, 62, p, 92);
+            drawSiriusUnit(ctx, unit('penitent'), 78 + p * 60, 96, tick);
+          }
           ctx.fillStyle = '#4a4252'; ctx.fillRect(84, 52, 32, 32); ctx.fillStyle = '#625b68'; ctx.fillRect(84, 52, 32, 5);
           const x = 40 + (cycle % 120) * 1.1, y = 62; drawGuidePlayer(ctx, x, y);
           ctx.fillStyle = RUNE_GOLD; ctx.fillRect(x - 12, y - 30, 24, 3); ctx.fillRect(x - 12, y - 24, 24, 3); ctx.fillRect(x - 15, y - 27, 3, 3); ctx.fillRect(x + 12, y - 27, 3, 3);
@@ -123,7 +136,7 @@ export default function SiriusGuide({ drawBoss, drawCelestial }: { drawBoss: (ct
       { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 2, 3, 4, 5, 6, 7], skill: true },
       { title: 'ENEMIES', indices: [8, 9, 10], skill: false },
       { title: 'PHASE 2+', indices: [11, 13], skill: false },
-      { title: 'PHASE 3', indices: [12], skill: false },
+      { title: 'PHASE 3', indices: [12, 14], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>
     <h4 className="rs-guide-group-title">{section.title}</h4>
     <div className="rs-nep-grid">

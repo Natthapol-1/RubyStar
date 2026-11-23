@@ -1,4 +1,4 @@
-const {app,BrowserWindow,ipcMain,protocol,session,Menu,dialog}=require('electron');
+const {app,BrowserWindow,ipcMain,protocol,session,Menu,dialog,shell}=require('electron');
 const path=require('node:path');const fs=require('node:fs');
 const {SaveStore}=require('./save-store.cjs');
 const {Readable}=require('node:stream');
@@ -45,6 +45,13 @@ app.whenReady().then(()=>{
  ipcMain.handle('profile:save',(event,data)=>{trusted(event);store.write(data);return true;});
  ipcMain.handle('window:fullscreen',event=>{trusted(event);win.setFullScreen(!win.isFullScreen());return win.isFullScreen();});
  ipcMain.handle('window:quit',event=>{trusted(event);win.close();});
+ // Support: open the folder holding saves and logs, and keep a small local error log there (logs/errors.log).
+ ipcMain.handle('app:open-data',event=>{trusted(event);return shell.openPath(app.getPath('userData'));});
+ ipcMain.on('app:log-error',(event,message)=>{trusted(event);try{
+  const dir=path.join(app.getPath('userData'),'logs'),file=path.join(dir,'errors.log');fs.mkdirSync(dir,{recursive:true});
+  if(fs.existsSync(file)&&fs.statSync(file).size>512*1024)fs.renameSync(file,file+'.old'); // keep at most two ~512 KB files
+  fs.appendFileSync(file,new Date().toISOString()+' v'+app.getVersion()+' '+String(message).slice(0,4000).replace(/\r?\n/g,'\n    ')+'\n');
+ }catch{}});
  ipcMain.on('window:close-ready',(event,saved)=>{trusted(event);clearTimeout(closeTimer);closeTimer=undefined;if(saved===false)return;closing=true;win.close();});
  win.on('close',event=>{if(!closing){event.preventDefault();win.webContents.send('window:closing');closeTimer??=setTimeout(()=>{closing=true;win.close();},5000);}});
  win.once('ready-to-show',()=>win.show());win.loadURL(origin+'/').catch(error=>{dialog.showErrorBox('Ruby Star could not start','Unable to load the game assets. Rebuild or reinstall Ruby Star.\n'+error.message);closing=true;app.quit();});

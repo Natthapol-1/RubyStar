@@ -6,7 +6,7 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const c = require('../game/constants.ts'), engine = require('../game/engine.ts');
 const source = fs.readFileSync('game/RubyStarGame.tsx', 'utf8');
 // Local art modules keep their real imports; React/UI imports are dropped since only canvas drawing runs.
-const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
+const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(display-settings|player-suit-art|convergence-art|devourer-model-art|singularity-maw|venus-art|venus|gambit-art|gambit|thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
   .map(m => `const ${m[1].replace(/\btype\s+/g, '')}=require('./${m[2]}.ts');`).join('');
 const code = 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
   + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;exports.drawMinimap=drawMinimap;exports.drawGuideCelestial=drawGuideCelestial;';
@@ -39,6 +39,12 @@ function scene(name,setup){
 // Grant: targets marked early in the cycle, then the closing cyan rings just before the ice lands.
 scene('saturn',(s)=>{s.saturn.grantTimer=300;});
 scene('saturn-grant',(s)=>{s.saturn.grantTimer=30;});
+scene('saturn-reversed-grant',(s,m,boss)=>{
+ s.saturn.phase=3;boss.hp=saturn.SATURN.phaseHP;s.saturn.grantTimer=30;
+ const [x,y]=[[11,11],[11,9],[12,9],[10,9]].find(([x,y])=>engine.isFloorTile(s.map,x,y));
+ const extra=engine.createEncounterEnemy(s,'frostbiter',x,y,40);s.enemies.push(extra);
+ s.saturn.grantTargets.push(extra.id);s.saturn.reverseGrantCycle=true;s.saturn.reverseGrantId=m.sleet_mortar.id;
+});
 // Recall: violet diamonds and chevrons back to her on everything holding her ice.
 scene('saturn-recall',(s,m)=>{s.saturn.grantTimer=300;s.saturn.recallTimer=40;m.glacier_hulk.icyShieldHP=120;m.frostbiter.icyShieldHP=60;s.playerShieldHP=40;s.saturn.playerIce=40;});
 // Capture the counter visuals from real Grant and Recall resolutions.
@@ -104,4 +110,15 @@ scene('saturn-frost-trail',(s,m,boss)=>{
   art.drawSaturnUnit(ctx,mob,150,74,150-left);art.drawSaturnGrantMark(ctx,150,74,40,74,left,150-left);ctx.restore();
  }
  fs.writeFileSync(path.join(out,'saturn-guide-grant-mark.png'),sheet.toBuffer('image/png'));
+}
+// Reversed and ordinary marks use the exact gameplay painters.
+{
+ const sheet=createCanvas(660,170),ctx=sheet.getContext('2d');
+ for(const [i,left] of [140,55,5].entries()){
+  ctx.save();ctx.translate(i*220,0);ctx.fillStyle='#102533';ctx.fillRect(0,0,220,170);
+  ctx.fillStyle=art.REVERSE_GRANT_COLOR;ctx.font='bold 12px monospace';ctx.fillText('REVERSED GRANT',14,20);
+  const mob={type:'sleet_mortar',id:1,hp:40,maxHp:40,icyShieldHP:0,flashTicks:0,shootTicks:0,attackTimer:99};
+  art.drawSaturnUnit(ctx,mob,150,100,150-left);art.drawSaturnGrantMark(ctx,150,100,35,100,left,150-left,true);ctx.restore();
+ }
+ fs.writeFileSync(path.join(out,'saturn-reversed-grant-cues.png'),sheet.toBuffer('image/png'));
 }

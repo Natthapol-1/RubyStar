@@ -41,7 +41,7 @@ function drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
  * read from the swap cooldown so drawing never changes state. Right after a swap the new colour flares much stronger
  * (up to 1 + POLE_FLASH_BOOST times) and eases back over POLE_FLASH_TICKS. Returns [old colour, new colour, blend 0–1, flare 0–1].
  */
-const POLE_FLASH_TICKS = 40, POLE_FLASH_BOOST = 5;
+const POLE_FLASH_TICKS = 40, POLE_FLASH_BOOST = 8;
 export function poleTint(state: Readonly<GameState>): [string, string, number, number] | null {
   const b = state.binary; if (!b) return null;
   const now = POLE_COLORS[b.pole], before = POLE_COLORS[b.pole === 'north' ? 'south' : 'north'];

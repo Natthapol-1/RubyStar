@@ -1,20 +1,20 @@
 import { CHAMBER_BOUNDS, ENEMY_CONFIGS, SINGULARITY_CHALLENGE as SC, TELEPORT_PADS, TILE_SIZE, chamberOfTile, isBossType } from './constants';
 import { addStarEnergy } from './blessing-effects';
-import { bfs, devourerBodyScale, createEncounterEnemy, damageEnemy, damagePlayer, damageRuby, explodeDevourer, devourerSoundAllowed, splitBody, freeChamberTiles, hasLineOfSight, healCore, healPlayer, isFloorTile, killEnemy, playAudioOneShot, shovePlayerFromEnemy, type Enemy, type GameState } from './engine';
+import { bfs, devourerBodyScale, createEncounterEnemy, damageEnemy, damagePlayer, damageRuby, explodeDevourer, devourerSoundAllowed, freeChamberTiles, hasLineOfSight, healCore, healPlayer, isFloorTile, killEnemy, playAudioOneShot, shovePlayerFromEnemy, type Enemy, type GameState } from './engine';
 
-// Two Maws open in turns and consume bodies permanently; the Gravity Hook (C) tows a body and flings it into one.
+// Two Maws open together and consume bodies permanently; the Gravity Hook (C) tows a body and flings it into one.
 
-export interface Maw { x: number; y: number; tx: number; ty: number; room: number; ticks: number; age?: number; offset?: number; opens?: number; forced?: 'open' | 'closed'; next?: { tx: number; ty: number; room: number } } // age: ticks since it appeared (fade-in and open cycle); offset: where in the cycle it started
+export interface Maw { x: number; y: number; tx: number; ty: number; room: number; ticks: number; age?: number; offset?: number; opens?: number; eatCooldown?: number; forced?: 'open' | 'closed'; next?: { tx: number; ty: number; room: number } } // age: ticks since it appeared (fade-in and open cycle); offset: where in the cycle it started
 /** A Lost Soul about to appear: a mark on the floor and minimap for soulWarnTicks before the soul comes out there. */
 /** A drifting toxic gas cloud (phase 2+): its centre in pixels, its drift, and its life (ticks left of max). */
-export interface GasCloud { x: number; y: number; vx: number; vy: number; ticks: number; max: number; seed: number; r?: number; still?: boolean } // r: radius in tiles (default gas.radius); still: left by a Contaminated Soulless, never drifts
+export interface GasCloud { x: number; y: number; vx: number; vy: number; ticks: number; max: number; seed: number; r?: number; still?: boolean; fade?: number; owner?: number } // owner: the Contaminated Soulless that left this trail puff; r: radius in tiles (default gas.radius); still: a Contaminated Soulless trail puff, never drifts; fade: fade-in/out ticks (default gas.fade)
 export interface SoulSign { tx: number; ty: number; ticks: number; golden: boolean; hollow?: boolean; toxic?: boolean } // hollow: a Soulless is coming (toxic: a Contaminated Soulless)
 export interface SingularityTrial {
   phase: 1 | 2 | 3; encounterId: number; defeatedMaxHp: number;
   soundTicks?: Record<string, number>; // when each repeatable sound last played (devourerSoundAllowed)
   maws?: Maw[];
   convergenceTimer?: number;
-  convergence?: { x: number; y: number; ticks: number; stage: 'gather' | 'charge' | 'blast'; count: number; gatherTicks?: number; sequential?: boolean; members: { id: number; x: number; y: number; tx: number; ty: number; size?: number; started?: boolean }[] };
+  convergence?: { x: number; y: number; ticks: number; stage: 'gather' | 'charge' | 'blast'; count: number; gatherTicks?: number; sequential?: boolean; knockPending?: boolean; members: { id: number; x: number; y: number; tx: number; ty: number; size?: number; started?: boolean }[] };
 
   hook?: { id: number; ticks: number };       // the body you hold, and for how long
   hookCooldown?: number;
@@ -30,6 +30,8 @@ export interface SingularityTrial {
   lands?: { x: number; y: number; ticks: number }[]; // a jumping body hitting the ground where its comet came down
   bursts?: { x: number; y: number; ticks: number; to: [number, number][] }[]; // a gorged body exploding, with where each copy was flung
   swallows?: { x: number; y: number; ticks: number; big: boolean; torn?: boolean; fromX?: number; fromY?: number; size?: number }[];  // effects where something was consumed or torn apart
+  shellBreaks?: { x: number; y: number; ticks: number }[]; // a copy's Void Shell shattering
+  fEatCooldown?: number; // ticks until the F field can swallow another copy (mawEatCooldown, like a Maw)
 }
 
 export const SINGULARITY_BURST_TICKS = 48;
@@ -104,14 +106,15 @@ function manageMaws(s: GameState, t: SingularityTrial) {
   while (maws.length < mawCount(t)) {
     const spot = pickSpot(s, [...maws.map(m => m.room), ...(maws.length ? [] : [])]);
     if (!spot) return;
-    const cycle = SC.mawCycle.closed + SC.mawCycle.warn + SC.mawCycle.open;
-    maws.push({ ...place(spot, moveTicks + maws.length * Math.floor(moveTicks / 2)), offset: maws.length * Math.floor(cycle / 2) }); // half a cycle apart
+    maws.push({ ...place(spot, moveTicks + maws.length * Math.floor(moveTicks / 2)), offset: 0 }); // every Maw shares one open cycle
   }
+  let opened = false; // the Maws open together: play their gulp once
   for (const m of maws) {
     m.age = (m.age ?? 0) + 1;
+    if ((m.eatCooldown ?? 0) > 0) m.eatCooldown!--;
     const c = SC.mawCycle, at = ((m.age ?? 0) + (m.offset ?? 0)) % (c.closed + c.warn + c.open);
-    if (!m.forced && at === c.closed + c.warn) { // it opens: the deep gulp, slowed to the length of the window (the backdrop black hole gulps with it)
-      playAudioOneShot('/sounds/reverse.mp3', .35, .42); playAudioOneShot('/sounds/celestial/singularity.wav', .22, .25);
+    if (!m.forced && at === c.closed + c.warn && !opened) { // it opens: the deep gulp, slowed to the length of the window (the backdrop black hole gulps with it)
+      opened = true; playAudioOneShot('/sounds/reverse.mp3', .35, .55); playAudioOneShot('/sounds/celestial/singularity.wav', .22, .33);
     }
     if (!m.forced && at === c.closed + c.warn) m.opens = (m.opens ?? 0) + 1;
     if (m.ticks > 40 || mawWindow(m).state === 'closed') m.ticks--; // the fade-out waits for it to rest
@@ -156,8 +159,9 @@ export function swallowAtField(s: GameState) {
   if (!t || !f || f.ticks <= 0 || s.gamePhase !== 'playing') return;
   const tx = Math.floor(f.x / TILE_SIZE), ty = Math.floor(f.y / TILE_SIZE), centre = { x: (tx + .5) * TILE_SIZE, y: (ty + .5) * TILE_SIZE } as Maw;
   for (const e of [...s.enemies]) {
+    if ((t.fEatCooldown ?? 0) > 0) return; // one copy at a time, like a Maw
     if (e.type !== 'devourer' || !swallowable(e) || held(t, e) || !s.enemies.includes(e)) continue;
-    if (e.tileX === tx && e.tileY === ty && Math.hypot(e.x - centre.x, e.y - centre.y) <= TILE_SIZE * .55) { consume(s, t, centre, e); if (s.gamePhase !== 'playing') return; }
+    if (e.tileX === tx && e.tileY === ty && Math.hypot(e.x - centre.x, e.y - centre.y) <= TILE_SIZE * .55) { t.fEatCooldown = SC.mawEatCooldown; consume(s, t, centre, e); if (s.gamePhase !== 'playing') return; }
   }
 }
 
@@ -167,15 +171,13 @@ function consume(s: GameState, t: SingularityTrial, m: Maw, e: Enemy) {
   (t.swallows ??= []).push({ x: m.x, y: m.y, ticks: body ? 40 : 24, big: body, fromX: e.x, fromY: e.y, size: body ? TILE_SIZE * .7 : TILE_SIZE * .4 });
   if (body) {
     e.devourer = { ...(e.devourer ?? { generation: 0 }), consumed: true };
-    const chain = t.feast && t.feast.ticks > 0 ? Math.min(SC.feastMax, t.feast.count + 1) : 1, heal = SC.bodySwallowHeal * (1 + SC.feastStep * (chain - 1));
+    const chain = t.feast && t.feast.ticks > 0 ? Math.min(SC.feastMax, t.feast.count + 1) : 1, heal = SC.bodySwallowHeal * (1 + SC.feastStep * (chain - 1)) + SC.bodySwallowBonus;
     t.feast = { count: chain, ticks: SC.feastWindow };
     healPlayer(s, heal); healCore(s, heal); addStarEnergy(s, SC.feastEnergy * chain);
   }
   else { healPlayer(s, SC.swallowHeal); healCore(s, SC.swallowHeal); addStarEnergy(s, SC.swallowEnergy); }
-  if (devourerSoundAllowed(s, 'swallow')) { // swallows in a row share one cooldown
-    playAudioOneShot('/sounds/reverse.mp3', body ? .7 : .35, body ? .55 : 1.1);
-    if (body) playAudioOneShot('/sounds/celestial/singularity.wav', .45, .6);
-  }
+  // A swallowed Devourer is silent, so the deep suck only ever means a Maw opening; other aliens get a short gulp.
+  if (!body && devourerSoundAllowed(s, 'swallow')) playAudioOneShot('/sounds/reverse.mp3', .35, 1.1);
   const i = s.enemies.indexOf(e);
   if (i >= 0) { e.hp = 0; killEnemy(s, i, true); }
 }
@@ -193,6 +195,37 @@ function beginConvergenceMember(s:GameState,t:SingularityTrial,a:NonNullable<Sin
 }
 
 /** One synchronized swarm attack. Existing bodies keep their HP, stacks and identities throughout. */
+export function convergenceGatherTicks(count:number){
+  const c=SC.convergence;return Math.max(c.gatherTicks,count*c.bodyTicks)+c.gatherExtraTicks;
+}
+
+/** Shared by the visible leading front and its one-time player knockback. */
+export function convergenceWaveRadius(s:GameState,origin:{x:number;y:number},elapsed:number){
+  const width=(s.map[0]?.length??51)*TILE_SIZE,height=s.map.length*TILE_SIZE;
+  const farthest=Math.max(...[[0,0],[width,0],[0,height],[width,height]].map(([x,y])=>Math.hypot(x-origin.x,y-origin.y)));
+  return TILE_SIZE*.8+(farthest/.7+TILE_SIZE*3)*Math.max(0,Math.min(1,elapsed/SC.convergence.waveTicks));
+}
+function convergenceWavePush(s:GameState,a:NonNullable<SingularityTrial['convergence']>){
+  if(!a.knockPending||s.gamePhase!=='playing')return;
+  const dx=s.playerX-a.x,dy=s.playerY-a.y,ax=Math.abs(dx),ay=Math.abs(dy);
+  const radius=convergenceWaveRadius(s,a,SC.convergence.blastTicks-a.ticks);
+  if(ax>radius||ay>radius||(ax>radius*.65&&ay>radius*.65))return;
+  a.knockPending=false;
+  const horizontal=dx||dy?ax>=ay:Math.abs(s.playerDirX)>=Math.abs(s.playerDirY);
+  const dirX=horizontal?(Math.sign(dx)||Math.sign(s.playerDirX)||1):0;
+  const dirY=horizontal?0:(Math.sign(dy)||Math.sign(s.playerDirY)||1);
+  s.playerKnockback={dirX,dirY,started:false,tilesLeft:SC.convergence.knock,shaken:true,speedMult:SC.convergence.knockSpeedMult};
+}
+
+/** How hard the Convergence blast hits a point (pixels): nearMult close to the gather point, easing down to farMult far
+ * away; the chamber diagonally opposite the gather point always takes farMult. */
+export function convergenceDamageMult(a: { x: number; y: number }, x: number, y: number) {
+  const C = SC.convergence, from = chamberOfTile(Math.floor(a.x / TILE_SIZE), Math.floor(a.y / TILE_SIZE)), at = chamberOfTile(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE));
+  if (from >= 0 && at >= 0 && at === 3 - from) return C.farMult; // ALPHA↔GAMMA, BETA↔DELTA
+  const d = Math.hypot(x - a.x, y - a.y) / TILE_SIZE, k = Math.max(0, Math.min(1, (C.farTiles - d) / (C.farTiles - C.nearTiles)));
+  return C.farMult + (C.nearMult - C.farMult) * k * k;
+}
+
 export function updateConvergence(s: GameState, t: SingularityTrial): boolean {
   const C = SC.convergence;
   if (s.gamePhase !== 'playing') return false;
@@ -205,7 +238,7 @@ export function updateConvergence(s: GameState, t: SingularityTrial): boolean {
     const spot = spots[Math.floor(Math.random()*spots.length)];
     if (!spot) { t.convergenceTimer = 60; return false; }
     const [tx,ty] = spot;
-    t.convergence = { x:(tx+.5)*TILE_SIZE,y:(ty+.5)*TILE_SIZE,ticks:Math.max(C.gatherTicks,bodies.length*C.bodyTicks),gatherTicks:Math.max(C.gatherTicks,bodies.length*C.bodyTicks),stage:'gather',count:bodies.length,sequential:true,
+    t.convergence = { x:(tx+.5)*TILE_SIZE,y:(ty+.5)*TILE_SIZE,ticks:convergenceGatherTicks(bodies.length),gatherTicks:convergenceGatherTicks(bodies.length),stage:'gather',count:bodies.length,sequential:true,
       members:bodies.map(e=>({id:e.id,x:e.x,y:e.y,tx:e.tileX,ty:e.tileY,size:Math.floor(TILE_SIZE*ENEMY_CONFIGS.devourer.bodyFraction*devourerBodyScale(e))})) };
     t.jaw = undefined;
     beginConvergenceMember(s,t,t.convergence,0);
@@ -214,7 +247,7 @@ export function updateConvergence(s: GameState, t: SingularityTrial): boolean {
   }
   const a=t.convergence;
   if(a.stage==='gather') {
-    const duration=a.gatherTicks??Math.max(C.gatherTicks,a.members.length*C.bodyTicks);
+    const duration=a.gatherTicks??convergenceGatherTicks(a.members.length);
     const index=Math.floor((duration-a.ticks)/(duration/Math.max(1,a.members.length)));
     // Older saved gathers hid every body at once. Restore waiting members before continuing their turns.
     if(!a.sequential){
@@ -226,10 +259,12 @@ export function updateConvergence(s: GameState, t: SingularityTrial): boolean {
       a.sequential=true;
     }
   }
+  if(a.stage==='blast')t.convergenceTimer=Math.max(0,(t.convergenceTimer??C.everyTicks)-1);
   if (a.stage === 'charge') a.ticks = 0; // resume an older snapshot without its obsolete charge delay
   if (--a.ticks > 0) {
+    if(a.stage==='blast')convergenceWavePush(s,a);
     if(a.stage==='gather') {
-      const duration=a.gatherTicks??Math.max(C.gatherTicks,a.members.length*C.bodyTicks),slot=duration/Math.max(1,a.members.length);
+      const duration=a.gatherTicks??convergenceGatherTicks(a.members.length),slot=duration/Math.max(1,a.members.length);
       beginConvergenceMember(s,t,a,Math.floor((duration-a.ticks)/slot));
     }
     return a.stage !== 'blast';
@@ -245,10 +280,14 @@ export function updateConvergence(s: GameState, t: SingularityTrial): boolean {
     }
     t.convergenceTimer=C.everyTicks;
     s.screenShakeTicks=Math.max(s.screenShakeTicks,30);s.screenShakeAmt=Math.max(s.screenShakeAmt,14);
-    playAudioOneShot('/sounds/sci-fi-explosion-09.mp3',.9,.65);
-    playAudioOneShot('/sounds/meteorExplode.mp3',.45,.75);
-    const damage=Math.min(C.maxDamage,Math.ceil(C.maxDamage*a.count/SC.familyCap[t.phase-1]));
-    if(damage>0){damagePlayer(s,damage);if(s.gamePhase==='playing')damageRuby(s,Math.ceil(damage*C.rubyShare));}
+    playAudioOneShot('/sounds/sci-fi-explosion-09.mp3',1,.65);
+    playAudioOneShot('/sounds/meteorExplode.mp3',.65,.75);
+    // The swarm's share of the cap sets the base hit; distance from the gather point scales it (see convergenceDamageMult).
+    const base=Math.min(1,a.count/SC.familyCap[t.phase-1])*C.maxDamage,damage=Math.ceil(base*convergenceDamageMult(a,s.playerX,s.playerY));
+    const rubyAt=s.rubyTileX!==-1&&!s.playerCarryingRuby?[(s.rubyTileX+.5)*TILE_SIZE,(s.rubyTileY+.5)*TILE_SIZE]:[s.playerX,s.playerY];
+    if(damage>0){damagePlayer(s,damage);if(s.gamePhase==='playing')damageRuby(s,Math.ceil(base*C.rubyShare*convergenceDamageMult(a,rubyAt[0],rubyAt[1])));}
+    a.knockPending=damage>0&&s.gamePhase==='playing';
+    convergenceWavePush(s,a);
     return true;
   }
   t.convergence=undefined;return false;
@@ -262,6 +301,8 @@ export function updateSingularityMaws(s: GameState) {
   t.swallows = (t.swallows ?? []).filter(w => --w.ticks > 0);
   t.bursts = (t.bursts ?? []).filter(b => --b.ticks > 0);
   t.lands = (t.lands ?? []).filter(l => --l.ticks > 0);
+  t.shellBreaks = (t.shellBreaks ?? []).filter(b => --b.ticks > 0);
+  if ((t.fEatCooldown ?? 0) > 0) t.fEatCooldown!--;
   if (updateConvergence(s, t)) { updateHook(s, t); return; }
   manageMaws(s, t);
   if (t.horizonCooldown && t.horizonCooldown > 0) t.horizonCooldown--;
@@ -275,10 +316,21 @@ export function updateSingularityMaws(s: GameState) {
     const surging = mawWindow(m).state === 'open', pulse = surging ? SC.mawOpenPulse : SC.mawPulse;
     const playerRadius = (surging ? SC.playerSwellRadius : SC.playerRadius) * TILE_SIZE, playerPulse = surging ? SC.playerSwellPulse : SC.playerPulse;
     const radius = mawReach(s, m) * TILE_SIZE;
-    // Consumption first: Devourer copies only. Other aliens can be pulled but are never eaten here.
+    // Consumption first: Devourer copies only, one at a time (mawEatCooldown between swallows). Other aliens can be pulled
+    // but are never eaten here.
     for (const e of [...s.enemies]) {
+      if ((m.eatCooldown ?? 0) > 0) break;
       if (e.type !== 'devourer' || !swallowable(e) || !s.enemies.includes(e)) continue;
-      if (e.tileX === m.tx && e.tileY === m.ty && Math.hypot(e.x - m.x, e.y - m.y) <= TILE_SIZE * .55) { consume(s, t, m, e); if (s.gamePhase !== 'playing') return; }
+      if (e.tileX === m.tx && e.tileY === m.ty && Math.hypot(e.x - m.x, e.y - m.y) <= TILE_SIZE * .55) { m.eatCooldown = SC.mawEatCooldown; consume(s, t, m, e); if (s.gamePhase !== 'playing') return; }
+    }
+    // A Soulless held on the centre is ground down: damage every mawSoulless.every ticks it stays there.
+    for (const e of [...s.enemies]) {
+      if ((e.type !== 'soulless' && e.type !== 'toxic_soulless') || e.hp <= 0 || held(t, e)) continue;
+      if (e.tileX !== m.tx || e.tileY !== m.ty) continue;
+      e.mawBurn = (e.mawBurn ?? 0) + 1; if (e.mawBurn < SC.mawSoulless.every) continue;
+      e.mawBurn = 0; damageEnemy(s, e, SC.mawSoulless.damage, 'special');
+      if (e.hp <= 0 && s.enemies.includes(e)) killEnemy(s, s.enemies.indexOf(e));
+      if (s.gamePhase !== 'playing') return;
     }
     // Pull enemies in. Devourer bodies are heavier and are pulled every other pulse; within mawInnerRadius tiles of the
     // centre the pull is mawInnerMult times as frequent.
@@ -350,7 +402,7 @@ export function bodyJump(s: GameState, e: Enemy): boolean {
     return true;
   }
   if (!t || !d || (d.generation ?? 0) === 0 || d.gorgeTicks !== undefined || (d.newbornTicks ?? 0) > 0 || e.singularityPull) return false;
-  const every = d.gnasher ? SC.gnasher.everyTicks : J.everyTicks; // a Gnasher jumps more often
+  const every = J.everyTicks;
   d.jumpTicks ??= every[0] + Math.floor(Math.random() * (every[1] - every[0]));
   if (--d.jumpTicks > 0) { if (d.jumpTicks <= J.warn && d.jumpTicks % 6 === 0) e.flashTicks = 3; return false; } // flickers first
   d.jumpTicks = undefined;
@@ -374,7 +426,7 @@ export function bodyJump(s: GameState, e: Enemy): boolean {
 // ─── Toxic gas (phase 2+) ────────────────────────────────────────────────────
 
 /** A cloud's strength (0–1): fading in over its first `fade` ticks and out over its last. */
-export const gasFade = (g: GasCloud) => Math.max(0, Math.min(1, (g.max - g.ticks) / SC.gas.fade, g.ticks / SC.gas.fade));
+export const gasFade = (g: GasCloud) => { const f = g.fade ?? SC.gas.fade; return Math.max(0, Math.min(1, (g.max - g.ticks) / f, g.ticks / f)); };
 /** How deep a point is in the gas (0 outside, up to 1 at a full-strength cloud's centre). */
 export function gasDepth(s: Readonly<GameState>, x: number, y: number): number {
   let depth = 0;
@@ -390,18 +442,29 @@ export const gasPlayerSlow = (s: Readonly<GameState>) => gasDepth(s, s.playerX, 
  * original one per stack), like a full body; with none it bursts and is flung to a random spot elsewhere, clear of gas
  * and away from you. Hooked and thrown bodies pass through. */
 function gasBursts(s: GameState, t: SingularityTrial) {
-  for (const e of s.enemies.filter(x => x.type === 'devourer' && x.hp > 0 && !held(t, x) && !x.singularityPull && gasDepth(s, x.x, x.y) > .3)) { // a cloud still fading in does not burst them yet
+  const toxic = s.enemies.filter(x => x.type === 'toxic_soulless' && x.hp > 0), reach = SC.soulless.touchRadius * TILE_SIZE;
+  const touching = (x: Enemy) => toxic.some(o => Math.hypot(o.x - x.x, o.y - x.y) <= reach); // a Contaminated Soulless bursts them like gas
+  for (const e of s.enemies.filter(x => x.type === 'devourer' && x.hp > 0 && !held(t, x) && !x.singularityPull && (gasDepth(s, x.x, x.y) > .3 || touching(x)))) { // a cloud still fading in does not burst them yet
     if (!s.enemies.includes(e)) continue;
-    if (e.chargeDirX > 0) { explodeDevourer(s, e); if (s.gamePhase !== 'playing') return; continue; }
-    const spots = [0, 1, 2, 3].flatMap(room => freeChamberTiles(s, room)).filter(([x, y]) => Math.hypot(x - s.playerTileX, y - s.playerTileY) >= SC.gas.minFromYou && gasDepth(s, (x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) === 0);
-    if (!spots.length) continue;
-    const [x, y] = spots[Math.floor(Math.random() * spots.length)], to: [number, number] = [(x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE];
-    (t.bursts ??= []).push({ x: e.x, y: e.y, ticks: SINGULARITY_BURST_TICKS, to: [to] });
-    jumpBlast(s, e.x, e.y); if (s.gamePhase !== 'playing') return;
-    Object.assign(e, { tileX: x, tileY: y, targetTileX: x, targetTileY: y, x: to[0], y: to[1], stepProgress: 0, path: [], pathTimer: 0 });
-    if (e.devourer) e.devourer.landTicks = SINGULARITY_LAND_TICKS;
-    if (devourerSoundAllowed(s, 'boom')) playAudioOneShot('/sounds/sci-fi-explosion-09.mp3', .45, 1.1);
+    gasBurst(s, t, e); if (s.gamePhase !== 'playing') return;
   }
+  // From phase 3, a Soulless that walks into the gas is contaminated.
+  if (t.phase >= SC.soulless.toxicFromPhase) for (const e of s.enemies) if (e.type === 'soulless' && e.hp > 0 && gasDepth(s, e.x, e.y) > .3) {
+    e.type = 'toxic_soulless'; e.flashTicks = 10; e.gasTrail = undefined;
+    if (devourerSoundAllowed(s, 'toxic')) playAudioOneShot('/sounds/poisoned.wav', .45, .8);
+  }
+}
+/** One Devourer bursting in the gas: with stacks it explodes into its copies; with none it bursts and is flung elsewhere. */
+function gasBurst(s: GameState, t: SingularityTrial, e: Enemy) {
+  if (e.chargeDirX > 0) { explodeDevourer(s, e); return; }
+  const spots = [0, 1, 2, 3].flatMap(room => freeChamberTiles(s, room)).filter(([x, y]) => Math.hypot(x - s.playerTileX, y - s.playerTileY) >= SC.gas.minFromYou && gasDepth(s, (x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE) === 0);
+  if (!spots.length) return;
+  const [x, y] = spots[Math.floor(Math.random() * spots.length)], to: [number, number] = [(x + .5) * TILE_SIZE, (y + .5) * TILE_SIZE];
+  (t.bursts ??= []).push({ x: e.x, y: e.y, ticks: SINGULARITY_BURST_TICKS, to: [to] });
+  jumpBlast(s, e.x, e.y); if (s.gamePhase !== 'playing') return;
+  Object.assign(e, { tileX: x, tileY: y, targetTileX: x, targetTileY: y, x: to[0], y: to[1], stepProgress: 0, path: [], pathTimer: 0, singularityPull: undefined });
+  if (e.devourer) { e.devourer.landTicks = SINGULARITY_LAND_TICKS; e.devourer.stunTicks = 0; }
+  if (devourerSoundAllowed(s, 'boom')) playAudioOneShot('/sounds/sci-fi-explosion-09.mp3', .45, 1.1);
 }
 function newCloud(s: GameState): GasCloud | null {
   const spots = [0, 1, 2, 3].flatMap(room => freeChamberTiles(s, room)).filter(([x, y]) => Math.hypot(x - s.playerTileX, y - s.playerTileY) >= SC.gas.minFromYou);
@@ -412,11 +475,11 @@ function newCloud(s: GameState): GasCloud | null {
 /** Clouds drift slowly, turning a little and bouncing off walls; each fades out at the end of its life and a new one
  * forms somewhere else, away from you. */
 function updateGas(s: GameState, t: SingularityTrial) {
-  if (t.phase < SC.gas.fromPhase) { t.gas = (t.gas ?? []).filter(g => g.still); if (!t.gas.length) return; } // phase 1: only Contaminated Soulless clouds
+  if (t.phase < SC.gas.fromPhase) { t.gas = (t.gas ?? []).filter(g => g.still); if (!t.gas.length && !s.enemies.some(e => e.type === 'toxic_soulless')) return; } // phase 1: only Contaminated Soulless trail puffs
   const gas = t.gas ??= [];
   for (const g of [...gas]) {
     if (--g.ticks <= 0) { gas.splice(gas.indexOf(g), 1); continue; }
-    if (g.still) continue; // a Contaminated Soulless cloud stays where it fell
+    if (g.still) continue; // a Contaminated Soulless trail puff stays where it was left
     const turn = Math.sin(s.gameTick * .01 + g.seed) * .004, c = Math.cos(turn), sn = Math.sin(turn);
     [g.vx, g.vy] = [g.vx * c - g.vy * sn, g.vx * sn + g.vy * c];
     const nx = g.x + g.vx, ny = g.y + g.vy;
@@ -427,11 +490,19 @@ function updateGas(s: GameState, t: SingularityTrial) {
   gasBursts(s, t);
 }
 
-/** A Contaminated Soulless died: it leaves a still, larger gas cloud on its spot for a while. */
-export function toxicSoullessCloud(s: GameState, e: Enemy) {
-  const t = s.trial?.devourer as SingularityTrial | undefined; if (!t) return;
-  (t.gas ??= []).push({ x: (e.tileX + .5) * TILE_SIZE, y: (e.tileY + .5) * TILE_SIZE, vx: 0, vy: 0, ticks: SC.soulless.cloudTicks, max: SC.soulless.cloudTicks, seed: Math.random() * 100, r: SC.soulless.cloudRadius, still: true });
-  if (devourerSoundAllowed(s, 'toxic')) playAudioOneShot('/sounds/poisoned.wav', .45, .8);
+/** A walking Contaminated Soulless leaves a trail: a small still gas puff on each new tile it reaches, at most one every
+ * trailGap ticks, keeping at most trailMax puffs. Called after its AI each tick. */
+export function toxicSoullessTrail(s: GameState, e: Enemy) {
+  const t = s.trial?.devourer as SingularityTrial | undefined, S = SC.soulless; if (!t || e.hp <= 0) return;
+  const last = e.gasTrail;
+  if (!last) { e.gasTrail = { tx: e.tileX, ty: e.tileY, tick: s.gameTick }; return; } // where it starts is not part of the trail
+  if ((last.tx === e.tileX && last.ty === e.tileY) || s.gameTick - last.tick < S.trailGap) return;
+  e.gasTrail = { tx: e.tileX, ty: e.tileY, tick: s.gameTick };
+  const gas = t.gas ??= [];
+  gas.push({ x: (e.tileX + .5) * TILE_SIZE, y: (e.tileY + .5) * TILE_SIZE, vx: 0, vy: 0, ticks: S.trailTicks, max: S.trailTicks, seed: Math.random() * 100, r: S.trailRadius, still: true, fade: S.trailFade, owner: e.id });
+  // At most trailMax puffs each: the oldest goes when a new one is laid.
+  const own = gas.filter(g => g.owner === e.id);
+  for (const g of own.slice(0, Math.max(0, own.length - S.trailMax))) gas.splice(gas.indexOf(g), 1);
 }
 
 // ─── Spreading out ───────────────────────────────────────────────────────────
@@ -450,35 +521,6 @@ export function bodySpreadStep(s: GameState, e: Enemy): [number, number] | null 
     .filter(([x, y]) => isFloorTile(s.map, x, y) && !others.some(o => o.tileX === x && o.tileY === y))
     .map(p => [p, spacing(p[0], p[1])] as const).sort((a, b) => b[1] - a[1])[0];
   return best && best[1] > here ? best[0] : null;
-}
-
-// ─── Gnasher (phase 3) ───────────────────────────────────────────────────────
-
-/** Whether a new copy should be a Gnasher: phase 3, by chance, and fewer than max alive. */
-export function rollGnasher(s: GameState): boolean {
-  const t = s.trial?.devourer as SingularityTrial | undefined, G = SC.gnasher;
-  if (!t || t.phase < G.fromPhase || Math.random() >= G.chance) return false;
-  return s.enemies.filter(e => e.type === 'devourer' && e.hp > 0 && e.devourer?.gnasher).length < G.max;
-}
-const biteable = (t: SingularityTrial, g: Enemy, o: Enemy) => o !== g && o.type === 'devourer' && o.hp > 0 && !o.devourer?.consumed && (o.devourer?.generation ?? 0) > 0 && o.devourer?.gorgeTicks === undefined && !o.devourer?.gnasher && !held(t, o);
-/** The nearest body a ready Gnasher goes after, within seek tiles. */
-export function gnasherPrey(s: GameState, g: Enemy): Enemy | undefined {
-  const t = s.trial?.devourer as SingularityTrial | undefined; if (!t) return undefined;
-  return s.enemies.filter(o => biteable(t, g, o) && Math.hypot(o.tileX - g.tileX, o.tileY - g.tileY) <= SC.gnasher.seek)
-    .sort((a, b) => Math.hypot(a.x - g.x, a.y - g.y) - Math.hypot(b.x - g.x, b.y - g.y))[0];
-}
-/** A ready Gnasher bites a body within reach: with stacks it bursts at once with twice its stacks; with none it splits
- * into two. */
-export function gnasherBite(s: GameState, g: Enemy) {
-  const t = s.trial?.devourer as SingularityTrial | undefined, d = g.devourer; if (!t || !d) return;
-  if ((d.biteTicks ?? 0) > 0) { d.biteTicks!--; return; }
-  const victim = s.enemies.find(o => biteable(t, g, o) && Math.hypot(o.x - g.x, o.y - g.y) <= SC.gnasher.reach * TILE_SIZE);
-  if (!victim) return;
-  d.biteTicks = SC.gnasher.biteTicks; g.shootTicks = 16;
-  s.laserBeams.push({ fromX: g.x, fromY: g.y, dirX: 0, dirY: 0, endX: victim.x, endY: victim.y, ticks: 20, color: '#6b2fa8' });
-  if (devourerSoundAllowed(s, 'gnash')) playAudioOneShot('/sounds/slash.mp3', .55, .7);
-  if (victim.chargeDirX > 0) { victim.chargeDirX *= 2; explodeDevourer(s, victim); }
-  else { splitBody(s, victim); }
 }
 
 /** So a phase never ends too fast: in its first loneBodyTicks, if only one body is left and it is not already bursting, it
@@ -536,17 +578,23 @@ function bite(s: GameState, t: SingularityTrial, jaw: NonNullable<SingularityTri
 
 // ─── Gravity Hook (C) ─────────────────────────────────────────────────────────
 
+/** A copy still wrapped in its Void Shell (phase 3). */
+export const voidShelled = (e: Readonly<Enemy>) => e.type === 'devourer' && !!e.devourer?.challenge && e.icyShieldHP > 0;
 const hooked = (t: SingularityTrial, e: Enemy) => t.hook?.id === e.id || !!t.flings?.some(f => f.id === e.id);
 /** Out of everything else's reach: hooked, thrown, or in the air after a jump or burst. */
 const held = (t: SingularityTrial, e: Enemy) => !!e.devourer?.merging || hooked(t, e) || !!e.devourer?.landTicks;
 /** A body that can be hooked: a living copy (not the original). */
-const hookable = (e: Enemy) => !e.devourer?.merging && e.hp > 0 && !e.devourer?.consumed && !e.devourer?.landTicks && (e.type === 'devourer' ? (e.devourer?.generation ?? 0) > 0 : !isBossType(e.type) && e.type !== 'aegis_construct'); // not mid-jump; a bursting copy too: its fuse keeps burning
-/** The body the hook would catch now: the nearest hookable body within range and in sight. */
+const hookable = (e: Enemy) => !e.devourer?.merging && e.hp > 0 && !e.devourer?.consumed && !e.devourer?.landTicks && (e.type === 'devourer' ? (e.devourer?.generation ?? 0) > 0 : !isBossType(e.type) && e.type !== 'aegis_construct'); // not mid-jump; a bursting copy too: holding pauses its fuse
+/** The body the hook would catch now: in-sight targets before ones behind walls, then the nearest Devourer copy within range, else the nearest other mob. A Void Shell keeps a copy out
+ * of the hook's grasp until it is broken. */
 export function hookTarget(s: GameState): Enemy | undefined {
   const t = s.trial?.devourer; if (!t || t.hook || (t.hookCooldown ?? 0) > 0) return undefined;
-  return s.enemies.filter(e => hookable(e) && !held(t, e) && Math.hypot(e.tileX - s.playerTileX, e.tileY - s.playerTileY) <= SC.hook.range
-    && hasLineOfSight(s.map, s.playerTileX, s.playerTileY, e.tileX, e.tileY))
-    .sort((a, b) => Math.hypot(a.x - s.playerX, a.y - s.playerY) - Math.hypot(b.x - s.playerX, b.y - s.playerY))[0];
+  // Targets in sight come first; it reaches through walls only when none is visible (the tow and throw still stop at walls).
+  const seen = (e: Enemy) => hasLineOfSight(s.map, s.playerTileX, s.playerTileY, e.tileX, e.tileY);
+  return s.enemies.filter(e => hookable(e) && !held(t, e) && !voidShelled(e) && Math.hypot(e.tileX - s.playerTileX, e.tileY - s.playerTileY) <= SC.hook.range)
+    .sort((a, b) => Number(seen(b)) - Number(seen(a))
+      || Number(b.type === 'devourer') - Number(a.type === 'devourer') // then Devourer copies
+      || Math.hypot(a.x - s.playerX, a.y - s.playerY) - Math.hypot(b.x - s.playerX, b.y - s.playerY))[0];
 }
 /** The engine asks whether a body's own AI should wait: held, in flight, or stunned by a slam. Counts the stun down. */
 export function singularityHeld(s: GameState, e: Enemy): boolean {
@@ -559,10 +607,11 @@ export function singularityHeld(s: GameState, e: Enemy): boolean {
 export function pressGravityHook(s: GameState): boolean {
   const t = s.trial?.devourer; if (!t || s.gamePhase !== 'playing') return false;
   const e = hookTarget(s); if (!e) return false;
+  s.playerCastTicks = 24; s.playerCastKind = 'devourer'; s.playerPrimalCast = true;
   t.hook = { id: e.id, ticks: 0 }; e.path = []; e.pathTimer = 0; e.boneLunge = undefined;
   if (e.devourer) e.devourer.jumpTicks = undefined; // a hooked body never jumps: a pending jump is cancelled and its timer starts over
   (t.hookFx ??= []).push({ x: e.x, y: e.y, ticks: 20, kind: 'latch' });
-  playAudioOneShot('/sounds/jupiter-fence-cast.wav', .35, 1.3);
+  playAudioOneShot('/sounds/jupiter-fence-cast.wav', .6, 1.3); // the grab
   return true;
 }
 /** Auto-aim: the Maw (preferred) or other body within throwing range closest to the way you face, within aimCone. */
@@ -586,6 +635,12 @@ export function releaseGravityHook(s: GameState) {
   (t.flings ??= []).push({ id: e.id, ax, ay, dx: 0, dy: 0, left: Math.abs(ax - px) + Math.abs(ay - py) + (aim ? 2 : 0), moved: 0 });
   playAudioOneShot('/sounds/speedBoost.mp3', .35, 1.4);
 }
+/** A hook impact (slam or wall): a Soulless (either kind) takes soullessImpact damage and a Lost or Golden Soul dies. */
+function hookImpact(s: GameState, e: Enemy) {
+  if ((e.type !== 'soulless' && e.type !== 'toxic_soulless' && e.type !== 'lost_soul') || e.hp <= 0) return;
+  damageEnemy(s, e, e.type === 'lost_soul' ? e.hp : SC.hook.soullessImpact, 'special');
+  if (e.hp <= 0 && s.enemies.includes(e)) killEnemy(s, s.enemies.indexOf(e));
+}
 function stun(e: Enemy, ticks: number) { e.devourer = { ...(e.devourer ?? { generation: 0 }), stunTicks: Math.max(e.devourer?.stunTicks ?? 0, ticks) }; e.flashTicks = 10; }
 function updateHook(s: GameState, t: SingularityTrial) {
   if ((t.hookCooldown ?? 0) > 0 && --t.hookCooldown! === 0 && devourerSoundAllowed(s, 'ready')) playAudioOneShot('/sounds/celestial/skill-ready.wav', .9, 1.1);
@@ -606,20 +661,27 @@ function updateHook(s: GameState, t: SingularityTrial) {
     if (!e || e.hp <= 0) { end(); continue; }
     // A thrown body is swallowed as soon as it enters F's inner reach, even mid-step.
     const field = s.singularity;
-    if (e.type === 'devourer' && field && field.ticks > 0 && Math.hypot(e.x - field.x, e.y - field.y) <= SC.mawInnerRadius * TILE_SIZE) {
-      end(); consume(s, t, { x: field.x, y: field.y } as Maw, e);
+    if (e.type === 'devourer' && field && field.ticks > 0 && !((t.fEatCooldown ?? 0) > 0) && Math.hypot(e.x - field.x, e.y - field.y) <= SC.mawInnerRadius * TILE_SIZE) { // still swallowing: it flies on
+      end(); t.fEatCooldown = SC.mawEatCooldown; consume(s, t, { x: field.x, y: field.y } as Maw, e);
       if (s.gamePhase !== 'playing') return;
       continue;
     }
+    // A thrown Devourer that flies into the gas bursts there, even mid-step.
+    if (e.type === 'devourer' && gasDepth(s, e.x, e.y) > .3) { end(); gasBurst(s, t, e); if (s.gamePhase !== 'playing') return; continue; }
     if (e.singularityPull) continue; // still mid-step
     const maw = (t.maws ?? []).find(m => Math.hypot(e.tileX - m.tx, e.tileY - m.ty) <= SC.mawInnerRadius);
-    if (maw && e.type === 'devourer') { end(); consume(s, t, maw, e); if (s.gamePhase !== 'playing') return; continue; }
+    if (maw && e.type === 'devourer') {
+      end(); if ((maw.eatCooldown ?? 0) > 0) { stun(e, SC.hook.endStun); continue; } // still swallowing: it drops in its reach and is pulled in after
+      maw.eatCooldown = SC.mawEatCooldown; consume(s, t, maw, e); if (s.gamePhase !== 'playing') return; continue;
+    }
     const other = f.moved > 0 && s.enemies.find(o => o !== e && hookable(o) && !held(t, o) && Math.max(Math.abs(o.tileX - e.tileX), Math.abs(o.tileY - e.tileY)) <= 1);
     if (other) {
       end(); (t.hookFx ??= []).push({ x: (e.x + other.x) / 2, y: (e.y + other.y) / 2, ticks: 40, kind: 'slam' });
       s.screenShakeTicks = Math.max(s.screenShakeTicks, 12); s.screenShakeAmt = Math.max(s.screenShakeAmt, 7);
       if (devourerSoundAllowed(s, 'hit')) { playAudioOneShot('/sounds/hitHurt.wav', .5, .8); playAudioOneShot('/sounds/bombExplode.wav', .25, 1.2); }
       stun(e, SC.hook.slamStun); stun(other, SC.hook.slamStun);
+      hookImpact(s, e); if (s.gamePhase !== 'playing') return;
+      hookImpact(s, other); if (s.gamePhase !== 'playing') return;
       continue;
     }
     // Step toward the aimed tile along its longer axis (a staircase for a diagonal throw).
@@ -630,7 +692,7 @@ function updateHook(s: GameState, t: SingularityTrial) {
     if (!isFloorTile(s.map, e.tileX + f.dx, e.tileY + f.dy)) {
       end(); (t.hookFx ??= []).push({ x: e.x + f.dx * TILE_SIZE / 2, y: e.y + f.dy * TILE_SIZE / 2, ticks: 22, kind: 'wall' });
       if (devourerSoundAllowed(s, 'hit')) playAudioOneShot('/sounds/hitHurt.wav', .4, .9);
-      stun(e, SC.hook.wallStun); continue;
+      stun(e, SC.hook.wallStun); hookImpact(s, e); if (s.gamePhase !== 'playing') return; continue;
     }
     f.left--; f.moved++; e.singularityPull = { started: false, dx: f.dx, dy: f.dy, speed: SC.hook.flingSpeed };
   }
@@ -701,6 +763,6 @@ export function clearSingularityMaws(s: GameState) {
   const t = s.trial?.devourer as SingularityTrial | undefined; if (!t) return;
   t.convergence = undefined; t.convergenceTimer = SC.convergence.everyTicks;
   for (const e of s.enemies) if (e.devourer) e.devourer.merging = false;
-  t.soullessTimer = undefined; t.hook = undefined; t.hookCooldown = 0; t.flings = []; t.hookFx = []; t.feast = undefined; t.jaw = undefined; t.jawTimer = undefined; t.gas = []; t.swallows = []; t.bursts = []; t.soulSigns = [];
+  t.soullessTimer = undefined; t.hook = undefined; t.hookCooldown = 0; t.flings = []; t.hookFx = []; t.feast = undefined; t.jaw = undefined; t.jawTimer = undefined; t.gas = []; t.swallows = []; t.bursts = []; t.shellBreaks = []; t.fEatCooldown = 0; t.soulSigns = [];
 }
 export const mawRoomOf = (m: Maw) => chamberOfTile(m.tx, m.ty);

@@ -1,7 +1,7 @@
 import type { EnemyType } from './constants';
 import type { TrialBody } from './trials';
 
-export interface CelestialEnemyEntry { id:string; map:TrialBody; type?:EnemyType; name:string; description:string; variant?:'golden'|'copy'|'gnasher'; portrait?:'shark' }
+export interface CelestialEnemyEntry { id:string; map:TrialBody; type?:EnemyType; name:string; description:string; variant?:'golden'|'copy'; portrait?:'shark' }
 
 export const celestialEnemies:readonly CelestialEnemyEntry[] = [
   {
@@ -51,14 +51,14 @@ export const celestialEnemies:readonly CelestialEnemyEntry[] = [
     "map": "neptune",
     "type": "jellyfish",
     "name": "Jellyfish",
-    "description": "Defeating it during a dive reveals a clone."
+    "description": "Defeating it during a dive reveals an echo."
   },
   {
     "id": "gaia-angry_mushroom",
     "map": "gaia",
     "type": "angry_mushroom",
     "name": "Ragecap",
-    "description": "Rushes you, knocks you back and spreads vines."
+    "description": "Fast, with a knockback attack. Spreads vines."
   },
   {
     "id": "gaia-sporeling",
@@ -75,11 +75,11 @@ export const celestialEnemies:readonly CelestialEnemyEntry[] = [
     "description": "Spreads vines as it moves."
   },
   {
-    "id": "moon-moon_illusion",
-    "map": "moon",
-    "type": "moon_illusion",
-    "name": "Queen Illusion",
-    "description": "A false Queen that hides the real one."
+    "id": "gaia-blossom",
+    "map": "gaia",
+    "type": "blossom",
+    "name": "Blossom",
+    "description": "Heals the boss and bursts to push you away."
   },
   {
     "id": "moon-mirror_mite",
@@ -93,7 +93,14 @@ export const celestialEnemies:readonly CelestialEnemyEntry[] = [
     "map": "moon",
     "type": "moon_shade",
     "name": "Shade",
-    "description": "Hunts Ruby."
+    "description": "Attacks and pushes Ruby."
+  },
+  {
+    "id": "moon-moon_hound",
+    "map": "moon",
+    "type": "moon_hound",
+    "name": "Crystal Hound",
+    "description": "Fast, with a knockback attack."
   },
   {
     "id": "moon-moon_mimic",
@@ -212,7 +219,7 @@ export const celestialEnemies:readonly CelestialEnemyEntry[] = [
     "map": "singularity",
     "type": "toxic_soulless",
     "name": "Contaminated Soulless",
-    "description": "A Soulless that leaves gas when it dies."
+    "description": "A Soulless that leaves a gas trail as it walks."
   },
   {
     "id": "neptune-shark",

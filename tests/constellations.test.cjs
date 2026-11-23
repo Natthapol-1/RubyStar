@@ -1,6 +1,8 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),test=require('node:test'),ts=require('typescript');
 require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,f);
 const e=require('../game/engine.ts'),c=require('../game/constants.ts');
+// Runs fn with a fixed-seed Math.random (mulberry32), so a test that walks through random spawns is repeatable.
+function seeded(seed,fn){const original=Math.random;let a=seed>>>0;Math.random=()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};try{return fn();}finally{Math.random=original;}}
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 test('God Stage +1 advances once, respects pause and triggers Constellations and Ascension',()=>{
  const s=e.createInitialState();s.bossesKilled=1;s.playerHP=40;
@@ -92,14 +94,14 @@ test('bomb gains one tile matching blast visuals, preserves self damage and Ruby
   assert.equal(s.bombBlasts[0].maxRadius,radius*c.TILE_SIZE);assert.equal(e.getBombRadius(s,powered),radius);assert.equal(s.rubyHP,100);assert.ok(s.playerHP<100);
  }
 });
-test('regular spawn and split-child HP gain a share per milestone up to defeat 18, then two percent per defeat after',()=>{
+test('regular spawn and split-child HP gain a share per milestone up to defeat 18, then two percent per defeat after',()=>{seeded(1,()=>{
  for(const kills of [0,2,3,5,6,8,9,18,19,20,21,30]){
   const s=fresh();s.bossesKilled=kills;const mult=1+Math.min(6,Math.floor(kills/3))*c.ALIEN_HP_PER_MILESTONE+Math.max(0,kills-18)*.02;near(e.constellationAlienHPMult(s),mult);
   enemy(s,'splitter',.01);e.useLaser(s);assert.equal(s.enemies.length,2);for(const a of s.enemies)near(a.maxHp,c.ENEMY_CONFIGS.mini_splitter.maxHp*c.REGULAR_ENEMY_HP_MULT*mult);
   s.enemies=[];s.noMobs=false;s.spawnTimer=100000;e.tick(s);assert.ok(s.enemies.length>0);
   for(const a of s.enemies)near(a.maxHp,Math.ceil(c.ENEMY_CONFIGS[a.type].maxHp*c.DIFFICULTY_TIERS[s.difficultyLevel].hpMult)*c.REGULAR_ENEMY_HP_MULT*mult);
  }
-});
+});});
 test('owned choices are rejected and never offered again, including the final single choice',()=>{
  const s=fresh();s.constellations=Object.keys(e.CONSTELLATIONS).filter(k=>k!=='wave');s.bossesKilled=59;defeat(s);
  assert.deepEqual(s.constellationChoices,['wave']);assert.equal(e.chooseConstellation(s,'laser'),false);

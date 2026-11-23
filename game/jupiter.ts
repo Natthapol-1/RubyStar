@@ -1,7 +1,8 @@
-import { CHAMBER_BOUNDS, ENEMY_CONFIGS, MOVE_SPEED_MULT, JUPITER, PLAYER_BASE_SPEED, SPECIAL_REAPER_SLOW, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, chamberOfTile } from './constants';
-import { godPhaseClock, ATTACK_SFX_VOLUME, bfs, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, stormSlowMultiplier, playSFX_pickup, isFloorTile, killEnemy, playSFX_reaperStrike, playAudioOneShot, tryReaperHallwaySeal, type Enemy, type GameState } from './engine';
+import { CHAMBER_BOUNDS, ENEMY_CONFIGS, MOVE_SPEED_MULT, JUPITER, jupiterPhaseHP, jupiterPhaseCeilHP, jupiterPhaseOfHP, PLAYER_BASE_SPEED, SPECIAL_REAPER_SLOW, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, chamberOfTile } from './constants';
+import { godPhaseClock, ATTACK_SFX_VOLUME, bfs, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, stormSlowMultiplier, playSFX_pickup, isFloorTile, killEnemy, playSFX_reaperStrike, playAudioOneShot, tryReaperHallwaySeal, releaseReaperHallwaySeal, playerCCImmune, type Enemy, type GameState } from './engine';
 import { playUiSfx } from './ui-sfx';
 import { playJupiterAmbientSound, stopJupiterAmbientSound, playJupiterChargeSound, stopJupiterChargeSound } from './event-audio';
+import { updateJupiterCover, stopJupiterCoverShuffle, type JupiterCoverBlock, type JupiterCoverShuffle } from './jupiter-cover';
 
 export type JupiterStage = 'charging' | 'pursuit' | 'escape';
 export interface VoltWall { x: number; y: number; vertical: boolean; half: number; negative?: number; positive?: number; age: number }
@@ -17,6 +18,11 @@ export interface JupiterState {
   shockTiles: ChargedTile[]; tileBursts: {x:number;y:number;ticks:number}[];
   fragments: PursuitFragment[]; fragmentOverdrive: boolean; overdriveCharge: number; overdriveBurstTicks: number;
   miniStorms: MiniStorm[]; miniStormHitCooldown: number;
+  reaperTrail?: {x:number;y:number;ticks:number}[]; trailSlowTicks?:number;
+  coverTimer?: number;
+  coverBlocks?: JupiterCoverBlock[];
+  coverShuffle?: JupiterCoverShuffle;
+  movingCover?: {x:number;y:number;dx:number;dy:number;fromX?:number;fromY?:number;slideTicks?:number;artX?:number;artY?:number}[];
   dashTiles?: { x:number; y:number; ticks:number; dx:number; dy:number }[]; dashLastX?:number; dashLastY?:number; // cosmetic dash footprints
   walls: VoltWall[]; bursts: { x: number; y: number; ticks: number; vertical: boolean; half: number; negative?: number; positive?: number }[];
 }
@@ -30,20 +36,28 @@ export function createJupiterState(state: GameState) {
 export function jupiterMaxEnergy(j:JupiterState) {
   const phaseMultiplier=1+(j.phase-1)*.2;
   const roundEnergy=j.round===2?JUPITER.secondPursuitEnergy:JUPITER.pursuitEnergy;
-  return Math.round(roundEnergy*phaseMultiplier);
+  return Math.round(roundEnergy*phaseMultiplier*(j.phase>=2?JUPITER.laterPhaseEnergyMult:1));
 }
 export function jupiterBoss(state: GameState) { return state.enemies.find(e => e.id === state.jupiter?.bossId && e.hp > 0); }
+export function normalizeJupiterHealth(state:GameState,boss:Enemy) {
+  const j=state.jupiter,total=jupiterPhaseCeilHP(1);
+  if(!j||boss.id!==j.bossId||boss.hp<=0||boss.maxHp===total||boss.maxHp<=0)return;
+  const oldBand=boss.maxHp/3,remaining=Math.max(0,Math.min(1,(boss.hp-(3-j.phase)*oldBand)/oldBand));
+  boss.hp=jupiterPhaseCeilHP(j.phase)-jupiterPhaseHP(j.phase)*(1-remaining);boss.maxHp=total;
+}
 export function initializeJupiterBoss(state: GameState, boss: Enemy) {
   const previous = state.jupiter;
+  stopJupiterCoverShuffle(state);
   createJupiterState(state);
   if (previous) { state.jupiter!.shockTiles=previous.shockTiles??state.jupiter!.shockTiles;state.jupiter!.slowTicks=previous.slowTicks??0;state.jupiter!.guardTicks=previous.guardTicks ?? 0; state.jupiter!.walls=previous.walls; state.jupiter!.wallCooldown=previous.wallCooldown; state.jupiter!.playerBoost=previous.playerBoost; state.jupiter!.playerDashX=previous.playerDashX??1; state.jupiter!.playerDashY=previous.playerDashY??0; }
-  state.jupiter!.bossId = boss.id; boss.hp = boss.maxHp = JUPITER.phaseHP * 3;
+  state.jupiter!.bossId = boss.id; boss.hp = boss.maxHp = jupiterPhaseCeilHP(1);
   boss.path = []; boss.pushTiles = 0;
   state.jupiter!.chargeRoom=nearestRoom(boss.tileX,boss.tileY);
   playJupiterChargeSound();
 }
 export function clearJupiterEncounter(state: GameState) {
   if (!state.jupiter) return;
+  stopJupiterCoverShuffle(state);
   stopJupiterAmbientSound(); stopJupiterChargeSound();
   state.jupiter.walls = []; state.jupiter.bursts = []; state.jupiter.safeRoom = -1;
   state.jupiter.shards=[];state.jupiter.shardEffects=[];state.jupiter.shardTarget=-1;
@@ -51,12 +65,14 @@ export function clearJupiterEncounter(state: GameState) {
   state.jupiter.slowTicks=0;state.jupiter.chargeRoom=-1;state.jupiter.blast=null;state.jupiter.tileBursts=[];
   state.jupiter.guardTicks = state.jupiter.bossBoost = state.jupiter.playerBoost = 0;
   state.jupiter.dashTiles=[];state.jupiter.dashLastX=state.jupiter.dashLastY=undefined;
+  state.jupiter.reaperTrail=[];state.jupiter.trailSlowTicks=0;
 }
 export function jupiterDashMultiplier(left: number, duration: number, peak: number) { return left > 0 ? 1+(peak-1)*Math.pow(Math.min(1,left/duration),2) : 1; }
 export function jupiterPlayerSpeed(state: GameState) {
   const j = state.jupiter;
-  const stageSpeed=j&&jupiterBoss(state)?j.stage==='escape'?JUPITER.fleeSpeed/PLAYER_BASE_SPEED:j.stage==='pursuit'?JUPITER.playerPursuitSpeed:1:1;
-  return j ? stageSpeed * jupiterDashMultiplier(j.playerBoost,JUPITER.playerBoostTicks,JUPITER.playerBoostSpeed) * ((j.slowTicks??0)>0?JUPITER.shockSlow:1) : 1;
+  const stageSpeed=j&&jupiterBoss(state)?j.stage==='escape'?JUPITER.playerRaceSpeed/PLAYER_BASE_SPEED:j.stage==='pursuit'?JUPITER.playerPursuitSpeed:1:1;
+  const slow=j?Math.min((j.slowTicks??0)>0?JUPITER.shockSlow:1,(j.trailSlowTicks??0)>0?JUPITER.trailSlow:1):1;
+  return j ? stageSpeed * jupiterDashMultiplier(j.playerBoost,JUPITER.playerBoostTicks,JUPITER.playerBoostSpeed) * slow : 1;
 }
 export function jupiterReaperSpeed(state:GameState,boss:Enemy) {
   const j=state.jupiter!;
@@ -79,6 +95,22 @@ export function drainJupiterEnergy(state: GameState, enemy: Enemy, hpLost: numbe
   if (state.jupiter?.bossId === enemy.id && state.jupiter.stage === 'pursuit') {
     state.jupiter.energy = Math.max(0, state.jupiter.energy - hpLost * JUPITER.energyPerDamage);
   }
+  advanceJupiterPhase(state,enemy);
+}
+
+function advanceJupiterPhase(state:GameState,boss:Enemy) {
+  const j=state.jupiter;
+  if(!j||boss.id!==j.bossId||boss.hp<=0)return false;
+  const phase=jupiterPhaseOfHP(boss.hp);
+  if(phase<=j.phase)return false;
+  j.phase=phase;
+  startCharging(state,1);
+  j.shardEffects=[];j.blast=null;j.stormAge=0;j.stormTimer=JUPITER.stormInterval;
+  j.miniStormHitCooldown=0;j.boostCooldown=JUPITER.boostCooldown;
+  boss.shootTicks=0;boss.windupTicks=0;
+  releaseReaperHallwaySeal(state);
+  state.bossSpawnName=`PHASE ${phase}`;state.bossSpawnColor=ENEMY_CONFIGS.storm_reaper.color;state.bossSpawnTicks=120;
+  return true;
 }
 
 export function useVoltFence(state: GameState): boolean {
@@ -97,6 +129,7 @@ export function useVoltFence(state: GameState): boolean {
     }
     return (tiles+.5)*TILE_SIZE;
   };
+  state.playerCastTicks = 24; state.playerCastKind = 'storm_reaper'; state.playerPrimalCast = true;
   const negative=reach(-1),positive=reach(1);
   j.walls.push({x:(x+.5)*TILE_SIZE,y:(y+.5)*TILE_SIZE,vertical,half:Math.max(negative,positive),negative,positive,age:0});
   j.playerDashX=state.playerDirX||(!state.playerDirY?1:0);j.playerDashY=state.playerDirY;
@@ -188,10 +221,12 @@ function startPursuit(state: GameState) {
 }
 function startCharging(state: GameState, round: 1 | 2) {
   const j = state.jupiter!, boss = jupiterBoss(state)!;
+  stopJupiterCoverShuffle(state);j.coverTimer=undefined;
   j.stage = 'charging'; j.round = round; j.stageTicks = JUPITER.chargeTicks; j.energy = 0; j.safeRoom = -1;
   j.chargeRoom=nearestRoom(Math.round(boss.x/TILE_SIZE-.5),Math.round(boss.y/TILE_SIZE-.5));
   j.shards=[];j.shardTarget=-1;
   j.fragments=[];j.fragmentOverdrive=false;j.overdriveCharge=0;j.overdriveBurstTicks=0;j.miniStorms=[];
+  j.reaperTrail=[];j.trailSlowTicks=0;
   j.bossBoost = 0; boss.path = []; boss.pathTimer = 0;
   // Stop exactly where he is without leaving tile and interpolation coordinates inconsistent.
   boss.tileX = boss.targetTileX = Math.round(boss.x / TILE_SIZE - .5);
@@ -256,20 +291,21 @@ function updateStormShards(state:GameState,boss:Enemy) {
     j.shards=j.shards.filter(s=>s.id!==shard.id);j.shardTarget=-1;boss.pathTimer=0;
     j.shardEffects.push({x,y,bossX:boss.x,bossY:boss.y,heal,ticks:26});
     if(heal) {
-      boss.hp=Math.min((4-j.phase)*JUPITER.phaseHP,boss.hp+JUPITER.phaseHP*JUPITER.shardShare);
+      boss.hp=Math.min(jupiterPhaseCeilHP(j.phase),boss.hp+jupiterPhaseHP(j.phase)*JUPITER.shardBossHealShare);
       boss.healFlashTicks=18;playSFX_pickup();
     } else {
-      damageEnemy(state,boss,JUPITER.phaseHP*JUPITER.shardShare,'special');
+      damageEnemy(state,boss,jupiterPhaseHP(j.phase)*JUPITER.shardShare,'special');
       healPlayer(state,JUPITER.shardHeal); // each shard you collect heals you a little
-      j.phase=Math.max(j.phase,Math.min(3,4-Math.ceil(boss.hp/JUPITER.phaseHP))) as 1|2|3;
       playAudioOneShot('/sounds/jupiter-fence-hit.mp3',.7);
       if(boss.hp<=0){const index=state.enemies.indexOf(boss);if(index>=0)killEnemy(state,index);return;}
+      if(j.stage!=='escape')return;
     }
   }
   j.shardPlayerX=state.playerX;j.shardPlayerY=state.playerY;j.shardBossX=boss.x;j.shardBossY=boss.y;
 }
 function startEscape(state:GameState) {
   const j=state.jupiter!,boss=jupiterBoss(state);if(!boss)return;
+  stopJupiterCoverShuffle(state);j.coverTimer=undefined;
   j.stage='escape';j.energy=0;j.stageTicks=0;j.safeRoom=-1;j.bossBoost=0;
   j.fragments=[];j.fragmentOverdrive=false;j.overdriveCharge=0;j.overdriveBurstTicks=0;
   scatterStormShards(state,boss);
@@ -301,9 +337,10 @@ function updatePursuitFragments(state:GameState,boss:Enemy) {
     j.fragments=j.fragments.filter(f=>f!==fragment);collected=true;
     j.shardEffects.push({x,y,bossX:boss.x,bossY:boss.y,heal:false,ticks:26});
     // A collected fragment bypasses pursuit armour, like the lightning in Shard Race.
-    damageEnemy(state,boss,JUPITER.phaseHP*JUPITER.shardShare/JUPITER.damageTaken,'special');
+    damageEnemy(state,boss,jupiterPhaseHP(j.phase)*JUPITER.shardShare/JUPITER.damageTaken,'special');
     playAudioOneShot('/sounds/jupiter-fence-hit.mp3',.7);
     if(boss.hp<=0){const i=state.enemies.indexOf(boss);if(i>=0)killEnemy(state,i);return;}
+    if(j.stage!=='pursuit')return;
     spawnPursuitFragment(state,boss,fragment.id,chamberOfTile(fragment.x,fragment.y));
   }
   if(collected) {
@@ -347,9 +384,38 @@ function updateMiniStorms(state:GameState) {
     if(state.gamePhase!=='playing')return;
   }
 }
+function recordReaperTrail(state:GameState,boss:Enemy,oldX:number,oldY:number) {
+  const j=state.jupiter!;
+  if(j.phase<3||j.stage==='charging'||Math.hypot(boss.x-oldX,boss.y-oldY)<.01)return;
+  const trail=j.reaperTrail??=[],steps=Math.max(1,Math.ceil(Math.hypot(boss.x-oldX,boss.y-oldY)/(TILE_SIZE/3)));
+  for(let i=0;i<=steps;i++) {
+    const x=Math.floor((oldX+(boss.x-oldX)*i/steps)/TILE_SIZE),y=Math.floor((oldY+(boss.y-oldY)*i/steps)/TILE_SIZE);
+    if(state.map[y]?.[x]!==T_FLOOR)continue;
+    const existing=trail.find(t=>t.x===x&&t.y===y);
+    if(existing)existing.ticks=JUPITER.trailTicks;
+    else {
+      trail.push({x,y,ticks:JUPITER.trailTicks});
+      if(trail.length>JUPITER.trailMaxTiles){let oldest=0;for(let k=1;k<trail.length;k++)if(trail[k].ticks<trail[oldest].ticks)oldest=k;trail.splice(oldest,1);}
+    }
+  }
+  j.reaperTrail=trail;
+}
+function updateReaperTrail(state:GameState) {
+  const j=state.jupiter!;
+  if(j.phase<3||j.stage==='charging'){j.reaperTrail=[];j.trailSlowTicks=0;return;}
+  j.reaperTrail=(j.reaperTrail??[]).filter(t=>--t.ticks>0&&state.map[t.y]?.[t.x]===T_FLOOR);
+  if(j.reaperTrail.length>JUPITER.trailMaxTiles)j.reaperTrail=j.reaperTrail.sort((a,b)=>b.ticks-a.ticks).slice(0,JUPITER.trailMaxTiles);
+  j.trailSlowTicks=Math.max(0,(j.trailSlowTicks??0)-1);
+  if(playerCCImmune(state)){j.trailSlowTicks=0;return;}
+  const x=Math.floor(state.playerX/TILE_SIZE),y=Math.floor(state.playerY/TILE_SIZE);
+  if(j.reaperTrail.some(t=>t.x===x&&t.y===y))j.trailSlowTicks=JUPITER.trailSlowTicks;
+}
+
 export function updateJupiterReaper(state: GameState, boss: Enemy) {
+  normalizeJupiterHealth(state,boss);
   const j = state.jupiter!; boss.pushTiles = 0; boss.targeting = 'player';
   if (j.stage === 'charging') return;
+  const oldX=boss.x,oldY=boss.y;
   if(j.stage==='escape'&&!j.shards)scatterStormShards(state,boss);
   tryReaperHallwaySeal(state, boss);
   if (boss.attackTimer > 0) boss.attackTimer--;
@@ -378,10 +444,12 @@ export function updateJupiterReaper(state: GameState, boss: Enemy) {
     boss.y = (boss.tileY + .5) * TILE_SIZE + (boss.targetTileY-boss.tileY) * boss.stepProgress;
     if (boss.stepProgress >= TILE_SIZE) { boss.tileX = boss.targetTileX; boss.tileY = boss.targetTileY; boss.stepProgress = 0; }
   }
+  recordReaperTrail(state,boss,oldX,oldY);
 }
 
 export function updateJupiter(state: GameState) {
   const j = state.jupiter; if (!j || state.gamePhase !== 'playing') return;
+  const currentBoss=jupiterBoss(state);if(currentBoss){normalizeJupiterHealth(state,currentBoss);if(advanceJupiterPhase(state,currentBoss))return;}
   if(!j.shockTiles){j.shockTiles=[];for(let id=0;id<JUPITER.shockTileCount;id++){const room=id%4,tile=randomChargedTile(state,room);if(tile)j.shockTiles.push({id,room,x:tile[0],y:tile[1],cooldown:0});}}
   if(j.chargeRoom===undefined){const current=jupiterBoss(state);j.chargeRoom=current?nearestRoom(current.tileX,current.tileY):-1;}
 
@@ -403,6 +471,7 @@ export function updateJupiter(state: GameState) {
   j.bursts = j.bursts.filter(b => --b.ticks > 0);
   if(j.blast&&--j.blast.ticks<=0)j.blast=null;
   updateChargedTiles(state);
+  updateReaperTrail(state);
   // Segment intersection, including a fast enemy crossing the whole fence between frames.
   j.walls = j.walls.filter(w => {
     if (state.gamePhase !== 'playing') return false;
@@ -428,7 +497,8 @@ export function updateJupiter(state: GameState) {
   for (const enemy of state.enemies) { enemy.voltPreviousX=enemy.x;enemy.voltPreviousY=enemy.y; }
   if (state.gamePhase !== 'playing') { clearJupiterEncounter(state); return; }
   const boss = jupiterBoss(state); if (!boss) return;
-  j.phase = Math.max(j.phase, Math.min(3, 4-Math.ceil(boss.hp/JUPITER.phaseHP))) as 1|2|3;
+  if(advanceJupiterPhase(state,boss))return;
+  updateJupiterCover(state);
   updateMiniStorms(state);
   if(state.gamePhase!=='playing')return;
   if (j.stage === 'charging') {
@@ -439,7 +509,7 @@ export function updateJupiter(state: GameState) {
     }
   } else if (j.stage === 'pursuit') {
     updatePursuitFragments(state,boss);
-    if(state.gamePhase!=='playing'||!jupiterBoss(state))return;
+    if(state.gamePhase!=='playing'||!jupiterBoss(state)||j.stage!=='pursuit')return;
     j.energy = Math.max(0,j.energy-JUPITER.energyDrainPerSecond/60);
     if (j.energy <= 0) {
       if (j.round===1) startCharging(state,2);
@@ -468,7 +538,7 @@ export function updateJupiter(state: GameState) {
     }
   } else {
     updateStormShards(state,boss);
-    if(state.gamePhase!=='playing'||!jupiterBoss(state))return;
+    if(state.gamePhase!=='playing'||!jupiterBoss(state)||j.stage!=='escape')return;
     if(j.shards.length===0)startCharging(state,1);
   }
 }
@@ -480,7 +550,7 @@ export function godSetJupiterPhase(state: GameState, phase: 1|2|3) {
   const existing=jupiterBoss(state);
   if(!existing)godSpawnBoss(state,'storm_reaper');
   const boss=jupiterBoss(state);if(!boss)return;
-  boss.hp=(4-phase)*JUPITER.phaseHP;state.jupiter!.phase=phase;
+  boss.hp=jupiterPhaseCeilHP(phase);state.jupiter!.phase=phase;
   startCharging(state,1);
 }
 export function godSetJupiterStage(state: GameState, stage: JupiterStage) {

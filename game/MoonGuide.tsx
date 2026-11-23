@@ -1,5 +1,5 @@
 'use client';
-import { drawGuideLaser, drawGuideBullet } from './guide-art';
+import { drawGuideLaser, drawGuideBullet, drawGuideRuby } from './guide-art';
 import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
@@ -27,8 +27,8 @@ function shard(ctx: CanvasRenderingContext2D, x: number, y: number, angle: numbe
 }
 
 export default function MoonGuide({ drawQueen, drawBlinker, drawCelestial }: { drawQueen: DrawQueen; drawBlinker: DrawBlinker; drawCelestial: CelestialGuidePainter }) {
-  const cards: { title: string; color: string; text: string; paint: Paint }[] = [
-    { title: 'HIDDEN QUEEN', color: '#dd88ff', text: 'Hides among identical illusions. When she jumps, she leaves a field that heals you more the harder you hit her.', paint: (ctx, t) => {
+  const cards: { title: string; color: string; text: React.ReactNode; paint: Paint }[] = [
+    { title: 'HIDDEN QUEEN', color: '#dd88ff', text: 'Hides among identical illusions and jumps between chambers.', paint: (ctx, t) => {
       const shown = 1 + Math.min(3, Math.floor((t % 200) / 50));
       [[40, 60], [100, 44], [160, 64], [100, 92]].slice(0, shown).forEach(([x, y]) => drawQueen(ctx, x, y, t, true));
     } },
@@ -41,7 +41,7 @@ export default function MoonGuide({ drawQueen, drawBlinker, drawCelestial }: { d
         ctx.strokeStyle = '#dd88ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(44, 42); ctx.lineTo(96, 88); ctx.moveTo(158, 42); ctx.lineTo(172, 84); ctx.stroke(); }
       ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#8a7aa8'; ctx.fillText('FAKE', 40, 64); ctx.fillStyle = '#f4eaff'; ctx.fillText('REAL', 132, 64);
     } },
-    { title: 'REVEAL', color: '#ff9cf0', text: 'Reveals herself before jumping and takes more damage. Never jumps into your chamber.', paint: (ctx, t) => {
+    { title: 'REVEAL', color: '#ff9cf0', text: <>Reveals herself before jumping and <strong style={{ color: '#ffe6a6', fontWeight: 800, textShadow: '0 0 5px #ffc75e44' }}>takes more damage</strong> then.</>, paint: (ctx, t) => {
       const cycle = t % 160, revealed = cycle >= 90;
       drawQueen(ctx, 110, 60, t, !revealed);
       if (revealed && cycle < 110) { const k = (cycle - 90) / 20; ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#f4eaff'; ctx.lineWidth = 3; ctx.strokeRect(110 - 20 - k * 20, 60 - 20 - k * 20, 40 + k * 40, 40 + k * 40); ctx.globalAlpha = 1; }
@@ -55,19 +55,24 @@ export default function MoonGuide({ drawQueen, drawBlinker, drawCelestial }: { d
         for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.fillRect(mx + dx * 20 - (dx > 0 ? 6 : 0), my + dy * 20 - (dy > 0 ? 2 : 0), 6, 2); ctx.fillRect(mx + dx * 20 - (dx > 0 ? 2 : 0), my + dy * 20 - (dy > 0 ? 6 : 0), 2, 6); }
       }
     } },
-    { title: 'MIRROR MITE', color: '#c6b8ff', text: 'Killing one heals you and marks two chambers on the minimap. One contains the real Queen.', paint: (ctx, t) => {
+    { title: 'MIRROR MITE', color: '#c6b8ff', text: 'Killing one marks two chambers on the minimap. One holds the real Queen.', paint: (ctx, t) => {
       const cycle = t % 120, x = 60 + Math.min(50, cycle * .8);
       if (cycle < 70) { ctx.save(); ctx.translate(x, 60); ctx.scale(1.4, 1.4); drawMoonUnit(ctx, { id: 1, type: 'mirror_mite', flashTicks: cycle > 62 ? 4 : 0, attackTimer: 30 } as Enemy, 0, 0, t); ctx.restore(); }
       player(ctx, 160, 60);
       if (cycle >= 70) { const rise = (cycle - 70) / 50; ctx.globalAlpha = 1 - rise; ctx.fillStyle = '#ff5a8a'; ctx.fillRect(157, 34 - rise * 18, 6, 16); ctx.fillRect(152, 39 - rise * 18, 16, 6); ctx.globalAlpha = 1; }
     } },
-    { title: 'SHADE', color: '#9f86e0', text: 'Goes straight for Ruby.', paint: (ctx, t) => {
-      const x = 40 + (t % 120) * .7;
-      ctx.save(); ctx.translate(x, 60); ctx.scale(1.3, 1.3); drawMoonUnit(ctx, { id: 3, type: 'moon_shade', flashTicks: 0, attackTimer: t % 120 > 100 ? 8 : 30 } as Enemy, 0, 0, t); ctx.restore();
-      ctx.save(); ctx.translate(160, 62); ctx.shadowColor = '#ff4d7a'; ctx.shadowBlur = 5; ctx.fillStyle = '#e8326a'; ctx.fillRect(-11, -11, 22, 22); ctx.shadowBlur = 0;
-      ctx.fillStyle = '#a8183f'; ctx.fillRect(-7, -7, 14, 14); ctx.fillStyle = '#ffd0dc'; ctx.fillRect(-9, -9, 5, 5); ctx.restore();
+    { title: 'CRYSTAL HOUND', color: '#a9e6ff', text: 'Fast, with a knockback attack.', paint: (ctx, t) => {
+      // Loop: it dashes in, bites, and you are knocked back.
+      const k = t % 120, bite = k >= 60 && k < 72, x = 30 + Math.min(60, k) * 1.5, push = k >= 60 ? Math.min(1, (k - 60) / 10) * 34 : 0;
+      ctx.save(); ctx.translate(x, 64); ctx.scale(1.3, 1.3); drawMoonUnit(ctx, { id: 5, type: 'moon_hound', flashTicks: 0, shootTicks: bite ? 8 : 0, hp: 10, maxHp: 10 } as Enemy, 0, 0, t); ctx.restore();
+      player(ctx, 148 + Math.round(push), 62);
     } },
-    { title: 'MIRRORS', color: '#e6dcff', text: 'Reflect your lasers and bullets back at you. You can walk through them.', paint: (ctx, t) => {
+    { title: 'SHADE', color: '#9f86e0', text: 'Attacks and pushes Ruby.', paint: (ctx, t) => {
+      const k = t % 120, x = 40 + k * .7, shove = k > 104 ? Math.min(1, (k - 104) / 10) * 26 : 0; // the strike knocks Ruby back
+      ctx.save(); ctx.translate(x, 60); ctx.scale(1.3, 1.3); drawMoonUnit(ctx, { id: 3, type: 'moon_shade', flashTicks: 0, attackTimer: k > 100 ? 8 : 30 } as Enemy, 0, 0, t); ctx.restore();
+      drawGuideRuby(ctx, 160 + Math.round(shove), 62); // the same Ruby as every rule sheet
+    } },
+    { title: 'MIRRORS', color: '#e6dcff', text: 'Reflect your shots back at you.', paint: (ctx, t) => {
       for (let k = 0; k < 3; k++) { const y = 26 + k * 24; ctx.globalAlpha = .45; ctx.fillStyle = '#2c2450'; ctx.fillRect(118, y, 22, 22); ctx.globalAlpha = .4; ctx.fillStyle = '#8f86c8'; ctx.fillRect(121, y + 3, 16, 16); ctx.globalAlpha = .8; ctx.strokeStyle = '#e6dcff'; ctx.lineWidth = 2; ctx.strokeRect(119, y + 1, 20, 20); ctx.globalAlpha = 1; }
       player(ctx, 40, 62);
       const k = (t % 180) / 180; // your laser reaches the mirror, then comes back at you (a 3s loop)
@@ -83,13 +88,13 @@ export default function MoonGuide({ drawQueen, drawBlinker, drawCelestial }: { d
       if (t % 80 < 14) { ctx.strokeStyle = '#dd88ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(150, 70); ctx.lineTo(176, 104); ctx.stroke(); }
       player(ctx, 180, 104);
     } },
-    { title: 'DARKNESS', color: '#8a7aa8', text: 'Darkness moves between chambers and can cover two at once. Hits briefly reveal hidden enemies.', paint: (ctx, t) => {
+    { title: 'DARKNESS', color: '#8a7aa8', text: 'Hides enemies and moves between chambers. Hits briefly reveal them.', paint: (ctx, t) => {
       ctx.fillStyle = '#030108'; ctx.fillRect(16, 12, 168, 96); ctx.strokeStyle = '#b98cff99'; ctx.lineWidth = 3; ctx.strokeRect(16, 12, 168, 96);
       player(ctx, 40, 60);
       const hit = t % 180 < 70; // a hit lights up the hidden Queen for a moment
       if (hit) { drawGuideLaser(ctx, 50, 60, 134, 60); drawQueen(ctx, 146, 60, t, true); }
     } },
-    { title: 'SHATTER', color: '#b98cff', text: 'Destroyed illusions release crystal shards that damage you and Ruby.', paint: (ctx, t) => {
+    { title: 'SHATTER', color: '#b98cff', text: 'Destroyed illusions shatter into damaging shards.', paint: (ctx, t) => {
       const cycle = t % 120;
       if (cycle < 40) drawQueen(ctx, 100, 60, t, true);
       else for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + .2, d = (cycle - 40) * 1.2; shard(ctx, 100 + Math.cos(a) * d, 60 + Math.sin(a) * d, a, 1 - (cycle - 40) / 80); }
@@ -125,9 +130,9 @@ export default function MoonGuide({ drawQueen, drawBlinker, drawCelestial }: { d
     <p className="rs-guide-intro" style={{ color: '#ffe6a6', fontWeight: 700 }}>The Queen hides among illusions. Moon Mark tracks its target, while Lunar Echo draws attacks.</p>
     {[
       { title: 'GENERAL RULES & SKILLS', indices: [0, 2, 3, 1], skill: true },
-      { title: 'ENEMIES', indices: [4, 5, 9], skill: false },
-      { title: 'PHASE 2+', indices: [6, 7], skill: false },
-      { title: 'PHASE 3', indices: [8, 10], skill: false },
+      { title: 'ENEMIES', indices: [4, 8, 5, 10], skill: false }, // mite, mimic, crystal hound, shatter
+      { title: 'PHASE 2+', indices: [7, 6], skill: false },          // mirrors, shade
+      { title: 'PHASE 3', indices: [9, 11], skill: false },          // darkness, blinker
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>
     <h4 className="rs-guide-group-title">{section.title}</h4>
     <div className="rs-nep-grid">

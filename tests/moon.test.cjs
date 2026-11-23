@@ -5,6 +5,8 @@ require.extensions['.ts'] = (m, f) => {
   m._compile(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 } }).outputText, f);
 };
 const e = require('../game/engine.ts'), c = require('../game/constants.ts'), moon = require('../game/moon.ts'), api = e.moonTest;
+// Runs fn with a fixed-seed Math.random (mulberry32), so a test that walks through random spawns is repeatable.
+function seeded(seed,fn){const original=Math.random;let a=seed>>>0;Math.random=()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};try{return fn();}finally{Math.random=original;}}
 
 function fresh() {
   const s = e.createModeState('trial', 'splitter_queen');
@@ -285,11 +287,12 @@ test('a mirror stops your laser and bullets and bounces their damage into you', 
   assert.equal(behind.hp, 4);
 });
 
-test('mimics come only from phase 2; disguised, one looks like an illusion, stays put, never attacks and never changes back', () => {
+test('mimics come from phase 1; disguised, one looks like an illusion, stays put, never attacks and never changes back', () => {seeded(2,()=>{
   const p1 = e.createModeState('trial', 'splitter_queen');
-  p1.meteoriteTimer = p1.bossTimer = 100000;
+  p1.meteoriteTimer = 100000; p1.immortal = true; // the Queen arrives as usual: mimics only come while she is here
   for (let i = 0; i < 2500; i++) e.tick(p1);
-  assert.ok(!p1.enemies.some(x => x.type === 'moon_mimic'), 'none in phase 1');
+  assert.equal(p1.moon.phase, 1);
+  assert.ok(p1.enemies.some(x => x.type === 'moon_mimic'), 'mimics already in phase 1');
 
   const { s, boss } = fresh();
   moon.godSetMoonPhase(s, 2);
@@ -309,7 +312,7 @@ test('mimics come only from phase 2; disguised, one looks like an illusion, stay
   assert.deepEqual([mimic.tileX, mimic.tileY], at, 'stays put');
   for (let i = 0; i < 1200; i++) e.tick(s);
   assert.ok(mimic.mimic.disguised, 'stays disguised for good');
-});
+});});
 
 test('a posing mimic has 1 HP: one laser breaks it', () => {
   const { s } = fresh();
@@ -366,10 +369,9 @@ test('mirrors move to new spots every so often, never right under you', () => {
   assert.ok(!s.moon.mirrors.includes(s.playerTileY * c.MAP_COLS + s.playerTileX));
 });
 
-test('from phase 2 mimics arrive on their own timer, up to a cap, without taking the place of other spawns', () => {
+test('mimics arrive on their own timer from phase 1, up to a cap, without taking the place of other spawns', () => {
   const { s, boss } = fresh();
   s.noMobs = false;
-  moon.godSetMoonPhase(s, 2);
   boss.phaseTimer = 1e9; boss.attackTimer = 1e9;
   s.immortal = true;
   s.spawnTimer = -1e9; // no regular aliens here: only the mimic timer runs (noMobs would also stop mimics)
@@ -534,7 +536,7 @@ test('darkness entry plays once and reentry restarts the clip while the haze is 
   }
 });
 
-test('Blinkers join the regular spawns only from phase 3, at most two alive', () => {
+test('Blinkers join the regular spawns only from phase 3, up to the cap', () => {seeded(3,()=>{
   const run = phase => {
     const s = e.createModeState('trial', 'splitter_queen');
     s.meteoriteTimer = 100000; s.bossTimer = 100000; s.immortal = true; s.moon.phase = phase;
@@ -545,4 +547,163 @@ test('Blinkers join the regular spawns only from phase 3, at most two alive', ()
   assert.equal(run(1), 0, 'none before phase 3');
   const most = run(3);
   assert.ok(most >= 1 && most <= c.MOON_BLINKER_MAX, 'phase 3 spawns them, capped: ' + most);
+});});
+
+// A floor row with room: Ruby at (x, y), floor at x-1 (shade) and x+1..x+push (its landing tiles).
+function rubyRow(s) {
+  for (let y = 2; y < c.MAP_ROWS - 2; y++) for (let x = 2; x < c.MAP_COLS - 4; x++) {
+    let ok = true;
+    for (let k = -1; k <= c.MOON_SHADE_RUBY_PUSH; k++) if (s.map[y][x + k] !== c.T_FLOOR) ok = false;
+    if (ok) return [x, y];
+  }
+}
+const stepPush = s => { for (let i = 0; i < c.MOON_RUBY_PUSH_STEP * (c.MOON_SHADE_RUBY_PUSH + 1); i++) moon.updateMoon(s); };
+
+test('a shade hit shoves a placed Ruby away from it, a tile at a time', () => {
+  const { s } = fresh();
+  const [x, y] = rubyRow(s);
+  s.playerCarryingRuby = false; s.rubyTileX = x; s.rubyTileY = y;
+  const shade = e.createEncounterEnemy(s, 'moon_shade', x - 1, y, 6);
+  moon.moonShadePushRuby(s, shade);
+  moon.updateMoon(s);
+  assert.equal(s.rubyTileX, x + 1, 'first hop right away');
+  stepPush(s);
+  assert.deepEqual([s.rubyTileX, s.rubyTileY], [x + c.MOON_SHADE_RUBY_PUSH, y]);
+  assert.equal(s.moon.rubyPush, null);
+});
+
+test('walls stop the shove, and picking Ruby up cancels it', () => {
+  const { s } = fresh();
+  const [x, y] = rubyRow(s);
+  s.playerCarryingRuby = false; s.rubyTileX = x; s.rubyTileY = y;
+  s.map[y][x + 1] = c.T_WALL; // cover right behind Ruby
+  moon.moonShadePushRuby(s, e.createEncounterEnemy(s, 'moon_shade', x - 1, y, 6));
+  stepPush(s);
+  assert.deepEqual([s.rubyTileX, s.rubyTileY], [x, y], 'blocked by the wall');
+  s.map[y][x + 1] = c.T_FLOOR;
+  moon.moonShadePushRuby(s, e.createEncounterEnemy(s, 'moon_shade', x - 1, y, 6));
+  s.rubyTileX = -1; // carried
+  stepPush(s);
+  assert.equal(s.moon.rubyPush, null);
+});
+
+test('in play, a shade striking a placed Ruby hurts and shoves it', () => {
+  const { s, boss } = fresh();
+  const [x, y] = rubyRow(s);
+  s.enemies = s.enemies.filter(en => en === boss); boss.attackTimer = 1e9;
+  s.playerCarryingRuby = false; s.rubyTileX = x; s.rubyTileY = y; s.rubyShieldHP = 0;
+  const shade = e.createEncounterEnemy(s, 'moon_shade', x - 1, y, 6); shade.attackTimer = 0; s.enemies.push(shade);
+  const hp = s.rubyHP;
+  for (let i = 0; i < 3 && s.rubyHP === hp; i++) e.tick(s);
+  assert.ok(s.rubyHP < hp, 'Ruby hit');
+  for (let i = 0; i < 20; i++) e.tick(s);
+  assert.ok(s.rubyTileX > x, `pushed right: ${s.rubyTileX} from ${x}`);
+});
+
+test('a Crystal Hound is fast, and its bite hurts a little and knocks you back', () => {
+  const { s, boss } = fresh();
+  for (const other of ['moon_shade', 'mirror_mite', 'moon_mimic']) assert.ok(c.ENEMY_CONFIGS.moon_hound.speed > c.ENEMY_CONFIGS[other].speed, 'faster than ' + other);
+  const [x, y] = rubyRow(s); // a free floor row: the hound at x-1, you at x, room behind you
+  s.enemies = s.enemies.filter(en => en === boss); boss.attackTimer = 1e9; boss.phaseTimer = 1e9;
+  s.playerCarryingRuby = false; s.rubyTileX = 2; s.rubyTileY = 2; // Ruby placed far off: the hound comes for you, and the push is full length
+  s.godMode = false; s.playerShieldHP = 0;
+  s.playerTileX = s.playerTargetX = x; s.playerTileY = s.playerTargetY = y; s.playerX = (x + .5) * c.TILE_SIZE; s.playerY = (y + .5) * c.TILE_SIZE; s.playerKnockback = null;
+  const hound = e.createEncounterEnemy(s, 'moon_hound', x - 1, y, 10); hound.attackTimer = 0; s.enemies.push(hound);
+  const hp = s.playerHP;
+  for (let i = 0; i < 3 && s.playerHP === hp; i++) e.tick(s);
+  assert.ok(s.playerHP < hp, 'bitten');
+  assert.ok(s.playerKnockback, 'knocked back');
+  assert.equal(s.playerKnockback.dirX, 1, 'away from the hound');
+  assert.equal(s.playerKnockback.tilesLeft, c.MOON_HOUND.knockback);
+});
+
+test('a mirror mite dies to any damaging hit, even a weak bullet late in a run', () => {
+  const { s } = fresh();
+  const [x, y] = rubyRow(s);
+  const mite = e.createEncounterEnemy(s, 'mirror_mite', x, y, 3); s.enemies.push(mite); // as if scaled up
+  api.damageEnemy(s, mite, .35);
+  assert.ok(mite.hp <= 0, `mite left at ${mite.hp}`);
+});
+
+test('a Crystal Hound ignores a placed Ruby right beside it and hunts you', () => {
+  const { s, boss } = fresh();
+  const [x, y] = rubyRow(s);
+  s.enemies = s.enemies.filter(en => en === boss); boss.attackTimer = 1e9; boss.phaseTimer = 1e9;
+  s.playerCarryingRuby = false; s.rubyTileX = x; s.rubyTileY = y; s.rubyShieldHP = 0;
+  const hound = e.createEncounterEnemy(s, 'moon_hound', x - 1, y, 16); hound.attackTimer = 0; s.enemies.push(hound);
+  const rubyHp = s.rubyHP;
+  for (let i = 0; i < 30; i++) e.tick(s);
+  assert.equal(s.rubyHP, rubyHp, 'Ruby untouched');
+  assert.equal(hound.targeting, 'player');
+});
+
+// Two placed-Ruby spots: one in the shade's chamber, one in another chamber.
+const roomFloor = (s, room) => { const [r1, c1, r2, c2] = c.CHAMBER_BOUNDS[room]; for (let y = r1 + 2; y < r2 - 1; y++) for (let x = c1 + 2; x < c2 - 1; x++) if (s.map[y][x] === c.T_FLOOR && !c.TELEPORT_PADS.some(p => p[0] === x && p[1] === y)) return [x, y]; };
+function shadeIn(room) {
+  const { s, boss } = fresh();
+  s.enemies = s.enemies.filter(en => en === boss); boss.attackTimer = 1e9; boss.phaseTimer = 1e9;
+  const [x, y] = roomFloor(s, room);
+  const shade = e.createEncounterEnemy(s, 'moon_shade', x, y, 6); s.enemies.push(shade);
+  s.playerCarryingRuby = false; s.godMode = false; s.immortal = true; s.rubyShieldHP = 0; // Ruby can take damage, so a hit shows
+  return { s, shade };
+}
+
+test('a shade never leaves its chamber, even when Ruby is placed in another one', () => {
+  const { s, shade } = shadeIn(0);
+  const [rx, ry] = roomFloor(s, 3); s.rubyTileX = rx; s.rubyTileY = ry;
+  const rubyHp = s.rubyHP;
+  for (let i = 0; i < 1800; i++) { e.tick(s); assert.equal(c.chamberOfTile(shade.tileX, shade.tileY), 0, 'stays home'); }
+  assert.equal(s.rubyHP, rubyHp, 'Ruby elsewhere is safe from it');
+});
+
+test('a shade hunts Ruby placed in its own chamber', () => {
+  const { s, shade } = shadeIn(0);
+  const [rx, ry] = roomFloor(s, 0);
+  s.rubyTileX = rx + 4 < c.CHAMBER_BOUNDS[0][3] && s.map[ry][rx + 4] === c.T_FLOOR ? rx + 4 : rx; s.rubyTileY = ry;
+  s.rubyShieldHP = 0; const rubyHp = s.rubyHP;
+  for (let i = 0; i < 1200 && s.rubyHP === rubyHp; i++) e.tick(s);
+  assert.ok(s.rubyHP < rubyHp, 'Ruby in its chamber gets hit');
+  assert.equal(c.chamberOfTile(shade.tileX, shade.tileY), 0);
+});
+
+test('a shade lines up on the pad side of Ruby, so its shove pushes Ruby away from the pad', () => {
+  for (const room of [0, 1, 2, 3]) {
+    const { s, shade } = shadeIn(room);
+    const pad = c.TELEPORT_PADS.find(([px, py]) => c.chamberOfTile(px, py) === room);
+    // Ruby three tiles from the pad with open floor around it (any side), the shade starting elsewhere in the room.
+    const spots = [[3, 0], [-3, 0], [0, 3], [0, -3]].map(([dx, dy]) => [pad[0] + dx, pad[1] + dy])
+      .filter(([x, y]) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([a, b]) => s.map[y + b]?.[x + a] === c.T_FLOOR));
+    assert.ok(spots.length, 'room ' + room + ' has an open spot near its pad');
+    const [rx, ry] = spots[0]; s.rubyTileX = rx; s.rubyTileY = ry;
+    const before = Math.hypot(rx - pad[0], ry - pad[1]), hp = s.rubyHP;
+    for (let i = 0; i < 1500 && s.rubyHP === hp; i++) e.tick(s);
+    assert.ok(s.rubyHP < hp, 'room ' + room + ': Ruby hit');
+    for (let i = 0; i < 20; i++) e.tick(s); // let the shove finish
+    assert.ok(Math.hypot(s.rubyTileX - pad[0], s.rubyTileY - pad[1]) > before, `room ${room}: pushed away from the pad (${before} -> ${Math.hypot(s.rubyTileX - pad[0], s.rubyTileY - pad[1])})`);
+    assert.equal(c.chamberOfTile(shade.tileX, shade.tileY), room);
+  }
+});
+
+test('a shade cannot be knocked back', () => {
+  const { s, shade } = shadeIn(0);
+  const at = [shade.tileX, shade.tileY];
+  shade.pushDirX = 1; shade.pushDirY = 0; shade.pushTiles = 3; // as a Wave would push it
+  e.tick(s); e.tick(s);
+  assert.equal(shade.pushTiles, 0);
+  assert.ok(Math.abs(shade.tileX - at[0]) + Math.abs(shade.tileY - at[1]) <= 1, 'not shoved several tiles');
+});
+
+test('shades join the regular spawns only from phase 2', () => {
+  const run = phase => {
+    const s = e.createModeState('trial', 'splitter_queen');
+    s.meteoriteTimer = 1e5; s.bossTimer = 1e5; s.immortal = true; s.moon.phase = phase;
+    let seen = 0;
+    for (let i = 0; i < 4000; i++) {
+      e.tick(s); s.moon.phase = phase;
+      if (i % 300 === 0) { seen += s.enemies.filter(x => x.type === 'moon_shade').length; s.enemies = s.enemies.filter(x => x.type === 'splitter_queen'); } // clear room for new spawns
+    }
+    return seen + s.enemies.filter(x => x.type === 'moon_shade').length;
+  };
+  assert.equal(run(1), 0, 'none in phase 1');
+  assert.ok(run(2) > 0, 'they appear in phase 2');
 });

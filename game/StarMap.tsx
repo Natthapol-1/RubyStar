@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useLoadingRouter as useRouter } from './NavigationProvider';
 import { canEnter, challengeCleared, isDesktop } from './profile';
 import CelestialBackdrop from './CelestialBackdrop';
 import CelestialBody from './CelestialBody';

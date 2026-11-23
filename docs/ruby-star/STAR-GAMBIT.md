@@ -8,7 +8,7 @@ Working name: **Star Gambit**. Currency: **Glint** (small glowing crystal chips;
 
 ## Built so far
 
-- Route `/gambit`, lobby card STAR GAMBIT (IN DEVELOPMENT): a hand of two yellow cards with pale glints.
+- Route `/gambit` works only in development builds (release builds show the 404 page). Its mode card is hidden from the lobby while in development.
 - The **Bazaar Ring** map (63×63): six stalls (ALPHA–ZETA) on the corners of a hexagon around the PLAZA, each with a teleport pad (keys 1–7). A ring of corridors joins neighbouring stalls; the top and bottom stalls have spokes into the plaza and each side stall a straight corridor across into it. Each stall has its own crate pattern (ALPHA corner brackets, BETA broken shelves, GAMMA a broken ring round the pad, DELTA scattered crates, EPSILON diagonal arms, ZETA four counters); the plaza has four pillars. You and Ruby start in ALPHA.
 - Its own backdrop: a dusk trading port. The sky has a banded setting sun, a ringed planet and moon, cloud streaks and a dotted traffic lane. The skyline has three parallax depths (hazy far towers, lit middle towers, dark near towers with rooftop gear and neon signs), plus crossing freighters and drifting crates.
 - HUD: **WAVE** replaces STAGE, with a 150px bar that drains over each 45-second wave (the clock only advances the wave number for now). A Glint counter sits beside the energy bar (always 0 for now). Below 1280px wide, the HUD bars are a little narrower to make room.
@@ -31,7 +31,7 @@ Rules never give an upside; choosing is picking the restriction that hurts your 
 |---|---|
 | Teleport Charges | Teleport uses charges (up to 3, slow recharge); with none you cannot teleport |
 | Twin Rubies | Two Rubies, never in the same chamber; carry only one at a time; losing either ends the run |
-| Wandering Ruby | Ruby walks her own slow route; she cannot be carried |
+| Wandering Ruby | Ruby walks its own slow route; it cannot be carried |
 | Glass Cannon | Half max HP |
 | Lifeline | No manual healing |
 | Short Fuse | Aliens move 20% faster |

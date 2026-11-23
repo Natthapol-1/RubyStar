@@ -45,6 +45,10 @@ All audio, art and fonts are bundled. Fonts and their OFL licenses live in `publ
 
 The renderer uses context isolation, sandboxing, disabled Node integration, denied permissions and window creation, restricted navigation and a production content policy. The preload exposes only load/save, fullscreen and shutdown coordination. Resource resolution stays inside the export directory. The packaged app contains no remote content and no development server. Upgrade Electron and review dependency advisories before releases; the web framework/build-tool dependency audit remains a separate maintenance concern from the dependency-free desktop main process.
 
+## Support tools
+
+Settings shows the version and, on desktop, OPEN SAVE & LOG FOLDER (`app:open-data`, opening the user-data folder). Uncaught renderer errors and unhandled rejections (at most 50 per session) are appended to `logs/errors.log` there with a timestamp, version and route (`app:log-error`); past 512 KB the file rotates to `errors.log.old`. Nothing is sent anywhere.
+
 ## Testing and distribution
 
 Build the export before `npm run check:desktop`. The check uses a test-only user-data folder under `.tmp/desktop-smoke`, never the player's profile. Test a clean profile, complete First Orbit, return to the lobby, and check the Endless default. In normal Endless, defeat guardians to unlock worlds and reach stage 10 for Ascension. Clear a supported challenge to see its gemstone reward and unlocked blessing. Inspect the exploration terminal's recorded/undiscovered entries and cleared/uncleared map labels.

@@ -12,7 +12,7 @@ const cards = [
   ['FROST SHIELDS', 'The boss gives frost shields to her aliens. Breaking them hurts her; hitting her directly does little.'],
   ['MARKED TARGETS', 'Snowflakes mark her next shield targets. Kill one first to hurt her and gain a shield.'],
   ['RECALL', 'Violet diamonds mark shields she pulls back to heal. If none return, she is hurt instead.'],
-  ['PRIMAL SKILL', 'Absolute Zero: stops time around you and frees you from ice. Catch her grants to steal the shield; block recalls to heal.'],
+  ['PRIMAL SKILL', 'Absolute Zero: stops time around you. Catching her grants steals the shield.'],
   ['COLD', 'Without a shield, the blizzard hurts and slows you. Frozen tiles freeze you.'],
   ['FROSTBITER', 'Pounces on a marked tile, strips your shield and knocks you back.'],
   ['HAILER', 'Shells marked tiles and freezes them.'],
@@ -20,6 +20,7 @@ const cards = [
   ['FROST BLOOM', 'Shielded aliens spread frost shields to allies and get faster and stronger.'],
   ['FREEZING LINES', 'Her grant and recall lines leave frozen paths.'],
   ['FROST TRAIL', 'Your path freezes behind you.'],
+  ['REVERSED GRANTS', 'A gold snowflake marks a reversed grant. It shields its target only when caught by Absolute Zero.'],
 ] as const;
 
 const RED_MARK = '#ff8aa0';
@@ -41,7 +42,13 @@ export default function SaturnGuide({ drawCelestial, drawFrozenTile, drawBoss }:
         const burst = (x: number, y: number, t: number, col: string) => { const r = 8 + t * 34; ctx.globalAlpha = 1 - t; ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.strokeRect(x - r, y - r, r * 2, r * 2); ctx.globalAlpha = 1; };
         const heal = (x: number, y: number, t: number) => { ctx.globalAlpha = 1 - t; ctx.fillStyle = '#8dffb0'; ctx.fillRect(x - 2, y - 30 - t * 14, 4, 12); ctx.fillRect(x - 6, y - 26 - t * 14, 12, 4); ctx.globalAlpha = 1; };
         const shield = (x: number, y: number) => { ctx.strokeStyle = '#9fe8ff'; ctx.lineWidth = 3; ctx.strokeRect(x - 18, y - 18, 36, 36); };
-        if (i === 0) { // you break the frost shield on her alien; its ice flies back and hurts her
+        if (i === 11) {
+          const p=loop(300),blocked=p>=.5,landed=p% .5>.32;
+          drawBoss(ctx,35,65,tick);drawSaturnUnit(ctx,unit('frostbiter'),150,65,tick);
+          if(blocked){ctx.globalAlpha=.12;ctx.fillStyle='#f2f8ff';ctx.fillRect(113,28,74,74);ctx.globalAlpha=.75;ctx.strokeStyle='#f2f8ff';ctx.lineWidth=2;ctx.strokeRect(113,28,74,74);ctx.globalAlpha=1;}
+          if(!landed)drawSaturnGrantMark(ctx,150,65,35,65,Math.max(1,90-(p%.5)/.32*90),tick,true);
+          if(landed&&blocked)drawMobIceShield(ctx,150,65,26,tick);
+        } else if (i === 0) { // you break the frost shield on her alien; its ice flies back and hurts her
           const p = loop(240), broken = p > .45; drawGuidePlayer(ctx, 100, 100);
           drawBoss(ctx, 40, 50, tick, false, p > .62 && p < .7);
           drawSaturnUnit(ctx, unit('frostbiter'), 155, 50, tick); if (!broken) drawMobIceShield(ctx, 155, 50, 26, tick);
@@ -129,7 +136,7 @@ export default function SaturnGuide({ drawCelestial, drawFrozenTile, drawBoss }:
       { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 2, 3, 4], skill: true },
       { title: 'ENEMIES', indices: [5, 6, 7], skill: false },
       { title: 'PHASE 2+', indices: [8, 10], skill: false },
-      { title: 'PHASE 3', indices: [9], skill: false },
+      { title: 'PHASE 3', indices: [9, 11], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>
     <h4 className="rs-guide-group-title">{section.title}</h4>
     <div className="rs-nep-grid">

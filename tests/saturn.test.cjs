@@ -12,6 +12,91 @@ function fresh(){
 const alien=(s,type,x,y,hp=100)=>{const m=e.createEncounterEnemy(s,type,x,y,hp);s.enemies.push(m);return m;};
 const close=(x,y,m)=>assert.ok(Math.abs(x-y)<1e-6,`${m??''} ${x} vs ${y}`);
 
+test('phase 3 sometimes marks four grants with exactly one stable reversed target; earlier phases never do',()=>{
+  const random=Math.random;
+  try{
+    for(const phase of [1,2,3]){
+      const{s,t}=fresh();for(let i=0;i<5;i++)alien(s,'normal',20+i,20);
+      Math.random=()=>0;a.godSetSaturnPhase(s,phase);t.iceTimer=t.recallTimer=1e6;t.pulse=-1e6;
+      assert.equal(t.grantTargets.length,phase===3?4:3);
+      assert.equal(t.reverseGrantId!==undefined,phase===3);
+      if(phase===3){
+        const id=t.reverseGrantId;Math.random=()=>.99;a.updateSaturn(s);assert.equal(t.reverseGrantId,id,'warning does not reroll');
+        t.grantTimer=1;a.updateSaturn(s);assert.equal(t.grantTargets.length,3);assert.equal(t.reverseGrantId,undefined,'normal cycle remains possible');
+      }
+    }
+  }finally{Math.random=random;}
+});
+
+test('reversed cycle fills its fourth slot as aliens arrive, and its cue pauses with gameplay',()=>{
+  const{s,t}=fresh(),random=Math.random;
+  try{
+    Math.random=()=>0;a.godSetSaturnPhase(s,3);t.iceTimer=t.recallTimer=1e6;t.pulse=-1e6;
+    for(let i=0;i<3;i++)alien(s,'normal',20+i,20);
+    a.updateSaturn(s);assert.equal(t.grantTargets.length,3);assert.equal(t.reverseGrantId,undefined);
+    alien(s,'normal',23,20);a.updateSaturn(s);assert.equal(t.grantTargets.length,4);assert.ok(t.grantTargets.includes(t.reverseGrantId));
+    const before=JSON.stringify(t);s.gamePhase='paused';a.updateSaturn(s);assert.equal(JSON.stringify(t),before);
+  }finally{Math.random=random;}
+});
+
+test('reversed grants give shield only when blocked, including double grants to Hulks, without a counter reward',()=>{
+  for(const blocked of [false,true])for(const type of ['frostbiter','glacier_hulk']){
+    const{s,t,boss}=fresh();t.phase=3;boss.hp=S.phaseHP;
+    const mob=alien(s,type,13,10);t.grantTargets=[mob.id];t.reverseGrantId=mob.id;t.reverseGrantCycle=false;
+    if(blocked)t.field={x:s.playerX,y:s.playerY,ticks:30};
+    const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);
+    assert.equal(mob.icyShieldHP,blocked?S.grantAmount*(type==='glacier_hulk'?2:1):0);
+    assert.equal(boss.hp,hp);assert.equal(s.playerShieldHP,0);assert.equal(t.playerIce,0);
+    assert.equal(t.beams[0].kind,'reverseGrant');assert.ok(t.temporaryIce.length,'the fired line still freezes its path');
+  }
+});
+
+test('mixed normal and reversed grants preserve the reversed shield after the normal counter strips the field',()=>{
+  const{s,t,boss}=fresh();t.phase=3;boss.hp=S.phaseHP;
+  const normal=alien(s,'frostbiter',12,10),reverse=alien(s,'frostbiter',13,10);
+  normal.icyShieldHP=20;reverse.icyShieldHP=20;
+  t.grantTargets=[normal.id,reverse.id];t.reverseGrantId=reverse.id;t.reverseGrantCycle=false;
+  t.field={x:s.playerX,y:s.playerY,ticks:30};const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);
+  assert.equal(normal.icyShieldHP,0);assert.equal(reverse.icyShieldHP,S.grantAmount);
+  close(hp-boss.hp,S.grantAmount*S.counterGrantShare+S.counterGrantBonus);
+  close(s.playerShieldHP,S.grantAmount*S.fieldShieldShare);
+});
+
+test('a dead reversed target grants no shield to the player and causes no grant damage to the boss',()=>{
+  const{s,t,boss}=fresh();t.phase=3;boss.hp=S.phaseHP;
+  const mob=alien(s,'glacier_hulk',13,10);t.grantTargets=[mob.id];t.grantHulks=[mob.id];t.reverseGrantId=mob.id;t.reverseGrantCycle=false;
+  s.enemies=s.enemies.filter(x=>x!==mob);const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);
+  assert.equal(boss.hp,hp);assert.equal(s.playerShieldHP,0);assert.equal(t.playerIce,0);
+});
+
+test('grant counter damage never hits the reversed target, even when it has less HP than the counter damage',()=>{
+  for(const hp of [1,4,100]){
+    const{s,t,boss}=fresh();t.phase=3;boss.hp=S.phaseHP;
+    const normal=alien(s,'frostbiter',12,10),reverse=alien(s,'frostbiter',13,10,hp);
+    t.grantTargets=[normal.id,reverse.id];t.reverseGrantId=reverse.id;t.reverseGrantCycle=false;
+    t.field={x:s.playerX,y:s.playerY,ticks:30};t.grantTimer=1;a.updateSaturn(s);
+    assert.ok(s.enemies.includes(reverse));assert.equal(reverse.hp,hp);assert.equal(reverse.icyShieldHP,S.grantAmount);
+    assert.equal(normal.hp,100-S.counterDamage,'normal target still takes counter damage');
+  }
+});
+
+test('No Freeze prevents Saturn floor, fired-line, alien ice and trail freezes without consuming shield',()=>{
+  for(const kind of ['floor','line','alien','trail']){
+    const{s,t}=fresh();e.godSetNoFreeze(s,true);s.playerShieldHP=80;
+    if(kind==='floor')s.frostIceTiles=[[10,10]];
+    else if(kind==='trail')t.frostTrail=[{x:10,y:10,ticks:-1}];
+    else t.temporaryIce=[{x:10,y:10,ticks:60,freezeTicks:kind==='line'?24:72}];
+    a.freezeSaturnPlayer(s);assert.equal(s.playerFrozenTicks,0);assert.equal(s.playerShieldHP,80);
+    e.godSetNoFreeze(s,false);a.freezeSaturnPlayer(s);assert.ok(s.playerFrozenTicks>0);assert.ok(s.playerShieldHP<80);
+  }
+});
+
+test('an older phase 3 state without reversed-grant fields keeps normal grant behavior',()=>{
+  const{s,t,boss}=fresh();t.phase=3;boss.hp=S.phaseHP;
+  const mob=alien(s,'frostbiter',20,20);t.grantTargets=[mob.id];delete t.reverseGrantId;delete t.reverseGrantCycle;
+  t.grantTimer=1;a.updateSaturn(s);assert.equal(mob.icyShieldHP,S.grantAmount);
+});
+
 test('Saturn is a three-phase guardian fight on her own population; F is the ordinary Saturn Guard',()=>{
   const{s,boss}=fresh();assert.equal(boss.hp,S.phaseHP*3);assert.equal(s.playerShieldHP,0);
   s.specialSkill='frost_warden';e.useSpecialSkill(s);const shield=s.playerShieldHP;assert.ok(shield>0);
@@ -48,7 +133,7 @@ test('C stops time: grants landing inside come to you, aliens inside freeze and 
   assert.equal(a.useSaturnIntercept(s),true);assert.equal(a.useSaturnIntercept(s),false,'cooldown');
   assert.equal(near1.frostAct,undefined,'its pounce is cancelled');assert.ok(a.saturnTimeStopped(s,near1));assert.ok(!a.saturnTimeStopped(s,far));
   const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);
-  assert.equal(near1.icyShieldHP,0);assert.equal(far.icyShieldHP,S.grantAmount);close(s.playerShieldHP,S.grantAmount*S.fieldShieldShare,'C gives a bigger shield');close(hp-boss.hp,S.grantAmount*S.absorbShare);
+  assert.equal(near1.icyShieldHP,0);assert.equal(far.icyShieldHP,S.grantAmount);close(s.playerShieldHP,S.grantAmount*S.fieldShieldShare,'C gives a bigger shield');close(hp-boss.hp,S.grantAmount*S.counterGrantShare+S.counterGrantBonus);
   assert.ok(S.fieldShieldShare>S.killShieldShare);
   for(let i=0;i<S.fieldTicks;i++)a.updateSaturn(s);assert.equal(t.field,null);
 });
@@ -124,7 +209,7 @@ test('Saturn uses 32 frozen tiles without a boss-room bonus and a shorter player
   const{s,t}=fresh();t.iceTimer=0;a.updateSaturn(s);assert.equal(t.nextIce.length,32);
   for(let i=0;i<S.iceWarning;i++)a.updateSaturn(s);
   assert.equal(s.frostIceTiles.length,32);
-  a.freezeSaturnPlayer(s);assert.equal(s.playerFrozenTicks,72);assert.equal(S.fieldTicks,45);
+  const [x,y]=s.frostIceTiles[0];player(s,x,y);a.freezeSaturnPlayer(s);assert.equal(s.playerFrozenTicks,48);assert.equal(S.fieldTicks,45);
 });
 
 test('Glacier Hulk walks to an adjacent tile within 40 ticks',()=>{
@@ -168,7 +253,7 @@ test('a marked Hulk that dies first still gives double ice',()=>{
 test('your shield is capped; taken ice past the cap is lost but still hurts her',()=>{
   const{s,t,boss}=fresh();s.playerShieldHP=S.shieldCap-10;const bite=alien(s,'frostbiter',22,20);t.grantTargets=[bite.id];
   a.useSaturnIntercept(s);near(bite,12,10);const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);
-  assert.equal(s.playerShieldHP,S.shieldCap);close(hp-boss.hp,S.grantAmount*S.absorbShare);
+  assert.equal(s.playerShieldHP,S.shieldCap);close(hp-boss.hp,S.grantAmount*S.counterGrantShare+S.counterGrantBonus);
   s.playerShieldHP=500;a.updateSaturn(s);assert.equal(s.playerShieldHP,S.shieldCap,'any source is clamped');
 });
 
@@ -177,7 +262,7 @@ test('a caught grant strips the ice of every alien in the field, without giving 
   const far1=alien(s,'frostbiter',35,35),far2=alien(s,'frostbiter',36,35);other.icyShieldHP=40;outside.icyShieldHP=40;t.grantTargets=[marked.id,far1.id,far2.id]; // all slots filled, so none are added
   a.useSaturnIntercept(s);const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);
   assert.equal(other.icyShieldHP,0);assert.equal(outside.icyShieldHP,40);
-  close(s.playerShieldHP,S.grantAmount*S.fieldShieldShare);close(hp-boss.hp,S.grantAmount*S.absorbShare);
+  close(s.playerShieldHP,S.grantAmount*S.fieldShieldShare);close(hp-boss.hp,S.grantAmount*S.counterGrantShare+S.counterGrantBonus);
   const{s:s2,t:t2}=fresh();const lone=alien(s2,'frostbiter',10,12),g=[1,2,3].map(k=>alien(s2,'frostbiter',33+k,35));lone.icyShieldHP=40;a.useSaturnIntercept(s2);t2.grantTargets=g.map(x=>x.id);t2.grantTimer=1;a.updateSaturn(s2);
   assert.equal(lone.icyShieldHP,40,'no catch, no strip');
 });
@@ -297,7 +382,7 @@ test('phase 3 grant paths expire after lineIceTicks (1.95 seconds)',()=>{
   for(let i=0;i<a.SATURN.lineIceTicks-1;i++)a.updateSaturn(s);assert.ok(t.temporaryIce.some(i=>i.x===25&&i.y===10));a.updateSaturn(s);assert.ok(!t.temporaryIce.some(i=>i.x===25&&i.y===10));
 });
 
-test('phase 3 paths freeze for 0.4 seconds; normal floor and shell ice keep their full freeze',()=>{
+test('phase 3 paths freeze for 0.4 seconds; overlapping normal floor freezes for 0.8s and shell ice for 1.2s',()=>{
   for(const overlap of ['none','floor','shell']){
     const{s,t,boss}=bloomScene(3);near(boss,30,10);player(s,40,40);
     const mob=alien(s,'frostbiter',20,10);t.grantTargets=[mob.id];t.grantTimer=1;a.updateSaturn(s);
@@ -305,7 +390,7 @@ test('phase 3 paths freeze for 0.4 seconds; normal floor and shell ice keep thei
     if(overlap==='floor')s.frostIceTiles=[[25,10]];
     if(overlap==='shell')t.shells=[{x:25,y:10,ticks:1}];
     player(s,25,10);a.updateSaturn(s);
-    assert.equal(s.playerFrozenTicks,overlap==='none'?24:72,overlap);
+    assert.equal(s.playerFrozenTicks,overlap==='none'?24:overlap==='floor'?48:72,overlap);
   }
 });
 
@@ -427,7 +512,7 @@ test('only five distinct footprints remain and each expires independently',()=>{
 test('freezing from ordinary ice fades active ice and pending footsteps after clearing their hazards',()=>{
  const{s,t}=trailScene();player(s,9,10);a.updateSaturn(s);
  t.frostTrail.push({x:11,y:10,ticks:0});s.frostIceTiles=[[9,10]];
- a.updateSaturn(s);assert.equal(s.playerFrozenTicks,S.freezeTicks);assert.deepEqual(t.frostTrail,[]);
+ a.updateSaturn(s);assert.equal(s.playerFrozenTicks,S.normalFreezeTicks);assert.deepEqual(t.frostTrail,[]);
  assert.equal(a.saturnIceAt(s,11,10),false);
  assert.deepEqual(t.trailFades.map(tile=>[tile.x,tile.y,tile.footprintTicks>0]),[[8,10,true],[11,10,false]]);
  saturnTicks(s,S.trailReplaceFadeTicks-1);assert.equal(t.trailFades.length,2);
@@ -447,4 +532,9 @@ test('a meteor hits the Frost Warden for 10% of a phase even through her own fro
   const{s,boss}=fresh();s.godMode=true;boss.icyShieldHP=500;const hp=boss.hp;
   s.meteoriteWarning=c.chamberOfTile(boss.tileX,boss.tileY);s.meteoriteStrikeIn=1;e.tick(s);
   assert.ok(Math.abs(hp-boss.hp-S.phaseHP*S.meteorShare)<1e-6,'took '+(hp-boss.hp));assert.equal(boss.icyShieldHP,500,'her shield is untouched');
+});
+
+test('countering a normal and Hulk grant adds 10.9 and 21.8 boss damage',()=>{
+  const{s,t,boss}=fresh();const normal=alien(s,'frostbiter',12,10),hulk=alien(s,'glacier_hulk',10,12);t.grantTargets=[normal.id,hulk.id];
+  a.useSaturnIntercept(s);const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);close(hp-boss.hp,32.7);
 });

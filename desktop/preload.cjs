@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('rubyDesktop',Object.freeze({
   save:data=>ipcRenderer.invoke('profile:save',data),
   fullscreen:()=>ipcRenderer.invoke('window:fullscreen'),
   quit:()=>ipcRenderer.invoke('window:quit'),
+  openDataFolder:()=>ipcRenderer.invoke('app:open-data'),
+  logError:message=>ipcRenderer.send('app:log-error',String(message)),
   onClosing:callback=>{const handler=()=>callback();ipcRenderer.on('window:closing',handler);return ()=>ipcRenderer.removeListener('window:closing',handler);},
   closeReady:(saved=true)=>ipcRenderer.send('window:close-ready',saved),
 }));

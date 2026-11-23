@@ -10,7 +10,7 @@ export default function BombStatus({ armed, cooldown, powered, totalCooldown }: 
   const progress = Math.max(0, Math.min(1, 1 - cooldown / totalCooldown));
   return <div className={`bomb-status ${status}`} role="img" aria-label={label} title={label} data-bomb-state={status}>
     <svg viewBox="0 0 40 40" aria-hidden="true" shapeRendering="crispEdges">
-      <rect x="1" y="1" width="38" height="38" fill="#0b1424" stroke={armed ? '#ffb859' : '#314058'} strokeWidth="2" />
+      <rect x="1" y="1" width="38" height="38" fill="#0b1424" stroke={cooling ? '#314058' : '#ffb859'} strokeWidth="2" />
       {cooling && <path d="M20 1 H39 V39 H1 V1 H20" pathLength="100" fill="none" stroke="#ffb665" strokeWidth="2" strokeDasharray={`${progress * 100} 100`} />}
       <g className={cooling ? '' : 'bomb-glow'} style={{ color }}>
         <rect x="10" y="15" width="20" height="18" fill="currentColor" />

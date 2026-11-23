@@ -4,7 +4,7 @@ Ruby Star is a top-down space-station survival/defense game. `/` is the mode lob
 
 ## The game in brief
 
-**Core loop.** You are a square ship protecting Ruby (a pink gem) across four rooms in a 2×2 grid: ALPHA top-left, BETA top-right, GAMMA bottom-right, DELTA bottom-left. If either of you hits 0 HP, the run ends. Tools: laser, held-charge wave, bullets (every 20th is heavy), speed burst, bomb, carrying Ruby, healing beside her and teleport pads. A full star gauge makes your next ability powered. Hazards: meteors move clockwise through the rooms, comets start at stage 3, and four rare space events (Black Hole, Shooting Star, Eclipse, Supernova).
+**Core loop.** You are a square ship protecting Ruby (a pink gem) across four rooms in a 2×2 grid: ALPHA top-left, BETA top-right, GAMMA bottom-right, DELTA bottom-left. If either of you hits 0 HP, the run ends. Tools: laser, held-charge wave, bullets (every 20th is heavy), speed burst, bomb, carrying Ruby, healing beside it and teleport pads. A full star gauge makes your next ability powered. Hazards: meteors move clockwise through the rooms, comets start at stage 3, and four rare space events (Black Hole, Shooting Star, Eclipse, Supernova).
 
 **Endless Space.** Stage = bosses defeated, drawn from ten boss encounters. Alien types and difficulty tiers unlock over time. Every third boss kill offers one of three constellation upgrades (44 in all). From stage 10 (Ascension) boss kills give a one-use celestial skill on F that also changes your suit; Ascension mode starts a run there. From stage 20 (Transcendence) two bosses can be active at once and you choose a gemstone blessing every ten stages.
 
@@ -39,10 +39,10 @@ Read only the topics a task needs.
 | The Moon · Shadow Queen | Illusions, reveal, mirrors, Moon Mark, darkness | [Moon](MOON.md) |
 | Jupiter · Storm Reaper | Charge, storm pursuit, Shard Race, Volt Fence | [Jupiter](JUPITER.md) |
 | Saturn · Frost Warden | Frost shields, grants and recalls, Absolute Zero, blizzard | [Saturn](SATURN.md) |
-| Neptune · Sea Chanter | Dives and clones, fish, tides, the Trident | [Neptune](NEPTUNE.md) |
+| Neptune · Sea Chanter | Dives and echoes, Ocean’s Melody, healing-charged Ocean’s Chorus | [Neptune](NEPTUNE.md) |
 | Sirius · Blind Prayer | Light/dark swaps, traced runes, Holy Light, Sacred Halo, the Ruby guess | [Sirius](SIRIUS.md) |
 | Binary Star · Astral Twins | Three twin lives, opposite-room jumps, magnetic poles, collisions | [Binary Star](BINARY.md) |
-| The Singularity · Soul Devourer | Maws that open in turns, the Gravity Hook, Souls, the multiplying swarm | [The Singularity](SINGULARITY.md) |
+| The Singularity · Soul Devourer | Maws that open together, the Gravity Hook, Souls, the multiplying swarm | [The Singularity](SINGULARITY.md) |
 
 **Lore** (story only; skip it during development): [Sun](SUN-LORE.md), [Venus](VENUS-LORE.md), [Gaia](GAIA-LORE.md), [Moon](MOON-LORE.md), [Jupiter](JUPITER-LORE.md), [Saturn](SATURN-LORE.md), [Neptune](NEPTUNE-LORE.md), [Sirius](SIRIUS-LORE.md), [Binary Star](BINARY-LORE.md), [Singularity](SINGULARITY-LORE.md).
 

@@ -8,6 +8,7 @@ import { godPhaseClock, createEncounterEnemy, damageEnemy, damagePlayer, stunPla
 export const BINARY = {
   twinHP: 1650,         // each twin, per phase (one life)
   reviveHpRatio: .4,    // a twin revived inside a phase returns with 40% of its life (Endless: 60%)
+  lateReviveHpRatio: .25, // ...and with 25% from its second revival in the same phase
   transferDelay: 540,   // the twins share HP every 15–18s here (Endless: 6–9s)
   meteorShare: .1,      // a meteor takes 10% of a twin's phase HP
   swapTicks: [2100, 2100, 2700] as const, // the twins jump to two opposite chambers every 35s in phases 1–2, 45s in phase 3
@@ -46,6 +47,7 @@ export const BINARY = {
   magnetPadGap: 6,      // a magnet sits at least 6 tiles (along both axes) from its room's teleport pad: beyond its 4-tile reach of the pad and the tiles around it
   magnetHold: 1.5,      // a pull stops once you are this close
   poleCooldown: 120,    // C swaps your pole at most every 2 seconds
+  swapVisualTicks: 36, // Pole Shift brackets and filings turn over 0.6 seconds; gameplay timing is separate
   surgeTicks: 45,       // for 0.75s after a swap, magnetic enemies in your or your F twin's field are shoved once
   // Each surge jolt (push or pull alike) deals a little damage and heals you and Ruby.
   // A Lodestone your field (or a swap) drives within 1 tile of a twin in the next second, or a twin driven within
@@ -427,8 +429,9 @@ export function collisionSplit(a: number, c: number, pool: number): [number, num
 export function swapPole(s: GameState): boolean {
   const b = s.binary;
   if (!b || s.gamePhase !== 'playing' || b.poleCooldown > 0) return false;
+  s.playerCastTicks = 24; s.playerCastKind = 'astral_twins'; s.playerPrimalCast = true;
   b.pole = b.pole === 'north' ? 'south' : 'north';
-  b.poleCooldown = BINARY.poleCooldown; b.swapFlashTicks = 18;
+  b.poleCooldown = BINARY.poleCooldown; b.swapFlashTicks = BINARY.swapVisualTicks;
   b.surge = BINARY.surgeTicks; b.surgeHit = [];
   playCelestialSound('sea_chanter'); // the swap plays the Neptune's Tide cast sound
   b.pulse = Math.min(b.pulse, 12); // the new pole takes hold almost at once

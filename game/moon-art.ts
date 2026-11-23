@@ -508,6 +508,54 @@ function drawMoonHealing(ctx: CanvasRenderingContext2D,state:Readonly<GameState>
 
 // Arrival frames (she and her new illusions appear together), her disguise breaking at the reveal, and the crystal
 // shards thrown by a destroyed illusion.
+/** A hovering block-built moon casts a feathered spotlight onto the marked body. */
+export function drawMoonMarkLight(ctx:CanvasRenderingContext2D,state:Readonly<GameState>,camX:number,camY:number){
+  const mark=state.moon?.mark,target=mark&&state.enemies.find(e=>e.id===mark.id&&e.hp>0);if(!mark||!target)return;
+  const age=MOON_MARK_TICKS-mark.ticks,rise=Math.min(1,age/14),end=Math.min(1,mark.ticks/60),fade=rise*rise*(3-2*rise)*end*end*(3-2*end);
+  const x=target.x-camX,y=target.y-camY,sx=x+36,sy=y-142+Math.sin(state.gameTick*.035)*2,length=Math.hypot(x-sx,y-sy);
+  ctx.save();ctx.shadowBlur=0;ctx.translate(sx,sy);ctx.rotate(Math.atan2(y-sy,x-sx)-Math.PI/2);
+  const light=ctx.createLinearGradient(0,0,0,length);light.addColorStop(0,'rgba(221,245,255,.95)');light.addColorStop(.55,'rgba(120,204,255,.72)');light.addColorStop(1,'rgba(155,221,255,.2)');ctx.fillStyle=light;
+  for(let strip=0;strip<48;strip++){
+    const left=strip/24-1,right=(strip+1)/24-1,middle=(left+right)/2;
+    ctx.globalAlpha=fade*.4*(.5+.5*Math.cos(middle*Math.PI));
+    ctx.beginPath();ctx.moveTo(left*5,8);ctx.lineTo(right*5,8);ctx.lineTo(right*38,length+14);ctx.lineTo(left*38,length+14);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();ctx.save();ctx.shadowBlur=0;
+  // Quiet crystal dust descends through the cone, with a few small lunar glints.
+  for(let i=0;i<18;i++){
+    const t=(state.gameTick*.0045+i/18)%1,spread=(5+t*29)*Math.sin(i*2.39996);
+    const mx=sx+(x-sx)*t+spread,my=sy+(y-sy)*t;
+    ctx.globalAlpha=fade*Math.sin(t*Math.PI)*(.22+i%3*.1);
+    block(ctx,mx-1,my-1,i%3?2:3,i%3?3:4,i%3?'#acdfff':'#effaff');
+    if(i%6===0){block(ctx,mx-4,my,8,1,'#e3f6ff');block(ctx,mx,my-4,1,8,'#e3f6ff');}
+  }
+  ctx.translate(Math.round(sx),Math.round(sy));
+  const moonPulse=.8+.2*Math.cos(age*Math.PI/60),moonOpacity=fade*.7*moonPulse;
+  // Symmetric ten-row silhouette: exactly 40px wide and 40px high.
+  const moonRows=[8,14,18,20,20,20,20,18,14,8];
+  const traceMoon=(radius:number)=>{
+    ctx.beginPath();for(let row=0;row<moonRows.length;row++){
+      const half=moonRows[row]*radius/20;ctx.rect(-half,-radius+row*radius/5,half*2,radius/5);
+    }
+  };
+  for(const radius of [28,24]){
+    ctx.globalAlpha=moonOpacity*(radius>25?.06:.12);ctx.fillStyle='#6fb8ee';traceMoon(radius);ctx.fill();
+  }
+  ctx.globalAlpha=moonOpacity;ctx.shadowColor='#78ccff';ctx.shadowBlur=4;ctx.fillStyle='#b0deff';traceMoon(20);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.save();traceMoon(20);ctx.clip();
+  // Flat crater clusters and small pale deposits keep the surface block-built, without bevels.
+  for(const [cx,cy,size]of [[-9,-9,7],[5,-4,9],[-6,7,6],[9,9,4],[-13,1,3]]){
+    ctx.globalAlpha=moonOpacity*.5;block(ctx,cx,cy,size,size,'#6796bd');
+    ctx.globalAlpha=moonOpacity*.3;block(ctx,cx+2,cy+2,Math.max(2,size-3),Math.max(2,size-3),'#4c7ca8');
+  }
+  ctx.globalAlpha=moonOpacity*.75;block(ctx,-4,-15,10,3,'#e3f6ff');block(ctx,-13,-5,3,4,'#d9f2ff');block(ctx,3,11,4,3,'#d9f2ff');
+  ctx.restore();
+  const twinkle=.55+.25*Math.sin(state.gameTick*.07);
+  ctx.globalAlpha=moonOpacity*twinkle;block(ctx,-27,-3,9,2,'#d9f2ff');block(ctx,-24,-6,2,8,'#effaff');
+  block(ctx,25,7,3,3,'#b5e5ff');ctx.restore();
+}
+
 export function drawMoonEffects(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, tick: number) {
   const moon = state.moon; if (!moon) return;
   ctx.save(); ctx.shadowBlur = 0;
@@ -535,6 +583,40 @@ export function drawMoonEffects(ctx: CanvasRenderingContext2D, state: Readonly<G
     if (age < 32) {
       const t = age / 32, fade = 1-t;
       const px = (moon.mark.fromX ?? state.playerX)-camX, py = (moon.mark.fromY ?? state.playerY)-camY;
+      // A lunar pressure wave blooms from the cast position, with a short translucent wake.
+      const wave=age/32,wr=12+wave*TILE_SIZE*3.2,wake=Math.min(wr*.5,34),wf=.5+.5*Math.cos(wave*Math.PI);
+      const trace=(radius:number)=>{
+        ctx.beginPath();for(let point=0;point<8;point++){
+          const a=point*Math.PI/4+Math.PI/8,vx=px+Math.cos(a)*radius,vy=py+Math.sin(a)*radius;
+          if(point)ctx.lineTo(vx,vy);else ctx.moveTo(vx,vy);
+        }ctx.closePath();
+      };
+      ctx.shadowBlur=0;ctx.lineJoin='miter';
+      for(let sheet=15;sheet>=0;sheet--){
+        const u=sheet/15;trace(wr-wake*u);ctx.globalAlpha=wf*.08*Math.pow(1-u,1.2);
+        ctx.strokeStyle='#72b9ee';ctx.lineWidth=wake/15+1;ctx.stroke();
+      }
+      trace(wr);ctx.globalAlpha=wf*.15;ctx.strokeStyle='#8bd4ff';ctx.lineWidth=10;ctx.stroke();
+      ctx.globalAlpha=wf*.22;ctx.strokeStyle='#e0f6ff';ctx.lineWidth=2.5;ctx.stroke();
+      // Detached ice-blue crystal tips and fine glitter catch the travelling moonlight.
+      for(let crystal=0;crystal<8;crystal++){
+        const a=crystal*Math.PI/4+Math.PI/8,cx=px+Math.cos(a)*wr,cy=py+Math.sin(a)*wr;
+        ctx.save();ctx.translate(cx,cy);ctx.rotate(a+Math.PI/2);
+        for(let layer=1;layer>=0;layer--){
+          ctx.globalAlpha=wf*(layer?.035:.11);ctx.fillStyle=layer?'#6fb9e6':'#b5e5ff';
+          const offset=layer*5;ctx.beginPath();ctx.moveTo(0,-13+offset);ctx.lineTo(5,offset);ctx.lineTo(0,10+offset);ctx.lineTo(-5,offset);ctx.closePath();ctx.fill();
+        }
+        ctx.globalAlpha=wf*.2;block(ctx,-1,-10,2,12,'#f2fbff');ctx.restore();
+      }
+      for(let glint=0;glint<48;glint++){
+        const edge=glint/6,point=Math.floor(edge),u=edge-point,a=point*Math.PI/4+Math.PI/8,b=a+Math.PI/4;
+        const scatter=.72+hash(glint,4,3)*.4;
+        const gx=px+((1-u)*Math.cos(a)+u*Math.cos(b))*wr*scatter,gy=py+((1-u)*Math.sin(a)+u*Math.sin(b))*wr*scatter;
+        const shine=Math.pow(Math.max(0,Math.sin(age*.31+glint*1.7)),4),size=3+shine*4;
+        ctx.globalAlpha=wf*(.085+shine*.28);block(ctx,gx-size,gy-.75,size*2,1.5,'#effaff');block(ctx,gx-.75,gy-size,1.5,size*2,'#effaff');
+        ctx.globalAlpha=wf*shine*.36;block(ctx,gx-1,gy-1,2,2,'#ffffff');
+        if(glint%4===0){ctx.globalAlpha=wf*.11;ctx.save();ctx.translate(gx,gy);ctx.rotate(a);block(ctx,-2,-3,4,6,'#96d5f5');ctx.restore();}
+      }
       // A small square seal opens at the caster; three whole rectangular lights travel outward.
       const radius = 13 + t*22;
       ctx.globalAlpha = fade*.6; ctx.shadowColor = ICE; ctx.shadowBlur = 5;
@@ -573,19 +655,29 @@ export function drawMoonEffects(ctx: CanvasRenderingContext2D, state: Readonly<G
         block(ctx,x+dx*r-(dx>0?4:0),y+dy*r-(dy>0?11:0),4,11,ICE);
         ctx.shadowBlur=0;block(ctx,bx+1,by,9,1,PALE);ctx.shadowBlur=5;
       }
-      // A filled stepped diamond is the persistent identifier, floating above the head.
-      const sy = y-r-18 + Math.round(Math.sin(tick*.06)*2);
-      ctx.globalAlpha=.95;
-      block(ctx,x-4,sy-10,8,20,ICE);block(ctx,x-7,sy-6,14,12,ICE);block(ctx,x-10,sy-3,20,6,ICE);
+      // Translucent corner echoes radiate beyond the model, never washing over its face.
+      const detailFade=Math.min(1,age/12,moon.mark.ticks/45);
       ctx.shadowBlur=0;
-      block(ctx,x-3,sy-6,6,12,'#163454');block(ctx,x-6,sy-3,12,6,'#163454');
-      block(ctx,x-2,sy-3,4,6,PALE);
-      block(ctx,x-2,sy+13,4,3,ICE);block(ctx,x-1,sy+17,2,3,PALE);
-      // Two separated orbit glints avoid covering the marked model with a wash.
-      for(let i=0;i<2;i++) {
-        const a=tick*.025+i*Math.PI, gx=x+Math.cos(a)*(r+5), gy=y+Math.sin(a)*(r+5);
-        ctx.globalAlpha=.6;block(ctx,gx-2,gy-2,4,4,ICE);
-        ctx.globalAlpha=.8;block(ctx,gx-1,gy-1,2,2,PALE);
+      for(let echo=0;echo<3;echo++){
+        const phase=((age+echo*24)%72)/72,reach=r+5+phase*19,strength=detailFade*(1-phase)*.16;
+        for(const [dx,dy]of [[-1,-1],[1,-1],[1,1],[-1,1]]){
+          const cx=x+dx*reach,cy=y+dy*reach;
+          ctx.globalAlpha=strength;block(ctx,cx-(dx>0?12:0),cy-1,12,3,'#78ccff');block(ctx,cx-1,cy-(dy>0?12:0),3,12,'#78ccff');
+          ctx.globalAlpha=strength*.65;block(ctx,cx-(dx>0?12:0),cy+dy*3,12,3,ICE);
+        }
+      }
+      // Four orbiting crystalline points and twelve separated white-blue sparkles.
+      for(let i=0;i<4;i++){
+        const a=tick*.013+i*Math.PI/2+Math.PI/4,gx=x+Math.cos(a)*(r+13),gy=y+Math.sin(a)*(r+13);
+        ctx.save();ctx.translate(gx,gy);ctx.rotate(a);
+        ctx.globalAlpha=detailFade*.22;ctx.fillStyle='#78ccff';ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(5,0);ctx.lineTo(0,8);ctx.lineTo(-5,0);ctx.closePath();ctx.fill();
+        ctx.globalAlpha=detailFade*.7;block(ctx,-1,-4,2,8,'#e5f7ff');ctx.restore();
+      }
+      for(let i=0;i<12;i++){
+        const a=i*2.39996+tick*.007,d=r+11+i%3*7,gx=x+Math.cos(a)*d,gy=y+Math.sin(a)*d;
+        const shine=Math.pow(Math.max(0,Math.sin(tick*.11+i*1.9)),4),size=2+shine*3;
+        ctx.globalAlpha=detailFade*(.12+shine*.55);block(ctx,gx-size,gy-.75,size*2,1.5,'#e5f7ff');block(ctx,gx-.75,gy-size,1.5,size*2,'#e5f7ff');
+        ctx.globalAlpha=detailFade*shine*.7;block(ctx,gx-1,gy-1,2,2,'#ffffff');
       }
     }
     ctx.restore();
@@ -613,6 +705,7 @@ export function drawMoonEffects(ctx: CanvasRenderingContext2D, state: Readonly<G
 export function drawMoonUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number): boolean {
   if (e.type === 'moon_shade') { drawShade(ctx, e, sx, sy, tick); drawEnemyHealthBar(ctx,e,sx,sy); return true; }
   if (e.type === 'moon_mimic') { drawMimic(ctx, e, sx, sy, tick); drawEnemyHealthBar(ctx,e,sx,sy); return true; }
+  if (e.type === 'moon_hound') { drawHound(ctx, e, sx, sy, tick); drawEnemyHealthBar(ctx,e,sx,sy); return true; }
   if (e.type !== 'mirror_mite') return false;
   const flash = e.flashTicks > 0, step = Math.floor(tick / 6 + e.id) % 2, attack = e.attackTimer > 0 && e.attackTimer <= 12;
   ctx.save(); ctx.translate(Math.round(sx), Math.round(sy)); ctx.shadowBlur = 0;
@@ -635,12 +728,37 @@ export function drawMoonUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, 
     block(ctx, -6, 0, 4, 4, '#f4eaff'); block(ctx, 2, 0, 4, 4, '#f4eaff');
     block(ctx, -5, 1, 2, 2, '#3a2a6a'); block(ctx, 3, 1, 2, 2, '#3a2a6a');
   }
-  // a mirror shard on its back
-  ctx.fillStyle = flash ? '#ffffff' : '#e8e0ff'; tri(ctx, -3, -h, 3, -h, 0, -h - 7);
-  ctx.fillStyle = flash ? '#ffffff' : '#a98cff'; tri(ctx, 0, -h, 3, -h, 0, -h - 7);
+  // a mirror shard on its back, as stepped blocks: pale on the lit side, violet on the other
+  const lit = flash ? '#ffffff' : '#e8e0ff', shade = flash ? '#ffffff' : '#a98cff';
+  block(ctx, -3, -h - 3, 3, 3, lit); block(ctx, 0, -h - 3, 3, 3, shade);
+  block(ctx, -2, -h - 6, 2, 3, lit); block(ctx, 0, -h - 6, 2, 3, shade);
+  block(ctx, -1, -h - 8, 1, 2, lit); block(ctx, 0, -h - 8, 1, 2, shade);
   ctx.restore();
   drawEnemyHealthBar(ctx,e,sx,sy);
   return true;
+}
+
+// Crystal Hound: a fast ice-blue crystal beast. A wide blocky body with a glowing ice rim and dark inset, a lit top
+// facet, two pale shard ears, narrowed eyes under slanted brows and two fangs that drop as it bites; four stepped legs
+// gallop and the body bobs with them.
+function drawHound(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number) {
+  const flash = e.flashTicks > 0, gallop = Math.floor(tick / 4 + e.id) % 2, bite = e.shootTicks > 0;
+  ctx.save(); ctx.translate(Math.round(sx), Math.round(sy) - gallop); ctx.shadowBlur = 0;
+  for (const [lx, lift] of [[-13, gallop], [-6, 1 - gallop], [2, gallop], [9, 1 - gallop]]) block(ctx, lx, 8 - lift * 3, 4, 7, flash ? '#ffffff' : '#4f7fa4');
+  const w = 14, top = -9, h = 18;
+  ctx.shadowColor = ICE; ctx.shadowBlur = 5;
+  block(ctx, -w, top, w * 2, h, flash ? '#ffffff' : ICE); ctx.shadowBlur = 0;
+  if (!flash) {
+    block(ctx, -w + 2, top + 2, w * 2 - 4, h - 4, '#0e2236');
+    block(ctx, -9, -2, 6, 3, PALE); block(ctx, 3, -2, 6, 3, PALE); // eyes
+    block(ctx, -10, -6, 4, 2, ICE); block(ctx, -6, -5, 3, 2, ICE); block(ctx, 6, -6, 4, 2, ICE); block(ctx, 3, -5, 3, 2, ICE); // angry brows, slanting in, clear of the eyes
+    block(ctx, -6, 3, 3, bite ? 6 : 3, PALE); block(ctx, 3, 3, 3, bite ? 6 : 3, PALE); // fangs
+  }
+  // shard ears as stepped blocks: wide at the base, narrowing to a square tip
+  const ear = flash ? '#ffffff' : PALE, inner = flash ? '#ffffff' : ICE;
+  block(ctx, -w, top - 3, 7, 3, ear); block(ctx, -w, top - 6, 5, 3, ear); block(ctx, -w, top - 9, 3, 3, ear); block(ctx, -w + 3, top - 3, 3, 3, inner);
+  block(ctx, w - 7, top - 3, 7, 3, ear); block(ctx, w - 5, top - 6, 5, 3, ear); block(ctx, w - 3, top - 9, 3, 3, ear); block(ctx, w - 6, top - 3, 3, 3, inner);
+  ctx.restore();
 }
 
 // Shade: a translucent shadow wraith that hunts Ruby. A stepped hood and body in deep violet, flickering between
@@ -700,28 +818,16 @@ export function drawMoonRevealOverlay(ctx: CanvasRenderingContext2D, state: Read
   if (a <= 0) return;
   ctx.save(); ctx.shadowBlur = 0;
   if (t < .12) { ctx.globalAlpha = (1 - t / .12) * .22; ctx.fillStyle = PALE; ctx.fillRect(0, 0, w, h); }
-  // Big chunky glass crystals grow in from the corners and edges: irregular faceted
-  // gems with lit upper-left faces, shaded lower-right faces, pale edges and a glint.
+  // Flat glass silhouettes grow in from the corners, with pale luminous contours.
   const chunks: [number, number, number][] = [[0, 0, 1.25], [w, 0, 1.1], [w, h, 1.3], [0, h, 1.05], [w * .5, 0, .7], [w * .5, h, .8], [0, h * .5, .75], [w, h * .45, .85], [w * .25, 0, .55], [w * .78, h, .6], [0, h * .78, .5], [w, h * .18, .5]];
   chunks.forEach(([cx, cy, scale], i) => {
     const R = Math.min(w, h) * .2 * scale * (.4 + .6 * grow), sides = 6 + (i % 2), rot = hash(i, 1, 67) * Math.PI;
     const pts: [number, number][] = [];
     for (let k = 0; k < sides; k++) { const ang = rot + k / sides * Math.PI * 2, rr = R * (.75 + hash(i, k, 68) * .35); pts.push([cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr * .9]); }
-    const ox = cx - R * .18, oy = cy - R * .14; // the facet apex, offset so faces read as a cut gem
-    for (let k = 0; k < sides; k++) {
-      const [x1, y1] = pts[k], [x2, y2] = pts[(k + 1) % sides], mx = (x1 + x2) / 2 - cx, my = (y1 + y2) / 2 - cy;
-      const light = (-mx - my) / (Math.hypot(mx, my) || 1); // faces toward the upper left catch the light
-      ctx.globalAlpha = a * (.22 + .2 * Math.max(0, light));
-      ctx.fillStyle = light > .35 ? '#d9c4ff' : light > -.35 ? (i % 3 ? '#9a74e0' : '#7fb8e8') : '#3e2a72';
-      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.closePath(); ctx.fill();
-    }
-    ctx.globalAlpha = a * .7; ctx.strokeStyle = PALE; ctx.lineWidth = 2; ctx.lineJoin = 'miter';
-    ctx.beginPath(); pts.forEach(([px, py], k) => k ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.stroke();
-    ctx.globalAlpha = a * .25; ctx.lineWidth = 1;
-    for (const [px, py] of pts) { ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(px, py); ctx.stroke(); }
-    // A broad glassy highlight band across the upper-left face.
-    ctx.globalAlpha = a * .35; ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.moveTo(ox - R * .45, oy - R * .1); ctx.lineTo(ox - R * .1, oy - R * .5); ctx.lineTo(ox - R * .02, oy - R * .42); ctx.lineTo(ox - R * .36, oy - R * .02); ctx.closePath(); ctx.fill();
+    // Flat translucent crystal silhouettes; no lit/shaded facet planes or bevel bands.
+    ctx.globalAlpha=a*.24;ctx.fillStyle=i%3?'#9a74e0':'#7fb8e8';
+    ctx.beginPath();pts.forEach(([px,py],k)=>k?ctx.lineTo(px,py):ctx.moveTo(px,py));ctx.closePath();ctx.fill();
+    ctx.globalAlpha=a*.65;ctx.strokeStyle=PALE;ctx.lineWidth=1.5;ctx.lineJoin='miter';ctx.stroke();
   });
   // Soft violet frost at the rim and a few long prism lines across the view.
   const rim = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * .35, w / 2, h / 2, Math.max(w, h) * .72);

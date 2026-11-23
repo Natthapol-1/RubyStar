@@ -1,8 +1,24 @@
 import { CHAMBER_BOUNDS, MAP_COLS, MAP_ROWS, TILE_SIZE, T_FLOOR } from './constants';
 import type { GameState } from './engine';
 
+/** Shared silhouette for the full strike and smaller Neptune note waves. */
+export function tracePrimalPressureFront(ctx:CanvasRenderingContext2D,x:number,y:number,r:number){
+  const shoulder=.44*r;
+  ctx.beginPath();
+  ctx.moveTo(x-shoulder,y-r);ctx.lineTo(x+shoulder,y-r);
+  ctx.lineTo(x+shoulder,y-r*.78);ctx.lineTo(x+r*.78,y-r*.78);
+  ctx.lineTo(x+r*.78,y-shoulder);ctx.lineTo(x+r,y-shoulder);
+  ctx.lineTo(x+r,y+shoulder);ctx.lineTo(x+r*.78,y+shoulder);
+  ctx.lineTo(x+r*.78,y+r*.78);ctx.lineTo(x+shoulder,y+r*.78);
+  ctx.lineTo(x+shoulder,y+r);ctx.lineTo(x-shoulder,y+r);
+  ctx.lineTo(x-shoulder,y+r*.78);ctx.lineTo(x-r*.78,y+r*.78);
+  ctx.lineTo(x-r*.78,y+shoulder);ctx.lineTo(x-r,y+shoulder);
+  ctx.lineTo(x-r,y-shoulder);ctx.lineTo(x-r*.78,y-shoulder);
+  ctx.lineTo(x-r*.78,y-r*.78);ctx.lineTo(x-shoulder,y-r*.78);ctx.closePath();
+}
+
 /** Cosmetic pressure front: crosses all chambers without changing damage or simulation. */
-export function drawPrimalAftershock(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, chamber: number, age: number, color: string, core: string) {
+export function drawPrimalAftershock(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number, chamber: number, age: number, color: string, core: string, fragments = true) {
   const [r1,c1,r2,c2]=CHAMBER_BOUNDS[chamber],s=TILE_SIZE;
   const cx=(c1+c2+1)*s/2,cy=(r1+r2+1)*s/2;
   const reach=Math.max(...[[0,0],[MAP_COLS*s,0],[0,MAP_ROWS*s],[MAP_COLS*s,MAP_ROWS*s]].map(([x,y])=>Math.hypot(x-cx,y-cy)));
@@ -12,23 +28,12 @@ export function drawPrimalAftershock(ctx: CanvasRenderingContext2D, state: Reado
   for(let echo=0;echo<3;echo++) {
     const p=(age-6-echo*9)/95;if(p<=0||p>=1)continue;
     const r=p*reach,fade=Math.min(1,(1-p)*5)*(1-echo*.26),x=cx-camX,y=cy-camY;
-    const shoulder=.44*r;
-    ctx.beginPath();
-    ctx.moveTo(x-shoulder,y-r);ctx.lineTo(x+shoulder,y-r);
-    ctx.lineTo(x+shoulder,y-r*.78);ctx.lineTo(x+r*.78,y-r*.78);
-    ctx.lineTo(x+r*.78,y-shoulder);ctx.lineTo(x+r,y-shoulder);
-    ctx.lineTo(x+r,y+shoulder);ctx.lineTo(x+r*.78,y+shoulder);
-    ctx.lineTo(x+r*.78,y+r*.78);ctx.lineTo(x+shoulder,y+r*.78);
-    ctx.lineTo(x+shoulder,y+r);ctx.lineTo(x-shoulder,y+r);
-    ctx.lineTo(x-shoulder,y+r*.78);ctx.lineTo(x-r*.78,y+r*.78);
-    ctx.lineTo(x-r*.78,y+shoulder);ctx.lineTo(x-r,y+shoulder);
-    ctx.lineTo(x-r,y-shoulder);ctx.lineTo(x-r*.78,y-shoulder);
-    ctx.lineTo(x-r*.78,y-r*.78);ctx.lineTo(x-shoulder,y-r*.78);ctx.closePath();
+    tracePrimalPressureFront(ctx,x,y,r);
     ctx.lineJoin='miter';ctx.strokeStyle=color;
     ctx.globalAlpha=fade*.12;ctx.lineWidth=80;ctx.stroke();
     ctx.globalAlpha=fade*.65;ctx.lineWidth=18;ctx.stroke();
     ctx.globalAlpha=fade*.85;ctx.strokeStyle=core;ctx.lineWidth=5;ctx.stroke();
-    if(echo===0)for(let i=0;i<56;i++) {
+    if(fragments&&echo===0)for(let i=0;i<56;i++) {
       const a=i*2.39996,travel=r*(.85+i%4*.05);
       ctx.save();ctx.translate(x+Math.cos(a)*travel,y+Math.sin(a)*travel);ctx.rotate(a);
       ctx.globalAlpha=fade*.65;ctx.fillStyle=i%3?color:core;
@@ -50,7 +55,7 @@ export function drawPrimalAftershock(ctx: CanvasRenderingContext2D, state: Reado
   }
   // Chunky radiant fragments emphasize the initial room impact.
   const burst=Math.max(0,1-age/58);
-  for(let i=0;i<40&&burst>0;i++) {
+  for(let i=0;i<40&&burst>0&&fragments;i++) {
     const a=i*2.39996,r=age*(4+i%7),x=cx+Math.cos(a)*r-camX,y=cy+Math.sin(a)*r-camY;
     ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.rotate(a);
     ctx.globalAlpha=burst*(i%3?.65:.9);ctx.fillStyle=i%3?color:core;

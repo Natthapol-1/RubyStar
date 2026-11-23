@@ -3,11 +3,12 @@ const fs = require('fs'), path = require('path'), Module = require('module'), ts
 const compile = src => ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, jsx: ts.JsxEmit.React } }).outputText;
 require.extensions['.ts'] = (m, f) => m._compile(compile(fs.readFileSync(f, 'utf8')), f);
 require.extensions['.tsx'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, jsx: ts.JsxEmit.ReactJSX } }).outputText, f);
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+GlobalFonts.registerFromPath(path.resolve('public/fonts/press-start-2p.ttf'),'Press Start 2P');
 const c = require('../game/constants.ts'), engine = require('../game/engine.ts');
 const source = fs.readFileSync('game/RubyStarGame.tsx', 'utf8');
 // Local art modules keep their real imports; React/UI imports are dropped since only canvas drawing runs.
-const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
+const imports = [...source.matchAll(/^import\s+(\{[^}]*\})\s+from\s+'\.\/(display-settings|player-suit-art|convergence-art|devourer-model-art|singularity-maw|venus-art|venus|gambit-art|gambit|thorn-art|field-art|blessing-art|blessing-effects|endless-build-art|warning-art|world-themes|sirius-art|sirius|saturn-art|saturn|ice-shield-art|enemy-health-art|jupiter-art|jupiter|encounter-art|neptune-art|gaia-art|moon-art|sun-art|neptune|gaia|moon|sun|binary-world-art|binary-art|binary)';/gm)]
   .map(m => `const ${m[1].replace(/\btype\s+/g, '')}=require('./${m[2]}.ts');`).join('');
 const code = 'const {' + Object.keys(c).join(',') + "}=require('./constants.ts');const {" + Object.keys(engine).filter(k => !(k in c)).join(',') + "}=require('./engine.ts');" + imports
   + source.slice(source.indexOf('const BG_COLOR'), source.indexOf('// Challenge HUD centre: the guardian')) + ';exports.drawGame=drawGame;exports.drawMinimap=drawMinimap;exports.drawGuideCelestial=drawGuideCelestial;';
@@ -92,7 +93,7 @@ fs.writeFileSync(path.join(out,'sun-materials.png'),detail.toBuffer('image/png')
 // Compare ordinary water with the empowered pressure burst at several actual animation ages.
 const waveSheet=createCanvas(1200,600),wc=waveSheet.getContext('2d');wc.fillStyle='#100e1b';wc.fillRect(0,0,1200,600);
 for(const [row,empowered] of [false,true].entries())for(const [col,age] of [3,10,20,30].entries()) {
- const x=col*300+150,y=row*300+155;art.drawCoolingRipple(wc,x,y,36-age,empowered,120);
+ const x=col*300+150,y=row*300+155;art.drawCoolingRipple(wc,x,y,c.SUN.waveVisualTicks-age,empowered,120);
  wc.fillStyle='#9db9cc';wc.font='12px monospace';wc.textAlign='center';wc.fillText((empowered?'EMPOWERED':'NORMAL')+' · '+age+' ticks',x,row*300+285);
 }
 fs.writeFileSync(path.join(out,'sun-cooling-wave-stages.png'),waveSheet.toBuffer('image/png'));
@@ -133,16 +134,30 @@ for(const [i,label] of ['SUNBURST · 8s','METEOR · 3s','BOTH · SAME ROOM'].ent
 fs.writeFileSync(path.join(out,'sun-warning-comparison.png'),warnings.toBuffer('image/png'));
 
 // Thermal eruption and Sunburst use their real above-actor explosion renderers.
-for(const kind of ['eruption','sunburst']) {
+for(const kind of ['eruption','sunburst','defuse']) {
  const sheet=createCanvas(1280,720),ctx=sheet.getContext('2d');
  for(const [i,age] of [3,12,25,38].entries()) {
   const state=engine.createModeState('trial','fiery_king');state.enemies=[];state.resources=[];state.noMobs=true;state.sun.heat=50;
   if(kind==='eruption')state.sun.eruptionTicks=90-age;
-  else state.sun.flareFlash={room:0,ticks:45-age,defused:false};
+  else state.sun.flareFlash={room:0,ticks:45-age,defused:kind==='defuse'};
   const cv=createCanvas(1280,720),before=JSON.stringify(state);
   renderer.exports.drawGame(cv.getContext('2d'),state,1280,720,age,0,false);
   if(before!==JSON.stringify(state))throw Error('Solar explosion art mutated simulation');
   ctx.drawImage(cv,(i%2)*640,Math.floor(i/2)*360,640,360);
  }
  fs.writeFileSync(path.join(out,'sun-'+kind+'-stages.png'),sheet.toBuffer('image/png'));
+}
+
+// The hot release remains visible from all chambers, while its sun stays in the marked one.
+{
+ const sheet=createCanvas(1280,720),ctx=sheet.getContext('2d');
+ for(let room=0;room<4;room++){
+  const state=engine.createModeState('trial','fiery_king');state.enemies=[];state.resources=[];state.sun.heat=50;
+  const [tx,ty]=c.TELEPORT_PADS[room],age=[7,17,29,17][room];
+  Object.assign(state,{playerTileX:tx,playerTileY:ty,playerX:(tx+.5)*c.TILE_SIZE,playerY:(ty+.5)*c.TILE_SIZE});
+  state.sun.flareFlash={room:0,ticks:45-age,defused:false};
+  const frame=createCanvas(1280,720),before=JSON.stringify(state);renderer.exports.drawGame(frame.getContext('2d'),state,1280,720,age,0,false);
+  if(before!==JSON.stringify(state))throw Error('Sunburst arena drawing mutated state');ctx.drawImage(frame,room%2*640,Math.floor(room/2)*360,640,360);
+ }
+ fs.writeFileSync(path.join(out,'sun-sunburst-arena.png'),sheet.toBuffer('image/png'));
 }

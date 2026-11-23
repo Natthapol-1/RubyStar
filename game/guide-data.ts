@@ -2,12 +2,12 @@ import type {BossType,EnemyType} from './constants';
 // Short description, plus the kill bonus (if any) shown on its own line as "Killing buff: ...".
 export const aliens: { type: EnemyType; name: string; description: string; reward?: string }[] = [
   { type: 'normal', name: 'Normal', description: 'Chases you or Ruby.' },
-  { type: 'armored', name: 'Armored', description: 'Tanky. Its hits knock you back.', reward: 'A small shield.' },
+  { type: 'armored', name: 'Armored', description: 'Tanky, with a knockback attack.', reward: 'A small shield.' },
   { type: 'healer', name: 'Healer', description: 'Heals nearby aliens.', reward: 'Heals you.' },
-  { type: 'fast', name: 'Runner', description: 'Fast and fragile. Its hits knock you back.', reward: 'A speed burst.' },
+  { type: 'fast', name: 'Runner', description: 'Fast and fragile, with a knockback attack.', reward: 'A speed burst.' },
   { type: 'charger', name: 'Charger', description: 'Rushes in a straight line.', reward: 'Lots of extra energy.' },
   { type: 'sniper', name: 'Sniper', description: 'Charges a long-range shot.', reward: 'Your hits chain lightning for 5s.' },
-  { type: 'ghost', name: 'Ghost', description: 'Moves through walls. Its hits knock you back.', reward: 'Heals Ruby.' },
+  { type: 'ghost', name: 'Ghost', description: 'Moves through walls, with a knockback attack.', reward: 'Heals Ruby.' },
   { type: 'shielder', name: 'Shielder', description: 'Shields another alien.', reward: 'Shields Ruby.' },
   { type: 'energy_leech', name: 'Leech', description: 'Steals your energy up close.', reward: 'Returns the stolen energy.' },
   { type: 'bomber', name: 'Bomber', description: 'Explodes up close or when killed, knocking you back.' },

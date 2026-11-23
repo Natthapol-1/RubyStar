@@ -12,19 +12,19 @@ import type { Enemy } from './engine';
 const SAND = '#e3c08a', CYAN = '#78dedf', GOLD = '#ffd27a', RED = '#ff6a4d';
 const cards = [
   ['SEALED SHIELD', 'His shield blocks most damage and reflects your hits.'],
-  ['TOTEM SEQUENCE', 'Totems appear one by one, then sink into the sand. Remember where they are and their order.'],
-  ['IN ORDER', 'Break them in the order they appeared. A wrong one explodes, hitting its whole chamber, then moves.'],
+  ['TOTEM SEQUENCE', 'Totems appear one by one, then sink into the sand.'],
+  ['IN ORDER', 'Break them in the order they appeared. A wrong one explodes and relocates.'],
   ['OUT OF TIME', 'A totem left too long explodes the same way.'],
-  ['SHIELD BROKEN', 'Breaking every totem breaks his shield for a while and heals you and Ruby.'],
+  ['SHIELD BROKEN', 'Breaking every totem breaks his shield for a while.'],
   ['PRIMAL SKILL', 'Sand Swirl: uncovers what is buried around you and briefly blocks and reflects hits.'],
-  ['PARRY', 'Sand Swirl just before his attack or a totem blast lands blocks it, heals you and stuns him.'],
+  ['PARRY', 'Sand Swirl right before a hit lands blocks it and stuns the boss.'],
   ['AEGIS SENTINEL', 'Leaps onto you from anywhere and fires a charged lance.'],
   ['LONGER SEQUENCES', 'Sequences get longer.'],
-  ['HIDDEN CORE', 'His core hides in the sand. Each totem you break points toward it; after the last, break the core before his shield recovers.'],
+  ['HIDDEN CORE', 'His core hides in the sand; broken totems point to it. After the last totem, break the core to drop his shield.'],
   ['SAND SCARAB', 'Nests hide near totems and his core. Uncovering one releases a scarab.'],
-  ['DUNE WORM', 'Tunnels under the sand, leaving a trail, and bursts up beside you with a knockback bite. Sand Swirl digs it up.'],
-  ['SAND RELICS', 'Uncover and break them to heal, recharge Venus Veil or reveal the totems.'],
-  ['SAND SCORPION', 'Hides in place under the sand. Bursts up beside you with a hard, knockback sting.'],
+  ['DUNE WORM', 'Tunnels under the sand and bursts up beside you to bite. Sand Swirl digs it up.'],
+  ['SAND RELICS', 'Uncover and break relics for a bonus: healing, a faster Venus Veil or revealing all totems.'],
+  ['SAND SCORPION', 'Hides under the sand and bursts up beside you to sting.'],
 ] as const;
 
 const unit = (type: Enemy['type'], extra: Partial<Enemy> = {}) => ({ type, id: 1, hp: 30, maxHp: 30, icyShieldHP: 0, flashTicks: 0, shootTicks: 0, attackTimer: 99, ...extra }) as Enemy;
@@ -154,7 +154,7 @@ export default function VenusGuide({ drawCelestial }: { drawCelestial: Celestial
           <canvas ref={el => { refs.current[i] = el; }} width={200} height={120} aria-hidden="true" />
           <h5 style={{ color: i === 5 ? SAND : '#f0e2c4' }}>{title === 'PRIMAL SKILL' ? `PRIMAL SKILL (${bindingLabel('mapSkill')})` : title}</h5><p>{text}</p>
         </article>; })}
-        {section.skill && <CelestialSkillGuideCard name="Venus Veil" description="Cuts the damage you and Ruby take and reflects direct hits back at the attacker for a while." color="#f5dcc8" draw={drawCelestial} />}
+        {section.skill && <CelestialSkillGuideCard name="Venus Veil" description="Cuts the damage you and Ruby take and reflects direct hits back." color="#f5dcc8" draw={drawCelestial} />}
       </div></section>)}
   </div>;
 }

@@ -257,7 +257,7 @@ export function hallwayOfTile(tileX: number, tileY: number): number {
 export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'lancer' | 'enchanter' | 'bleeder' | 'snatcher' | 'impostor' | 'shooter' | 'reflector' | 'trapper' | 'dropper' | 'blinker' | 'jammer' | 'spook' | 'grappler' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
   | 'fish_blue' | 'fish_red' | 'stinger' | 'water_clone' | 'water_bomb' | 'jellyfish' | 'pufferfish'
   | 'seed_pod' | 'blossom' | 'sporeling' | 'vine_crawler' | 'angry_mushroom' | 'lifebloom'
-  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_mimic' | 'cinder_wisp' | 'lost_soul' | 'soulless' | 'toxic_soulless' | 'sand_relic' | 'sand_core' | 'sand_scarab' | 'sand_scorpion' | 'dune_worm' | 'emberling' | 'scorch_sapper' | 'flare_spitter' | 'frostbiter' | 'sleet_mortar' | 'glacier_hulk' | 'lodestone' | 'grounder' | 'pulsar' | 'zealot' | 'bellringer' | 'mason' | 'penitent';
+  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_hound' | 'moon_mimic' | 'cinder_wisp' | 'lost_soul' | 'soulless' | 'toxic_soulless' | 'sand_relic' | 'sand_core' | 'sand_scarab' | 'sand_scorpion' | 'dune_worm' | 'emberling' | 'scorch_sapper' | 'flare_spitter' | 'frostbiter' | 'sleet_mortar' | 'glacier_hulk' | 'lodestone' | 'grounder' | 'pulsar' | 'zealot' | 'bellringer' | 'mason' | 'penitent';
 
 export const ENERGY_LEECH_DRAIN = 30;
 
@@ -276,27 +276,34 @@ export interface EnemyConfig {
 }
 
 export const JUPITER = {
-  phaseHP: 1800, chargeTicks: 360, damageTaken: .1,
-  pursuitEnergy: 100, secondPursuitEnergy: 120, energyDrainPerSecond: 1.2, energyPerDamage: .45,
-  pursuitSpeed: 7.1, fleeSpeed: 10, playerPursuitSpeed: 1.5, raceSpeedBoost: 1.4,
-  catchupStartTiles: 8, catchupFullTiles: 20, catchupMultiplier: 1.75,
+  phaseHP: 1700, laterPhaseHPMult: 1.2, chargeTicks: 300, damageTaken: .2,
+  pursuitEnergy: 100, secondPursuitEnergy: 120, laterPhaseEnergyMult: 1.1 * 1.05, energyDrainPerSecond: 1.2, energyPerDamage: .4,
+  pursuitSpeed: 7.1, fleeSpeed: 8, playerRaceSpeed: 9, playerPursuitSpeed: 1.5, raceSpeedBoost: 1.4,
+  catchupStartTiles: 8, catchupFullTiles: 20, catchupMultiplier: 2.25,
   boostCooldown: 180, boostTicks: 24, boostSpeed: 6,
-  wallCooldown: 180, wallTicks: 1800, wallHalfLength: 1, wallDamage: 18, wallHealing: 15, wallEnergyDrain: 12,
+  wallCooldown: 180, wallTicks: 1800, wallHalfLength: 1, wallDamage: 18, wallHealing: 17, wallEnergyDrain: 12,
   wallSlowTicks: 120, wallSlow: .55, exposedWallSlow: .18, fenceGuardTicks: 36, fenceGuardDamage: .1, playerBoostTicks: 24, playerBoostSpeed: 4,
   stormGrace: 90, stormInterval: 30, stormDamage: 14, stormRubyDamage: 7,
   shockTileCount: 20, shockTileRespawn: 180, shockSlowTicks: 120, shockSlow: .55, shockEnergy: 12,
   chargeBlastDamage: 60, chargeBlastTicks: 42,
-  shardCount: 32, shardShare: .01, shardReach: .55, shardHeal: 3,
+  shardCount: 32, shardShare: .01, shardBossHealShare: .015, shardReach: .55, shardHeal: 4,
   fragmentCount: 2, fragmentChargeTicks: 480, fragmentBoost: 1.35,
   miniStormsPerRoom: 2, miniStormSpeed: 2.8, miniStormChaseSpeed: 4.6, miniStormChaseRange: 6,
-  miniStormDamage: 12, miniStormHitCooldown: 60,
+  miniStormDamage: 10, miniStormHitCooldown: 60,
+  trailTicks: 300, trailSlow: .7, trailSlowTicks: 12, trailMaxTiles: 65,
+  coverMinInterval: 240, coverMaxInterval: 360, coverWarningTicks: 72, coverRetractTicks: 18, coverRiseTicks: 18,
   celestialShare: .2, meteorShare: .1,
 } as const;
+
+export function jupiterPhaseHP(phase:number) { return Math.round(JUPITER.phaseHP*(phase>=2?JUPITER.laterPhaseHPMult:1)); }
+export function jupiterPhaseFloorHP(phase:number) { return phase===1?jupiterPhaseHP(2)+jupiterPhaseHP(3):phase===2?jupiterPhaseHP(3):0; }
+export function jupiterPhaseCeilHP(phase:number) { return jupiterPhaseFloorHP(phase)+jupiterPhaseHP(phase); }
+export function jupiterPhaseOfHP(hp:number):1|2|3 { return hp>jupiterPhaseCeilHP(2)?1:hp>jupiterPhaseCeilHP(3)?2:3; }
 
 export const SUN = {
   phaseHP: 3000, meteorShare: .1, solarShare: .04, stations: 5, stationReach: 1.6, stationBossReach: 2.5, // solarShare: Solar Flare (F) hits the King for this share of a phase
   stationChargeTicks: 300, stationTrickle: .6, stationCooling: 11.96, stationHealing: 25, stationRubyHealing: 25,
-  waveRadius: 8, waveCooldown: 330, waveDamage: 1, waveCooling: 2, waveStationCharge: 45, waveSlowTicks: 90, waveSlowMult: .5,
+  waveRadius: 8, waveCooldown: 330, waveVisualTicks: 36, waveDamage: 1, waveCooling: 2, waveStationCharge: 45, waveSlowTicks: 90, waveSlowMult: .5,
   rapidCooldown: 12, afterQuenchCooldown: 120, // afterQuenchCooldown: C returns as an ordinary wave 2s after the extinguished window ends
   empoweredDamage: .045, empoweredNormalDamage: 10, quenchTicks: 600, quenchDelayTicks: 120,
   quenchEnemyTickInterval: 2, // zero temperature: enemy movement, windups and attacks run at half speed
@@ -365,7 +372,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     maxHp: 30, speed: 4, color: '#c5bcae', shieldColor: '#eee4d2', bodyFraction: .9, scoreValue: 15,
     damageToPlayer: 12, damageToRuby: 8, attackCooldown: 80, attackRange: 6, bombExplodeRange: 0,
   },
-  toxic_soulless: { // Singularity phase 2+: a Soulless full of gas; dying, it leaves a still, larger gas cloud
+  toxic_soulless: { // Singularity phase 3: a Soulless full of gas; it leaves a trail of gas puffs as it walks
     maxHp: 30, speed: 0.9, color: '#7dff8a', shieldColor: '#c6ffb0', bodyFraction: .6, scoreValue: 15,
     damageToPlayer: 8, damageToRuby: 5, attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
   },
@@ -421,22 +428,22 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
   stinger: {
-    maxHp: 6, speed: 0.95, color: '#3fd6b0', shieldColor: '#a8f5e2',
-    bodyFraction: 0.68, scoreValue: 15, damageToPlayer: 4, damageToRuby: 3,
+    maxHp: 6, speed: 1.3, color: '#3fd6b0', shieldColor: '#a8f5e2',
+    bodyFraction: 0.68, scoreValue: 15, damageToPlayer: 5, damageToRuby: 3.5,
     attackCooldown: 70, attackRange: 1, bombExplodeRange: 0,
   },
   jellyfish: { // fragile; killing one during a dive reveals a clone
     maxHp: 2, speed: 0.5, color: '#ff9ce6', shieldColor: '#ffd6f4',
-    bodyFraction: 0.66, scoreValue: 10, damageToPlayer: 5, damageToRuby: 3,
+    bodyFraction: 0.66, scoreValue: 10, damageToPlayer: 6, damageToRuby: 3.5,
     attackCooldown: 70, attackRange: 1, bombExplodeRange: 0,
   },
   pufferfish: { // chases you, swells up when close, then bursts into spikes that knock you back (melee handled by the challenge)
-    maxHp: 7, speed: 1.7, color: '#ffc94a', shieldColor: '#fff0b8',
+    maxHp: 7, speed: 2.5, color: '#ffc94a', shieldColor: '#fff0b8',
     bodyFraction: 0.7, scoreValue: 20, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 150, attackRange: 0, bombExplodeRange: 0,
   },
   water_clone: {
-    maxHp: 8, speed: 1.45, color: '#6fc7ff', shieldColor: '#d8f2ff',
+    maxHp: 8, speed: 3.0, color: '#6fc7ff', shieldColor: '#d8f2ff',
     bodyFraction: 0.9, scoreValue: 0, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 0, attackRange: 0, bombExplodeRange: 0,
   },
@@ -463,7 +470,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     attackCooldown: 70, attackRange: 8, bombExplodeRange: 0,
   },
   grounder: { // Binary Star alien (phase 2+): a heavy anchor that escorts a twin; twins near it ignore magnetic fields
-    maxHp: 30, speed: 0.6, color: '#9aa3b5', shieldColor: '#e2e6ee',
+    maxHp: 30, speed: 1.5, color: '#9aa3b5', shieldColor: '#e2e6ee',
     bodyFraction: 0.78, scoreValue: 20, damageToPlayer: 0, damageToRuby: 0,
     attackCooldown: 999, attackRange: 0, bombExplodeRange: 0,
   },
@@ -483,9 +490,14 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
   },
   moon_shade: { // Moon alien: a translucent shadow that always hunts a placed Ruby (you only while you carry it)
-    maxHp: 6, speed: 1.0, color: '#7a5cc8', shieldColor: '#c9b6ff',
+    maxHp: 11, speed: 2, color: '#7a5cc8', shieldColor: '#c9b6ff',
     bodyFraction: 0.75, scoreValue: 15, damageToPlayer: 4, damageToRuby: 6,
-    attackCooldown: 70, attackRange: 1, bombExplodeRange: 0,
+    attackCooldown: 72, attackRange: 1, bombExplodeRange: 0,
+  },
+  moon_hound: { // Moon alien: a fast crystal beast that only hunts you; its bite knocks you back (like Gaia's Ragecap)
+    maxHp: 10, speed: 3, color: '#6fc8ff', shieldColor: '#d6f2ff',
+    bodyFraction: 0.75, scoreValue: 20, damageToPlayer: 4, damageToRuby: 0,
+    attackCooldown: 75, attackRange: 1, bombExplodeRange: 0,
   },
   moon_mimic: { // Moon alien (phase 2+): wanders, then sits still looking exactly like a Queen illusion; never chases or attacks
     maxHp: 5, speed: 0.9, color: '#9a8cd0', shieldColor: '#d8d0ff',
@@ -762,6 +774,11 @@ export function getThornFieldBounds(x: number, y: number, radius = THORN_RADIUS)
   const centerX=Math.round(x/TILE_SIZE)*TILE_SIZE,centerY=Math.round(y/TILE_SIZE)*TILE_SIZE;
   return {x:centerX,y:centerY,left:centerX-radius,top:centerY-radius,right:centerX+radius,bottom:centerY+radius};
 }
+/** Tile membership shared by thorn damage, Sunfire clearing and field rendering. */
+export function thornFieldContainsTile(field:{x:number;y:number;radius?:number;clearedTiles?:number[]},tx:number,ty:number){
+  const bounds=getThornFieldBounds(field.x,field.y,field.radius),x=(tx+.5)*TILE_SIZE,y=(ty+.5)*TILE_SIZE;
+  return x>=bounds.left&&x<bounds.right&&y>=bounds.top&&y<bounds.bottom&&!field.clearedTiles?.includes(ty*MAP_COLS+tx);
+}
 export const THORN_LIFETIME = 840; // 14s, about three simultaneous patches
 export const THORN_MAX_PATCHES = 4;
 export const THORN_POISON_TICKS = 240; // 4s, refreshed but never stacked
@@ -962,39 +979,41 @@ export const SINGULARITY_CHALLENGE = {
   // hand it leaves one per two stacks; a Maw swallows it whole. A copy is full at bodyStacks; only the original carries
   // the phase's maxStacks.
   // mealStacks: stacks each Lost Soul gives; a copy is full at bodyStacks
-  phaseHP: [150, 150, 150], copyHP: [130, 130, 130], stackHP: 25, bodyStacks: 3, mealStacks: 1, maxStacks: [9, 10, 10], gorgeTicks: 180, familyCap: [40, 48, 56], stacksPerCopy: 2, // familyCap: most bodies alive per phase
+  phaseHP: [150, 150, 150], copyHP: [130, 130, 130], stackHP: 25, bodyStacks: 3, mealStacks: 1, maxStacks: [11, 11, 11], gorgeTicks: 180, familyCap: [40, 48, 56], stacksPerCopy: 2, // familyCap: most bodies alive per phase
   // The full burst, within 3 tiles: 20 and a 2-tile shove to you, 10 to a placed Ruby, 30 to other enemies (Lost Souls are spared).
-  burst: { radius: 6, damage: 18, rubyDamage: 7, enemyDamage: 30, knock: 3 },
+  burst: { radius: 6, damage: 12, rubyDamage: 5, enemyDamage: 30, knock: 3 },
   // A body leaving in a random jump (or flung by gas) blasts where it was: smaller than a burst.
   jumpBlast: { radius: 4, damage: 6, rubyDamage: 3, knock: 2 },
   soulKillHeal: 2, // killing a Lost Soul yourself heals you 3 (meteors give nothing)
-  // bodySpeed: bodies walk 65% faster than the normal Devourer.
-  newbornSpeed: 3, bodySpeed: 1.65, weakestGeneration: 2, generationSpeed: .97, generationDamage: .97, generationScale: .98, minimumScale: .7, minimumStats: .6,
-  convergence: { everyTicks: 1680, gatherTicks: 120, bodyTicks: 6, chargeTicks: 0, blastTicks: 180, maxDamage: 30, rubyShare: .5 },
+  // bodySpeed: bodies walk 80% faster than the normal Devourer.
+  newbornSpeed: 3, bodySpeed: 1.8, weakestGeneration: 2, generationSpeed: .97, generationDamage: .97, generationScale: .98, minimumScale: .7, minimumStats: .6,
+  convergence: { everyTicks: 2580, gatherTicks: 120, gatherExtraTicks: 120, bodyTicks: 6, chargeTicks: 0, blastTicks: 180, waveTicks: 45, waveEchoTicks: 4, maxDamage: 45, rubyShare: .5, knock: 5, knockSpeedMult: 2.4,
+    // Damage scales with distance from the gather point: nearMult within nearTiles, easing (quadratic) down to farMult at
+    // farTiles and beyond; the chamber diagonally opposite the gather point always takes farMult.
+    nearMult: 1.5, farMult: .5, nearTiles: 6, farTiles: 40 },
   mealSpeed: 1.4, mealSpeedTicks: 180, // eating refreshes a three-second movement boost; does not stack
   biteDamage: .9, biteFamilyExponent: .65, mealCooldown: 20, mealMaxCooldown: 70, mealPenalty: .35, firstMeal: 12,
   // Bodies hunt nearby food, then the player or Ruby.
   wellPullSpeed: 6,                                  // forced step speed for every pull (Maw and F)
   // Each Maw idles small (mawRadius), warns, then opens wide (mawOpenRadius, faster pulls) on a repeating cycle; the
   // two Maws are half a cycle apart. You are pulled only while a Maw is open.
+  mawEatCooldown: 30, // ticks after a Maw (or the F field) swallows a copy before it can swallow another
   mawCycle: { closed: 960, warn: 90, open: 210 }, mawOpenRadius: 5, mawOpenPulse: 6,
   mawRadius: 2, mawSwellRadius: 5, mawPulse: 14, mawSwellPulse: 6, mawInnerRadius: 2, mawInnerMult: 4, mawInnerHeavyMult: 5, heavyPulseMult: 18 / 14, fullPullMult: 1.35, // a body one stack from full (or bursting) is pulled 35% less often // tiles; ticks between pulls
   playerRadius: 1.5, playerSwellRadius: 5, playerPulse: 100, playerSwellPulse: 30, playerInnerMult: 2, // a resting Maw pulls you only from the tiles around its centre
   horizonDamage: 30, horizonFling: 3, horizonCooldown: 60,
   mawCount: [2, 2, 2], mawMoveTicks: [2100, 2100, 2100], mawPreview: 300,
-  swallowHeal: 6, swallowEnergy: 4, bodySwallowHeal: 8,
+  swallowHeal: 6, swallowEnergy: 4, bodySwallowHeal: 8, bodySwallowBonus: 5, // a swallowed copy heals bodySwallowHeal (scaled by the Feast chain) + bodySwallowBonus
   // Feast: swallowing bodies within feastWindow of each other builds a chain; each heals and energises more (up to feastMax).
   feastWindow: 240, feastStep: .5, feastMax: 4, feastEnergy: 4,
   // Gravity Hook (C): hold to latch the nearest body within hookRange tiles in sight and tow it; release (or after
   // hookMaxTicks) flings it hookFling tiles the way you face. A fling swallows it on reaching a Maw's inner tiles, slams
   // it into another enemy (both stunned, no damage) or a wall. There is no release cooldown. aimCone: the throw bends
   // toward a Maw (preferred) or body within this many degrees of your facing and within reach.
-  hook: { range: 8, maxTicks: 180, cooldown: 0, towGap: 1.6, towSpeed: 7, fling: 7, aimCone: 30, flingSpeed: 11, slamDamage: 0, slamStun: 180, wallDamage: 0, wallStun: 60, endStun: 30 },
+  hook: { range: 8, maxTicks: 180, cooldown: 0, towGap: 1.6, towSpeed: 7, fling: 7, aimCone: 30, flingSpeed: 11, slamDamage: 0, slamStun: 180, wallDamage: 0, wallStun: 60, endStun: 30,
+    soullessImpact: 10 }, // a Soulless (either kind) in a hook slam or thrown into a wall takes this damage; a Lost Soul dies
+  mawSoulless: { every: 60, damage: 10 }, // a Soulless (either kind) on a Maw's centre tile takes damage each every ticks it stays there
   foodRadius: 12,
-  // Gnasher (phase 3): a new copy is one with chance (at most max alive). It walks speed× faster, jumps on everyTicks, and
-  // every biteTicks bites another body within reach tiles (hunting one within seek tiles): with stacks the victim bursts
-  // at once with twice its stacks; with none it splits into two.
-  gnasher: { fromPhase: 3, chance: .25, max: 3, speed: 1.4, everyTicks: [240, 420], biteTicks: 240, reach: 1.5, seek: 8 },
   loneBodyTicks: 1800, // in a phase's first 30s, a lone body (not already bursting) bursts at once with the phase's full stacks
   spreadChance: .6, // a body on or next to another body steps away from it this often instead of following its path
   aggroTicks: 60, // a body you hit ignores food and hunts you for this long (each hit restarts it)
@@ -1012,16 +1031,22 @@ export const SINGULARITY_CHALLENGE = {
   jaw: { firstTicks: 300, everyTicks: [240, 360], everyTicksLate: [240, 360], // same attack frequency in every phase
     warn: 48, snap: 30, radius: 1, damage: 15, knock: 6, knockSpeedMult: 2.4 },
   // Limited food gives the swarm chances to multiply while leaving time to fight and set traps.
-  soulCap: 16, soulStart: 4, soulWarnTicks: 90,
-  soulSpawnTicks: 45, soulWander: 45, soulSpeed: 1.2, soulHP: 1,
+  soulCap: 22, soulStart: 6, soulWarnTicks: 90,
+  soulSpawnTicks: 36, soulWander: 45, soulSpeed: 1.2, soulHP: 1,
   // Soulless: a soulless skeleton that hunts you (ordinary melee chase), announced by a grey sign; one more every everyTicks up
   // to the phase's cap. The swarm never eats it; a Maw or F swallows it like any alien.
-  soulless: { everyTicks: 240, cap: [3, 4, 5], hp: 30, toxicFromPhase: 2, toxicChance: .35, cloudRadius: 2.6, cloudTicks: 480 }, // from phase 2 some are Contaminated Soulless: dying, each leaves a still gas cloud of cloudRadius tiles for cloudTicks
+  // From phase 3 some are Contaminated Soulless: as they walk they leave a trail of still gas puffs (trailRadius tiles,
+  // trailTicks long, fading in and out over trailFade), at most one every trailGap ticks and only on a new tile, and at most
+  // trailMax live puffs each (the oldest goes first). They walk
+  // toxicSpeed times as fast as a Soulless, and a Devourer within touchRadius tiles of one bursts as it does in gas.
+  soulless: { everyTicks: 240, cap: [3, 4, 5], hp: 30, toxicFromPhase: 3, toxicChance: .35, toxicSpeed: 1.4, touchRadius: 1, trailRadius: 1.2, trailTicks: 300, trailFade: 30, trailGap: 20, trailMax: 6 },
   soulFleeRadius: 3, soulFleeSpeed: 2.6, goldenFleeSpeed: 4.2, // goldenFleeSpeed: a Golden Soul runs from you faster // a soul runs from you (not the swarm) within soulFleeRadius tiles
-  // Golden Souls from phase 2: a quarter of new souls; a Devourer that eats one is filled to full stacks at once.
+  // Golden Souls (phase 2+): a quarter of new souls; a Devourer that eats one is filled to full stacks at once.
   goldenFromPhase: 2, goldenChance: .25,
+  // Void Shell (phase 3): some new copies carry a shell that absorbs hp damage. The Gravity Hook cannot catch a shelled copy.
+  shell: { fromPhase: 3, chance: .3, hp: 60 },
   soundGap: 60, eatSoundGap: 150, // eatSoundGap: the swarm eats constantly, so meals play at most every 2.5s // ticks: each repeatable Singularity sound (bites, meals, bursts, swallows, hook hits...) plays at most this often
-  fTicks: 540, // the F Singularity lasts 9s in the challenge (18s elsewhere)
+  fTicks: 360, // the F Singularity lasts 6s in the challenge (18s elsewhere)
   fPullTicks: 10, // the F Singularity pulls every 10 ticks here (15 elsewhere); Devourer bodies on two of every three pulses
 } as const;
 
@@ -1162,24 +1187,35 @@ export const TUTORIAL_STEP_PAUSE = 75; // ticks of "done" feedback before the ne
 export const TRIAL_BOSS_DELAY = 300;        // ticks (5s) before the guardian's arrival warning starts
 export const SPECIAL_RECAST_LOCK = 90; // endless: 1.5s after a cast before F works again, so a skill earned by that cast isn't wasted
 export const TRIAL_SKILL_COOLDOWN = 1200;   // ticks (20s) after casting before the skill returns
-export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2400, splitter_queen: 900, fiery_king: 1620, storm_reaper: 840, devourer: 720 }; // Gaia's Roots: 40s; Lunar Echo: 15s; Solar Flare: 27s; Jupiter Storm: 14s; Singularity: 12s
+export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2100, splitter_queen: 900, fiery_king: 1620, storm_reaper: 540, devourer: 540 }; // Gaia's Roots: 35s; Lunar Echo: 15s; Solar Flare: 27s; Jupiter Storm: 9s; Singularity: 9s
 export function trialSkillCooldown(skill: SpecialSkill) { return TRIAL_SKILL_COOLDOWNS[skill] ?? TRIAL_SKILL_COOLDOWN; }
 
 // Neptune challenge (Sea Chanter): three phases with their own HP (NEPTUNE_PHASE_HPS). Healing can never lift her into a
 // finished phase. Dive points are fractions of the current phase; at each one she dives, drops water clones
 // and stays under until they are all destroyed (HP snaps down to the dive point) or time runs out
 // (each surviving clone restores NEPTUNE_CLONE_HEAL of the phase). Diving at 0 ends the phase; clearing
-// phase 3's final dive leaves her surfaced and exposed, and the next hit kills her.
-export const NEPTUNE_PHASE_HPS: Record<1 | 2 | 3, number> = { 1: 2000, 2: 2400, 3: 3000 }; // phase 2 +20%, phase 3 +50%
+// phase 3's final dive (at 0 HP) defeats her.
+export const NEPTUNE_PHASE_HPS: Record<1 | 2 | 3, number> = { 1: 2000, 2: 2300, 3: 2450 }; // phase 1: three equal dive intervals
 export const NEPTUNE_TOTAL_HP = NEPTUNE_PHASE_HPS[1] + NEPTUNE_PHASE_HPS[2] + NEPTUNE_PHASE_HPS[3];
 // HP left once a phase is emptied (later phases sit below it on the bar), and the top of a phase.
 export function neptunePhaseFloorHP(phase: 1 | 2 | 3) { return phase === 1 ? NEPTUNE_PHASE_HPS[2] + NEPTUNE_PHASE_HPS[3] : phase === 2 ? NEPTUNE_PHASE_HPS[3] : 0; }
 export function neptunePhaseCeilHP(phase: 1 | 2 | 3) { return neptunePhaseFloorHP(phase) + NEPTUNE_PHASE_HPS[phase]; }
-export const NEPTUNE_DIVE_POINTS: Record<1 | 2 | 3, number[]> = { 1: [.75, .5, .25, 0], 2: [.66, .33, 0], 3: [.66, .33, 0] };
-export const NEPTUNE_CLONES: Record<1 | 2 | 3, number> = { 1: 3, 2: 3, 3: 4 };
+export const NEPTUNE_DIVE_POINTS: Record<1 | 2 | 3, number[]> = { 1: [2/3, 1/3, 0], 2: [.66, .33, 0], 3: [.66, .33, 0] };
+export const NEPTUNE_CLONES: Record<1 | 2 | 3, number> = { 1: 3, 2: 3, 3: 3 };
 export const NEPTUNE_DIVE_TICKS: Record<1 | 2 | 3, number> = { 1: 1200, 2: 1200, 3: 960 }; // 20s, 20s, 16s
 export const NEPTUNE_CLONE_HEAL_FX_TICKS = 72;
 export const NEPTUNE_BOSS_SPEED_MULT = 1.07;
+export const NEPTUNE_CLONE_KILL_HEAL = 20;
+export const NEPTUNE_CLONE_CHARGE_HEAL = 5; // effective HP per recipient credited to Chorus
+export const NEPTUNE_CLONE_FLEE_RADIUS = 7;
+export const NEPTUNE_CLONE_FLEE_BURST_MULT = 3;
+export const NEPTUNE_CLONE_FLEE_BURST_TICKS = 60;
+export const NEPTUNE_CLONE_FLEE_BURST_COOLDOWN = 600;
+export const NEPTUNE_MELODY_TAUNT_RADIUS = 7;
+export const NEPTUNE_MELODY_TAUNT_TICKS = 180;
+export const NEPTUNE_MELODY_WATER_BALL_DAMAGE = .85;
+export const NEPTUNE_CLAM = {repositionTicks:3600,openTicks:240,waveTicks:36,radius:11,damage:4,pushTiles:3,slowTicks:180,slow:.55} as const;
+export const NEPTUNE_CORRUPTED_CLAM = {openTicks:300,radius:10,damage:5,pushTiles:5,pushSpeed:1.6,slowTicks:60,slow:.7} as const;
 export const NEPTUNE_CLONE_HEAL = .1;       // share of phase HP per surviving clone
 export const NEPTUNE_CLONE_HEAL_BLOCK = 240; // hitting a clone stops her ally-feeding heal for 4s
 export const NEPTUNE_DIVE_SPEED = 12; // very fast: on this map you hunt her clones, not her
@@ -1187,26 +1223,32 @@ export const NEPTUNE_BOMB_INTERVAL = 360;   // phase 2+: a water ball every 6s w
 export const NEPTUNE_BOMB_FUSE = 180;       // 3s before it bursts
 export const NEPTUNE_BOMB_RADIUS = 4;       // tiles
 export const NEPTUNE_SONG_BONUS = 2;       // her water waves and bursts deal +2 here (to you and Ruby alike)
-export const NEPTUNE_BOMB_DAMAGE = 25;      // to player and Ruby inside the burst
+export const NEPTUNE_BOMB_DAMAGE = 28;      // to player and Ruby inside the burst
 export const NEPTUNE_BOMB_SELF_DAMAGE = .03; // share of phase HP she takes when you pop it first
-export const NEPTUNE_ATTACK_MULT: Record<1 | 2 | 3, number> = { 1: 1, 2: 1.5, 3: 1.5 };
-export const NEPTUNE_LIFESTEAL = 1;         // phase 3: her hits heal her for the damage dealt
-export const NEPTUNE_STRIKE_DAMAGE = .07;   // meteors deal this share of phase HP
-export const NEPTUNE_TRIDENT_DAMAGE: Record<1 | 2 | 3, number> = { 1: .10, 2: .07, 3: .07 }; // share of phase HP
+export const NEPTUNE_ATTACK_MULT: Record<1 | 2 | 3, number> = { 1: 1.1, 2: 1.65, 3: 1.65 };
+export const NEPTUNE_STRIKE_DAMAGE = .10;   // meteors deal this share of phase HP
+export const NEPTUNE_TRIDENT_DAMAGE: Record<1 | 2 | 3, number> = { 1: .10, 2: .10, 3: .10 }; // share of phase HP
 export const NEPTUNE_HEAL_CHARGE_MAX = 120;  // sky laser charge capacity
 export const NEPTUNE_HEAL_CHARGE_RATE = .93; // charge per HP actually healed
+export const NEPTUNE_TIDE_SKILL_HEAL = 65;
+export const NEPTUNE_TIDE_SKILL_CHARGE_HEAL = 40; // effective HP per recipient credited to Chorus
 export const NEPTUNE_LASER_WARNING = 180;   // 3s from choosing a room to the strike
-export const NEPTUNE_FISH_CAP = 12;
-export const NEPTUNE_FISH_RED_CHANCE = .35;
-export const NEPTUNE_FISH_SPAWN_GAP = 120;
-export const NEPTUNE_FISH_HEAL = 8;         // blue fish heal you this much
+export const NEPTUNE_FISH_CAP = 16;
+export function neptuneFishCap(phase:number){return NEPTUNE_FISH_CAP+(phase===3?4:0);}
+export const NEPTUNE_FISH_RED_CHANCE = .25;
+export function neptuneFishRedChance(_phase:number){return NEPTUNE_FISH_RED_CHANCE;}
+export const NEPTUNE_FISH_SPAWN_GAP = 90;
+export const NEPTUNE_FISH_HEAL = 12;        // blue fish heal the player and Ruby while she is surfaced
+// Keep blue-fish Chorus income at 2.6 effective HP per second of uncapped spawning.
+export const NEPTUNE_FISH_CHARGE_SCALE = (2.6/60) / ((1-NEPTUNE_FISH_RED_CHANCE)*NEPTUNE_FISH_HEAL*2/NEPTUNE_FISH_SPAWN_GAP);
+export function neptuneFishChargeScale(phase:number){return NEPTUNE_FISH_CHARGE_SCALE*(phase===3?1-NEPTUNE_FISH_RED_CHANCE:1);}
 export const NEPTUNE_FISH_BOSS_HEAL = .03;  // ...or heal her this share of phase HP if she is diving
-export const NEPTUNE_FISH_HURT = 6;         // red fish cost you this much
+export const NEPTUNE_FISH_HURT = 7;         // red fish cost you this much
 export const NEPTUNE_STINGER_CHANCE = .35;  // share of natural alien spawns replaced by stingers...
-export const NEPTUNE_PUFFER_CHANCE = .2;    // ...and then by pufferfish
-export const NEPTUNE_PUFF_TICKS = 36, NEPTUNE_PUFF_RADIUS = 2.5, NEPTUNE_PUFF_DAMAGE = 7, NEPTUNE_PUFF_KNOCKBACK = 2;
-export const NEPTUNE_POISON_TICKS = 240;    // stinger poison: 2 damage per second for 4s
-export const NEPTUNE_POISON_DAMAGE = 2;
+export const NEPTUNE_PUFFER_CHANCE = .28;   // ...and then by pufferfish (phase 2+ only)
+export const NEPTUNE_PUFF_TICKS = 30, NEPTUNE_PUFF_RADIUS = 3.5, NEPTUNE_PUFF_DAMAGE = 8, NEPTUNE_PUFF_KNOCKBACK = 2;
+export const NEPTUNE_POISON_TICKS = 240;    // stinger poison: 3 damage per second for 4s
+export const NEPTUNE_POISON_DAMAGE = 3;
 export const NEPTUNE_TIDE_TICKS = 600;      // phases 1–2: one 10s tide every 20–30s
 export const NEPTUNE_TIDE_GAP: [number, number] = [1200, 1800];
 export const NEPTUNE_TIDE_ROTATE = 900;     // phase 3: two tides always flowing, moving every 15s
@@ -1223,14 +1265,14 @@ export const NEPTUNE_SHARK_FOLLOWUP_DELAY = 60; // second charge begins 1s after
 export const NEPTUNE_SHARK_TRIPLE_CHANCE = .1; // phase 3: a 10% chance that a shark brings two more, each 1s after the last
 export const NEPTUNE_SHARK_WARNING = 72;    // lane warning before it charges
 export const NEPTUNE_SHARK_SPEED = .5;      // tiles per tick
-export const NEPTUNE_SHARK_DAMAGE = 19.8; // to you and to a placed Ruby
-export const NEPTUNE_CLONE_PHASE3_SPEED = 1.1; // phase 3: water clones swim 10% faster
+export const NEPTUNE_SHARK_DAMAGE = 22; // to you and to a placed Ruby
+export const NEPTUNE_CLONE_PHASE3_SPEED = 1.25; // phase 3: echoes swim 25% faster
 export const NEPTUNE_SHARK_KNOCKBACK = 3;   // tiles you are thrown sideways off its lane
 export const NEPTUNE_SHARK_BOSS_DAMAGE = .05; // share of phase HP when she is caught in its lane
 
 // Moon challenge (Shadow Queen): an illusion fight. She wears her Echo's look and hides among illusions that copy her;
 // just before each jump she shows her true self and is vulnerable. Three phases, all playing the same for now.
-export const MOON_PHASE_HP = 2000;           // per phase; she has three
+export const MOON_PHASE_HP = 1850;           // per phase; she has three
 export const MOON_FIRST_CLONES = 4;          // illusions on her first jump...
 export const MOON_CLONES_PER_JUMP = 2;       // ...and on every jump after
 export const MOON_CLONE_CAPS: Record<1 | 2 | 3, number> = { 1: 6, 2: 8, 3: 8 }; // the oldest fades when a new one would pass this
@@ -1253,32 +1295,33 @@ export const MOON_SHARD_HIT_RADIUS = .45;    // tiles
 export const MOON_STRIKE_DAMAGE = .1;        // meteors deal this share of the phase to her
 export const MOON_MITE_CHANCE = .6;          // share of the regular spawns left after the shade roll that are mirror mites (~53%)
 // Phase 3: this share of regular alien spawns are Blinkers (a kill teleports you), at most MOON_BLINKER_MAX alive; rolled first.
-export const MOON_BLINKER_CHANCE = .15;
-export const MOON_BLINKER_MAX = 2;
-export const MOON_SHADE_CHANCE = .12;        // share of regular alien spawns that are shades (Ruby hunters), rolled first
+export const MOON_BLINKER_CHANCE = .22;
+export const MOON_BLINKER_MAX = 3;
+export const MOON_HOUND = { chance: .16, max: 4, knockback: 2 }; // Crystal Hounds: rolled after shades, at most this many alive; the bite pushes you this many tiles
+export const MOON_SHADE_CHANCE = .16;        // share of regular alien spawns that are shades (Ruby hunters), rolled first
 export const MOON_DARK_SHIFT = 600;          // phase 3: darkness moves every 10s
 export const MOON_DOUBLE_DARK_CHANCE = .35;
 export const MOON_DARK_OVERLAY_TICKS = 24;  // screen haze fades on entering or leaving darkness
 export const MOON_DARK_FADE = 30;            // visual: the dark fades across over 0.5s
 export const MOON_SEEN_TICKS = 45;           // anything hit inside the dark shows itself for 0.75s
-export const MOON_MIMIC_GAP = 360;           // phase 2+: a mimic arrives every 6s on its own timer (never replacing other spawns)...
+export const MOON_MIMIC_GAP = 360;           // every phase: a mimic arrives every 6s on its own timer (never replacing other spawns)...
 export const MOON_MIMIC_CAP = 4;             // ...with at most this many alive
 export const MOON_MIMIC_TRUE_TICKS: [number, number] = [120, 240];   // 2–4s in its own form, then it poses as an illusion for good
 export const MOON_MITE_KILL_HEAL = 10;       // on top of the usual +5 kill heal
 export const MOON_MITE_HINT_TICKS = 300;     // a mite kill shows two rooms on the minimap for 5s: hers and one other
 export const MOON_HIT_HEAL = .3;             // this share of the HP she loses to your attacks heals you when she next jumps
-export const MOON_MIRROR_STRIPS = 3;         // phase 2+: mirror strips per room; walkable, but they bounce your laser and bullets back into you
+export const MOON_MIRROR_STRIPS = 5;         // phase 2+: mirror strips per room; walkable, but they bounce your laser and bullets back into you
 export const MOON_MIRROR_LENGTH = 3;         // tiles per strip
 export const MOON_MIRROR_SHIFT = 1200;       // every 20s the mirrors move to new spots
 export const MOON_MIRROR_FADE = 30;          // visual: old panes fade out, new ones fade in
+export const MOON_SHADE_RUBY_PUSH = 3, MOON_RUBY_PUSH_STEP = 5; // a shade hit shoves a placed Ruby this many tiles away, one tile every this many ticks
 export const MOON_MARK_TICKS = 360;          // C marks the nearest Queen or illusion for 6s; the mark follows her jumps
 export const MOON_MARK_COOLDOWN = 600;       // 10s from each cast
 
 // Gaia challenge (Thorn Weaver): overgrowth fight. Every floor tile has a growth level 0–3 (clean, moss, vines,
 // thicket). Vines slow you and heal her; you clear them with attacks, meteors, Sunfire and Gaia's Roots.
-// Three phases of GAIA_PHASE_HP; phases 1–2 end with a short wither, and phase 3 plays like phase 2 until she dies.
+// Three phases of GAIA_PHASE_HP; reaching a phase floor starts the next phase at once, and phase 3 plays like phase 2 until she dies.
 export const GAIA_PHASE_HP = 3000;
-export const GAIA_WITHER_TICKS = 180;            // 3s between phases
 export const GAIA_SEEK_RANGE = 8;               // when not fleeing she walks to overgrowth this close and lingers there
 export const GAIA_CAST_COOLDOWN = 90;            // aimed fields every 1.5s after one lands (4s elsewhere)
 export const GAIA_THORN_RUBY_DAMAGE = 1;         // a placed Ruby inside his field: 1 every 0.75s...
@@ -1292,7 +1335,7 @@ export const GAIA_MOSS_CHANCE = .08;             // ...moss next to vines -> vin
 export const GAIA_CREEP_CAP = 120;               // at most this many upgrades per creep pass
 export const GAIA_VINE_SLOW = .6, GAIA_THICKET_SLOW = .45;
 export const GAIA_THICKET_DAMAGE = 1;            // per second while standing in thicket
-export const GAIA_VINE_HEAL = .010546875, GAIA_THICKET_HEAL = .02109375; // share of phase HP per second she heals on vines / thicket
+export const GAIA_VINE_HEAL = .0095185546875, GAIA_THICKET_HEAL = .019037109375; // share of phase HP per second she heals on vines / thicket
 export const GAIA_THICKET_ARMOR = .75;           // damage she takes while standing in thicket
 export const GAIA_SCORCH_TICKS = 600;            // scorched tiles cannot regrow for 10s
 export const GAIA_WARD_RADIUS = 2;               // placed Ruby keeps ground clean within this Chebyshev radius
@@ -1304,17 +1347,22 @@ export const GAIA_RING_DAMAGE = 3;               // per second while the ring is
 // it costs you HP, and hits her hard if she is in that chamber.
 export const GAIA_SUN_MAX = 100;
 export const GAIA_SUN_CHARGE_RATE = .8262;        // Sunfire charge per growth level you clear
+export const GAIA_CLEAR_HEAL = .1; // HP you and Ruby each heal per growth level you clear (no cap)
 export const GAIA_POD_CHARGE = 6.885;                // breaking a seed pod adds this much
 export const GAIA_SUN_MIN = 10;                  // smallest charge you can fire
 export const GAIA_SUN_RADIUS: [number, number] = [2, 7]; // partial burst radius in tiles, from minimum to almost full
 export const GAIA_SUN_WARNING = 180;             // full charge: 3s wind-up before the chamber burns
-// Meteors and full Sunfire hit her the same: a share of the current phase, ignoring her armor and thicket.
-// A partial Sunfire deals that share scaled by its charge.
+export const GAIA_SUN_DROP_SOUND_RATE = .68;     // stretches the 2.04s fall cue across the full wind-up
+export const GAIA_SUN_WHOOSH_GAIN = .35;
+// Shares of the current phase, ignoring her armor and thicket.
+// A partial Sunfire scales its own share by its charge.
 export const GAIA_STRIKE_DAMAGE = .1;
+export const GAIA_SUN_DAMAGE = .12;
 export const GAIA_SUN_SELF_DAMAGE = 50;          // full charge burns you and placed Ruby for this if inside the room (dodge it)
 export const GAIA_STONE_COUNT = 8;
-export const GAIA_STONE_HEAL = .015;             // share of player / Ruby max HP per successful Sunstone burn
-export const GAIA_STONE_SELF_DAMAGE = .043;      // a field burned by a Sunstone costs her this share of phase HP
+export const GAIA_STONE_HEAL = .01;              // share of player / Ruby max HP per successful Sunstone burn
+export const GAIA_STONE_SELF_DAMAGE = .0495;     // a field burned by a Sunstone costs her this share of phase HP
+export const GAIA_STONE_BLOOM_TICKS = 36; // contact bloom visual lifetime
 export const GAIA_STONE_TRAVEL = 60, GAIA_STONE_RELIGHT = 60;
 // Phase 3: each aimed cast adds a second field one field-width from you toward your nearest lit Sunstone, and lit
 // stones hop 2 tiles in a random direction every 4s.
@@ -1323,17 +1371,21 @@ export const GAIA_STONE_DRIFT_GAP = 240, GAIA_STONE_DRIFT_TICKS = 20, GAIA_STONE
 export const GAIA_POD_GAP: Record<1 | 2 | 3, number> = { 1: 900, 2: 1080, 3: 1080 };
 export const GAIA_POD_FUSE = 480;                // 8s to burst
 export const GAIA_POD_BURST_RADIUS = 3;
-export const GAIA_BLOSSOM_GAP = 1200, GAIA_BLOSSOM_MAX = 3;
+export const GAIA_BLOSSOM_GAP = 1080, GAIA_BLOSSOM_MAX = 4;
 // Lifeblooms (help): rare in phase 1, more in phase 2, most in phase 3.
 export const GAIA_LIFEBLOOM_GAP: Record<1 | 2 | 3, number> = { 1: 1500, 2: 900, 3: 360 }; // 25s, 15s, 6s
 export const GAIA_LIFEBLOOM_MAX: Record<1 | 2 | 3, number> = { 1: 1, 2: 2, 3: 3 };
-export const GAIA_LIFEBLOOM_HEAL = 20, GAIA_LIFEBLOOM_LIFE = 900;
+export const GAIA_LIFEBLOOM_HEAL = 25, GAIA_LIFEBLOOM_LIFE = 900;
 export const GAIA_BLOSSOM_KILL_HEAL = 15;         // breaking a blossom heals you this much
 export const GAIA_BLOSSOM_SELF_DAMAGE = .08;     // breaking a blossom costs her this share of the phase
-export const GAIA_BLOSSOM_HEAL = .005;           // share of phase HP per second, per blossom
+export const GAIA_BLOSSOM_HEAL = .006;           // share of phase HP per second, per blossom
 export const GAIA_BLOSSOM_SHOT_GAP = 180, GAIA_BLOSSOM_SHOT_RANGE = 7, GAIA_BLOSSOM_SHOT_DAMAGE = 4;
 export const GAIA_POLLEN_SLOW_TICKS = 60, GAIA_POLLEN_SLOW = .7;
-export const GAIA_SNARE_GAP = 330, GAIA_SNARE_WARNING = 60, GAIA_SNARE_DAMAGE = 6, GAIA_SNARE_ROOT = 90;
+// Blossom pulse: an instant wave-like burst that knocks you back, fired only while you are in reach (it waits otherwise).
+export const GAIA_BLOSSOM_PULSE = { gap: 480, firstGap: [180, 420] as [number, number], retry: 30, radius: 6, damage: 3, push: 4, ringTicks: 24 };
+/** Tiles a blossom pulse reaches; it fires only when you stand on one. */
+export function blossomPulseHits(bx: number, by: number, x: number, y: number) { return Math.hypot(bx - x, by - y) <= GAIA_BLOSSOM_PULSE.radius; }
+export const GAIA_SNARE_GAP = 270, GAIA_SNARE_WARNING = 60, GAIA_SNARE_DAMAGE = 6, GAIA_SNARE_ROOT = 90;
 export const GAIA_SPAWN_RATE = .6, GAIA_EXTRA_ENEMIES = 3; // aliens spawn 1.7× as often here, with 3 more allowed at once
 export const GAIA_ALIEN_CHANCE = .5;             // share of natural alien spawns replaced by Gaia aliens: 40% Ragecaps,
                                                  // 30% each sporelings and vine crawlers
@@ -1397,6 +1449,7 @@ export const SPECIAL_PRAYER_DURATION = 360;
 export const SPECIAL_QUEEN_DECOY_HITS = 12;
 
 export const SPECIAL_WEAVER_DURATION = 1800;
+export const GAIA_ROOTS_DURATION = 1500; // Gaia's Roots field lasts 25s in the Gaia challenge (30s elsewhere)
 export const SPECIAL_WEAVER_RADIUS = TILE_SIZE * 6;
 export const SPECIAL_WEAVER_SLOW = .6;
 export const SPECIAL_WEAVER_NORMAL_DAMAGE = 4;

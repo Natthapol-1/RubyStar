@@ -1,9 +1,9 @@
-import { TILE_SIZE, T_WALL, THORN_RADIUS, THORN_WINDUP, THORN_LIFETIME, getThornFieldBounds } from './constants';
+import { TILE_SIZE, T_WALL, THORN_RADIUS, THORN_WINDUP, THORN_LIFETIME, getThornFieldBounds, thornFieldContainsTile } from './constants';
 import type { GameState } from './engine';
 
 export function drawThornGround(ctx: CanvasRenderingContext2D, state: GameState, camX: number, camY: number, tickN: number) {
   ctx.save();
-  const areas = (state.thornPatches ?? []).map(p => ({ x: p.x, y: p.y, ticks: p.ticks, radius: p.radius ?? THORN_RADIUS, warning: false }));
+  const areas:{x:number;y:number;ticks:number;radius:number;warning:boolean;clearedTiles?:number[]}[] = (state.thornPatches ?? []).map(p => ({ x: p.x, y: p.y, ticks: p.ticks, radius: p.radius ?? THORN_RADIUS, warning: false,clearedTiles:p.clearedTiles }));
   for (const e of state.enemies) {
     if (e.type === 'thorn_weaver' && e.hp > 0 && (e.thorn?.windupTicks ?? 0) > 0)
       areas.push({ x: e.thorn!.aimX, y: e.thorn!.aimY, ticks: e.thorn!.windupTicks, radius: THORN_RADIUS, warning: true });
@@ -12,9 +12,10 @@ export function drawThornGround(ctx: CanvasRenderingContext2D, state: GameState,
   }
   for (const rawArea of areas) {
     const bounds=getThornFieldBounds(rawArea.x,rawArea.y,rawArea.radius),area={...rawArea,x:bounds.x,y:bounds.y};
+    const floor=(tx:number,ty:number)=>thornFieldContainsTile(rawArea,tx,ty)&&(state.map[ty]?.[tx]??T_WALL)!==T_WALL;
     ctx.save();ctx.beginPath();
     for(let ty=bounds.top/TILE_SIZE;ty<bounds.bottom/TILE_SIZE;ty++)for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
-      if((state.map[ty]?.[tx]??T_WALL)!==T_WALL)ctx.rect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
+      if(floor(tx,ty))ctx.rect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
     }
     ctx.clip();
     const age = area.warning ? 0 : THORN_LIFETIME - area.ticks;
@@ -26,12 +27,12 @@ export function drawThornGround(ctx: CanvasRenderingContext2D, state: GameState,
     ctx.fillStyle = area.warning ? '#b5bd50' : '#729d3d'; // the defence field shares the normal field's green
     for(let ty=bounds.top/TILE_SIZE;ty<bounds.bottom/TILE_SIZE;ty++){
       for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
-        if((state.map[ty]?.[tx] ?? T_WALL)!==T_WALL)ctx.fillRect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
+        if(floor(tx,ty))ctx.fillRect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
       }
     }
     // One simple thorn sprout per tile, matching the plain overgrowth style: a stem that grows in, then a pale tip.
     for(let ty=bounds.top/TILE_SIZE;!area.warning&&ty<bounds.bottom/TILE_SIZE;ty++)for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
-      if((state.map[ty]?.[tx]??T_WALL)===T_WALL)continue;
+      if(!floor(tx,ty))continue;
       const n=Math.sin(tx*127.1+ty*311.7)*43758.5453,h=n-Math.floor(n);
       const x=tx*TILE_SIZE-camX+12+Math.floor(h*22),y=ty*TILE_SIZE-camY+34,height=Math.round(18*growth);
       ctx.globalAlpha=fade;ctx.fillStyle='#4f8f3c';ctx.fillRect(x-3,y-height,6,height);
@@ -40,7 +41,6 @@ export function drawThornGround(ctx: CanvasRenderingContext2D, state: GameState,
     }
     // One luminous boundary marks the actual walkable hazard tiles.
     ctx.globalAlpha=fade*(area.warning?.6+progress*.3:.45);ctx.strokeStyle=area.warning?'#ffd68b':'#99cf68';ctx.shadowColor=area.warning?'#ffbc65':'#88bc45';ctx.shadowBlur=4;ctx.lineWidth=3;
-    const floor=(tx:number,ty:number)=>tx>=bounds.left/TILE_SIZE&&tx<bounds.right/TILE_SIZE&&ty>=bounds.top/TILE_SIZE&&ty<bounds.bottom/TILE_SIZE&&(state.map[ty]?.[tx]??T_WALL)!==T_WALL;
     ctx.beginPath();
     for(let ty=bounds.top/TILE_SIZE;ty<bounds.bottom/TILE_SIZE;ty++)for(let tx=bounds.left/TILE_SIZE;tx<bounds.right/TILE_SIZE;tx++){
       if(!floor(tx,ty))continue;const x=tx*TILE_SIZE-camX,y=ty*TILE_SIZE-camY;

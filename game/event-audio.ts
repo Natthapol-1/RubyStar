@@ -6,8 +6,8 @@ type Stage = 'warning' | 'active' | 'charge' | 'collect';
 type Layer = readonly [file: string, gain: number, rate: number, seconds: number];
 const cues: Record<AmbientEventKind, Partial<Record<Stage, readonly Layer[]>>> = {
   blackhole: {
-    warning: [['celestial/solar-flare-swoosh.wav', .35, 1, 1.6]],
-    active: [['reverse.mp3', .22, 1, 1.2]],
+    warning: [['celestial/solar-flare-swoosh.wav', .2835, 1, 1.6]],
+    active: [['reverse.mp3', .1782, 1, 1.2]],
   },
   shootingStar: {
     warning: [['light.mp3', .32, 1.25, 1.4]],
@@ -30,6 +30,7 @@ let moonDarknessEntry: HTMLAudioElement | null = null;
 let disconnectMoonDarknessEntry: (() => void) | undefined;
 let jupiterAmbient: HTMLAudioElement | null = null;
 let jupiterCharge: HTMLAudioElement | null = null;
+const toxicGasVoices=new Map<string,HTMLAudioElement>();
 const fadingVoices = new Map<HTMLAudioElement, { gain: number; ticks: number }>();
 type RepeatKind = 'blackhole' | 'eclipse';
 const repeaters: Record<RepeatKind, { voices: Set<HTMLAudioElement>; lastAge: number | null; interval: number; limit: number }> = {
@@ -37,8 +38,10 @@ const repeaters: Record<RepeatKind, { voices: Set<HTMLAudioElement>; lastAge: nu
   eclipse: { voices: new Set(), lastAge: null, interval: 120, limit: 3 },
 };
 let paused = false;
+const sunWarningFilters=new WeakMap<HTMLAudioElement,()=>void>();
 
 function releaseVoice(voice: HTMLAudioElement) {
+  sunWarningFilters.get(voice)?.();sunWarningFilters.delete(voice);
   sunWarnings.heat.delete(voice);sunWarnings.burst.delete(voice);
   if (moonDarknessEntry === voice) {
     moonDarknessEntry = null;
@@ -47,9 +50,25 @@ function releaseVoice(voice: HTMLAudioElement) {
   }
   if (jupiterAmbient === voice) jupiterAmbient = null;
   if (jupiterCharge === voice) jupiterCharge = null;
+  for(const [file,gasVoice]of toxicGasVoices)if(gasVoice===voice)toxicGasVoices.delete(file);
   voice.pause(); voices.delete(voice); fadingVoices.delete(voice);
   for (const repeat of Object.values(repeaters)) repeat.voices.delete(voice);
   voice.onended = voice.ontimeupdate = voice.onerror = voice.onloadedmetadata = null;
+}
+
+/** Sharpen the arena-wide heat alarm without changing its timing or pitch. */
+function sharpenSunHeatWarning(voice:HTMLAudioElement){
+  const ctx=getAudioCtx();if(!ctx||typeof ctx.createMediaElementSource!=='function'||typeof ctx.createBiquadFilter!=='function')return;
+  try{
+    const low=ctx.createBiquadFilter(),presence=ctx.createBiquadFilter(),air=ctx.createBiquadFilter(),limiter=ctx.createDynamicsCompressor();
+    low.type='highpass';low.frequency.value=220;low.Q.value=.7;
+    presence.type='peaking';presence.frequency.value=2800;presence.Q.value=.8;presence.gain.value=5;
+    air.type='highshelf';air.frequency.value=6000;air.gain.value=2;
+    limiter.threshold.value=-5;limiter.knee.value=4;limiter.ratio.value=5;limiter.attack.value=.001;limiter.release.value=.08;
+    const source=ctx.createMediaElementSource(voice);
+    source.connect(low).connect(presence).connect(air).connect(limiter).connect(ctx.destination);
+    sunWarningFilters.set(voice,()=>{source.disconnect();low.disconnect();presence.disconnect();air.disconnect();limiter.disconnect();});
+  }catch{ /* The recording remains available without the optional EQ. */ }
 }
 
 /** Simulation schedules warning repeats; Sunburst is pitched up and overlapping tails have a fixed cap. */
@@ -63,6 +82,7 @@ function playSunWarning(kind: keyof typeof sunWarnings) {
   try {
     const voice=gameAudio('/sounds/sun-heat-warning.mp3','effects');
     voice.volume=1;voice.loop=false;voice.playbackRate=kind==='burst'?1.2:1;voice.preservesPitch=kind!=='burst';
+    if(kind==='heat')sharpenSunHeatWarning(voice);
     group.add(voice);voices.add(voice);
     voice.onended=voice.onerror=()=>releaseVoice(voice);
     voice.play().catch(()=>releaseVoice(voice));
@@ -150,6 +170,23 @@ export function playJupiterChargeSound() {
 
 export function stopJupiterChargeSound() {
   if (jupiterCharge) { const voice = jupiterCharge; releaseVoice(voice); voice.currentTime = 0; }
+}
+
+/** One shared pair of exposure layers, using the ambient pause/cleanup lifecycle. */
+export function syncToxicGasSound(depth:number){
+  if(paused||typeof Audio==='undefined'||(typeof document!=='undefined'&&document.hidden))return;
+  for(const [file,edge,inner,rate]of [['poisoned.wav',.3,.2,.75],['singularity-gas-hiss.mp3',.35,.2,1]] as const){
+    const target=depth>0?edge+Math.min(1,depth)*inner:0;
+    if(target>0&&!toxicGasVoices.has(file)){
+      try{
+        const voice=gameAudio('/sounds/'+file,'effects');voice.volume=0;voice.loop=true;voice.playbackRate=rate;voice.preservesPitch=rate===1;
+        toxicGasVoices.set(file,voice);voices.add(voice);voice.onerror=()=>releaseVoice(voice);voice.play().catch(()=>releaseVoice(voice));
+      }catch{continue;}
+    }
+    const voice=toxicGasVoices.get(file);if(!voice)continue;
+    voice.volume+=Math.max(-.025,Math.min(.025,target-voice.volume));
+    if(target===0&&voice.volume<=.001)releaseVoice(voice);
+  }
 }
 
 export function pauseAmbientEventSounds() {

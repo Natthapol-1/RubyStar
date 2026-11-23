@@ -7,16 +7,100 @@ const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
 function fresh(){const s=e.createModeState('trial','storm_reaper');e.godSpawnBoss(s,'storm_reaper');const boss=j.jupiterBoss(s);near(boss,14,10);s.noMobs=true;s.meteoriteTimer=1e6;return{s,boss};}
 function pursue(s,round=1){s.jupiter.round=round;j.godSetJupiterStage(s,'pursuit');}
 
-test('Jupiter is playable and starts with three equal HP phases and stationary charging',()=>{
+function seededCover(seed,run){const original=Math.random;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};try{return run();}finally{Math.random=original;}}
+const wallCount=s=>s.map.flat().filter(t=>t===c.T_WALL).length;
+function coverRun(){const {s,boss}=fresh();s.immortal=true;near(boss,39,39);j.godSetJupiterPhase(s,2);pursue(s);return {s,boss};}
+function finishShuffle(s){for(let i=0;i<c.JUPITER.coverWarningTicks+c.JUPITER.coverRetractTicks+c.JUPITER.coverRiseTicks;i++)j.updateJupiter(s);}
+function assertRoomsConnected(s){
+ for(let room=0;room<4;room++){
+  const [r1,c1,r2,c2]=c.CHAMBER_BOUNDS[room],[px,py]=c.TELEPORT_PADS[room],seen=new Set([`${px},${py}`]),queue=[[px,py]];
+  for(let i=0;i<queue.length;i++)for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const x=queue[i][0]+dx,y=queue[i][1]+dy,key=`${x},${y}`;
+   if(x<=c1||x>=c2||y<=r1||y>=r2||s.map[y][x]===c.T_WALL||seen.has(key))continue;
+   seen.add(key);queue.push([x,y]);
+  }
+  for(let y=r1+1;y<r2;y++)for(let x=c1+1;x<c2;x++)if(s.map[y][x]!==c.T_WALL)assert.ok(seen.has(`${x},${y}`),`room ${room} floor ${x},${y} remains connected`);
+ }
+}
+
+test('phase 2 pursuit reshuffles substantial sections in all rooms, after a collision-free preview',()=>seededCover(17,()=>{
+ const{s}=fresh();s.jupiter.coverTimer=1;j.updateJupiter(s);assert.equal(s.jupiter.coverShuffle,undefined);
+ j.godSetJupiterPhase(s,2);j.updateJupiter(s);assert.equal(s.jupiter.coverShuffle,undefined);
+ pursue(s);const before=JSON.stringify(s.map),walls=wallCount(s);s.jupiter.coverTimer=1;j.updateJupiter(s);
+ const change=s.jupiter.coverShuffle;assert.equal(change.phase,'warning');assert.equal(JSON.stringify(s.map),before);
+ assert.ok(change.moves.length>=12);assert.ok(change.moves.reduce((sum,m)=>sum+m.from.length,0)>=48);
+ assert.ok(change.moves.every(m=>m.from.length>=3&&m.to.length===m.from.length));
+ assert.deepEqual([...new Set(change.moves.map(m=>c.chamberOfTile(...m.from[0])))].sort(),[0,1,2,3]);
+ for(let i=0;i<c.JUPITER.coverWarningTicks;i++)j.updateJupiter(s);
+ assert.equal(change.phase,'retract');assert.equal(JSON.stringify(s.map),before);
+ for(let i=0;i<c.JUPITER.coverRetractTicks;i++)j.updateJupiter(s);
+ assert.equal(change.phase,'rise');assert.notEqual(JSON.stringify(s.map),before);assert.equal(wallCount(s),walls);assertRoomsConnected(s);
+ for(let i=0;i<c.JUPITER.coverRiseTicks;i++)j.updateJupiter(s);
+ const duration=c.JUPITER.coverWarningTicks+c.JUPITER.coverRetractTicks+c.JUPITER.coverRiseTicks;
+ assert.equal(s.jupiter.coverShuffle,undefined);assert.ok(s.jupiter.coverTimer>=c.JUPITER.coverMinInterval-duration&&s.jupiter.coverTimer<=c.JUPITER.coverMaxInterval-duration);
+}));
+
+test('room reshuffles remain connected, varied and constant in cover across many layouts',()=>seededCover(103,()=>{
+ const{s}=coverRun(),walls=wallCount(s),layouts=new Set();
+ for(let cycle=0;cycle<24;cycle++){
+  s.jupiter.energy=120;s.jupiter.coverTimer=1;j.updateJupiter(s);assert.ok(s.jupiter.coverShuffle);finishShuffle(s);
+  assert.equal(wallCount(s),walls);assertRoomsConnected(s);layouts.add(JSON.stringify(s.map));
+  for(const [x,y]of c.TELEPORT_PADS)assert.equal(s.map[y][x],c.T_TELEPORT);
+  for(const f of s.jupiter.fragments)assert.equal(s.map[f.y][f.x],c.T_FLOOR);
+  for(const [x,y]of c.TELEPORT_PADS.slice(1))assert.ok(e.bfs(s.map,10,10,x,y).length);
+ }
+ assert.ok(layouts.size>=20);
+}));
+
+test('entering a marked area cancels that obstacle without placing a wall on the player',()=>seededCover(47,()=>{
+ const{s}=coverRun();s.jupiter.coverTimer=1;j.updateJupiter(s);
+ const move=s.jupiter.coverShuffle.moves.find(m=>m.to.some(([x,y])=>s.map[y][x]===c.T_FLOOR));
+ const [x,y]=move.to.find(([x,y])=>s.map[y][x]===c.T_FLOOR);player(s,x,y);finishShuffle(s);
+ assert.equal(s.map[y][x],c.T_FLOOR);assert.deepEqual(s.jupiter.coverBlocks.find(b=>b.id===move.id).tiles,move.from);assertRoomsConnected(s);
+}));
+
+test('Surge Cells remain reachable and pickups reset Overdrive during reconfiguration',()=>seededCover(87,()=>{
+ const{s,boss}=coverRun(),q=s.jupiter;q.coverTimer=1;j.updateJupiter(s);
+ const cell=q.fragments[0],hp=boss.hp;player(s,cell.x,cell.y);q.overdriveCharge=c.JUPITER.fragmentChargeTicks;q.fragmentOverdrive=true;q.bossBoost=10;
+ j.updateJupiter(s);close(hp-boss.hp,c.jupiterPhaseHP(q.phase)*c.JUPITER.shardShare);assert.equal(q.fragmentOverdrive,false);assert.equal(q.overdriveCharge,0);assert.equal(q.bossBoost,0);
+ // A relocated cell landing in a marked area also cancels that section.
+ const move=q.coverShuffle.moves.find(m=>m.to.some(([x,y])=>s.map[y][x]===c.T_FLOOR&&Math.hypot(x-s.playerTileX,y-s.playerTileY)>4));
+ const [x,y]=move.to.find(([x,y])=>s.map[y][x]===c.T_FLOOR&&Math.hypot(x-s.playerTileX,y-s.playerTileY)>4);
+ Object.assign(q.fragments[0],{x,y});finishShuffle(s);
+ assert.equal(q.fragments.length,c.JUPITER.fragmentCount);assert.equal(s.map[y][x],c.T_FLOOR);
+ assert.deepEqual(q.coverBlocks.find(b=>b.id===move.id).tiles,move.from);
+ for(const f of q.fragments){assert.equal(s.map[f.y][f.x],c.T_FLOOR);assert.ok(e.bfs(s.map,10,10,f.x,f.y).length);}
+}));
+
+test('reshuffle stages pause, survive JSON run snapshots, and stop outside pursuit',()=>seededCover(91,()=>{
+ const{s}=coverRun();s.jupiter.coverTimer=1;j.updateJupiter(s);
+ for(const phase of ['warning','retract','rise']){
+  while(s.jupiter.coverShuffle.phase!==phase)j.updateJupiter(s);
+  s.gamePhase='teleporting';const before=JSON.stringify(s);j.updateJupiter(s);assert.equal(JSON.stringify(s),before);s.gamePhase='playing';
+ }
+ const saved=JSON.parse(JSON.stringify(s)),walls=wallCount(saved);finishShuffle(saved);assert.equal(wallCount(saved),walls);assertRoomsConnected(saved);
+ j.godSetJupiterStage(saved,'escape');const race=JSON.stringify(saved.map);for(let i=0;i<1000;i++)j.updateJupiter(saved);assert.equal(JSON.stringify(saved.map),race);assert.equal(saved.jupiter.coverShuffle,undefined);
+ for(const stage of ['warning','retract','rise']){
+  const{ s:active }=coverRun();active.jupiter.coverTimer=1;j.updateJupiter(active);while(active.jupiter.coverShuffle.phase!==stage)j.updateJupiter(active);
+  const map=JSON.stringify(active.map);j.clearJupiterEncounter(active);assert.equal(active.jupiter.coverShuffle,undefined);assert.equal(JSON.stringify(active.map),map);
+ }
+}));
+
+test('old sliding-cover snapshots release their departure reservation before reshuffling',()=>{
+ const{s}=coverRun();s.map[12][14]=c.T_WALL;s.map[12][15]=c.T_WALL;s.jupiter.movingCover=[{x:15,y:12,dx:1,dy:0,fromX:14,fromY:12,slideTicks:10}];
+ j.updateJupiter(s);assert.equal(s.map[12][14],c.T_FLOOR);assert.equal(s.map[12][15],c.T_WALL);assert.equal(s.jupiter.movingCover,undefined);
+});
+
+test('Jupiter is playable and starts with three HP phases and stationary charging',()=>{
   assert.equal(require('../game/trials.ts').findTrial('jupiter').ready,true);
-  const{s,boss}=fresh();assert.equal(s.specialSkill,'storm_reaper');assert.equal(boss.hp,c.JUPITER.phaseHP*3);
+  const{s,boss}=fresh();assert.equal(s.specialSkill,'storm_reaper');assert.equal(boss.hp,c.jupiterPhaseCeilHP(1));
   const before=[boss.x,boss.y];for(let i=0;i<c.JUPITER.chargeTicks;i++){j.updateJupiterReaper(s,boss);j.updateJupiter(s);}
   assert.deepEqual([boss.x,boss.y],before);assert.equal(s.jupiter.stage,'pursuit');assert.equal(s.jupiter.energy,100);
   assert.equal(s.jupiter.safeRoom,c.chamberOfTile(s.playerTileX,s.playerTileY));
 });
-test('charge and pursuit take 10% damage; damage drains pursuit energy only; exposed takes full damage',()=>{
-  const{s,boss}=fresh();let hp=boss.hp;e.damageEnemy(s,boss,100);close(hp-boss.hp,10);assert.equal(s.jupiter.energy,0);
-  pursue(s);hp=boss.hp;e.damageEnemy(s,boss,100);close(hp-boss.hp,10);close(s.jupiter.energy,100-10*c.JUPITER.energyPerDamage);
+test('charge and pursuit take 20% damage; damage drains pursuit energy only; exposed takes full damage',()=>{
+  const{s,boss}=fresh();let hp=boss.hp;e.damageEnemy(s,boss,100);close(hp-boss.hp,20);assert.equal(s.jupiter.energy,0);
+  pursue(s);hp=boss.hp;e.damageEnemy(s,boss,100);close(hp-boss.hp,20);close(s.jupiter.energy,100-20*c.JUPITER.energyPerDamage);
   j.godSetJupiterStage(s,'escape');hp=boss.hp;e.damageEnemy(s,boss,100);close(hp-boss.hp,100);
 });
 test('two pursuits alternate energy colours/rounds before exposed escape and restart',()=>{
@@ -25,10 +109,58 @@ test('two pursuits alternate energy colours/rounds before exposed escape and res
   s.jupiter.energy=0;j.updateJupiter(s);assert.equal(s.jupiter.stage,'escape');assert.equal(s.jupiter.safeRoom,-1);
   s.jupiter.shards=[];j.updateJupiter(s);assert.equal(s.jupiter.stage,'charging');assert.equal(s.jupiter.round,1);
 });
+test('an HP phase boundary immediately restarts charging from any part of the loop',()=>{
+ for(const phase of [1,2])for(const stage of ['charging','pursuit','escape']){
+  const{s,boss}=fresh();j.godSetJupiterPhase(s,phase);j.godSetJupiterStage(s,stage);
+  const q=s.jupiter;q.round=2;q.stageTicks=1;q.bossBoost=24;q.fragmentOverdrive=true;q.overdriveCharge=480;
+  q.blast={room:0,ticks:20};boss.shootTicks=14;boss.windupTicks=12;
+  boss.hp=c.jupiterPhaseFloorHP(phase)+1;e.damageEnemy(s,boss,100,'player');
+  assert.equal(q.phase,phase+1);assert.equal(q.stage,'charging');assert.equal(q.round,1);assert.equal(q.stageTicks,300);
+  assert.equal(q.energy,0);assert.equal(q.safeRoom,-1);assert.equal(q.bossBoost,0);assert.equal(q.fragmentOverdrive,false);
+  assert.equal(q.overdriveCharge,0);assert.equal(q.fragments.length,0);assert.equal(q.shards.length,0);assert.equal(q.miniStorms.length,0);
+  assert.equal(q.blast,null);assert.equal(boss.shootTicks,0);assert.equal(boss.windupTicks,0);assert.equal(boss.targetTileX,boss.tileX);
+  assert.equal(s.bossSpawnName,`PHASE ${phase+1}`);
+ }
+});
+test('a phase-ending race pickup discards remaining shards without extra damage or healing',()=>{
+ const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');near(boss,39,39);s.playerHP=50;boss.hp=c.jupiterPhaseFloorHP(1)+1;
+ const q=s.jupiter;q.shards=[{id:1,x:10,y:10},{id:2,x:10,y:10},{id:3,x:39,y:39}];
+ q.shardPlayerX=s.playerX;q.shardPlayerY=s.playerY;q.shardBossX=boss.x;q.shardBossY=boss.y;
+ j.updateJupiter(s);assert.equal(q.phase,2);assert.equal(q.stage,'charging');assert.equal(q.round,1);assert.equal(q.stageTicks,300);
+ close(boss.hp,c.jupiterPhaseFloorHP(1));close(s.playerHP,50+c.JUPITER.shardHeal);assert.equal(q.shards.length,0);
+});
+test('a phase-ending Surge Cell cancels pursuit and its wall preview without relocating another cell',()=>seededCover(77,()=>{
+ const{s,boss}=coverRun(),q=s.jupiter;q.coverTimer=1;j.updateJupiter(s);assert.ok(q.coverShuffle);
+ const f=q.fragments[0];player(s,f.x,f.y);boss.hp=c.jupiterPhaseFloorHP(2)+1;
+ j.updateJupiter(s);assert.equal(q.phase,3);assert.equal(q.stage,'charging');assert.equal(q.stageTicks,300);
+ assert.equal(q.fragments.length,0);assert.equal(q.coverShuffle,undefined);assert.equal(q.miniStorms.length,0);
+}));
+test('phase transitions release an active hallway seal',()=>{
+ const{s,boss}=fresh();player(s,24,10);near(boss,26,10);pursue(s);e.tryReaperHallwaySeal(s,boss);assert.notEqual(s.hallwaySeal,-1);
+ boss.hp=c.jupiterPhaseFloorHP(1)+1;e.damageEnemy(s,boss,100,'player');assert.equal(s.hallwaySeal,-1);assert.equal(s.hallwaySealTicks,0);
+ assert.equal(s.map[10][20],c.T_FLOOR);assert.equal(s.map[10][30],c.T_FLOOR);
+});
+test('old equal-band saved runs preserve their current phase HP percentage',()=>{
+ for(const phase of [1,2,3]){
+  const{s,boss}=fresh();s.jupiter.phase=phase;boss.maxHp=5100;boss.hp=(3-phase)*1700+850;
+  j.normalizeJupiterHealth(s,boss);assert.equal(boss.maxHp,5780);close(boss.hp,c.jupiterPhaseFloorHP(phase)+c.jupiterPhaseHP(phase)*.5);
+  assert.equal(s.jupiter.phase,phase);
+ }
+});
+test('later phases use their larger HP band for skill damage, shard healing and meteors',()=>{
+ for(const phase of [2,3]){
+  const{s,boss}=fresh();s.godMode=true;j.godSetJupiterPhase(s,phase);pursue(s);near(boss,12,10);
+  const hp=boss.hp;e.useSpecialSkill(s);close(hp-boss.hp,2040*.2*c.JUPITER.damageTaken);
+  j.godSetJupiterPhase(s,phase);j.godSetJupiterStage(s,'escape');near(boss,14,10);boss.hp-=100;
+  const injured=boss.hp;s.jupiter.shards=[{id:1,x:14,y:10}];s.jupiter.shardBossX=boss.x;s.jupiter.shardBossY=boss.y;
+  j.updateJupiter(s);close(boss.hp-injured,30.6);
+  j.godSetJupiterPhase(s,phase);const full=boss.hp;s.meteoriteWarning=0;s.meteoriteStrikeIn=1;e.tick(s);close(full-boss.hp,204);
+ }
+});
 test('all three HP phases retain the same loop and only final defeat wins',()=>{
   const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');
   for(const phase of [1,2,3]){j.godSetJupiterPhase(s,phase);j.updateJupiter(s);assert.equal(s.jupiter.phase,phase);assert.equal(s.gamePhase,'playing');}
-  assert.equal(boss.hp,c.JUPITER.phaseHP);j.godSetJupiterStage(s,'escape');e.damageEnemy(s,boss,boss.hp);e.killEnemy(s,s.enemies.indexOf(boss));
+  assert.equal(boss.hp,c.jupiterPhaseHP(3));j.godSetJupiterStage(s,'escape');e.damageEnemy(s,boss,boss.hp);e.killEnemy(s,s.enemies.indexOf(boss));
   assert.equal(s.gamePhase,'won');assert.equal(s.jupiter.safeRoom,-1);assert.equal(s.jupiter.walls.length,0);
 });
 test('storm locks three rooms, provides grace, hurts placed Ruby, and does not follow teleports',()=>{
@@ -76,12 +208,21 @@ test('fence slow is much stronger during the shard rush and he does not attack',
   const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');near(boss,12,10);boss.targetTileX=13;boss.voltSlowTicks=100;
   j.updateJupiterReaper(s,boss);close(boss.stepProgress,c.JUPITER.fleeSpeed*c.JUPITER.exposedWallSlow*c.MOVE_SPEED_MULT);
   assert.ok(c.JUPITER.exposedWallSlow<c.JUPITER.wallSlow/2);
-  near(boss,11,10);boss.pathTimer=0;s.jupiter.shards=s.jupiter.shards.filter(sh=>sh.x!==s.playerTileX||sh.y!==s.playerTileY); // a shard under you would heal you
+  near(boss,11,10);boss.pathTimer=0;boss.path=[];s.jupiter.shardTarget=-1;
+  for(let x=12;x<=15;x++)s.map[10][x]=c.T_FLOOR;
+  s.jupiter.shards=[{id:999,x:15,y:10}]; // fixed reachable goal, away from the player
   const hp=s.playerHP;j.updateJupiterReaper(s,boss);close(s.playerHP,hp);assert.ok(boss.path.length>0);
 });
 test('celestial skill hits for a phase share, protected during pursuit and full during escape',()=>{
   const{s,boss}=fresh();near(boss,12,10);pursue(s);let hp=boss.hp;e.useSpecialSkill(s);close(hp-boss.hp,c.JUPITER.phaseHP*c.JUPITER.celestialShare*c.JUPITER.damageTaken);
   s.specialSkill='storm_reaper';s.specialRecastTicks=0;j.godSetJupiterStage(s,'escape');hp=boss.hp;e.useSpecialSkill(s);close(hp-boss.hp,c.JUPITER.phaseHP*c.JUPITER.celestialShare);
+});
+test('Jupiter Storm recharges after nine seconds of active challenge play',()=>{
+  const{s}=fresh();s.godMode=true;e.useSpecialSkill(s);e.tick(s);
+  assert.equal(s.trial.cooldown,540);assert.equal(s.specialSkill,null);
+  s.gamePhase='teleporting';e.tick(s);assert.equal(s.trial.cooldown,540);s.gamePhase='playing';
+  for(let i=0;i<539;i++)e.tick(s);assert.equal(s.specialSkill,null);
+  e.tick(s);assert.equal(s.specialSkill,'storm_reaper');
 });
 test('pause freezes Jupiter actions and timers; no-boss cleanup and restart remove effects',()=>{
   const{s}=fresh();pursue(s);j.useVoltFence(s);s.gamePhase='teleporting';const before=JSON.stringify(s.jupiter);
@@ -168,7 +309,7 @@ test('Reaper dash commits to a direction and cannot cross cover',()=>{
 test('phase controls summon a missing Reaper and begin a fresh loop in the chosen HP phase',()=>{
   const s=e.createModeState('trial','storm_reaper');e.godSetNoBossSpawns(s,true);
   j.godSetJupiterPhase(s,1);const boss=j.jupiterBoss(s);assert.ok(boss);assert.equal(s.noBossSpawns,false);
-  assert.equal(boss.hp,c.JUPITER.phaseHP*3);assert.equal(s.jupiter.phase,1);assert.equal(s.jupiter.stage,'charging');
+  assert.equal(boss.hp,c.jupiterPhaseCeilHP(1));assert.equal(s.jupiter.phase,1);assert.equal(s.jupiter.stage,'charging');
   pursue(s,2);j.godSetJupiterPhase(s,3);assert.equal(s.jupiter.phase,3);assert.equal(s.jupiter.round,1);assert.equal(s.jupiter.energy,0);assert.equal(s.jupiter.stage,'charging');
 });
 test('pursuit entry flashes/shakes through its real transition state and preserves stronger shake',()=>{
@@ -268,15 +409,15 @@ test('player shard pickup strikes Reaper for 1% phase HP once and creates lightn
  for(let i=0;i<10;i++)j.updateJupiter(s);close(boss.hp,hp-c.JUPITER.phaseHP*.01);assert.equal(s.playerHP,100);
 });
 
-test('Reaper shards heal 1% but never restore a defeated HP phase',()=>{
- const{s,boss}=fresh();j.godSetJupiterPhase(s,2);j.godSetJupiterStage(s,'escape');near(boss,14,10);boss.hp=3500;
+test('Reaper shards heal 1.5% but never restore a defeated HP phase',()=>{
+ const{s,boss}=fresh();j.godSetJupiterPhase(s,2);j.godSetJupiterStage(s,'escape');near(boss,14,10);boss.hp=c.jupiterPhaseCeilHP(2)-100;
  const pickup=()=>{j.godSetJupiterStage(s,'escape');s.jupiter.shards=[{id:1,x:14,y:10}];s.jupiter.shardBossX=boss.x;s.jupiter.shardBossY=boss.y;j.updateJupiter(s);};
- pickup();close(boss.hp,3518);assert.equal(s.jupiter.shardEffects.at(-1).heal,true);
- boss.hp=3595;pickup();close(boss.hp,3600);assert.equal(s.jupiter.phase,2);assert.equal(s.jupiter.shards.length,0);
+ pickup();close(boss.hp,c.jupiterPhaseCeilHP(2)-100+c.jupiterPhaseHP(2)*.015);assert.equal(s.jupiter.shardEffects.at(-1).heal,true);
+ boss.hp=c.jupiterPhaseCeilHP(2)-5;pickup();close(boss.hp,c.jupiterPhaseCeilHP(2));assert.equal(s.jupiter.phase,2);assert.equal(s.jupiter.shards.length,0);
 });
 
 test('simultaneous shard collection has one winner and damage can win the encounter',()=>{
- const{s,boss}=fresh();j.godSetJupiterPhase(s,3);j.godSetJupiterStage(s,'escape');near(boss,10,10);boss.hp=18;
+ const{s,boss}=fresh();j.godSetJupiterPhase(s,3);j.godSetJupiterStage(s,'escape');near(boss,10,10);boss.hp=c.jupiterPhaseHP(3)*c.JUPITER.shardShare;
  s.jupiter.shards=[{id:1,x:10,y:10}];s.jupiter.shardBossX=boss.x;s.jupiter.shardBossY=boss.y;
  j.updateJupiter(s);assert.equal(s.gamePhase,'won');assert.equal(s.enemies.includes(boss),false);assert.equal(s.jupiter.shards.length,0);
 });
@@ -302,15 +443,15 @@ test('dash crossings collect shards but teleportation never sweeps intervening r
  const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');near(boss,39,39);s.jupiter.shards=[{id:1,x:11,y:10}];
  s.jupiter.shardPlayerX=10.5*c.TILE_SIZE;s.jupiter.shardPlayerY=10.5*c.TILE_SIZE;
  s.playerX=12.1*c.TILE_SIZE;s.playerY=10.5*c.TILE_SIZE;
- const hp=boss.hp;j.updateJupiter(s);close(boss.hp,hp-18);assert.equal(s.jupiter.shards.length,0);
+ const hp=boss.hp;j.updateJupiter(s);close(boss.hp,hp-c.JUPITER.phaseHP*c.JUPITER.shardShare);assert.equal(s.jupiter.shards.length,0);
  s.jupiter.shards=[{id:2,x:25,y:10}];s.jupiter.shardPlayerX=10.5*c.TILE_SIZE;s.jupiter.shardPlayerY=10.5*c.TILE_SIZE;
  player(s,39,10);j.updateJupiter(s);assert.equal(s.jupiter.shards.length,1);
 });
 
 test('exposed Reaper actually gathers shards through the normal tick loop without attacking',()=>{
- const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');boss.hp=5200;s.jupiter.shockTiles=[];
+ const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');boss.hp=boss.maxHp-200;const hp=boss.hp;s.jupiter.shockTiles=[];
  for(let i=0;i<220;i++)e.tick(s);
- assert.ok(s.jupiter.shards.length<32);assert.ok(boss.hp>5200);assert.equal(s.playerHP,100);
+ assert.ok(s.jupiter.shards.length<32);assert.ok(boss.hp>hp);assert.equal(s.playerHP,100);
 });
 
 test('shard path skips an unreachable nearby shard and uses a reachable goal',()=>{
@@ -346,10 +487,10 @@ test('full Reaper overdrive reduces Jupiter Storm and Volt Fence slow strength t
  boss.stormSlowUntilTick=s.gameTick+60;close(j.jupiterReaperSpeed(s,boss),normal*(1-(1-c.SPECIAL_REAPER_SLOW)/5));
 });
 
-test('player base speed matches Reaper during Shard Race and returns to normal after it',()=>{
+test('player has a small speed advantage during Shard Race and returns to normal after it',()=>{
  const{s,boss}=fresh();j.godSetJupiterStage(s,'escape');s.jupiter.playerBoost=0;s.jupiter.slowTicks=0;
- close(c.PLAYER_BASE_SPEED*j.jupiterPlayerSpeed(s),j.jupiterReaperSpeed(s,boss));
- s.jupiter.slowTicks=30;close(c.PLAYER_BASE_SPEED*j.jupiterPlayerSpeed(s),c.JUPITER.fleeSpeed*c.JUPITER.shockSlow);
+ close(c.PLAYER_BASE_SPEED*j.jupiterPlayerSpeed(s),c.JUPITER.playerRaceSpeed);close(j.jupiterReaperSpeed(s,boss),8);
+ s.jupiter.slowTicks=30;close(c.PLAYER_BASE_SPEED*j.jupiterPlayerSpeed(s),c.JUPITER.playerRaceSpeed*c.JUPITER.shockSlow);
  s.jupiter.slowTicks=0;j.godSetJupiterStage(s,'charging');close(j.jupiterPlayerSpeed(s),1);
 });
 
@@ -371,9 +512,9 @@ test('second pursuit fills the larger purple bar and charged tiles respect its n
  close(s.jupiter.energy,120-c.JUPITER.energyDrainPerSecond/60);
 });
 
-test('Reaper energy capacity increases by 20% per HP phase and retains the second-pursuit bonus',()=>{
+test('later HP phases gain 10% more energy while phase one and the second-pursuit bonus remain intact',()=>{
  const{s}=fresh();
- for(const [phase,first,second] of [[1,100,120],[2,120,144],[3,140,168]]) {
+ for(const [phase,first,second] of [[1,100,120],[2,139,166],[3,162,194]]) {
   j.godSetJupiterPhase(s,phase);
   assert.equal(j.jupiterMaxEnergy(s.jupiter),first);
   s.jupiter.round=2;
@@ -388,7 +529,7 @@ test('speed skill and teleport boosts are gentler only during Shard Race',()=>{
   else {s.gamePhase='teleporting';s.teleportDestOptions=[1];e.doTeleport(s,1);}
   assert.ok(s.speedActiveTicks>0);
   s.playerTargetX=s.playerTileX+1;s.map[s.playerTileY][s.playerTargetX]=c.T_FLOOR;s.playerStepProgress=0;
-  e.jupiterTest.updatePlayer(s);close(s.playerStepProgress,c.JUPITER.fleeSpeed*c.JUPITER.raceSpeedBoost*c.MOVE_SPEED_MULT);
+  e.jupiterTest.updatePlayer(s);close(s.playerStepProgress,c.JUPITER.playerRaceSpeed*c.JUPITER.raceSpeedBoost*c.MOVE_SPEED_MULT);
  }
  const{s}=fresh();pursue(s);s.speedActiveTicks=100;s.playerTargetX=s.playerTileX+1;s.map[s.playerTileY][s.playerTargetX]=c.T_FLOOR;
  e.jupiterTest.updatePlayer(s);close(s.playerStepProgress,c.PLAYER_BASE_SPEED*c.JUPITER.playerPursuitSpeed*c.SPEED_MULT*c.MOVE_SPEED_MULT);
@@ -401,7 +542,7 @@ test('phase 2 fragments stay in the safe chamber, charge into overdrive without 
  const base=j.jupiterReaperSpeed(s,boss);q.overdriveCharge=c.JUPITER.fragmentChargeTicks-1;q.bossBoost=0;q.boostCooldown=1000;
  j.updateJupiter(s);assert.equal(q.fragmentOverdrive,true);close(j.jupiterReaperSpeed(s,boss),base*c.JUPITER.fragmentBoost);
  const f=q.fragments[0],hp=boss.hp;player(s,f.x,f.y);q.bossBoost=10;j.updateJupiter(s);
- close(hp-boss.hp,c.JUPITER.phaseHP*c.JUPITER.shardShare);assert.equal(q.fragmentOverdrive,false);assert.equal(q.bossBoost,0);assert.equal(q.fragments.length,c.JUPITER.fragmentCount);
+ close(hp-boss.hp,c.jupiterPhaseHP(q.phase)*c.JUPITER.shardShare);assert.equal(q.fragmentOverdrive,false);assert.equal(q.bossBoost,0);assert.equal(q.fragments.length,c.JUPITER.fragmentCount);
  assert.equal(q.overdriveCharge,0);
  const replacement=q.fragments.find(t=>t.id===f.id);assert.ok(replacement);assert.equal(c.chamberOfTile(replacement.x,replacement.y),c.chamberOfTile(f.x,f.y));assert.ok(Math.hypot(replacement.x-f.x,replacement.y-f.y)>=3);
  j.godSetJupiterStage(s,'escape');assert.equal(q.fragments.length,0);assert.equal(q.fragmentOverdrive,false);
@@ -416,6 +557,56 @@ test('phase 1 has no new hazards; phase 3 storms persist into race and chase loc
  j.updateJupiter(s);close(hp-s.playerHP,c.JUPITER.miniStormDamage);
  s.gamePhase='constellation';const snapshot=JSON.stringify(q);j.updateJupiter(s);assert.equal(JSON.stringify(q),snapshot);
  s.gamePhase='playing';j.godSetJupiterStage(s,'charging');assert.equal(q.miniStorms.length,0);
+});
+
+test('only phase 3 movement leaves floor trails during pursuit and Shard Race',()=>{
+ for(const phase of [2,3])for(const stage of ['pursuit','escape']){
+  const{s,boss}=fresh();j.godSetJupiterPhase(s,phase);player(s,39,10);near(boss,11,10);j.godSetJupiterStage(s,stage);
+  for(let x=11;x<=19;x++)s.map[10][x]=c.T_FLOOR;
+  s.jupiter.shards=[{id:1,x:19,y:10}];s.jupiter.shardTarget=-1;s.jupiter.bossBoost=0;
+  for(let i=0;i<50;i++)j.updateJupiterReaper(s,boss);
+  const trail=s.jupiter.reaperTrail??[];
+  if(phase===2)assert.equal(trail.length,0);
+  else {assert.ok(trail.length>=2);assert.equal(new Set(trail.map(t=>`${t.x},${t.y}`)).size,trail.length);assert.ok(trail.every(t=>s.map[t.y][t.x]===c.T_FLOOR&&t.ticks===c.JUPITER.trailTicks));}
+ }
+});
+test('Reaper trail slows on contact, uses the stronger slow, and does no damage or energy refill',()=>{
+ const{s}=fresh();s.godMode=true;j.godSetJupiterPhase(s,3);pursue(s);s.jupiter.shockTiles=[];s.jupiter.miniStormHitCooldown=1e9;
+ player(s,11,10);s.jupiter.reaperTrail=[{x:11,y:10,ticks:60}];
+ const hp=s.playerHP,ruby=s.rubyHP,energy=s.jupiter.energy;j.updateJupiter(s);
+ assert.equal(s.jupiter.trailSlowTicks,c.JUPITER.trailSlowTicks);close(j.jupiterPlayerSpeed(s),c.JUPITER.playerPursuitSpeed*.7);
+ close(s.playerHP,hp);close(s.rubyHP,ruby);close(s.jupiter.energy,energy-c.JUPITER.energyDrainPerSecond/60);
+ s.jupiter.slowTicks=100;close(j.jupiterPlayerSpeed(s),c.JUPITER.playerPursuitSpeed*c.JUPITER.shockSlow);
+ s.jupiter.slowTicks=0;player(s,12,10);for(let i=0;i<c.JUPITER.trailSlowTicks;i++)j.updateJupiter(s);assert.equal(s.jupiter.trailSlowTicks,0);
+ player(s,11,10);s.ccImmuneUntil=s.gameTick+300;j.updateJupiter(s);assert.equal(s.jupiter.trailSlowTicks,0);
+});
+test('Reaper trails expire, pause, survive snapshots and clear on charging or cleanup',()=>{
+ const{s}=fresh();s.godMode=true;j.godSetJupiterPhase(s,3);pursue(s);s.jupiter.shockTiles=[];s.jupiter.miniStormHitCooldown=1e9;
+ s.map[10][11]=c.T_FLOOR;s.jupiter.reaperTrail=[{x:11,y:10,ticks:c.JUPITER.trailTicks}];s.gamePhase='teleporting';
+ const before=JSON.stringify(s.jupiter.reaperTrail);j.updateJupiter(s);assert.equal(JSON.stringify(s.jupiter.reaperTrail),before);
+ s.gamePhase='playing';const saved=JSON.parse(JSON.stringify(s));
+ for(let i=0;i<c.JUPITER.trailTicks;i++)j.updateJupiter(saved);assert.equal(saved.jupiter.reaperTrail.length,0);
+ j.godSetJupiterStage(s,'escape');assert.equal(s.jupiter.reaperTrail.length,1);
+ j.godSetJupiterStage(s,'charging');assert.equal(s.jupiter.reaperTrail.length,0);assert.equal(s.jupiter.trailSlowTicks,0);
+ s.jupiter.reaperTrail=[{x:11,y:10,ticks:60}];s.jupiter.trailSlowTicks=10;j.clearJupiterEncounter(s);
+ assert.equal(s.jupiter.reaperTrail.length,0);assert.equal(s.jupiter.trailSlowTicks,0);
+});
+test('Reaper trail never exceeds 65 tiles and replaces the oldest residue first',()=>{
+ const{s,boss}=fresh();j.godSetJupiterPhase(s,3);pursue(s);player(s,39,10);near(boss,11,10);boss.targetTileX=12;s.map[10][11]=s.map[10][12]=c.T_FLOOR;
+ const trail=[];for(let y=2;y<49&&trail.length<65;y++)for(let x=2;x<49&&trail.length<65;x++)if(s.map[y][x]===c.T_FLOOR&&y!==10)trail.push({x,y,ticks:120+trail.length});
+ const oldest={...trail[0]};s.jupiter.reaperTrail=trail;assert.equal(c.JUPITER.trailMaxTiles,65);
+ j.updateJupiterReaper(s,boss);assert.equal(s.jupiter.reaperTrail.length,65);
+ assert.ok(!s.jupiter.reaperTrail.some(t=>t.x===oldest.x&&t.y===oldest.y));
+ assert.ok(s.jupiter.reaperTrail.some(t=>t.x===11&&t.y===10));
+});
+test('Reaper trails skip pads and cover and stationary bodies do not renew them',()=>{
+ const{s,boss}=fresh();j.godSetJupiterPhase(s,3);pursue(s);player(s,39,10);near(boss,9,10);
+ for(let x=8;x<=14;x++)if(x!==10)s.map[10][x]=c.T_FLOOR;
+ s.map[10][10]=c.T_TELEPORT;s.jupiter.bossBoost=0;
+ for(let i=0;i<40;i++)j.updateJupiterReaper(s,boss);
+ assert.ok((s.jupiter.reaperTrail??[]).length);assert.ok(s.jupiter.reaperTrail.every(t=>s.map[t.y][t.x]===c.T_FLOOR));
+ near(boss,14,10);boss.path=[];boss.pathTimer=100;const before=JSON.stringify(s.jupiter.reaperTrail);j.updateJupiterReaper(s,boss);
+ assert.equal(JSON.stringify(s.jupiter.reaperTrail),before);
 });
 
 test('fence independently clips each side: three open tiles, two beside one wall, one between two walls',()=>{
@@ -465,4 +656,17 @@ test('a meteor always hits the Reaper for 10% of a phase, ignoring his charge an
     if(stage==='pursuit')assert.ok(energy-s.jupiter.energy<c.JUPITER.phaseHP*c.JUPITER.meteorShare*c.JUPITER.damageTaken*c.JUPITER.energyPerDamage+.5,'energy drain stays small: '+(energy-s.jupiter.energy));
     assert.ok(Math.abs(hp-boss.hp-c.JUPITER.phaseHP*c.JUPITER.meteorShare)<1e-6,stage+': '+(hp-boss.hp));
   }
+});
+
+test('fence drawing keeps each clipped end on its valid side, including horizontal fences',()=>{
+ const {createCanvas}=require('@napi-rs/canvas'),art=require('../game/jupiter-art.ts');
+ for(const vertical of [true,false])for(const [negative,positive]of [[72,24],[24,72],[24,24]]){
+  const canvas=createCanvas(220,220),ctx=canvas.getContext('2d');
+  art.drawVoltFence(ctx,100,100,vertical,Math.max(negative,positive),0,1,negative,positive);
+  const alpha=(along)=>ctx.getImageData(vertical?100:100+along,vertical?100+along:100,1,1).data[3];
+  assert.ok(alpha(-negative)>0,'negative emitter is on the unblocked side');
+  assert.ok(alpha(positive)>0,'positive emitter is on the unblocked side');
+  assert.equal(alpha(-negative-16),0,'no fence past the negative endpoint');
+  assert.equal(alpha(positive+16),0,'no fence past the positive endpoint');
+ }
 });

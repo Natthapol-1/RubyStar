@@ -1,5 +1,5 @@
 import { drawChamberCountdown, drawMinimapHazard } from './warning-art';
-import { CHAMBER_BOUNDS, JUPITER, TILE_SIZE, T_WALL, chamberOfTile } from './constants';
+import { CHAMBER_BOUNDS, JUPITER, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile } from './constants';
 import type { GameState } from './engine';
 import { jupiterStormRoom } from './jupiter';
 
@@ -94,6 +94,11 @@ export function drawJupiterBackdrop(ctx: CanvasRenderingContext2D,state:GameStat
   ctx.restore();
 }
 export function drawJupiterTile(ctx:CanvasRenderingContext2D,state:GameState,tx:number,ty:number,x:number,y:number,cover=false) {
+  const change=state.jupiter?.coverShuffle;
+  const animating=cover&&change&&change.phase!=='warning'&&change.moves.some(m=>(change.phase==='retract'?m.from:m.to).some(([bx,by])=>bx===tx&&by===ty));
+  drawJupiterTileBody(ctx,state,tx,ty,x,y,cover&&!animating);
+}
+function drawJupiterTileBody(ctx:CanvasRenderingContext2D,state:GameState,tx:number,ty:number,x:number,y:number,cover=false) {
   const storm=state.jupiter?.stage==='pursuit',ch=chamberOfTile(tx,ty),c=jupiterColors(state)[Math.max(0,ch)];
   ctx.save();
   rect(ctx,x,y,48,48,jupiterTint(state,'#241d25','#0b202b'));
@@ -155,7 +160,6 @@ export function drawJupiterTile(ctx:CanvasRenderingContext2D,state:GameState,tx:
   }
   ctx.restore();
 }
-function drawReaperBeam(ctx:CanvasRenderingContext2D,ax:number,ay:number,bx:number,by:number,width:number,color:string){rect(ctx,Math.min(ax,bx)-width/2,Math.min(ay,by)-width/2,Math.max(width,Math.abs(ax-bx)+width),Math.max(width,Math.abs(ay-by)+width),color);}
 export function drawReaperStrike(ctx: CanvasRenderingContext2D, x: number, y: number, rawAngle: number, remaining: number) {
  // Snap to the nearest right angle: the stepped cut stays axis-aligned instead of a diagonal scribble.
  const angle=Math.round(rawAngle/(Math.PI/2))*(Math.PI/2);
@@ -165,10 +169,7 @@ export function drawReaperStrike(ctx: CanvasRenderingContext2D, x: number, y: nu
  // Twin stepped plasma cuts cross the victim, drawn as axis-aligned pixel beams.
  for(const side of [-1,1]){
   const pts=[[-reach,-.45],[-.45,-.45],[-.45,-.15],[.1,-.15],[.1,.2],[.6,.2],[.6,.45],[1,.45]].map(([u,v],i)=>at(i===0?u:u*reach,v*reach*side));
-  for(const [width,color,alpha] of [[9,'#2fa58c',.55],[6,'#52ffd6',.95],[3,'#e2fff0',1]] as const){
-   ctx.globalAlpha=remaining*alpha;
-   for(let i=1;i<pts.length;i++)drawReaperBeam(ctx,pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1],width,color);
-  }
+  drawReaperPlasma(ctx,pts,remaining);
  }
  // An axis-aligned square shock front and four stepped ion bolts.
  const r=10+age*43;ctx.globalAlpha=remaining*.6;ctx.strokeStyle='#35c9ad';ctx.lineWidth=4;
@@ -176,28 +177,30 @@ export function drawReaperStrike(ctx: CanvasRenderingContext2D, x: number, y: nu
  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
   const inner=12+age*22,tip=inner+12+age*18;
   ctx.globalAlpha=remaining*.85;
-  drawReaperBeam(ctx,x+dx*inner,y+dy*inner,x+dx*(inner+8),y+dy*(inner+8),6,'#52ffd6');
-  drawReaperBeam(ctx,x+dx*(inner+8)-dy*6,y+dy*(inner+8)+dx*6,x+dx*tip-dy*6,y+dy*tip+dx*6,3,'#e2fff0');
+  drawReaperPlasma(ctx,[[x+dx*inner,y+dy*inner],[x+dx*(inner+8),y+dy*(inner+8)],[x+dx*(inner+8)-dy*6,y+dy*(inner+8)+dx*6],[x+dx*tip-dy*6,y+dy*tip+dx*6]],remaining*.85);
  }
  ctx.globalAlpha=Math.max(0,1-age*4)*.65;ctx.fillStyle='#ebfff4';ctx.fillRect(Math.round(x)-11,Math.round(y)-11,22,22);
  ctx.restore();
 }
-function drawReaperPlasma(ctx:CanvasRenderingContext2D,points:number[][],fade:number,palette:readonly string[]=['#2fa58c','#52ffd6','#e2fff0']) {
-  for(const [width,color,alpha]of [[10,palette[0],.55],[6,palette[1],.95],[2,palette[2],1]] as const) {
-    ctx.globalAlpha=fade*alpha;
-    for(let i=1;i<points.length;i++) {
-      const [ax,ay]=points[i-1],[bx,by]=points[i];
-      rect(ctx,Math.min(ax,bx)-width/2,Math.min(ay,by)-width/2,Math.max(width,Math.abs(ax-bx)+width),Math.max(width,Math.abs(ay-by)+width),color);
-    }
+/** Shared Jupiter lightning: a fine bright core inside progressively weaker flat color sheets. */
+export function drawJupiterLightning(ctx:CanvasRenderingContext2D,points:readonly (readonly number[])[],fade:number,palette:readonly string[]=['#2fa58c','#52ffd6','#e2fff0'],scale=1){
+  if(points.length<2||fade<=0)return;
+  ctx.save();ctx.shadowBlur=0;ctx.lineJoin='miter';ctx.lineCap='butt';ctx.beginPath();
+  points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+  for(const [width,alpha]of [[22,.025],[15,.045],[10,.075],[6,.16],[3,.4],[1.35,.95]]){
+    ctx.globalAlpha=Math.min(1,fade)*alpha;ctx.strokeStyle=width===1.35?palette[2]:width>15?palette[0]:palette[1];ctx.lineWidth=width*scale;ctx.stroke();
   }
+  ctx.restore();
 }
+function drawReaperPlasma(ctx:CanvasRenderingContext2D,points:readonly (readonly number[])[],fade:number,palette:readonly string[]=['#2fa58c','#52ffd6','#e2fff0']){drawJupiterLightning(ctx,points,fade,palette);}
+
 export function drawVoltFence(ctx:CanvasRenderingContext2D,x:number,y:number,vertical:boolean,half:number,tick:number,fade=1,negative=half,positive=half) {
-  ctx.save();ctx.translate(Math.round(x),Math.round(y));if(!vertical)ctx.rotate(Math.PI/2);ctx.shadowBlur=0;
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));if(!vertical)ctx.rotate(-Math.PI/2);ctx.shadowBlur=0;
   // Same axis-aligned plasma cuts and layered palette as Reaper's melee lightning.
   const flip=Math.floor(tick/6)%2?1:-1,span=negative+positive;
   const points=[[0,-negative],[0,-negative+span*.16],[-5*flip,-negative+span*.16],[-5*flip,-negative+span*.38],
     [5*flip,-negative+span*.38],[5*flip,-negative+span*.65],[-3*flip,-negative+span*.65],[-3*flip,-negative+span*.84],[0,-negative+span*.84],[0,positive]];
-  drawReaperPlasma(ctx,points,fade);
+  drawJupiterLightning(ctx,points,fade,['#2fa58c','#52ffd6','#e2fff0'],1.3);
   ctx.globalAlpha=fade;
   for(const end of [-negative,positive]) {rect(ctx,-8,end-7,16,14,'#193f43');rect(ctx,-8,end-7,16,3,'#8cffe0');rect(ctx,-3,end-4,6,8,'#e3fff5');}
   ctx.restore();
@@ -219,7 +222,7 @@ function drawVoltFenceCast(ctx:CanvasRenderingContext2D,wall:Readonly<import('./
   }
   ctx.shadowBlur=0;
   // Short current packets shoot from the centre toward the two existing emitters.
-  ctx.save();if(!wall.vertical)ctx.rotate(Math.PI/2);
+  ctx.save();if(!wall.vertical)ctx.rotate(-Math.PI/2);
   for(const side of [-1,1]) {
     const end=side<0?(wall.negative??wall.half):(wall.positive??wall.half);
     const travel=Math.min(1,age/10),head=end*(1-Math.pow(1-travel,3));
@@ -281,7 +284,7 @@ export function drawStormShard(ctx:CanvasRenderingContext2D,x:number,y:number,ti
   ctx.restore();
 }
 
-function drawShardEffects(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number) {
+export function drawShardEffects(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number) {
   for(const effect of state.jupiter?.shardEffects??[]) {
     const age=26-effect.ticks,fade=effect.ticks/26,x=effect.x-camX,y=effect.y-camY,bx=effect.bossX-camX,by=effect.bossY-camY;
     ctx.save();ctx.globalAlpha=fade;
@@ -300,23 +303,86 @@ function drawShardEffects(ctx:CanvasRenderingContext2D,state:GameState,camX:numb
   }
 }
 
+export function drawJupiterCoverShuffle(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number) {
+  const change=state.jupiter?.coverShuffle;if(!change)return;
+  ctx.save();
+  for(const move of change.moves) {
+    const footprint=new Set(move.to.map(([x,y])=>`${x},${y}`));
+    for(const [tx,ty]of move.to) {
+      const x=tx*TILE_SIZE-camX,y=ty*TILE_SIZE-camY;
+      ctx.globalAlpha=.1;rect(ctx,x+2,y+2,44,44,'#8ce8ce');
+      ctx.globalAlpha=.5;ctx.fillStyle='#8ce8ce';
+      if(!footprint.has(`${tx-1},${ty}`))ctx.fillRect(x+1,y+1,2,46);
+      if(!footprint.has(`${tx+1},${ty}`))ctx.fillRect(x+45,y+1,2,46);
+      if(!footprint.has(`${tx},${ty-1}`))ctx.fillRect(x+1,y+1,46,2);
+      if(!footprint.has(`${tx},${ty+1}`))ctx.fillRect(x+1,y+45,46,2);
+    }
+    if(change.phase==='warning')continue;
+    const retract=change.phase==='retract',left=change.ticks/(retract?JUPITER.coverRetractTicks:JUPITER.coverRiseTicks);
+    const progress=retract?left:1-left,scale=Math.max(.02,progress*progress*(3-2*progress));
+    for(const [tx,ty]of retract?move.from:move.to) {
+      ctx.save();ctx.globalAlpha=1;ctx.translate(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY+TILE_SIZE*(1-scale));ctx.scale(1,scale);
+      drawJupiterTileBody(ctx,state,tx,ty,0,0,true);ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+export function drawJupiterTrailTile(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,left:number,neighbors=0,seed=0) {
+  const fade=Math.min(1,left/45);
+  const north=!!(neighbors&1),east=!!(neighbors&2),south=!!(neighbors&4),west=!!(neighbors&8);
+  const leftEdge=west?0:3,top=north?0:3,right=east?48:45,bottom=south?48:45;
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));
+  // Joined residue keeps the floor grid visible; only the outside edge is lit.
+  ctx.globalAlpha=fade*.23;rect(ctx,leftEdge,top,right-leftEdge,bottom-top,'#2fbaa0');
+  ctx.globalAlpha=fade*.11;rect(ctx,west?0:9,north?0:9,east?(west?48:39):(west?39:30),south?(north?48:39):(north?39:30),'#80eed0');
+  ctx.globalAlpha=fade*.6;ctx.fillStyle='#5cd6bd';ctx.shadowColor='#3cc8ab';ctx.shadowBlur=3;
+  if(!north)ctx.fillRect(leftEdge,top,right-leftEdge,2);
+  if(!south)ctx.fillRect(leftEdge,bottom-2,right-leftEdge,2);
+  if(!west)ctx.fillRect(leftEdge,top,2,bottom-top);
+  if(!east)ctx.fillRect(right-2,top,2,bottom-top);
+  ctx.shadowBlur=0;
+  // Sparse little current packets travel along the path without filling every cell.
+  if(seed%3===0){const p=(tick*.6+seed*7)%30;
+    ctx.globalAlpha=fade*.5;
+    if(north||south)rect(ctx,22,8+p,3,7,'#b7f6df');
+    else rect(ctx,8+p,22,7,3,'#b7f6df');
+  }
+  ctx.restore();
+}
+
+export function drawJupiterTrail(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number,tick:number) {
+  const tiles=(state.jupiter?.reaperTrail??[]).filter(t=>state.map[t.y]?.[t.x]===T_FLOOR),occupied=new Set(tiles.map(t=>`${t.x},${t.y}`));
+  for(const t of tiles) {
+    const mask=(occupied.has(`${t.x},${t.y-1}`)?1:0)|(occupied.has(`${t.x+1},${t.y}`)?2:0)|(occupied.has(`${t.x},${t.y+1}`)?4:0)|(occupied.has(`${t.x-1},${t.y}`)?8:0);
+    drawJupiterTrailTile(ctx,t.x*TILE_SIZE-camX,t.y*TILE_SIZE-camY,tick,t.ticks,mask,t.x*13+t.y*7);
+  }
+}
+
+// The original tile imprint and sweep, with simple straight conductor texture.
+export function drawVoltDashTile(ctx:CanvasRenderingContext2D,x:number,y:number,left:number,dx:number,dy:number) {
+  const life=Math.max(0,Math.min(1,left/36));
+  if(!life)return;
+  ctx.save();ctx.beginPath();ctx.rect(x+2,y+2,TILE_SIZE-4,TILE_SIZE-4);ctx.clip();
+  ctx.globalAlpha=life*.2;rect(ctx,x+2,y+2,44,44,'#57e9bf');
+  ctx.globalAlpha=life*.6;ctx.strokeStyle='#8dffe0';ctx.lineWidth=2;ctx.strokeRect(x+5,y+5,38,38);
+  ctx.translate(x+24,y+24);ctx.rotate(Math.atan2(dy,dx));
+  const front=24-(1-life)*70;
+  ctx.globalAlpha=life*.55;rect(ctx,front-9,-22,12,44,'#50cfae');
+  ctx.globalAlpha=life*.85;rect(ctx,front,-22,2,44,'#d5fff0');
+  // Separated straight current strips replace the stair-shaped bolt.
+  drawJupiterLightning(ctx,[[-15,-7],[7,-7]],life*.35,undefined,.65);
+  drawJupiterLightning(ctx,[[-7,1],[16,1]],life*.5,undefined,.8);
+  drawJupiterLightning(ctx,[[-12,9],[5,9]],life*.25,undefined,.55);
+  ctx.restore();
+}
+
 export function drawJupiterGround(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number,tick:number) {
   const j=state.jupiter;if(!j)return;ctx.save();
+  drawJupiterTrail(ctx,state,camX,camY,tick);
+  drawJupiterCoverShuffle(ctx,state,camX,camY);
 
-  // A charged imprint on traversed floor tiles, with a quick directional surface glint.
-  for(const tile of j.dashTiles??[]) {
-    const x=tile.x*TILE_SIZE-camX,y=tile.y*TILE_SIZE-camY,life=tile.ticks/36;
-    ctx.save();ctx.beginPath();ctx.rect(x+2,y+2,TILE_SIZE-4,TILE_SIZE-4);ctx.clip();
-    ctx.globalAlpha=life*.2;rect(ctx,x+2,y+2,44,44,'#57e9bf');
-    ctx.globalAlpha=life*.6;ctx.strokeStyle='#8dffe0';ctx.lineWidth=2;ctx.strokeRect(x+5,y+5,38,38);
-    ctx.translate(x+24,y+24);ctx.rotate(Math.atan2(tile.dy,tile.dx));
-    const front=24-(1-life)*70;
-    ctx.globalAlpha=life*.55;rect(ctx,front-9,-22,12,44,'#50cfae');
-    ctx.globalAlpha=life*.85;rect(ctx,front,-22,2,44,'#d5fff0');
-    // Broad stepped current traces stay distinct from blue charged hazard bolts.
-    drawReaperPlasma(ctx,[[-15,8],[-4,8],[-4,2],[8,2],[8,-7],[16,-7]],life*.4);
-    ctx.restore();
-  }
+  for(const tile of j.dashTiles??[])drawVoltDashTile(ctx,tile.x*TILE_SIZE-camX,tile.y*TILE_SIZE-camY,tile.ticks,tile.dx,tile.dy);
   drawJupiterDischarge(ctx,state,camX,camY,tick);
   for(const fragment of j.fragments??[]) {
     const x=(fragment.x+.5)*TILE_SIZE-camX,y=(fragment.y+.5)*TILE_SIZE-camY;
@@ -409,12 +475,8 @@ export function drawMiniStorm(ctx:CanvasRenderingContext2D,x:number,y:number,tic
   }
   // Thin branching current traverses the whole funnel; its topology changes every three ticks.
   const epoch=Math.floor(tick/3),burst=(tick+id*17)%44;
-  const electricity=(points:number[][],alpha:number)=>{
-    for(const [width,color,opacity]of [[3,'#65d9b7',.48],[1,'#dcfff0',1]] as const){
-      ctx.globalAlpha=alpha*opacity;
-      for(let k=1;k<points.length;k++)drawReaperBeam(ctx,points[k-1][0],points[k-1][1],points[k][0],points[k][1],width,color);
-    }
-  };
+  const electricity=(points:number[][],alpha:number)=>drawJupiterLightning(ctx,points,alpha,['#2c8f7c','#65d9b7','#dcfff0'],.7);
+
   if(burst<24)for(let arc=0;arc<2;arc++) {
     const y0=-27+arc*23,reach=arc?27:40,points:number[][]=[[-reach,y0]];
     for(let step=1;step<=6;step++){
@@ -546,6 +608,14 @@ export function drawJupiterBossEffect(ctx:CanvasRenderingContext2D,state:GameSta
     ctx.fillStyle='#52ffd6';for(let i=4;i>=1;i--){ctx.globalAlpha=.22/i;ctx.fillRect(Math.round(x-(j.bossDashX??1)*i*14-25),Math.round(y-(j.bossDashY??0)*i*14-25),50,50);}
   }
   if(j.bossBoost>0) {
+    const dx=j.bossDashX??1,dy=j.bossDashY??0,age=1-j.bossBoost/JUPITER.boostTicks;
+    ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(dy,dx));
+    for(const side of [-1,1]) {
+      drawReaperPlasma(ctx,[[-100-age*65,side*29],[-60,side*29],[-60,side*40],[-20,side*40],[18,side*32]],(1-age)*.85);
+      ctx.globalAlpha=(1-age)*.8;rect(ctx,-110-age*60,side*49,60,3,'#d5fff1');
+    }
+    ctx.globalAlpha=(1-age)*.8;ctx.strokeStyle='#baffea';ctx.lineWidth=4;ctx.strokeRect(24+age*35,-38,16,76);
+    ctx.restore();
     ctx.globalAlpha=.55;
     ctx.strokeStyle='#d5fff1';ctx.lineWidth=3;ctx.strokeRect(x-42,y-42,84,84);
     for(let i=0;i<3;i++)rect(ctx,x-30+i*22,y+47,12,3,color);
@@ -583,26 +653,12 @@ export function drawJupiterMinimap(ctx:CanvasRenderingContext2D,state:GameState,
 
 export function drawJupiterGuard(ctx:CanvasRenderingContext2D,state:GameState,camX:number,camY:number,tick:number) {
   drawShardEffects(ctx,state,camX,camY);
-  if((state.jupiter?.slowTicks??0)>0) {
-    const x=Math.round(state.playerX-camX),y=Math.round(state.playerY-camY);
-    const fade=Math.min(1,state.jupiter!.slowTicks/12),frame=Math.floor(tick/5);
-    ctx.save();ctx.globalAlpha=fade*.8;
-    ctx.translate(x,y);
-    const pulse=frame%3!==0;
-    for(const side of [-1,1]) {
-      ctx.save();ctx.scale(.5,.5);
-      const xx=side*(state.playerCarryingRuby?48:33),flip=frame%2?1:-1;
-      drawReaperPlasma(ctx,[[xx,-37],[xx,-17],[xx+side*8,-17],[xx+side*8,3],[xx-side*5,3],[xx-side*5,25],[xx+side*6,25],[xx+side*6,42]],fade*(pulse?.95:.45),['#285781','#70bfff','#e3f6ff']);
-      ctx.restore();
-      for(let k=0;k<3;k++){
-        const life=(tick+k*17+side*13)%44,r=20+life*.35,yy=-25+k*19;
-        ctx.globalAlpha=fade*(1-life/44);rect(ctx,side*r-1,yy,3,5,k%2?'#e1f5ff':'#8bcfff');
-      }
-    }
-    // Brief current crossing the shoulder and boots, without obscuring the visor.
-    if(frame%2===0){ctx.globalAlpha=fade*.65;rect(ctx,-13,-19,10,2,'#e1f5ff');rect(ctx,3,18,10,2,'#9dd7ff');}
-    ctx.restore();
+  for(const burst of state.jupiter?.tileBursts??[]) {
+    if(burst.ticks<14)continue;
+    drawJupiterSlowImpact(ctx,state.playerX-camX,state.playerY-camY,(burst.ticks-14)/16);
   }
+  const slowLeft=Math.max(state.jupiter?.slowTicks??0,state.jupiter?.trailSlowTicks??0);
+  if(slowLeft>0)drawJupiterSlowAura(ctx,state.playerX-camX,state.playerY-camY,tick,Math.min(1,slowLeft/12),state.playerCarryingRuby);
   const left=state.jupiter?.guardTicks??0;if(left<=0)return;
   ctx.save();ctx.globalAlpha=Math.min(1,left/8);ctx.strokeStyle='#b8ffe8';ctx.lineWidth=3;ctx.shadowColor='#52ffd6';ctx.shadowBlur=4;
   const shell=(x:number,y:number,r:number)=>{
@@ -612,6 +668,72 @@ export function drawJupiterGuard(ctx:CanvasRenderingContext2D,state:GameState,ca
   shell(state.playerX-camX,state.playerY-camY,state.playerCarryingRuby?34:28);
   if(state.rubyTileX>=0)shell((state.rubyTileX+.5)*TILE_SIZE-camX,(state.rubyTileY+.5)*TILE_SIZE-camY,26);
   ctx.restore();
+}
+
+export function drawJupiterSlowAura(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,fade=1,carrying=false) {
+  const frame=Math.floor(tick/6),r=carrying?25:19,palette=['#245b9f','#54baff','#edfbff'];
+  const seed=Math.imul(frame+17,1597334677)>>>0,choice=(seed^(seed>>>16))>>>0;
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));
+  // Sample a few short contacts, with quiet gaps; stable per simulation frame.
+  if(choice%5!==0) {
+    const side=choice%2?1:-1,top=-r+((choice>>>3)%3)*10;
+    ctx.save();ctx.scale(.7,.7);
+    const sx=side*r/.7,sy=top/.7;
+    drawReaperPlasma(ctx,[[sx,sy],[sx+side*5,sy],[sx+side*5,sy+10],[sx-side*2,sy+10],[sx-side*2,sy+20]],fade*.75,palette);
+    ctx.restore();
+  }
+  if(choice%3===0) {
+    const edge=choice%2?r+2:-r-2,flip=choice%2?1:-1;
+    ctx.save();ctx.scale(.7,.7);
+    drawReaperPlasma(ctx,[[-8*flip,edge/.7],[0,edge/.7],[0,edge/.7+4],[7*flip,edge/.7+4]],fade*.55,palette);
+    ctx.restore();
+  }
+  if(choice%4===0) {
+    const side=(choice>>>12)%2?1:-1;
+    ctx.globalAlpha=fade*.65;rect(ctx,side*(r+9),((choice>>>7)%3-1)*14,2,3,'#a4ddff');
+  }
+  ctx.restore();
+}
+
+export function drawJupiterSlowImpact(ctx:CanvasRenderingContext2D,x:number,y:number,fade:number) {
+  const age=1-Math.max(0,Math.min(1,fade)),reach=19+age*16;
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));
+  // A small floor contact, followed by separated sparks, leaves the suit readable.
+  ctx.globalAlpha=(1-age)*(1-age)*.35;rect(ctx,-18,14,36,7,'#70bfff');
+  for(const side of [-1,1])for(let i=0;i<2;i++) {
+    const sx=side*(reach+i*5),sy=10+i*10+age*(i?10:-12);
+    ctx.globalAlpha=(1-age)*.55;rect(ctx,sx-3,sy-2,7,4,'#419ce8');
+    ctx.globalAlpha=(1-age)*.9;rect(ctx,sx-1,sy-1,3,2,'#e3f6ff');
+  }
+  ctx.restore();
+}
+
+function traceJupiterReleaseFront(ctx:CanvasRenderingContext2D,rx:number,ry:number){
+ctx.beginPath();
+      ctx.moveTo(-rx * .62, -ry);
+      ctx.lineTo(rx * .62, -ry);
+      ctx.lineTo(rx * .62, -ry * .68);
+      ctx.lineTo(rx, -ry * .68);
+      ctx.lineTo(rx, ry * .68);
+      ctx.lineTo(rx * .62, ry * .68);
+      ctx.lineTo(rx * .62, ry);
+      ctx.lineTo(-rx * .62, ry);
+      ctx.lineTo(-rx * .62, ry * .68);
+      ctx.lineTo(-rx, ry * .68);
+      ctx.lineTo(-rx, -ry * .68);
+      ctx.lineTo(-rx * .62, -ry * .68);
+      ctx.closePath();
+}
+
+/** Flat translucent lightning shoulders, kept behind the original bright plasma. */
+function drawStormLightningWake(ctx:CanvasRenderingContext2D,points:number[][],power:number,color:string){
+  const trace=(offset=0)=>{ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x+offset,y):ctx.moveTo(x+offset,y));};
+  trace();ctx.strokeStyle=color;ctx.lineJoin='miter';ctx.lineCap='butt';
+  for(const [width,alpha]of [[40,.012],[28,.02],[16,.03]]){
+    ctx.globalAlpha=power*alpha;ctx.lineWidth=width;ctx.stroke();
+  }
+  for(const side of [-1,1]){trace(side*13);ctx.globalAlpha=power*.025;ctx.lineWidth=7;ctx.stroke();}
+
 }
 
 export function drawJupiterTransition(ctx:CanvasRenderingContext2D,state:GameState,w:number,h:number,tick:number) {
@@ -649,6 +771,15 @@ export function drawJupiterTransition(ctx:CanvasRenderingContext2D,state:GameSta
     const plasma = [j.round === 2 ? '#684ca2' : '#2fa58c', storm, pale];
     ctx.save();
 
+    // Rich storm color sits below the flash, lightning and travelling pressure fronts.
+    const tintIn=Math.min(1,age/6),tintFade=tintIn*tintIn*(3-2*tintIn)*(.5+.5*Math.cos(age/72*Math.PI));
+    ctx.globalAlpha=tintFade*.16;rect(ctx,0,0,w,h,storm);
+    const tint=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.hypot(w,h)*.65);
+    tint.addColorStop(0,j.round===2?'rgba(173,113,243,.28)':'rgba(64,216,174,.28)');
+    tint.addColorStop(.55,j.round===2?'rgba(140,99,208,.12)':'rgba(46,167,151,.12)');
+    tint.addColorStop(1,j.round===2?'rgba(115,76,167,.025)':'rgba(36,130,136,.025)');
+    ctx.globalAlpha=tintFade;ctx.fillStyle=tint;ctx.fillRect(0,0,w,h);
+
     // Release the compressed charge in one bright snap and a series of stepped pressure fronts.
     ctx.globalAlpha = Math.pow(Math.max(0, 1 - age / 14), 2) * .75;
     rect(ctx, 0, 0, w, h, pale);
@@ -659,20 +790,13 @@ export function drawJupiterTransition(ctx:CanvasRenderingContext2D,state:GameSta
       const rx = w * radius, ry = h * radius;
       ctx.save();
       ctx.translate(w / 2, h / 2);
-      ctx.beginPath();
-      ctx.moveTo(-rx * .62, -ry);
-      ctx.lineTo(rx * .62, -ry);
-      ctx.lineTo(rx * .62, -ry * .68);
-      ctx.lineTo(rx, -ry * .68);
-      ctx.lineTo(rx, ry * .68);
-      ctx.lineTo(rx * .62, ry * .68);
-      ctx.lineTo(rx * .62, ry);
-      ctx.lineTo(-rx * .62, ry);
-      ctx.lineTo(-rx * .62, ry * .68);
-      ctx.lineTo(-rx, ry * .68);
-      ctx.lineTo(-rx, -ry * .68);
-      ctx.lineTo(-rx * .62, -ry * .68);
-      ctx.closePath();
+      const tail=Math.min(ry*.35,i?44:76);
+      for(let layer=11;layer>=0;layer--){
+        const u=layer/11,scale=Math.max(.01,(ry-tail*u)/ry);
+        traceJupiterReleaseFront(ctx,rx*scale,ry*scale);
+        ctx.globalAlpha=(1-travel)*(i?.1:.2)*Math.pow(1-u,1.2);ctx.strokeStyle=storm;ctx.lineWidth=tail/11*1.2+.4;ctx.stroke();
+      }
+      traceJupiterReleaseFront(ctx,rx,ry);
       ctx.globalAlpha = (1 - travel) * (i ? .24 : .4);
       ctx.strokeStyle = storm;
       ctx.lineWidth = i ? 24 : 54;
@@ -696,10 +820,24 @@ export function drawJupiterTransition(ctx:CanvasRenderingContext2D,state:GameSta
       ctx.translate(x, 0);
       ctx.scale(2.1, 1);
       ctx.translate(-x, 0);
+      drawStormLightningWake(ctx,points,power,storm);
+      drawStormLightningWake(ctx,[[x + side * 32, h * .32], [x + side * 76, h * .32],
+        [x + side * 76, h * .53], [x + side * 102, h * .53]],power*.63,storm);
       drawReaperPlasma(ctx, points, power, plasma);
       drawReaperPlasma(ctx, [[x + side * 32, h * .32], [x + side * 76, h * .32],
         [x + side * 76, h * .53], [x + side * 102, h * .53]], power * .63, plasma);
       ctx.restore();
+    }
+    // Independent quiet discharges fill the gaps without another bright core.
+    for(let i=0;i<7;i++){
+      const local=age-6-i*4;if(local<0||local>=38)continue;
+      const power=Math.sin(Math.PI*local/38)*.26,x=w*(.07+(i*37%89)/100),y=h*(.14+(i*23%65)/100),side=i%2?-1:1;
+      const height=130+i%3*22;
+      const points=[[x,y],[x,y+height*.32],[x+side*8,y+height*.32],[x+side*8,y+height*.7],[x+side*3,y+height*.7],[x+side*3,y+height]];
+      ctx.save();ctx.translate(x,0);ctx.scale(.5,1);ctx.translate(-x,0);
+      drawStormLightningWake(ctx,points,power,storm);
+      ctx.beginPath();points.forEach(([px,py],k)=>k?ctx.lineTo(px,py):ctx.moveTo(px,py));
+      ctx.globalAlpha=power*.62;ctx.strokeStyle=storm;ctx.lineWidth=3;ctx.stroke();ctx.restore();
     }
     for (let i = 0; i < 44; i++) {
       const side = i % 2 ? -1 : 1, travel = age * (7 + i % 7 * 3);

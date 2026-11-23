@@ -48,13 +48,13 @@ const {chromium}=require('playwright');
    Object.assign(b,{tileX:39,targetTileX:39,tileY:39,targetTileY:39,x:39.5*48,y:39.5*48,stepProgress:0});
    s.jupiter.shardBossX=b.x;s.jupiter.shardBossY=b.y;s.jupiter.shards=[{id:1,x:s.playerTileX,y:s.playerTileY},{id:99,x:10,y:39}];return b.hp;
   });
-  await page.waitForFunction(hp=>{const s=window.__jupiter,b=s.enemies.find(e=>e.id===s.jupiter.bossId);return s.jupiter.shards.length===1&&b.hp===hp-18;},shardHP);
+  await page.waitForFunction(hp=>{const s=window.__jupiter,b=s.enemies.find(e=>e.id===s.jupiter.bossId);return s.jupiter.shards.length===1&&b.hp===hp-17;},shardHP);
   assert.equal(await page.evaluate(()=>window.__jupiter.jupiter.shardEffects.at(-1).heal),false);
   const healHP=await page.evaluate(()=>{
    const s=window.__jupiter,b=s.enemies.find(e=>e.id===s.jupiter.bossId);b.hp-=100;
    s.jupiter.shards=[{id:2,x:b.tileX,y:b.tileY}];return b.hp;
   });
-  await page.waitForFunction(hp=>{const s=window.__jupiter,b=s.enemies.find(e=>e.id===s.jupiter.bossId);return s.jupiter.shards.length===0&&b.hp===hp+18&&s.jupiter.stage==='charging';},healHP);
+  await page.waitForFunction(hp=>{const s=window.__jupiter,b=s.enemies.find(e=>e.id===s.jupiter.bossId);return s.jupiter.shards.length===0&&b.hp===hp+25.5&&s.jupiter.stage==='charging';},healHP);
   assert.equal(await page.evaluate(()=>window.__jupiter.jupiter.shardEffects.at(-1).heal),true);
 
   await page.evaluate(()=>{const s=window.__jupiter,t=s.jupiter.shockTiles[0];t.x=s.playerTileX;t.y=s.playerTileY;t.cooldown=0;s.jupiter.stage='pursuit';s.jupiter.energy=40;});

@@ -396,10 +396,14 @@ test('the God Collide button moves the twins together and crashes them',()=>{
   assert.ok(s.binary.exposed>0&&twins[0].hp+twins[1].hp<before,'and crashed');
 });
 
-test('on Binary Star a revived twin returns with 40% of its life',()=>{
+test('on Binary Star a revived twin returns with 40% of its life, then 25% from its second revival in a phase',()=>{
   const{s,twins}=fresh();kill(s,twins[0]);
   for(let i=0;i<c.TWIN_REVIVE_TICKS;i++){s.playerHP=100;s.rubyHP=100;e.tick(s);}
   assert.equal(twins[0].twin.downedTicks,0);assert.ok(Math.abs(twins[0].hp-twins[0].maxHp*b.BINARY.reviveHpRatio)<1e-6,String(twins[0].hp));
+  kill(s,twins[0]);for(let i=0;i<c.TWIN_REVIVE_TICKS;i++){s.playerHP=100;s.rubyHP=100;e.tick(s);}
+  assert.ok(Math.abs(twins[0].hp-twins[0].maxHp*b.BINARY.lateReviveHpRatio)<1e-6,'second revival in the phase: '+twins[0].hp);
+  s.binary.phase=2;kill(s,twins[0]);for(let i=0;i<c.TWIN_REVIVE_TICKS;i++){s.playerHP=100;s.rubyHP=100;e.tick(s);}
+  assert.ok(Math.abs(twins[0].hp-twins[0].maxHp*b.BINARY.reviveHpRatio)<1e-6,'a new phase starts the count again: '+twins[0].hp);
 });
 
 test('a Lodestone locks a lane, warns, then snaps into you for damage and a knockback',()=>{

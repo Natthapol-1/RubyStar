@@ -324,6 +324,34 @@ export function drawEncounterTelegraphs(ctx: CanvasRenderingContext2D, state: Re
   ctx.restore();
 }
 
+/** Venus overload: flat amber pressure sheets clipped to the affected chamber. */
+function drawCitadelTotemBlast(ctx:CanvasRenderingContext2D,x:number,y:number,left:number,top:number,w:number,h:number,p:number){
+  const fade=.5+.5*Math.cos(p*Math.PI),reach=Math.max(Math.abs(x-left),Math.abs(x-left-w),Math.abs(y-top),Math.abs(y-top-h))*1.42;
+  ctx.shadowBlur=0;ctx.lineJoin='miter';
+  const tint=ctx.createRadialGradient(x,y,0,x,y,reach);
+  tint.addColorStop(0,'rgba(255,182,74,.28)');tint.addColorStop(.5,'rgba(227,150,66,.1)');tint.addColorStop(1,'rgba(227,150,66,0)');
+  ctx.globalAlpha=fade;ctx.fillStyle=tint;ctx.fillRect(left,top,w,h);
+  const trace=(r:number)=>{
+    const points=[[-.68,-1],[.68,-1],[1,-.68],[1,.68],[.68,1],[-.68,1],[-1,.68],[-1,-.68]];
+    ctx.beginPath();points.forEach(([dx,dy],i)=>i?ctx.lineTo(x+dx*r,y+dy*r):ctx.moveTo(x+dx*r,y+dy*r));ctx.closePath();
+  };
+  for(let echo=0;echo<3;echo++){
+    const q=p*1.8-echo*.14;if(q<=0||q>1.3)continue;
+    const r=16+q*reach,strength=fade*(1-echo*.24),tail=Math.min(r*.38,76);
+    for(let sheet=17;sheet>=0;sheet--){
+      const u=sheet/17;trace(r-tail*u);ctx.globalAlpha=strength*.32*Math.pow(1-u,1.2);ctx.strokeStyle=echo===2?'#e3c08a':'#f4b65f';ctx.lineWidth=tail/17+1;ctx.stroke();
+    }
+    trace(r);ctx.globalAlpha=strength*.75;ctx.strokeStyle='#f9bf6b';ctx.lineWidth=18;ctx.stroke();
+    ctx.globalAlpha=strength;ctx.strokeStyle='#fff0c8';ctx.lineWidth=3;ctx.stroke();
+  }
+  for(let i=0;i<48;i++){
+    const a=i*2.39996,d=12+(1-(1-p)*(1-p))*(40+i%7*22),size=3+i%4*2;
+    ctx.save();ctx.translate(x+Math.cos(a)*d,y+Math.sin(a)*d);ctx.rotate(a+p);
+    ctx.globalAlpha=fade*.18;ctx.fillStyle=i%3?'#e3c08a':'#fff0ca';ctx.fillRect(-size*.8,-size*.2,size,size);
+    ctx.globalAlpha=fade*.55;ctx.fillRect(-size/2,-size/2,size,size);ctx.restore();
+  }
+}
+
 export function drawEncounterEffects(ctx: CanvasRenderingContext2D, state: Readonly<GameState>, camX: number, camY: number) {
   ctx.save();
   for (const fx of state.encounterEffects ?? []) {
@@ -339,6 +367,7 @@ export function drawEncounterEffects(ctx: CanvasRenderingContext2D, state: Reado
         const [r1, c1, r2, c2] = CHAMBER_BOUNDS[chamber];
         const left = c1 * TILE_SIZE - camX, top = r1 * TILE_SIZE - camY, w = (c2 - c1 + 1) * TILE_SIZE, h = (r2 - r1 + 1) * TILE_SIZE;
         ctx.save(); ctx.beginPath(); ctx.rect(left + 2, top + 2, w - 4, h - 4); ctx.clip();
+        if(state.venus){drawCitadelTotemBlast(ctx,x,y,left,top,w,h,p);ctx.restore();continue;}
         ctx.globalAlpha = Math.pow(fade, 4) * .5; ctx.fillStyle = '#fff4db'; ctx.fillRect(left, top, w, h);
         const reach = Math.max(Math.abs(x - left), Math.abs(x - left - w), Math.abs(y - top), Math.abs(y - top - h));
         for (let layer = 0; layer < 4; layer++) {

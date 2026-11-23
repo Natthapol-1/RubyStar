@@ -1,5 +1,5 @@
 import { stopSunHeatWarning, stopSunburstWarning } from './event-audio';
-import { ENEMY_CONFIGS, MOVE_SPEED_MULT, SUN, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, CHAMBER_LABELS, chamberOfTile } from './constants';
+import { ENEMY_CONFIGS, MOVE_SPEED_MULT, SUN, TILE_SIZE, T_FLOOR, MAP_COLS, MAP_ROWS, CHAMBER_LABELS, CHAMBER_BOUNDS, chamberOfTile } from './constants';
 import { godPhaseClock, stormSlowMultiplier, bfs, createEncounterEnemy, grantInstantSpeedBoost, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healCore, healPlayer, killEnemy, playAudioOneShot, playCelestialSound, type Enemy, type GameState } from './engine';
 import { playUiSfx } from './ui-sfx';
 
@@ -16,7 +16,7 @@ export interface SunState {
   ripples: { x: number; y: number; ticks: number; empowered: boolean }[];
   burning: { x: number; y: number; ticks: number }[]; // phase 2+: the King's burning trail
   trailPulse: number; kingTile: number; // ticks to the next burn check; the tile he last stood on
-  flare: { room: number; ticks: number } | null; flareTimer: number; // phase 3: the marked room and its countdown
+  flare: { room: number; ticks: number; debug?: boolean } | null; flareTimer: number; // phase 3: the marked room and its countdown
   flareFlash: { room: number; ticks: number; defused: boolean } | null; // visual: the flare going off, or defused
   spitterHits?: {x:number;y:number;ticks:number}[];
   sapperTimer: number; // phase 3: ticks until the next Scorch Sapper
@@ -96,7 +96,7 @@ function quenchBoss(state: GameState) {
   boss.tileX = boss.targetTileX = Math.round(boss.x / TILE_SIZE - .5);
   boss.tileY = boss.targetTileY = Math.round(boss.y / TILE_SIZE - .5);
   boss.x = (boss.tileX + .5) * TILE_SIZE; boss.y = (boss.tileY + .5) * TILE_SIZE; boss.stepProgress = 0;
-  state.bossSpawnName = 'EXTINGUISHED · C ×5'; state.bossSpawnTicks = 180;
+  state.bossSpawnName = 'EXTINGUISHED · PULSE ×5'; state.bossSpawnTicks = 180;
   grantInstantSpeedBoost(state); // a free speed burst to close in for the five waves
   const shaking = state.screenShakeTicks > 0;
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 12);
@@ -116,7 +116,7 @@ export function coolSun(state: GameState, amount: number) {
 
 function ripple(state: GameState, x: number, y: number, empowered: boolean) {
   const sun = state.sun!;
-  sun.ripples.push({ x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE, ticks: 36, empowered });
+  sun.ripples.push({ x: (x + .5) * TILE_SIZE, y: (y + .5) * TILE_SIZE, ticks: SUN.waveVisualTicks, empowered });
   sun.burning = sun.burning.filter(b => Math.hypot(b.x - x, b.y - y) > SUN.waveRadius); // water puts out burning tiles
   if (sun.flare && chamberOfTile(Math.round(x), Math.round(y)) === sun.flare.room) defuseSunFlare(state); // water in a marked room defuses it
   for (const enemy of [...state.enemies]) {
@@ -164,6 +164,7 @@ export function useCoolingWave(state: GameState): boolean {
     sun.empoweredCasts--;
     if (sun.empoweredCasts === 0) sun.quenchedTicks = Math.min(sun.quenchedTicks, SUN.quenchDelayTicks);
   }
+  state.playerCastTicks = 24; state.playerCastKind = 'fiery_king'; state.playerPrimalCast = true;
   sun.waveCooldown = empowered ? SUN.rapidCooldown : SUN.waveCooldown;
   if (empowered) {
     const shaking = state.screenShakeTicks > 0;
@@ -352,7 +353,7 @@ const nextFlareGap = () => SUN.flareGap[0] + Math.floor(Math.random() * (SUN.fla
 function updateSunFlare(state: GameState, boss: Enemy | undefined) {
   const sun = state.sun!;
   if (sun.flareFlash && --sun.flareFlash.ticks <= 0) sun.flareFlash = null;
-  if (!boss || sun.phase < 3) {stopSunburstWarning();return;}
+  if ((!boss || sun.phase < 3) && !sun.flare?.debug) {stopSunburstWarning();return;}
   if (!sun.flare) {
     stopSunburstWarning();
     if (--sun.flareTimer > 0) return;
@@ -401,6 +402,21 @@ export function godSetSunPhase(state: GameState, phase: 1 | 2 | 3) {
   if (phase < 3) {state.sun.flare = null;stopSunburstWarning();}
   state.sun.flareTimer = nextFlareGap();
   state.bossSpawnName = `PHASE ${phase}`; state.bossSpawnTicks = 120;
+}
+
+/** Trigger one normal Sunburst without changing phase or spawning a boss. */
+export function godSunburst(state:GameState){
+  const sun=state.sun;if(!sun||state.gamePhase!=='playing'||sun.quenchedTicks>0)return;
+  let room=chamberOfTile(state.playerTileX,state.playerTileY);
+  if(room<0){
+    let best=Infinity;CHAMBER_BOUNDS.forEach(([r1,c1,r2,c2],i)=>{
+      const d=Math.hypot((c1+c2+1)*TILE_SIZE/2-state.playerX,(r1+r2+1)*TILE_SIZE/2-state.playerY);
+      if(d<best){best=d;room=i;}
+    });
+  }
+  stopSunburstWarning();sun.flare={room,ticks:SUN.flareWarning,debug:true};sun.flareFlash=null;
+  state.bossSpawnName='SUNBURST: '+CHAMBER_LABELS[room];state.bossSpawnTicks=120;
+  playUiSfx('sunburstWarning');playAudioOneShot('/sounds/kingFireSpell.mp3',.7);
 }
 
 export function godSetSunHeat(state: GameState, heat: 0 | 100) {

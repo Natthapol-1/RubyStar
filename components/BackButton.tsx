@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useLoadingRouter as useRouter } from '@/game/NavigationProvider';
 import type { ReactNode } from 'react';
 
 function playClick() {

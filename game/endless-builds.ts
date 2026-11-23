@@ -7,10 +7,10 @@ import { playSFX_wave, damageEnemy, healPlayer, healCore, isFloorTile, playAudio
 export const BLESSING_REVEAL_TICKS = 72;
 export const CELESTIAL_BLESSINGS = {
   stardust: {name:'Stardust',celestial:'Temporary blessing',cut:'brilliant',description:'Grants you and Ruby a small shield periodically. Clear a world to unlock its gemstone.',color:'#b4c2d6'},
-  blind_prayer: { name: 'Amber', celestial: 'Sirius', cut: 'prism', description: 'Gain energy much faster, refresh abilities at full energy, and stay powered 2s longer.', color: '#ffc53d' },
-  frost_warden: { name: 'Diamond', celestial: 'Saturn', cut: 'diamond', description: 'Healing grants shield; harder incoming hits grant more.', color: '#39cde0' },
+  blind_prayer: { name: 'Amber', celestial: 'Sirius', cut: 'amber', description: 'Gain energy much faster, refresh abilities at full energy, and stay powered 2s longer.', color: '#ffc53d' },
+  frost_warden: { name: 'Diamond', celestial: 'Saturn', cut: 'diamond', description: 'Healing grants shield; harder incoming hits grant more.', color: '#75ddec' },
   fiery_king: { name: 'Ruby', celestial: 'Sun', cut: 'cushion', description: 'Stay unharmed to move faster and strike with stronger red attacks. Taking damage removes the buff.', color: '#f52b50' },
-  storm_reaper: { name: 'Emerald', celestial: 'Jupiter', cut: 'emerald', description: 'Attacking builds speed and damage. Your hits stack a slowing charge on enemies.', color: '#1dd5a0' },
+  storm_reaper: { name: 'Emerald', celestial: 'Jupiter', cut: 'emerald', description: 'Attacking builds speed and damage. Your hits stack a slowing charge on enemies.', color: '#00966b' },
   splitter_queen: { name: 'Amethyst', celestial: 'Moon', cut: 'crystal', description: 'Speed bursts leave up to four shooting decoys.', color: '#a56af0' },
   devourer: { name: 'Obsidian', celestial: 'Singularity', cut: 'shard', description: 'Defeated enemies can leave larger gravity fields that pull, damage and slow.', color: '#75618e' },
   astral_twins: { name: 'Opal', celestial: 'Binary Star', cut: 'twin', description: 'Ruby copies your Laser, Wave, bullets or bomb.', color: '#82baff' },

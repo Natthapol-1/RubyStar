@@ -1,13 +1,14 @@
 import { gameAudio, channelVolume } from './audio-settings';
 import {
-  CHAMBER_BOUNDS, ENEMY_CONFIGS, GAIA_BLOSSOM_GAP, GAIA_BLOSSOM_HEAL, GAIA_BLOSSOM_MAX, GAIA_BLOSSOM_SHOT_DAMAGE, GAIA_BLOSSOM_SHOT_GAP,
+  CHAMBER_BOUNDS, ENEMY_CONFIGS, GAIA_BLOSSOM_GAP, GAIA_BLOSSOM_HEAL, GAIA_BLOSSOM_PULSE, blossomPulseHits, GAIA_BLOSSOM_MAX, GAIA_BLOSSOM_SHOT_DAMAGE, GAIA_BLOSSOM_SHOT_GAP,
   GAIA_BLOSSOM_SHOT_RANGE, GAIA_CREEP_CAP, GAIA_CREEP_CHANCE, GAIA_CREEP_GAP, GAIA_LIFEBLOOM_GAP, GAIA_LIFEBLOOM_LIFE, GAIA_LIFEBLOOM_MAX,
   GAIA_MOSS_CHANCE, GAIA_P3_TWIN_OFFSET, GAIA_PHASE_HP, GAIA_POD_BURST_RADIUS, GAIA_POD_FUSE, GAIA_POD_GAP, GAIA_POLLEN_DRIFT_SLOW, GAIA_POLLEN_GAP,
   GAIA_POLLEN_LASER, GAIA_POLLEN_SLOW, GAIA_POLLEN_SLOW_TICKS, GAIA_POLLEN_TICKS, GAIA_RING_DAMAGE, GAIA_RING_RADIUS, GAIA_SCORCH_TICKS,
   GAIA_SPORE_SHOT, GAIA_SEEK_RANGE, GAIA_SNARE_DAMAGE, GAIA_SNARE_GAP, GAIA_SNARE_ROOT, GAIA_SNARE_WARNING, GAIA_SPORE_RADIUS, GAIA_SPORE_SLOW, GAIA_SPORE_TICKS, GAIA_SPORE_DAMAGE, GAIA_SPORE_EVERY, GAIA_SPORE_GROWTH,
-  GAIA_STONE_DRIFT_GAP, GAIA_STONE_DRIFT_STEP, GAIA_STONE_DRIFT_TICKS, GAIA_STONE_RELIGHT, GAIA_STONE_HEAL, GAIA_STONE_SELF_DAMAGE, GAIA_STONE_TRAVEL,
-  GAIA_STRIKE_DAMAGE, GAIA_SUN_CHARGE_RATE, GAIA_SUN_MAX, GAIA_SUN_MIN, GAIA_SUN_RADIUS, GAIA_SUN_SELF_DAMAGE, GAIA_THICKET_ARMOR, GAIA_THICKET_DAMAGE,
-  GAIA_THICKET_HEAL, GAIA_THICKET_SLOW, GAIA_TRAIL_GAP, GAIA_TRAIL_RADIUS, GAIA_VINE_HEAL, GAIA_VINE_SLOW, GAIA_WARD_RADIUS, GAIA_WITHER_TICKS,
+  GAIA_STONE_DRIFT_GAP, GAIA_STONE_DRIFT_STEP, GAIA_STONE_DRIFT_TICKS, GAIA_STONE_RELIGHT, GAIA_STONE_HEAL, GAIA_STONE_SELF_DAMAGE, GAIA_CLEAR_HEAL, GAIA_STONE_TRAVEL, GAIA_STONE_BLOOM_TICKS,
+  GAIA_SUN_DAMAGE, GAIA_SUN_CHARGE_RATE, GAIA_SUN_MAX, GAIA_SUN_MIN, GAIA_SUN_RADIUS, GAIA_SUN_SELF_DAMAGE, GAIA_THICKET_ARMOR, GAIA_THICKET_DAMAGE,
+  GAIA_SUN_DROP_SOUND_RATE, GAIA_SUN_WARNING, GAIA_SUN_WHOOSH_GAIN,
+  GAIA_THICKET_HEAL, GAIA_THICKET_SLOW, GAIA_TRAIL_GAP, GAIA_TRAIL_RADIUS, GAIA_VINE_HEAL, GAIA_VINE_SLOW, GAIA_WARD_RADIUS,
   PLAYER_MAX_HP, RUBY_MAX_HP, MAP_COLS, MAP_ROWS, SPECIAL_WEAVER_RADIUS, THORN_CONTACT_INTERVAL, TILE_SIZE, T_FLOOR, chamberOfTile, getThornFieldBounds, isBossType,
   type EnemyType,
 } from './constants';
@@ -15,7 +16,7 @@ import {
   playUiSfx,
 } from './ui-sfx';
 import { godPhaseClock,
-  ATTACK_SFX_VOLUME, bfs, clearThornHazards, createEncounterEnemy, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, healCore, isFloorTile, killEnemy,
+  ATTACK_SFX_VOLUME, bfs, clearThornHazards, createEncounterEnemy, damageEnemy, damagePlayer, damageRuby, godSpawnBoss, healPlayer, healCore, shovePlayerFromEnemy, isFloorTile, killEnemy,
   playAudioOneShot, playCelestialSound, playSFX_objectBreak, playThornCut, playerCCImmune, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
 import {
@@ -32,6 +33,7 @@ export interface GaiaState {
   scorch: number[]; // ticks before a scorched tile may regrow
   trailTimer: number; creepTimer: number; secondTimer: number;
   sunCharge: number;
+  sunReadyFade?: number; // visual readiness blend, advanced only by the gameplay clock
   sunfire: { chamber: number; ticks: number } | null; // full-charge wind-up on a chamber
   sunImpact: { chamber: number; ticks: number } | null;
   sunBurst: { x: number; y: number; radius: number; ticks: number } | null; // partial-charge burst around you
@@ -44,12 +46,14 @@ export interface GaiaState {
   sporeBursts?: { x: number; y: number; ticks: number }[];
   snareTimer: number; snares: { tileX: number; tileY: number; ticks: number; ruby: boolean }[]; snaredTicks: number;
   rubyRootTicks: number; // visual: roots binding Ruby after a snare hits it
-  wither: number; // >0 between phases
   ringClosure: number; // share of Ruby's ring covered by vines
   rubyThornTimer: number; // ticks until a placed Ruby inside his field is hurt again
   spores: { x: number; y: number; ticks: number }[];
   pollen: { chamber: number; ticks: number } | null; pollenTimer: number;
   phaseBannerTicks: number;
+  blossomPulses?: { x: number; y: number; ticks: number }[]; // expanding rings of released blossom pulses
+  clearHeal?: number; // HP queued from overgrowth you cleared this tick
+  clearHealShown?: boolean; // the clearing heal effect already showed this second
 }
 
 
@@ -62,7 +66,7 @@ export function createGaiaState(state: GameState): GaiaState {
     trailTimer: GAIA_TRAIL_GAP, creepTimer: GAIA_CREEP_GAP, secondTimer: 60,
     sunCharge: 0, sunfire: null, sunImpact: null, sunBurst: null, stones: [], stoneFlashes: [],
     podTimer: GAIA_POD_GAP[1], blossomTimer: GAIA_BLOSSOM_GAP, lifebloomTimer: GAIA_LIFEBLOOM_GAP[1], bolts: [], pollenSlowTicks: 0, sporeSlowTicks: 0,
-    snareTimer: GAIA_SNARE_GAP, snares: [], snaredTicks: 0, rubyRootTicks: 0, wither: 0,
+    snareTimer: GAIA_SNARE_GAP, snares: [], snaredTicks: 0, rubyRootTicks: 0,
     ringClosure: 0, rubyThornTimer: THORN_CONTACT_INTERVAL, spores: [], pollen: null, pollenTimer: GAIA_POLLEN_GAP, phaseBannerTicks: 0,
   };
   state.gaia = gaia;
@@ -116,14 +120,18 @@ function gaiaSet(state: GameState, x: number, y: number, level: number) {
   if (gaia.growth[i] < level && gaiaCanGrow(state, x, y)) gaia.growth[i] = level;
 }
 
-// The player's attacks cut overgrowth back by `amount` levels; each level cut charges Sunfire.
+// The player's attacks cut overgrowth back by `amount` levels; each level cut charges Sunfire and heals you and Ruby a little.
 // Scorching (meteors, Sunfire itself) does not charge it.
 export function gaiaClearTile(state: GameState, x: number, y: number, amount = 1) {
   const gaia = state.gaia; if (!gaia || x < 0 || y < 0 || x >= MAP_COLS || y >= MAP_ROWS) return;
   const i = gaiaIndex(x, y), removed = Math.min(gaia.growth[i], amount);
   if (removed <= 0) return;
   gaia.growth[i] -= removed;
+  gaia.clearHeal = (gaia.clearHeal ?? 0) + removed * GAIA_CLEAR_HEAL;
   if (!gaia.sunfire) addGaiaSunCharge(state, removed * GAIA_SUN_CHARGE_RATE);
+}
+function playBlossomPulse() {
+  try { const a = gameAudio('/sounds/thornCast.wav', 'attack'); a.volume = .45 * ATTACK_SFX_VOLUME; a.play().catch(() => {}); } catch { }
 }
 export function addGaiaSunCharge(state: GameState, amount: number) {
   const gaia = state.gaia!, before = gaia.sunCharge;
@@ -176,17 +184,13 @@ function healGaia(state: GameState, boss: Enemy, amount: number) {
   boss.hp = Math.min(gaiaPhaseCeil(state.gaia!), boss.hp + amount);
   if (boss.hp > before) boss.healFlashTicks = Math.max(boss.healFlashTicks, 12);
 }
-// Damage multiplier on the Weaver herself: withering takes nothing, thicket armors her.
+// Damage multiplier on the Weaver herself: thicket armors her.
 export function gaiaBossDamageMult(state: GameState, e: Enemy) {
   const gaia = state.gaia!;
-  if (gaia.wither > 0) return 0;
   return gaiaLevel(state, e.tileX, e.tileY) >= 3 ? GAIA_THICKET_ARMOR : 1;
 }
 // Meteors and Sunfire: a share of the current phase that ignores her armor and thicket (still never past a phase end).
-// Nothing lands while she is withering between phases.
 export function gaiaStrikeDamage(state: GameState, boss: Enemy, share: number) {
-  const gaia = state.gaia!;
-  if (gaia.wither > 0) return;
   gaiaSelfDamage(state, boss, share);
 }
 // Self-damage from her own mistakes (Sunstones, uprooting) skips her armor.
@@ -222,7 +226,7 @@ function moveGaiaStone(state: GameState, index: number, room?: number) {
 }
 function burnAtStone(state: GameState, boss: Enemy, index: number, share: number) {
   const gaia = state.gaia!, stone = gaia.stones[index];
-  gaia.stoneFlashes.push({ x: stone.x, y: stone.y, toX: boss.tileX, toY: boss.tileY, ticks: 30 });
+  gaia.stoneFlashes.push({ x: stone.x, y: stone.y, toX: boss.tileX, toY: boss.tileY, ticks: GAIA_STONE_BLOOM_TICKS });
   healPlayer(state, PLAYER_MAX_HP * GAIA_STONE_HEAL);
   healCore(state, RUBY_MAX_HP * GAIA_STONE_HEAL);
   gaiaSelfDamage(state, boss, share);
@@ -300,6 +304,9 @@ export function initializeGaiaBoss(state: GameState, boss: Enemy) {
 function spawnGaiaObject(state: GameState, type: EnemyType, x: number, y: number) {
   const object = createEncounterEnemy(state, type, x, y, ENEMY_CONFIGS[type].maxHp);
   object.attackTimer = type === 'blossom' ? GAIA_BLOSSOM_SHOT_GAP : 100000; object.visualSpawnTicks = 20;
+  if (type === 'blossom') { // first pulse at a staggered time so blossoms do not burst together
+    const [lo, hi] = GAIA_BLOSSOM_PULSE.firstGap; object.phaseTimer = lo + Math.floor(Math.random() * (hi - lo));
+  }
   state.enemies.push(object);
   return object;
 }
@@ -344,7 +351,7 @@ export function gaiaSeekPath(state: GameState, e: Enemy): [number, number][] | n
 function advanceGaiaPhase(state: GameState, boss: Enemy) {
   const gaia = state.gaia!;
   gaia.phase = (gaia.phase + 1) as 2 | 3;
-  gaia.podTimer = GAIA_POD_GAP[gaia.phase] || 0; gaia.blossomTimer = GAIA_BLOSSOM_GAP; gaia.snareTimer = GAIA_SNARE_GAP;
+  gaia.podTimer = GAIA_POD_GAP[gaia.phase] || 0; gaia.blossomTimer = 1; gaia.snareTimer = GAIA_SNARE_GAP; // one blossom at once
   boss.hp = Math.min(boss.hp, gaiaPhaseCeil(gaia) - .01); boss.healFlashTicks = 30;
   state.bossSpawnName = `PHASE ${gaia.phase}`; state.bossSpawnColor = ENEMY_CONFIGS.thorn_weaver.color; state.bossSpawnTicks = 150;
   gaia.phaseBannerTicks = 180;
@@ -360,8 +367,8 @@ export function godSetGaiaPhase(state: GameState, phase: 1 | 2 | 3) {
   if (!boss) { godSpawnBoss(state, 'thorn_weaver'); boss = gaiaBoss(state); }
   if (!boss) return;
   state.enemies = state.enemies.filter(e => !isGaiaObject(e.type));
-  gaia.phase = phase; gaia.wither = 0; gaia.snares = [];
-  gaia.podTimer = GAIA_POD_GAP[phase] || 0; gaia.blossomTimer = GAIA_BLOSSOM_GAP; gaia.snareTimer = GAIA_SNARE_GAP;
+  gaia.phase = phase; gaia.snares = [];
+  gaia.podTimer = GAIA_POD_GAP[phase] || 0; gaia.blossomTimer = phase >= 2 ? 1 : GAIA_BLOSSOM_GAP; gaia.snareTimer = GAIA_SNARE_GAP;
   boss.hp = gaiaPhaseCeil(gaia) - .01; boss.healFlashTicks = 30;
   state.bossSpawnName = 'PHASE ' + phase; state.bossSpawnColor = ENEMY_CONFIGS.thorn_weaver.color; state.bossSpawnTicks = 120;
 }
@@ -370,7 +377,7 @@ function updateGaiaGrowth(state: GameState, boss: Enemy | undefined) {
   const gaia = state.gaia!;
   for (let i = 0; i < gaia.scorch.length; i++) if (gaia.scorch[i] > 0) gaia.scorch[i]--;
   // Her trail: tiles around her grow, up to vines.
-  if (boss && gaia.wither === 0 && --gaia.trailTimer <= 0) {
+  if (boss && --gaia.trailTimer <= 0) {
     gaia.trailTimer = GAIA_TRAIL_GAP;
     const radius = GAIA_TRAIL_RADIUS;
     for (let y = boss.tileY - radius; y <= boss.tileY + radius; y++) for (let x = boss.tileX - radius; x <= boss.tileX + radius; x++)
@@ -402,7 +409,7 @@ function updateGaiaRuby(state: GameState, second: boolean) {
 
 function updateGaiaStones(state: GameState) {
   const gaia = state.gaia!;
-  if (gaia.phase === 3 && gaia.wither === 0 && state.gameTick % GAIA_STONE_DRIFT_GAP === 0) driftGaiaStones(state);
+  if (gaia.phase === 3 && state.gameTick % GAIA_STONE_DRIFT_GAP === 0) driftGaiaStones(state);
   for (const stone of gaia.stones) {
     if (stone.slide) stone.slide--;
     if (stone.travel > 0) { stone.travel--; continue; }
@@ -422,7 +429,7 @@ function updateGaiaPlants(state: GameState, boss: Enemy | undefined, second: boo
     state.enemies.splice(state.enemies.indexOf(pod), 1);
     try { const sound = gameAudio('/sounds/place-plant.mp3', 'attack'); sound.volume = .5 * ATTACK_SFX_VOLUME; sound.play().catch(() => {}); } catch { }
   }
-  const active = boss && gaia.wither === 0;
+  const active = !!boss;
   if (active && GAIA_POD_GAP[gaia.phase] && --gaia.podTimer <= 0) {
     gaia.podTimer = GAIA_POD_GAP[gaia.phase];
     const tile = randomFloorTileAwayFromPlayer(state, 5);
@@ -462,8 +469,19 @@ function updateGaiaPlants(state: GameState, boss: Enemy | undefined, second: boo
         blossom.shootTicks = 12;
       }
     }
+    // Pulse: once its timer is up, a wave-like burst fires at once while you are in reach; it hurts a little and pushes you away.
+    const P = GAIA_BLOSSOM_PULSE;
+    if (--blossom.phaseTimer <= 0) {
+      if (blossomPulseHits(blossom.tileX, blossom.tileY, state.playerTileX, state.playerTileY)) {
+        blossom.phaseTimer = P.gap;
+        (gaia.blossomPulses ??= []).push({ x: blossom.x, y: blossom.y, ticks: P.ringTicks });
+        playBlossomPulse(); blossom.shootTicks = 12;
+        damagePlayer(state, P.damage, blossom); shovePlayerFromEnemy(state, blossom, P.push);
+      } else blossom.phaseTimer = P.retry;
+    }
   }
   gaia.bolts = gaia.bolts.filter(b => --b.ticks > 0);
+  if (gaia.blossomPulses) gaia.blossomPulses = gaia.blossomPulses.filter(p => --p.ticks > 0);
   // Help: lifeblooms sprout on random tiles (rare early, more often later); break one to heal you and Ruby. Unbroken ones fade.
   for (const bloom of state.enemies.filter(b => b.type === 'lifebloom' && b.hp > 0)) if (--bloom.windupTicks <= 0) state.enemies.splice(state.enemies.indexOf(bloom), 1);
   if (active && --gaia.lifebloomTimer <= 0) {
@@ -489,16 +507,12 @@ function updateGaiaPlants(state: GameState, boss: Enemy | undefined, second: boo
 function updateGaiaBoss(state: GameState, boss: Enemy, second: boolean) {
   const gaia = state.gaia!;
   boss.hp = Math.min(boss.hp, gaiaPhaseCeil(gaia));
-  // Between phases she withers into the soil, then returns in the next phase.
-  if (gaia.wither > 0) {
-    if (--gaia.wither === 0) advanceGaiaPhase(state, boss);
-    return;
-  }
-  if (gaia.phase < 3 && boss.hp <= gaiaPhaseFloor(gaia) + .02) { // phase 3 simply ends when her HP runs out
-    gaia.wither = GAIA_WITHER_TICKS; gaia.snares = [];
+  // At a phase floor the next phase starts at once (phase 3 simply ends when her HP runs out).
+  if (gaia.phase < 3 && boss.hp <= gaiaPhaseFloor(gaia) + .02) {
+    gaia.snares = [];
     for (const plant of state.enemies.filter(e => e.type === 'blossom')) killEnemy(state, state.enemies.indexOf(plant));
     clearThornHazards(state);
-    playCelestialSound('empty');
+    advanceGaiaPhase(state, boss);
     return;
   }
   // Healing from overgrowth under her.
@@ -508,20 +522,34 @@ function updateGaiaBoss(state: GameState, boss: Enemy, second: boolean) {
   }
 }
 
+/** Clear only the covered, active thorn tiles; preserve the remainder of each field. */
+function burnSunfireThorns(state:GameState,covered:(x:number,y:number)=>boolean){
+  state.thornPatches=(state.thornPatches??[]).filter(patch=>{
+    const bounds=getThornFieldBounds(patch.x,patch.y,patch.radius),cleared=new Set(patch.clearedTiles??[]);let remaining=0;
+    for(let y=bounds.top/TILE_SIZE;y<bounds.bottom/TILE_SIZE;y++)for(let x=bounds.left/TILE_SIZE;x<bounds.right/TILE_SIZE;x++){
+      if(state.map[y]?.[x]===undefined||!isFloorTile(state.map,x,y))continue;
+      const key=y*MAP_COLS+x;if(covered(x,y))cleared.add(key);if(!cleared.has(key))remaining++;
+    }
+    if(cleared.size)patch.clearedTiles=[...cleared];return remaining>0;
+  });
+}
+
 // Sunfire at full charge: after its wind-up it burns the whole chamber. You and Ruby are burned if still inside;
 // she takes a big share of the phase if she is there, and her plants and aliens in the chamber burn.
 function gaiaSunStrike(state: GameState, chamber: number) {
   const gaia = state.gaia!;
   gaia.sunImpact = { chamber, ticks: 120 };
   gaiaScorchRoom(state, chamber);
-  // Like the Trident it can be dodged: only you and Ruby inside the burning room are hurt.
+  const [r1,c1,r2,c2]=CHAMBER_BOUNDS[chamber];
+  burnSunfireThorns(state,(x,y)=>x>=c1&&x<=c2&&y>=r1&&y<=r2);
+  // Like the Ocean’s Chorus it can be dodged: only you and Ruby inside the burning room are hurt.
   if (chamberOfTile(state.playerTileX, state.playerTileY) === chamber) damagePlayer(state, GAIA_SUN_SELF_DAMAGE);
   if (state.rubyTileX !== -1 && chamberOfTile(state.rubyTileX, state.rubyTileY) === chamber) damageRuby(state, GAIA_SUN_SELF_DAMAGE);
   playSunfireBlast(1, true);
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 26); state.screenShakeAmt = Math.max(state.screenShakeAmt, 12);
   for (const target of [...state.enemies].reverse()) {
     if (!state.enemies.includes(target) || chamberOfTile(target.tileX, target.tileY) !== chamber) continue;
-    if (target.id === gaia.bossId) gaiaStrikeDamage(state, target, GAIA_STRIKE_DAMAGE);
+    if (target.id === gaia.bossId) gaiaStrikeDamage(state, target, GAIA_SUN_DAMAGE);
     else if (!isBossType(target.type)) { damageEnemy(state, target, target.hp + 1, 'meteor'); const i = state.enemies.indexOf(target); if (i >= 0) killEnemy(state, i, true); }
   }
   // It also draws a Sunstone into the struck room if the room has fewer than two.
@@ -534,9 +562,19 @@ function gaiaSunStrike(state: GameState, chamber: number) {
 
 export function updateGaia(state: GameState) {
   const gaia = state.gaia!;
+  const ready=gaia.sunCharge>=GAIA_SUN_MAX&&!gaia.sunfire;
+  gaia.sunReadyFade=Math.max(0,Math.min(1,(gaia.sunReadyFade??0)+(ready?1:-1)/30));
   state.ambientEvents.timer = Math.max(state.ambientEvents.timer, 3600); // no space events on this world
   const second = --gaia.secondTimer <= 0;
   if (second) gaia.secondTimer = 60;
+  // Clearing heal: everything cleared this tick is paid at once, with no cap; the heal effect shows at most once a second.
+  if (second) gaia.clearHealShown = false;
+  const clearHeal = gaia.clearHeal ?? 0;
+  gaia.clearHeal = 0;
+  if (clearHeal > 0) {
+    healPlayer(state, clearHeal, !gaia.clearHealShown); healCore(state, clearHeal);
+    gaia.clearHealShown = true;
+  }
   const boss = gaiaBoss(state);
   if (gaia.snaredTicks > 0) gaia.snaredTicks--;
   if (gaia.rubyRootTicks > 0) gaia.rubyRootTicks--;
@@ -552,8 +590,11 @@ export function updateGaia(state: GameState) {
   if (gaia.pollen && --gaia.pollen.ticks <= 0) gaia.pollen = null;
   if (!gaia.pollen && --gaia.pollenTimer <= 0) { gaia.pollenTimer = GAIA_POLLEN_GAP; gaia.pollen = { chamber: Math.floor(Math.random() * 4), ticks: GAIA_POLLEN_TICKS }; }
   if (gaia.sunfire) {
+    if(gaia.sunfire.ticks===GAIA_SUN_WARNING){
+      playAudioOneShot('/sounds/meteorFalling.mp3',.5,GAIA_SUN_DROP_SOUND_RATE);
+      playAudioOneShot('/sounds/gaia-sunfire-whoosh.mp3',GAIA_SUN_WHOOSH_GAIN);
+    }
     gaia.sunfire.ticks--;
-    if(gaia.sunfire.ticks===94)playAudioOneShot('/sounds/meteorFalling.mp3',.5,1.6); // match the Trident descent
     if(gaia.sunfire.ticks<=0){gaiaSunStrike(state,gaia.sunfire.chamber);gaia.sunfire=null;}
   }
   if (gaia.sunImpact && --gaia.sunImpact.ticks <= 0) gaia.sunImpact = null;
@@ -573,14 +614,16 @@ export function useSunfire(state: GameState): boolean {
   const gaia = state.gaia;
   if (!gaia || state.gamePhase !== 'playing' || gaia.sunfire || gaia.sunCharge < GAIA_SUN_MIN) return false;
   const charge = gaia.sunCharge;
-  if (charge >= GAIA_SUN_MAX) { // full: pick a room on the minimap (the same picker as Neptune's Trident)
+  if (charge >= GAIA_SUN_MAX) { // full: pick a room on the minimap (the same picker as Neptune's Ocean’s Chorus)
     state.gamePhase = 'laserTarget'; state.playerQueuedDirX = state.playerQueuedDirY = 0;
     return true;
   }
+  state.playerCastTicks = 24; state.playerCastKind = 'thorn_weaver'; state.playerPrimalCast = true;
   gaia.sunCharge = 0;
   const t = (charge - GAIA_SUN_MIN) / (GAIA_SUN_MAX - GAIA_SUN_MIN);
   const radius = GAIA_SUN_RADIUS[0] + (GAIA_SUN_RADIUS[1] - GAIA_SUN_RADIUS[0]) * t, px = state.playerTileX, py = state.playerTileY;
   gaia.sunBurst = { x: state.playerX, y: state.playerY, radius, ticks: 36 };
+  burnSunfireThorns(state,(x,y)=>tileEuclidDist(x,y,px,py)<=radius);
   const r = Math.ceil(radius);
   for (let y = py - r; y <= py + r; y++) for (let x = px - r; x <= px + r; x++) {
     if (tileEuclidDist(x, y, px, py) > radius || state.map[y]?.[x] !== T_FLOOR) continue;
@@ -588,7 +631,7 @@ export function useSunfire(state: GameState): boolean {
   }
   for (const target of [...state.enemies].reverse()) {
     if (!state.enemies.includes(target) || tileEuclidDist(target.tileX, target.tileY, px, py) > radius) continue;
-    if (target.id === gaia.bossId) gaiaStrikeDamage(state, target, GAIA_STRIKE_DAMAGE * charge / GAIA_SUN_MAX);
+    if (target.id === gaia.bossId) gaiaStrikeDamage(state, target, GAIA_SUN_DAMAGE * charge / GAIA_SUN_MAX);
     else if (!isBossType(target.type)) { damageEnemy(state, target, target.hp + 1, 'meteor'); const i = state.enemies.indexOf(target); if (i >= 0) killEnemy(state, i, true); }
   }
   state.screenShakeTicks = Math.max(state.screenShakeTicks, 10); state.screenShakeAmt = Math.max(state.screenShakeAmt, 4 + 4 * t);

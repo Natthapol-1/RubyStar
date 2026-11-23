@@ -9,10 +9,10 @@ import { BINARY_TWIN_COLORS, POLE_COLORS } from './binary';
 
 // Binary Star rule sheet: only what is new on this map, one small animated picture and one or two lines per card.
 const cards = {
-  lives: ['THREE LIVES', 'Defeat both twins three times. Finish the second quickly, or the first revives.'],
+  lives: ['THREE LIVES', 'Defeat both twins three times. A fallen twin revives if the other lasts too long.'],
   rooms: ['OPPOSITE ROOMS', 'The twins jump to opposite chambers now and then.'],
-  pole: ['PRIMAL SKILL', 'Pole Shift: swap between north and south. Matching poles push the twins away, opposite poles pull them in. Swapping heals you and Ruby.'],
-  collision: ['BINARY COLLISION', 'Slam one twin into the other to hurt and stun both. Apart, they take less damage. Exposed, it’s easier to even out their HP.'],
+  pole: ['PRIMAL SKILL', 'Pole Shift: swaps your pole. Matching poles push the twins away; opposites pull them in.'],
+  collision: ['BINARY COLLISION', 'Slamming the twins together hurts and stuns both. Apart, they take less damage.'],
   dawn: ['DAWN', 'North. Fights up close and dashes along a marked lane.'],
   dusk: ['DUSK', 'South. Shoots from afar and drops stunning stars around you.'],
   beam: ['TWIN BEAM', 'In the same room, the twins fire a beam between them.'],

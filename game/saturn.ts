@@ -12,18 +12,22 @@ export const SATURN = {
   meteorShare: .1,        // a meteor takes 10% of a phase
   blizzardDamage: 4, pulseTicks: 60, // constant blizzard on you (never Ruby): a shield takes it instead of HP and stops the chill
   trailDelay: 15, trailIceTicks: 72, trailReplaceFadeTicks: 12, trailFreezeTicks: 12, trailShieldLoss: 1 / 5, trailCap: 5,
-  iceCount: [32, 40, 48], iceInterval: [360, 240, 240], iceWarning: 60, freezeTicks: 72, // the moving frozen floor (moves every 6s, every 4s from phase 2); 1.2s player freeze
+  iceCount: [32, 40, 48], iceInterval: [360, 240, 240], iceWarning: 60, normalFreezeTicks: 48, freezeTicks: 72, // moving floor freezes for .8s; enemy ice for 1.2s
   // Grants: targets are marked for the whole 6s cycle, then each gets a big shield (a Glacier Hulk double).
   grantInterval: 360, grantTargets: 3, grantAmount: 45, hulkGrantMult: 2, grantWarning: 90,
+  reverseGrantChance: 1 / 2, // phase 3: a fourth grant with the opposite Absolute Zero outcome
   shatterShare: .2,       // ice you break on her aliens costs her 20% of its amount (9 HP per 45-ice grant)
-  absorbShare: .2,        // ice you take (marked target killed first, or caught by C) also damages her, at 20% of its amount
+  absorbShare: .2,        // taking a dead marked target's grant costs her 20% of its original amount
+  counterGrantShare: .22, // a grant caught by Absolute Zero costs her 22% of its original amount
+  counterGrantBonus: 1, // extra boss damage for each grant caught by Absolute Zero
+  counterGrantHulkBonus: 1, // an additional point for a caught Glacier Hulk grant
   // Shield you gain from taken ice: 2/3 of the grant when a marked target died first (30), 2× when C caught it (90).
   killShieldShare: 2 / 3, fieldShieldShare: 2,
   shieldCap: 200,         // your shield never holds more than this here, however it was gained
   // The first recall waits an extra half grant cycle, so recalls always land midway between two grants (3s apart).
-  recallInterval: 1080, recallOffset: 180, recallWarning: 90, backlashShare: .2,
-  recallHealShare: .4,    // she heals for 40% of the ice she pulls back...
-  loneRecallHealShare: .4 / 3, // ...but only a third of that (about 13%) when it comes from a single holder
+  recallInterval: 1080, recallOffset: 180, recallWarning: 90, backlashShare: .231,
+  recallHealShare: .38,    // she heals for 38% of the ice she pulls back...
+  loneRecallHealShare: .38 / 3, // ...but only a third of that (about 12.67%) when it comes from a single holder
   counterDamage: 8,       // a successful counter (caught grant or countered recall) also hurts every alien inside the field
   counterHealShare: .2,   // countering recall heals you for 20% of protected ice; Ruby receives two-thirds of that amount
   // C: a short time-stop field where you cast it. Aliens inside freeze and their attacks are cancelled, mortar shells
@@ -48,7 +52,7 @@ export const SATURN_BACKLASH_TICKS = 66; // the failed-recall screen effect
 export const SATURN_ALIENS: EnemyType[] = ['frostbiter', 'sleet_mortar', 'glacier_hulk'];
 export const isSaturnAlien = (type: EnemyType) => SATURN_ALIENS.includes(type);
 
-export type SaturnBeam = { fromX: number; fromY: number; toX: number; toY: number; ticks: number; kind: 'grant' | 'steal' | 'recall' | 'bloom' };
+export type SaturnBeam = { fromX: number; fromY: number; toX: number; toY: number; ticks: number; kind: 'grant' | 'reverseGrant' | 'steal' | 'recall' | 'bloom' };
 export interface SaturnState {
   phase: 1 | 2 | 3; bossId: number; pulse: number; spawnTimer: number;
   iceTimer: number; iceWarning: number; nextIce: [number, number][];
@@ -58,6 +62,7 @@ export interface SaturnState {
   temporaryIce: { x: number; y: number; ticks: number; freezeTicks?: number }[];
   grantTimer: number; grantTargets: number[];  // ids marked for the coming grant
   grantHulks: number[];                       // which marked ids are Glacier Hulks (a dead one still gives double)
+  reverseGrantCycle?: boolean; reverseGrantId?: number; // fixed through the warning; optional for old saves
   recallTimer: number; bloomTimer: number;
   playerIce: number;                          // the part of your shield that is her ice (she can recall it)
   field: { x: number; y: number; ticks: number } | null; cooldown: number; castTicks: number; // C's time-stop field; castTicks drives the HUD hourglass flip
@@ -82,7 +87,7 @@ export function saturnDamageTaken(s: GameState, e: Enemy, source: string) {
 export function initializeSaturnBoss(s: GameState, boss: Enemy) {
   const t = s.saturn!;
   t.bossId = boss.id; t.phase = 1; t.pulse = 0; t.bloomTimer = SATURN.bloomInterval;
-  t.grantTimer = SATURN.grantInterval; t.grantTargets = chooseGrantTargets(s, boss); t.recallTimer = SATURN.recallInterval + SATURN.recallOffset;
+  t.grantTimer = SATURN.grantInterval; markNextGrant(s, boss); t.recallTimer = SATURN.recallInterval + SATURN.recallOffset;
   boss.hp = boss.maxHp = SATURN.phaseHP * 3;
   boss.icyShieldHP = 0; boss.pushTiles = 0; boss.phaseTimer = 1800;
   t.frostTrail = []; t.trailFades = []; t.lastTrailTile = { x: s.playerTileX, y: s.playerTileY };
@@ -94,6 +99,7 @@ export function clearSaturnEncounter(s: GameState) {
   t.frostTrail = []; t.trailFades = []; t.lastTrailTile = { x: s.playerTileX, y: s.playerTileY };
   t.backlash = null; t.bloomTimer = SATURN.bloomInterval;
   t.nextIce = []; t.iceWarning = 0; t.temporaryIce = []; t.shells = []; t.beams = []; t.effects = []; t.grantTargets = []; t.field = null;
+  t.reverseGrantCycle = false; t.reverseGrantId = undefined;
   s.frostIceTiles = []; s.playerFrozenTicks = 0;
 }
 /** Inside C's time-stop field (pixel position). */
@@ -102,7 +108,7 @@ export function inSaturnField(s: GameState, x: number, y: number) {
   return !!f && Math.hypot(x - f.x, y - f.y) <= SATURN.fieldRadius * TILE_SIZE;
 }
 /** Frozen tiles cannot freeze you while you stand in your own time-stop field. */
-export function saturnFreezeImmune(s: GameState) { return inSaturnField(s, s.playerX, s.playerY); }
+export function saturnFreezeImmune(s: GameState) { return !!s.noFreeze || inSaturnField(s, s.playerX, s.playerY); }
 function fadeFrostFootprint(saturn: SaturnState, footprint: { x: number; y: number; ticks: number }) {
   (saturn.trailFades ??= []).push({
     x: footprint.x, y: footprint.y, footprintTicks: footprint.ticks, ticks: SATURN.trailReplaceFadeTicks,
@@ -121,7 +127,7 @@ export function freezeSaturnPlayer(s: GameState) {
   const trail=s.saturn?.frostTrail?.some(t=>t.ticks<=0&&t.x===s.playerTileX&&t.y===s.playerTileY);
   s.playerShieldHP *= trail&&!normalTile&&!temporary ? 1-SATURN.trailShieldLoss : .5;
   if (s.playerShieldHP <= 0) s.playerSaturnShield = false;
-  s.playerFrozenTicks = normalTile ? SATURN.freezeTicks : Math.max(temporary ? temporary.freezeTicks??SATURN.freezeTicks : 0,trail?SATURN.trailFreezeTicks:0)||SATURN.freezeTicks;
+  s.playerFrozenTicks = Math.max(normalTile?SATURN.normalFreezeTicks:0,temporary ? temporary.freezeTicks??SATURN.freezeTicks : 0,trail?SATURN.trailFreezeTicks:0)||SATURN.freezeTicks;
   if (s.saturn) {
     fadeFrostTrail(s.saturn);
     s.saturn.lastTrailTile = { x: s.playerTileX, y: s.playerTileY };
@@ -135,11 +141,11 @@ export function saturnIceAt(s: GameState, x: number, y: number) {
   return t.temporaryIce.some(tile=>tile.x===x&&tile.y===y)
     || !!t.frostTrail?.some(tile=>tile.ticks<=0&&tile.x===x&&tile.y===y);
 }
-/** A successful counter hurts every alien inside the field (after its ice is stripped, so it lands on HP). */
-function counterBlast(s: GameState) {
+/** Counter damage skips a reversed-grant target; its shield must arrive without the counter killing it first. */
+function counterBlast(s: GameState, excludedId?: number) {
   const t = s.saturn!;
   for (const e of [...s.enemies]) {
-    if (e.id === t.bossId || e.hp <= 0 || !s.enemies.includes(e) || !inSaturnField(s, e.x, e.y)) continue;
+    if (e.id === t.bossId || e.id === excludedId || e.hp <= 0 || !s.enemies.includes(e) || !inSaturnField(s, e.x, e.y)) continue;
     damageEnemy(s, e, SATURN.counterDamage, 'special');
     if (e.hp <= 0) { killEnemy(s, s.enemies.indexOf(e)); if (s.gamePhase !== 'playing') return; }
   }
@@ -218,16 +224,29 @@ export function saturnEmpower(s: GameState, e: Enemy, kind: 'speed' | 'damage') 
   return 1 + Math.min(1, e.icyShieldHP / SATURN.empowerFullIce) * (kind === 'speed' ? SATURN.empowerSpeed : SATURN.empowerDamage);
 }
 /** Ice you take for yourself: it shields you and is torn from her as well. */
-function takeIce(s: GameState, boss: Enemy, amount: number, shieldShare: number) {
+function takeIce(s: GameState, boss: Enemy, amount: number, shieldShare: number, damageShare:number=SATURN.absorbShare, bonus=0) {
   const shield = Math.max(0, Math.min(amount * shieldShare, SATURN.shieldCap - s.playerShieldHP));
   s.playerShieldHP += shield; s.saturn!.playerIce += shield; s.playerSaturnShield = true;
-  hurtBoss(s, boss, amount * SATURN.absorbShare);
+  hurtBoss(s, boss, amount * damageShare + bonus);
 }
 /** Grants she will give next: hulks first (she favours them), then the aliens holding the least ice. */
-function chooseGrantTargets(s: GameState, boss: Enemy) {
+function chooseGrantTargets(s: GameState, boss: Enemy, count: number = SATURN.grantTargets) {
   const aliens = s.enemies.filter(e => e !== boss && e.hp > 0 && !e.twin?.downedTicks);
   aliens.sort((a, b) => Number(b.type === 'glacier_hulk') - Number(a.type === 'glacier_hulk') || a.icyShieldHP - b.icyShieldHP || a.id - b.id);
-  return aliens.slice(0, SATURN.grantTargets).map(e => e.id);
+  return aliens.slice(0, count).map(e => e.id);
+}
+function markReverseGrant(s: GameState) {
+  const t = s.saturn!;
+  if (t.reverseGrantCycle && t.reverseGrantId === undefined && t.grantTargets.length === SATURN.grantTargets + 1)
+    t.reverseGrantId = t.grantTargets[Math.floor(Math.random() * t.grantTargets.length)];
+}
+function markNextGrant(s: GameState, boss: Enemy) {
+  const t = s.saturn!;
+  t.reverseGrantCycle = t.phase >= 3 && Math.random() < SATURN.reverseGrantChance;
+  t.reverseGrantId = undefined;
+  t.grantTargets = chooseGrantTargets(s, boss, SATURN.grantTargets + Number(t.reverseGrantCycle));
+  t.grantHulks = t.grantTargets.filter(id => s.enemies.some(e => e.id === id && e.type === 'glacier_hulk'));
+  markReverseGrant(s);
 }
 const grantSize = (e?: Enemy) => SATURN.grantAmount * (e?.type === 'glacier_hulk' ? SATURN.hulkGrantMult : 1);
 
@@ -241,15 +260,26 @@ function showSaturnCounter(s: GameState, kind: 'grantCounter' | 'recallCounter')
 function resolveGrant(s: GameState, boss: Enemy) {
   const t = s.saturn!;
   let taken = false, caught = false;
+  const reversed: { e: Enemy; amount: number }[] = [];
   const targets = t.grantTargets.map(id => ({ id, e: s.enemies.find(x => x.id === id && x.hp > 0) }));
   for (const { id, e } of targets) {
     const amount = e ? grantSize(e) : SATURN.grantAmount * (t.grantHulks.includes(id) ? SATURN.hulkGrantMult : 1); // a dead Hulk's slot still holds double
+    if (t.phase >= 3 && id === t.reverseGrantId) {
+      // A reversed grant is empty unless Absolute Zero catches it. Dead targets give no stolen grant.
+      if (e) {
+        t.beams.push({ fromX: boss.x, fromY: boss.y, toX: e.x, toY: e.y, ticks: 24, kind: 'reverseGrant' });
+        if (inSaturnField(s, e.x, e.y)) reversed.push({ e, amount });
+        else t.effects.push({ x: e.x, y: e.y, ticks: 18, kind: 'fizzle' });
+      }
+      continue;
+    }
     if (!e || inSaturnField(s, e.x, e.y)) {
       // A marked alien that died first, or a grant caught by C, comes to you instead.
       t.beams.push({ fromX: boss.x, fromY: boss.y, toX: s.playerX, toY: s.playerY, ticks: 24, kind: 'steal' });
       t.effects.push({ x: s.playerX, y: s.playerY, ticks: 24, kind: 'steal' });
       taken = true; caught ||= !!e;
-      takeIce(s, boss, amount, e ? SATURN.fieldShieldShare : SATURN.killShieldShare);
+      const bonus=e?SATURN.counterGrantBonus+(e.type==='glacier_hulk'?SATURN.counterGrantHulkBonus:0):0;
+      takeIce(s, boss, amount, e ? SATURN.fieldShieldShare : SATURN.killShieldShare, e ? SATURN.counterGrantShare : SATURN.absorbShare, bonus);
       if (s.gamePhase !== 'playing') return;
       continue;
     }
@@ -260,15 +290,17 @@ function resolveGrant(s: GameState, boss: Enemy) {
     for (const e of s.enemies) if (e !== boss && e.icyShieldHP > 0 && inSaturnField(s, e.x, e.y)) {
       e.icyShieldHP = 0; t.effects.push({ x: e.x, y: e.y, ticks: 18, kind: 'shatter' });
     }
-    counterBlast(s); if (s.gamePhase !== 'playing') return;
+    counterBlast(s, t.phase >= 3 ? t.reverseGrantId : undefined); if (s.gamePhase !== 'playing') return;
   }
+  // Apply after normal counters strip the field, so catching both types still grants the reversed shield.
+  for (const { e, amount } of reversed) if (e.hp > 0 && s.enemies.includes(e)) e.icyShieldHP += amount;
   if (taken) {
     if (caught) showSaturnCounter(s, 'grantCounter');
     else t.effects.push({ x: s.playerX, y: s.playerY, ticks: 30, kind: 'intercept' });
     playAudioOneShot('/sounds/shield.mp3', .9);
   }
   if (targets.length) { boss.shootTicks = 20; playAudioOneShot('/sounds/ice.mp3', .55); }
-  t.grantTargets = chooseGrantTargets(s, boss); // the next targets are marked at once, for the whole cycle
+  markNextGrant(s, boss); // the next targets are marked at once, for the whole cycle
   if (t.grantTargets.length) playAudioOneShot('/sounds/constellation-choice.wav', .2, 1.6);
 }
 
@@ -302,8 +334,8 @@ function resolveRecall(s: GameState, boss: Enemy) {
   // Nothing came back: the recall tears at her instead.
   t.effects.push({ x: boss.x, y: boss.y, ticks: 36, kind: 'backlash' });
   t.backlash = { x: boss.x, y: boss.y, ticks: SATURN_BACKLASH_TICKS };
-  s.screenShakeTicks = Math.max(s.screenShakeTicks, 26); s.screenShakeAmt = Math.max(s.screenShakeAmt, 12);
-  playSFX_objectBreak('frost'); playAudioOneShot('/sounds/saturn-barrier-break.mp3', .55);
+  s.screenShakeTicks = Math.max(s.screenShakeTicks, 32); s.screenShakeAmt = Math.max(s.screenShakeAmt, 15);
+  playSFX_objectBreak('frost'); playAudioOneShot('/sounds/saturn-barrier-break.mp3', .9);
   hurtBoss(s, boss, SATURN.phaseHP * SATURN.backlashShare);
 }
 
@@ -311,6 +343,7 @@ function resolveRecall(s: GameState, boss: Enemy) {
 export function useSaturnIntercept(s: GameState): boolean {
   const t = s.saturn;
   if (!t || s.gamePhase !== 'playing' || t.cooldown > 0) return false;
+  s.playerCastTicks = 24; s.playerCastKind = 'frost_warden'; s.playerPrimalCast = true;
   s.playerFrozenTicks = 0; s.playerStunned = false;
   t.field = { x: s.playerX, y: s.playerY, ticks: SATURN.fieldTicks }; t.cooldown = SATURN.cooldown; t.castTicks = 30;
   stopTimeInField(s);
@@ -404,7 +437,9 @@ export function updateSaturn(s: GameState) {
     if (t.iceWarning > 0 && --t.iceWarning === 0) { s.frostIceTiles = t.nextIce; t.nextIce = []; }
     if (s.playerFrozenTicks <= 0 && s.frostIceTiles.some(([x, y]) => x === s.playerTileX && y === s.playerTileY)) freezeSaturnPlayer(s); // a triggered tile melts
     // Grants: targets stay marked through the cycle (a dead one keeps its slot: that ice comes to you); empty slots fill as aliens arrive.
-    if (t.grantTargets.length < SATURN.grantTargets) for (const id of chooseGrantTargets(s, boss)) if (t.grantTargets.length < SATURN.grantTargets && !t.grantTargets.includes(id)) t.grantTargets.push(id);
+    const grantCount = SATURN.grantTargets + Number(t.phase >= 3 && t.reverseGrantCycle);
+    if (t.grantTargets.length < grantCount) for (const id of chooseGrantTargets(s, boss, grantCount)) if (t.grantTargets.length < grantCount && !t.grantTargets.includes(id)) t.grantTargets.push(id);
+    markReverseGrant(s);
     t.grantHulks = t.grantTargets.filter(id => t.grantHulks.includes(id) || s.enemies.some(e => e.id === id && e.type === 'glacier_hulk'));
     // Grant warning: a bright rising chime as the closing rings appear, 1.5s before the ice lands.
     if (--t.grantTimer === SATURN.grantWarning && t.grantTargets.length) playAudioOneShot('/sounds/saturn-warning.mp3', .6); // the supplied crystal-beat recording
@@ -574,7 +609,7 @@ export function godSetSaturnPhase(s: GameState, phase: 1 | 2 | 3) {
   const boss = saturnBoss(s); if (!boss) return;
   clearSaturnEncounter(s);
   boss.hp = SATURN.phaseHP * (4 - phase); s.saturn.phase = phase;
-  s.saturn.grantTimer = SATURN.grantInterval; s.saturn.grantTargets = chooseGrantTargets(s, boss); s.saturn.recallTimer = SATURN.recallInterval + SATURN.recallOffset; s.saturn.iceTimer = 0;
+  s.saturn.grantTimer = SATURN.grantInterval; markNextGrant(s, boss); s.saturn.recallTimer = SATURN.recallInterval + SATURN.recallOffset; s.saturn.iceTimer = 0;
 }
 export function godSaturnGrant(s: GameState) { const t = s.saturn; if (t && saturnBoss(s)) t.grantTimer = Math.min(t.grantTimer, 60); }
 export function godSaturnRecall(s: GameState) { const t = s.saturn; if (t && saturnBoss(s)) t.recallTimer = Math.min(t.recallTimer, SATURN.recallWarning + 1); }

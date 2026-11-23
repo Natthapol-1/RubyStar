@@ -5,6 +5,8 @@ require.extensions['.ts'] = (m, f) => {
   m._compile(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 } }).outputText, f);
 };
 const e = require('../game/engine.ts'), c = require('../game/constants.ts'), api = e.gaiaTest, g = require('../game/gaia.ts');
+// Runs fn with a fixed-seed Math.random (mulberry32), so a test that walks through random spawns is repeatable.
+function seeded(seed,fn){const original=Math.random;let a=seed>>>0;Math.random=()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};try{return fn();}finally{Math.random=original;}}
 const PH = c.GAIA_PHASE_HP, idx = (x, y) => y * c.MAP_COLS + x;
 
 function fresh() {
@@ -47,7 +49,8 @@ test('a field landing on a lit Sunstone burns away, costs the boss its Sunstone 
   s.playerHP = 50; s.rubyHP = 60;
   api.eruptThornField(s, boss, (stone.x + .5) * c.TILE_SIZE, (stone.y + .5) * c.TILE_SIZE);
   assert.equal(s.thornPatches.length, 0, 'no thorn patch');
-  assert.equal(s.playerHP, 51.5); assert.equal(s.rubyHP, 61.5);
+  assert.equal(s.playerHP, 50 + c.PLAYER_MAX_HP * c.GAIA_STONE_HEAL); assert.equal(s.rubyHP, 60 + c.RUBY_MAX_HP * c.GAIA_STONE_HEAL);
+  assert.equal(s.playerHP, 51); assert.equal(s.rubyHP, 61);
   assert.ok(Math.abs(hp - boss.hp - c.GAIA_STONE_SELF_DAMAGE * PH) < .01);
   assert.notEqual(c.chamberOfTile(stone.x, stone.y), room);
   assert.equal(stone.lit, false);
@@ -55,14 +58,14 @@ test('a field landing on a lit Sunstone burns away, costs the boss its Sunstone 
   assert.equal(stone.lit, true);
 });
 
-test('damage cannot skip a phase; at the floor she withers, then phase 2 begins', () => {
+test('damage cannot skip a phase; at the floor phase 2 begins at once with full phase HP', () => {
   const { s, boss } = fresh();
   api.damageEnemy(s, boss, 5000);
   assert.ok(boss.hp > 2 * PH && boss.hp < 2 * PH + 1);
-  e.tick(s); assert.ok(s.gaia.wither > 0);
-  const before = boss.hp; api.damageEnemy(s, boss, 100); assert.equal(boss.hp, before, 'immune while withering');
-  for (let i = 0; i < c.GAIA_WITHER_TICKS + 2; i++) e.tick(s);
+  e.tick(s);
   assert.equal(s.gaia.phase, 2);
+  assert.ok(boss.hp > 2 * PH - 1 && boss.hp <= 2 * PH, `phase 2 starts full: ${boss.hp}`);
+  const before = boss.hp; api.damageEnemy(s, boss, 100); assert.ok(boss.hp < before, 'she takes damage right away');
 });
 
 test("Ruby's ward keeps ground clean, and a closed ring of vines squeezes Ruby", () => {
@@ -94,6 +97,8 @@ test('a partial Sunfire bursts around you at once; more charge reaches further a
   };
   const small = burst(c.GAIA_SUN_MIN), big = burst(c.GAIA_SUN_MAX - 1);
   assert.ok(big.lost > small.lost, 'more damage'); assert.ok(big.cleared > small.cleared, 'more reach');
+  assert.ok(Math.abs(small.lost - PH * .12 * c.GAIA_SUN_MIN / c.GAIA_SUN_MAX) < .01, 'partial damage scales from 12%');
+  assert.ok(Math.abs(big.lost - PH * .12 * (c.GAIA_SUN_MAX - 1) / c.GAIA_SUN_MAX) < .01, 'near-full burst uses the same damage scale');
   assert.equal(small.left, 0); assert.equal(small.wound, null, 'partial is instant');
 });
 
@@ -114,7 +119,7 @@ test('a full Sunfire winds up, then burns the chosen room: you take damage if in
   const hp = boss.hp, playerHP = s.playerHP;
   for (let i = 0; i < c.GAIA_SUN_WARNING + 1; i++) e.tick(s);
   assert.equal(g.gaiaRoomShare(s, room), 0);
-  assert.ok(Math.abs(hp - boss.hp - c.GAIA_STRIKE_DAMAGE * PH) < 1, 'full Sunfire: ' + (hp - boss.hp));
+  assert.ok(Math.abs(hp - boss.hp - .12 * PH) < 1, 'full Sunfire deals 12%: ' + (hp - boss.hp));
   assert.ok(playerHP - s.playerHP >= c.GAIA_SUN_SELF_DAMAGE - .01, 'self damage');
 });
 
@@ -139,12 +144,15 @@ test('meteors scorch their room', () => {
   assert.equal(g.gaiaRoomShare(s, 1), 0);
 });
 
-test("Gaia's Roots comes back 40s after a cast in this challenge", () => {
+test("Gaia's Roots lasts 25s and comes back 35s after a cast in this challenge", () => {
   const { s } = fresh();
   assert.equal(s.specialSkill, 'thorn_weaver');
-  e.useSpecialSkill(s); e.tick(s);
-  assert.equal(s.trial.cooldown, 2400);
-  for (let i = 0; i < 2400; i++) e.tick(s);
+  e.useSpecialSkill(s);
+  assert.equal(s.celestialField.ticks, c.GAIA_ROOTS_DURATION);
+  assert.equal(c.GAIA_ROOTS_DURATION, 1500);
+  e.tick(s);
+  assert.equal(s.trial.cooldown, 2100);
+  for (let i = 0; i < 2100; i++) e.tick(s);
   assert.equal(s.specialSkill, 'thorn_weaver');
 });
 
@@ -242,15 +250,15 @@ test('meteors deal a share of the phase and ignore thicket armor', () => {
   assert.ok(Math.abs(hp - boss.hp - c.GAIA_STRIKE_DAMAGE * PH) < 2, 'meteor: ' + (hp - boss.hp));
 });
 
-test('at three blossoms a new one replaces the oldest', () => {
-  const { s, boss } = fresh();
+test('at the blossom cap a new one replaces the oldest', () => {
+  const { s, boss } = fresh(), max = c.GAIA_BLOSSOM_MAX;
   g.godSetGaiaPhase(s, 2); s.gaia.snareTimer = 1e9;
-  for (let i = 0; i < 3; i++) { s.gaia.blossomTimer = 1; e.tick(s); }
+  for (let i = 0; i < max; i++) { s.gaia.blossomTimer = 1; e.tick(s); }
   const before = s.enemies.filter(x => x.type === 'blossom').map(x => x.id);
-  assert.equal(before.length, 3);
+  assert.equal(before.length, max);
   s.gaia.blossomTimer = 1; e.tick(s);
   const after = s.enemies.filter(x => x.type === 'blossom').map(x => x.id);
-  assert.equal(after.length, 3); assert.ok(!after.includes(Math.min(...before)), 'oldest removed');
+  assert.equal(after.length, max); assert.ok(!after.includes(Math.min(...before)), 'oldest removed');
   void boss;
 });
 
@@ -306,14 +314,16 @@ test('phase 3 lifeblooms sprout; breaking one heals you and Ruby; unbroken ones 
   assert.ok(!s.enemies.includes(next), 'faded');
 });
 
-test('full Sunfire plays the Trident incoming shot once, 94 ticks before impact, and pauses its countdown',()=>{
+test('full Sunfire layers its falling shot and whoosh across the whole wind-up',()=>{
  const original=e.playAudioOneShot,cues=[];e.playAudioOneShot=(...args)=>cues.push(args);
  try {
-  const {s}=fresh();s.gaia.sunfire={chamber:0,ticks:96};
-  g.updateGaia(s);assert.equal(cues.length,0);
-  s.gamePhase='laserTarget';e.tick(s);assert.equal(s.gaia.sunfire.ticks,95);assert.equal(cues.length,0);
-  s.gamePhase='playing';g.updateGaia(s);assert.deepEqual(cues,[['/sounds/meteorFalling.mp3',.5,1.6]]);
-  for(let i=0;i<20;i++)g.updateGaia(s);assert.equal(cues.length,1);
+  const {s}=fresh();s.gaia.sunfire={chamber:0,ticks:c.GAIA_SUN_WARNING};
+  g.updateGaia(s);assert.deepEqual(cues,[
+   ['/sounds/meteorFalling.mp3',.5,c.GAIA_SUN_DROP_SOUND_RATE],
+   ['/sounds/gaia-sunfire-whoosh.mp3',c.GAIA_SUN_WHOOSH_GAIN],
+  ]);
+  for(let i=0;i<c.GAIA_SUN_WARNING-2;i++)g.updateGaia(s);
+  assert.equal(s.gaia.sunfire.ticks,1);assert.equal(cues.length,2);
  }finally{e.playAudioOneShot=original;}
 });
 
@@ -338,4 +348,130 @@ test('Sunstone healing caps at full HP and cannot repeat from an unlit stone', (
   s.playerHP=50;s.rubyHP=60;
   assert.equal(g.gaiaStoneBlocksField(s,boss,x,y,c.THORN_RADIUS),false);
   assert.equal(s.playerHP,50);assert.equal(s.rubyHP,60);
+});
+
+test('clearing overgrowth heals you and Ruby for every level cut, with no cap; scorching heals nothing', () => {
+  const { s } = fresh();
+  s.gaia.lifebloomTimer = 100000; s.gaia.secondTimer = 60; s.playerHP = 50; s.rubyHP = 50;
+  const tiles = roomTiles(s, 0).slice(0, 60);
+  for (const [x, y] of tiles) s.gaia.growth[idx(x, y)] = 3;
+  for (const [x, y] of tiles.slice(0, 5)) g.gaiaClearTile(s, x, y, 2); // 10 levels cut
+  g.updateGaia(s);
+  assert.ok(Math.abs(s.playerHP - (50 + 10 * c.GAIA_CLEAR_HEAL)) < .01, `healed to ${s.playerHP}`);
+  assert.ok(Math.abs(s.rubyHP - (50 + 10 * c.GAIA_CLEAR_HEAL)) < .01, `Ruby healed to ${s.rubyHP}`);
+  const before = s.playerHP;
+  for (const [x, y] of tiles.slice(5)) g.gaiaClearTile(s, x, y, 3); // a big clear in the same second: 55 tiles x 3 levels
+  g.updateGaia(s);
+  const big = 50 + (10 + 55 * 3) * c.GAIA_CLEAR_HEAL;
+  assert.ok(Math.abs(s.playerHP - big) < .01, `uncapped: ${s.playerHP}`);
+  assert.ok(s.playerHP > before);
+  assert.ok(Math.abs(s.rubyHP - big) < .01, `Ruby uncapped: ${s.rubyHP}`);
+  for (let i = 0; i < 70; i++) g.updateGaia(s); // nothing more without further clearing
+  assert.ok(Math.abs(s.playerHP - big) < .01, `nothing extra: ${s.playerHP}`);
+  for (const [x, y] of roomTiles(s, 1)) s.gaia.growth[idx(x, y)] = 3;
+  g.gaiaScorchRoom(s, 1); g.updateGaia(s);
+  assert.ok(Math.abs(s.playerHP - big) < .01, 'a scorch does not heal');
+});
+
+const putPlayer = (s, x, y) => { s.playerTileX = s.playerTargetX = x; s.playerTileY = s.playerTargetY = y; s.playerX = (x + .5) * c.TILE_SIZE; s.playerY = (y + .5) * c.TILE_SIZE; s.playerStepProgress = 0; s.playerKnockback = null; };
+function blossomNearPlayer() {
+  const { s, boss } = fresh();
+  g.godSetGaiaPhase(s, 2); s.gaia.snareTimer = 1e9; s.gaia.lifebloomTimer = 1e9;
+  e.tick(s); // phase start plants one blossom at once
+  const blossom = s.enemies.find(x => x.type === 'blossom');
+  blossom.attackTimer = 1e9; // no pollen shots in these checks
+  s.godMode = false; s.playerShieldHP = 0; s.thornPatches = []; boss.thorn.cooldown = 1e9;
+  return { s, boss, blossom };
+}
+// A floor tile `dist` from the blossom with open floor behind it, so a push away from the blossom is not blocked.
+const floorAt = (s, b, dist) => {
+  for (const [ux, uy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    let open = true;
+    for (let k = dist; k <= dist + c.GAIA_BLOSSOM_PULSE.push; k++) if (s.map[b.tileY + uy * k]?.[b.tileX + ux * k] !== c.T_FLOOR) open = false;
+    if (open) return [b.tileX + ux * dist, b.tileY + uy * dist];
+  }
+  return null;
+};
+
+test('entering phase 2 plants one blossom at once', () => {
+  const { s } = fresh();
+  g.godSetGaiaPhase(s, 2); s.gaia.snareTimer = 1e9;
+  e.tick(s);
+  assert.equal(s.enemies.filter(x => x.type === 'blossom').length, 1);
+});
+
+test('a blossom pulse bursts at once when you are in reach: a little damage and a push away', () => {
+  const { s, blossom } = blossomNearPlayer();
+  // Move the blossom to a spot with a straight run of open floor beside it, so the push is never blocked by chance.
+  const run = 2 + c.GAIA_BLOSSOM_PULSE.push;
+  let open = null;
+  for (let y = 2; y < c.MAP_ROWS - 2 && !open; y++) for (let x = 2; x < c.MAP_COLS - run - 2 && !open; x++)
+    if (c.chamberOfTile(x, y) >= 0 && Array.from({ length: run + 1 }, (_, k) => s.map[y][x + k] === c.T_FLOOR).every(Boolean)) open = [x, y];
+  assert.ok(open, 'an open floor run exists');
+  blossom.tileX = blossom.targetTileX = open[0]; blossom.tileY = blossom.targetTileY = open[1];
+  blossom.x = (open[0] + .5) * c.TILE_SIZE; blossom.y = (open[1] + .5) * c.TILE_SIZE;
+  const spot = floorAt(s, blossom, 2); assert.ok(spot, 'floor beside the blossom');
+  putPlayer(s, spot[0], spot[1]);
+  const hp = s.playerHP;
+  blossom.phaseTimer = 1; g.updateGaia(s);
+  assert.ok(Math.abs(hp - s.playerHP - c.GAIA_BLOSSOM_PULSE.damage) < .01, `damage ${hp - s.playerHP}`);
+  assert.ok(s.playerKnockback, 'pushed');
+  assert.equal(s.playerKnockback.tilesLeft, c.GAIA_BLOSSOM_PULSE.push);
+  assert.ok(s.playerKnockback.dirX * (spot[0] - blossom.tileX) + s.playerKnockback.dirY * (spot[1] - blossom.tileY) > 0, 'away from the blossom');
+  assert.equal(blossom.phaseTimer, c.GAIA_BLOSSOM_PULSE.gap);
+  assert.ok(s.gaia.blossomPulses.length > 0, 'ring drawn');
+});
+
+test('a blossom pulse waits while you are out of reach', () => {seeded(4,()=>{
+  const { s, blossom } = blossomNearPlayer();
+  const out = roomTiles(s, c.chamberOfTile(blossom.tileX, blossom.tileY)).find(([x, y]) => Math.hypot(x - blossom.tileX, y - blossom.tileY) > c.GAIA_BLOSSOM_PULSE.radius);
+  putPlayer(s, out[0], out[1]);
+  const hp = s.playerHP;
+  blossom.phaseTimer = 1; g.updateGaia(s);
+  assert.equal(s.playerHP, hp, 'no damage');
+  assert.equal(s.playerKnockback, null, 'no push');
+  assert.equal(blossom.phaseTimer, c.GAIA_BLOSSOM_PULSE.retry, 'checks again soon');
+  assert.ok(!(s.gaia.blossomPulses ?? []).length, 'no burst');
+});});
+
+function sunfireFieldScene(){
+ const scene=fresh(),s=scene.s;s.gaia.stones=[];s.gaia.trailTimer=s.gaia.creepTimer=s.gaia.secondTimer=1e9;scene.boss.thorn.defenseCooldown=1e9;
+ s.map=Array.from({length:c.MAP_ROWS},(_,y)=>Array.from({length:c.MAP_COLS},(_,x)=>x&&y&&x<c.MAP_COLS-1&&y<c.MAP_ROWS-1?c.T_FLOOR:c.T_WALL));
+ Object.assign(s,{playerTileX:10,playerTargetX:10,playerTileY:10,playerTargetY:10,playerX:10.5*c.TILE_SIZE,playerY:10.5*c.TILE_SIZE,rubyTileX:10,rubyTileY:10});
+ Object.assign(scene.boss,{tileX:30,targetTileX:30,tileY:30,targetTileY:30,x:30.5*c.TILE_SIZE,y:30.5*c.TILE_SIZE});return scene;
+}
+test('partial Sunfire burns only covered thorn tiles, preserving distant fields and removing full burns',()=>{
+ const {s,boss}=sunfireFieldScene(),edge={x:12*c.TILE_SIZE,y:10*c.TILE_SIZE,radius:c.THORN_RADIUS,ticks:500,ownerId:boss.id},far={x:30*c.TILE_SIZE,y:28*c.TILE_SIZE,radius:c.THORN_RADIUS,ticks:500,ownerId:boss.id};s.thornPatches=[edge,far];
+ s.gaia.sunCharge=c.GAIA_SUN_MIN;const hp=s.playerHP,ruby=s.rubyHP;assert.ok(g.useSunfire(s));
+ assert.ok(s.thornPatches.includes(edge));assert.ok(s.thornPatches.includes(far));assert.equal(far.clearedTiles,undefined);
+ assert.equal(c.thornFieldContainsTile(edge,10,10),false);assert.equal(e.isPlayerInThorns(s),false);assert.equal(c.thornFieldContainsTile(edge,13,9),true);
+ assert.equal(s.playerHP,hp);assert.equal(s.rubyHP,ruby);assert.equal(s.gaia.sunCharge,0);
+ s.playerX=13.5*c.TILE_SIZE;s.playerY=9.5*c.TILE_SIZE;assert.equal(e.isPlayerInThorns(s),true);
+ Object.assign(s,{playerX:10.5*c.TILE_SIZE,playerY:10.5*c.TILE_SIZE});s.gaia.sunCharge=c.GAIA_SUN_MAX-1;assert.ok(g.useSunfire(s));assert.ok(!s.thornPatches.includes(edge));assert.ok(s.thornPatches.includes(far));
+});
+test('full Sunfire clears thorn tiles at impact only and preserves fields across the chamber edge',()=>{
+ const {s,boss}=sunfireFieldScene(),[r1,c1,r2,c2]=c.CHAMBER_BOUNDS[0],y=Math.floor((r1+r2)/2);
+ const edge={x:c2*c.TILE_SIZE,y:y*c.TILE_SIZE,radius:c.THORN_RADIUS,ticks:500,ownerId:boss.id};
+ const inside={x:(c1+4)*c.TILE_SIZE,y:y*c.TILE_SIZE,radius:c.THORN_RADIUS,ticks:500,ownerId:boss.id};const far={x:30*c.TILE_SIZE,y:28*c.TILE_SIZE,radius:c.THORN_RADIUS,ticks:500,ownerId:boss.id};s.thornPatches=[edge,inside,far];
+ s.gaia.sunCharge=c.GAIA_SUN_MAX;assert.ok(g.useSunfire(s));assert.ok(e.chooseSkyLaser(s,0));assert.equal(s.thornPatches.length,3);
+ s.gaia.sunfire.ticks=1;g.updateGaia(s);assert.ok(!s.thornPatches.includes(inside));assert.ok(s.thornPatches.includes(edge));assert.ok(s.thornPatches.includes(far));
+ assert.equal(c.thornFieldContainsTile(edge,c2,y),false);assert.equal(c.thornFieldContainsTile(edge,c2+1,y),true);assert.equal(far.clearedTiles,undefined);
+});
+test('Sunfire-cleared field tiles are visually empty and cannot hurt placed Ruby',()=>{
+ const {s,boss}=sunfireFieldScene(),patch={x:12*c.TILE_SIZE,y:10*c.TILE_SIZE,radius:c.THORN_RADIUS,ticks:c.THORN_LIFETIME-80,ownerId:boss.id};s.thornPatches=[patch];s.gaia.sunCharge=c.GAIA_SUN_MIN;g.useSunfire(s);
+ const {createCanvas}=require('@napi-rs/canvas'),art=require('../game/thorn-art.ts'),canvas=createCanvas(6*c.TILE_SIZE,6*c.TILE_SIZE),ctx=canvas.getContext('2d'),before=JSON.stringify(s.thornPatches);
+ art.drawThornGround(ctx,s,8*c.TILE_SIZE,8*c.TILE_SIZE,100);assert.equal(JSON.stringify(s.thornPatches),before);
+ assert.equal(ctx.getImageData(2.5*c.TILE_SIZE,2.5*c.TILE_SIZE,1,1).data[3],0);assert.ok(ctx.getImageData(5.5*c.TILE_SIZE,1.5*c.TILE_SIZE,1,1).data[3]>0);
+ s.godMode=false;s.rubyShieldHP=0;s.rubyHP=70;for(let i=0;i<c.THORN_CONTACT_INTERVAL+2;i++)e.tick(s);assert.equal(s.rubyHP,70);
+ s.rubyTileX=13;s.rubyTileY=9;for(let i=0;i<c.THORN_CONTACT_INTERVAL+2;i++)e.tick(s);assert.ok(s.rubyHP<70);
+});
+
+test('full Sunfire overlay fades in and out on the gameplay clock and freezes on pause',()=>{
+ const{s}=fresh();s.gaia.sunCharge=c.GAIA_SUN_MAX;
+ for(let i=0;i<15;i++)g.updateGaia(s);
+ assert.ok(Math.abs(s.gaia.sunReadyFade-.5)<1e-8);
+ s.gamePhase='paused';e.tick(s);assert.ok(Math.abs(s.gaia.sunReadyFade-.5)<1e-8);
+ s.gamePhase='playing';for(let i=0;i<16;i++)g.updateGaia(s);assert.equal(s.gaia.sunReadyFade,1);
+ s.gaia.sunCharge=0;for(let i=0;i<15;i++)g.updateGaia(s);assert.ok(Math.abs(s.gaia.sunReadyFade-.5)<1e-8);
+ for(let i=0;i<16;i++)g.updateGaia(s);assert.equal(s.gaia.sunReadyFade,0);
 });

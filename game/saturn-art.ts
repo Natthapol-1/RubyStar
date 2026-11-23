@@ -184,19 +184,19 @@ export function drawSaturnSnowflake(ctx:CanvasRenderingContext2D,x:number,y:numb
 // ─── Her ice: grant and recall cues, beams and the time-stop field ──────────
 // Grants are cyan and square (she gives); recalls are violet and diamond-shaped (she takes back), so they never read alike.
 
-export const GRANT_COLOR = '#9ff1ff', RECALL_COLOR = '#c39bff';
+export const GRANT_COLOR = '#9ff1ff', RECALL_COLOR = '#c39bff', REVERSE_GRANT_COLOR = '#ffd05f';
 const ICE_DEEP = '#6fc3e8', TIME = '#f2f8ff';
 const GRANT_RING_TICKS = 90; // the closing ring appears for the last 1.5s before a grant lands
 
 /** Grant cue: a cyan square closing onto the unit, landing on its outline exactly when the ice arrives. */
-function grantRing(ctx: CanvasRenderingContext2D, x: number, y: number, left: number) {
+function grantRing(ctx: CanvasRenderingContext2D, x: number, y: number, left: number, color = GRANT_COLOR) {
   const p = 1 - Math.min(1, left / GRANT_RING_TICKS), r = Math.round(24 + (1 - p) * 36);
   x = Math.round(x); y = Math.round(y);
-  ctx.save(); ctx.globalAlpha = .4 + .55 * p; ctx.strokeStyle = GRANT_COLOR; ctx.lineWidth = 3 + Math.round(p * 2);
+  ctx.save(); ctx.globalAlpha = .4 + .55 * p; ctx.strokeStyle = color; ctx.lineWidth = 3 + Math.round(p * 2);
   ctx.strokeRect(x - r, y - r, r * 2, r * 2);
   ctx.fillStyle = '#ffffff'; for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) ctx.fillRect(x + sx * r - 4, y + sy * r - 4, 8, 8);
   ctx.globalAlpha = .9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(x - 24, y - 24, 48, 48);
-  if (left <= SATURN.fieldTicks) { ctx.globalAlpha = .22 + .22 * Math.abs(Math.sin(left * .5)); ctx.fillStyle = GRANT_COLOR; ctx.fillRect(x - 24, y - 24, 48, 48); }
+  if (left <= SATURN.fieldTicks) { ctx.globalAlpha = .22 + .22 * Math.abs(Math.sin(left * .5)); ctx.fillStyle = color; ctx.fillRect(x - 24, y - 24, 48, 48); }
   ctx.restore();
 }
 /** Recall cue: a violet diamond closing onto the unit with four chevrons pointing back toward her. */
@@ -228,49 +228,114 @@ function beamMotes(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: nu
   ctx.restore();
 }
 
-/** Time-stop field: a pale clock face with twelve hour blocks, a hand swept back, frames rippling inward and frozen motes. */
 /** Shared grant mark for gameplay and the rule-sheet example. */
-export function drawSaturnGrantMark(ctx:CanvasRenderingContext2D,x:number,y:number,fromX:number,fromY:number,left:number,tick:number) {
+export function drawSaturnGrantMark(ctx:CanvasRenderingContext2D,x:number,y:number,fromX:number,fromY:number,left:number,tick:number,reversed=false) {
   const p=1-left/SATURN.grantInterval;
-  iceBeam(ctx,fromX,fromY,x,y,.12+.25*p,GRANT_COLOR,3,true);
-  if(left<=GRANT_RING_TICKS){beamMotes(ctx,fromX,fromY,x,y,tick,GRANT_COLOR,.7);grantRing(ctx,x,y,left);}
-  drawSaturnSnowflake(ctx,x,y-42,10,'#e8fbff',tick*.05);
+  const color = reversed ? REVERSE_GRANT_COLOR : GRANT_COLOR;
+  iceBeam(ctx,fromX,fromY,x,y,.12+.25*p,color,3,true);
+  if(left<=GRANT_RING_TICKS){beamMotes(ctx,fromX,fromY,x,y,tick,color,.7);grantRing(ctx,x,y,left,color);}
+  drawSaturnSnowflake(ctx,x,y-42,10,reversed?REVERSE_GRANT_COLOR:'#e8fbff',tick*.05);
+}
+
+/** Small time-stop asterisk glitter: a bright white line and restrained icy glow. */
+function drawZeroCrystalParticle(ctx:CanvasRenderingContext2D,x:number,y:number,r:number,alpha:number,angle:number,shine=.6){
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.shadowBlur=0;ctx.lineCap='butt';ctx.lineJoin='miter';ctx.beginPath();
+  for(let arm=0;arm<6;arm++){
+    const a=arm*Math.PI/3,c=Math.cos(a),sn=Math.sin(a);ctx.moveTo(0,0);ctx.lineTo(c*r,sn*r);
+  }
+  // Additive ice-blue light spills past the white skeleton, with a brief sharper twinkle.
+  ctx.globalCompositeOperation='lighter';ctx.globalAlpha=alpha*(.28+shine*.35);ctx.strokeStyle='#8cdfff';ctx.shadowColor='#6dd4ff';ctx.shadowBlur=6;ctx.lineWidth=2.8;ctx.stroke();
+  ctx.globalAlpha=Math.min(1,alpha*1.4);ctx.strokeStyle='#ffffff';ctx.shadowColor='#e0faff';ctx.shadowBlur=3;ctx.lineWidth=1.2+shine*.25;ctx.stroke();
+  ctx.shadowBlur=0;ctx.globalAlpha=Math.min(1,alpha*(.65+shine*.6));ctx.fillStyle='#ffffff';ctx.fillRect(-.8,-.8,1.6,1.6);
+  ctx.restore();
 }
 
 function drawTimeField(ctx: CanvasRenderingContext2D, t: NonNullable<GameState['saturn']>, camX: number, camY: number) {
-  const f = t.field; if (!f) return;
-  const life = f.ticks / SATURN.fieldTicks, age = 1 - life, r = SATURN.fieldRadius * TILE_SIZE, x = Math.round(f.x - camX), y = Math.round(f.y - camY);
-  const fade = Math.min(1, life * 4), open = Math.min(1, age * 6); // snaps open, fades at the end
-  ctx.save();
-  // A cold wash that quiets everything inside.
-  ctx.globalAlpha = .2 * fade; ctx.fillStyle = '#cfe6ff'; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  ctx.globalAlpha = .12 * fade; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - r * .5, y - r * .5, r, r);
-  // Frames rippling inward.
-  for (let k = 0; k < 3; k++) {
-    const q = ((age * 2 + k / 3) % 1), rr = Math.round(r * (1 - q));
-    ctx.globalAlpha = .45 * fade * q; ctx.strokeStyle = TIME; ctx.lineWidth = 2; ctx.strokeRect(x - rr, y - rr, rr * 2, rr * 2);
+  const f=t.field;if(!f)return;
+  const age=1-f.ticks/SATURN.fieldTicks,fade=Math.max(0,Math.min(1,(.86-age)/.25)),radius=SATURN.fieldRadius*TILE_SIZE;
+  const x=Math.round(f.x-camX),y=Math.round(f.y-camY);
+  ctx.save();ctx.translate(x,y);ctx.shadowBlur=0;
+  // A quiet square wash and suspended snow keep the corners visible after the front passes.
+  const fieldFade=Math.min(1,f.ticks/12),outer=radius*1.16,feather=outer-radius;
+  ctx.save();ctx.beginPath();ctx.rect(-outer,-outer,outer*2,outer*2);ctx.clip();
+  // Keep the original square visible; only the added outer margin fades away.
+  ctx.globalAlpha=fieldFade*.055;panel(ctx,-radius,-radius,radius*2,radius*2,'#c3ecff');
+  for(let band=0;band<24;band++){
+    const inner=radius+feather*band/24,extent=radius+feather*(band+1)/24;
+    ctx.globalAlpha=fieldFade*.055*(1-(band+.5)/24);ctx.fillStyle='#c3ecff';
+    ctx.beginPath();ctx.rect(-extent,-extent,extent*2,extent*2);ctx.rect(-inner,-inner,inner*2,inner*2);ctx.fill('evenodd');
   }
-  // The clock face: outer frame, twelve hour blocks (larger at 12, 3, 6 and 9) and two corner brackets per corner.
-  const R = Math.round(r * (.9 + .1 * open));
-  ctx.globalAlpha = .9 * fade; ctx.strokeStyle = TIME; ctx.lineWidth = 4; ctx.strokeRect(x - R, y - R, R * 2, R * 2);
-  ctx.fillStyle = '#ffffff';
-  for (let h = 0; h < 12; h++) {
-    const a = h / 12 * Math.PI * 2, big = h % 3 === 0, s = big ? 12 : 6, d = R - 14;
-    ctx.globalAlpha = (big ? .95 : .65) * fade;
-    ctx.fillRect(Math.round(x + Math.sin(a) * d) - s / 2, Math.round(y - Math.cos(a) * d) - s / 2, s, s);
+  for(let i=0;i<72;i++){
+    const px=(((i*97+19)%307)/307-.5)*outer*1.9;
+    const py=(((i*163+71)%311)/311-.5)*outer*1.9+age*(10+i%4*4);
+    const edge=Math.max(0,Math.min(1,(outer-Math.max(Math.abs(px),Math.abs(py)))/feather));
+    ctx.globalAlpha=fieldFade*edge*(i%4?.24:.4);
+    if(i%8===0)drawZeroCrystalParticle(ctx,px,py,3.5,fieldFade*edge*.35,age*.18);
+    else panel(ctx,px,py,i%3?2:3,i%3?3:5,'#e7f9ff');
   }
-  // The hand: one solid bar rotated as a whole, swept backward as time stops.
-  ctx.save(); ctx.translate(x, y); ctx.rotate(-age * Math.PI * 1.5); ctx.globalAlpha = .85 * fade;
-  ctx.fillStyle = '#ffffff'; ctx.fillRect(-3, -R * .72, 6, R * .72); ctx.fillStyle = GRANT_COLOR; ctx.fillRect(-2, -R * .72, 4, 10);
+  for(const dx of [-1,1])for(const dy of [-1,1]){
+    ctx.globalAlpha=fieldFade*.35;
+    drawZeroCrystalParticle(ctx,dx*radius*.86,dy*radius*.86+age*10,3.5,fieldFade*.28,age*.3);
+  }
   ctx.restore();
-  ctx.globalAlpha = fade; ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 6, y - 6, 12, 12); ctx.fillStyle = '#9fc7ff'; ctx.fillRect(x - 3, y - 3, 6, 6);
-  // Motes hanging still in the air.
-  for (let k = 0; k < 14; k++) {
-    const mx = x + (((k * 97) % 100) / 100 - .5) * r * 1.8, my = y + (((k * 61) % 100) / 100 - .5) * r * 1.8;
-    ctx.globalAlpha = .5 * fade; ctx.fillStyle = k % 3 ? '#e6f3ff' : GRANT_COLOR; ctx.fillRect(Math.round(mx) - 2, Math.round(my) - 2, 4, 4);
+  // A pale snowflake expands under the separated crystalline pressure fronts.
+  const travel=Math.min(1,age*2.2),reach=radius*(.06+.94*(1-(1-travel)*(1-travel)));
+  ctx.globalAlpha=fade*.15;drawSaturnSnowflake(ctx,0,0,reach,'#c2eaff');
+  for(let echo=0;echo<3;echo++){
+    const p=Math.min(1,age*2.2-echo*.095);if(p<0)continue;
+    const r=radius*(.06+.94*(1-(1-p)*(1-p))),strength=fade*(1-echo*.28);
+    for(let arm=0;arm<6;arm++){
+      ctx.save();ctx.rotate(arm*Math.PI/3);
+      const span=16+r*.18;
+      ctx.globalAlpha=strength*.12;panel(ctx,-span,-r-7,span*2,15,'#79cce6');
+      ctx.globalAlpha=strength*.8;panel(ctx,-span,-r-2,span*2,5,'#a0e6f5');
+      ctx.globalAlpha=strength;panel(ctx,-span*.75,-r-1,span*1.5,2,'#f2fcff');
+      if(echo===0){
+        // Ice branches fork toward the wave's leading tips, like a snow crystal.
+        ctx.globalAlpha=fade*.85;panel(ctx,-2,-r-12,4,30,'#d9f7ff');
+        for(const side of [-1,1]){
+          ctx.save();ctx.translate(0,-r+5);ctx.rotate(side*Math.PI/4);
+          panel(ctx,-1,-17,3,17,'#a6e9ff');panel(ctx,-.5,-17,1,12,'#ffffff');ctx.restore();
+        }
+      }
+      ctx.restore();
+    }
   }
-  // The cast: a bright square shockwave as the field snaps open.
-  if (age < .3) { const q = age / .3, rr = Math.round(r * (.3 + q * .9)); ctx.globalAlpha = (1 - q) * .9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 8; ctx.strokeRect(x - rr, y - rr, rr * 2, rr * 2); }
+  // Detached snow crystals and short frozen streaks follow the front.
+  for(let i=0;i<18;i++){
+    const angle=i*Math.PI/9+.12,d=reach*(.62+i%3*.12);
+    ctx.globalAlpha=fade*(i%3?.45:.7);
+    if(i%3!==0){ctx.save();ctx.rotate(angle);panel(ctx,d-13,-1,13,3,'#b4e9fa');ctx.restore();}
+  }
+  // Mini crystals alone move independently; the field, large snowflake and wave stay unchanged.
+  for(let i=0;i<12;i++){
+    const delay=i%4*.015,life=(age-delay)/(1-delay);if(life<=0||life>=1)continue;
+    const a=i*2.39996,d=14+radius*(.35+i%7*.1)*Math.pow(life,.78);
+    const px=Math.cos(a)*d,py=Math.sin(a)*d-life*(10+i%3*5),opacity=Math.min(1,life*12)*Math.pow(1-life,.7);
+    drawZeroCrystalParticle(ctx,px,py,(6+i%4*2)*.5,opacity,a+life*(i%2?.9:-.7),Math.pow(Math.max(0,Math.sin(life*12+i*1.9)),4));
+  }
+  ctx.restore();
+}
+
+function drawFieldHourglass(ctx:CanvasRenderingContext2D,t:NonNullable<GameState['saturn']>,x:number,y:number){
+  const f=t.field;if(!f)return;
+  const age=1-f.ticks/SATURN.fieldTicks,flip=Math.min(1,age/.82),turn=flip*flip*(3-2*flip);
+  const alpha=.4*Math.min(1,f.ticks/10);
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.rotate(turn*Math.PI);ctx.scale(2.35,2.35);ctx.shadowBlur=0;
+  // Stepped glass, rim and sand are solid blocks; the complete symbol flips as one piece.
+  const rows=[[-24,-30,48,8],[-20,-22,40,7],[-14,-15,28,7],[-8,-8,16,16],[-14,8,28,7],[-20,15,40,7],[-24,22,48,8]];
+  for(const [left,top,width,height] of rows){
+    ctx.globalAlpha=alpha*.25;panel(ctx,left,top,width,height,'#77c6e8');
+    ctx.globalAlpha=alpha;panel(ctx,left,top,4,height,'#e7faff');panel(ctx,left+width-4,top,4,height,'#c5e7ff');
+  }
+  ctx.globalAlpha=alpha;panel(ctx,-29,-38,58,6,'#d9f3ff');panel(ctx,-29,32,58,6,'#d9f3ff');
+  ctx.globalAlpha=alpha*.6;panel(ctx,-25,-32,50,3,'#91c9e9');panel(ctx,-25,29,50,3,'#91c9e9');
+  ctx.globalAlpha=alpha*.85;
+  for(let i=0;i<4;i++){
+    panel(ctx,-16+i*4,-26+i*4,32-i*8,4,'#b4edff');
+    panel(ctx,-4-i*4,12+i*4,8+i*8,4,'#b4edff');
+  }
+  ctx.globalAlpha=alpha;panel(ctx,-2,-5,4,4,'#f5fdff');panel(ctx,-1,2,2,5,'#f5fdff');
   ctx.restore();
 }
 
@@ -328,7 +393,7 @@ export function drawSaturnGround(ctx: CanvasRenderingContext2D, s: GameState, ca
     const left = t.grantTimer;
     for (const id of t.grantTargets) {
       const e = s.enemies.find(x => x.id === id && x.hp > 0); if (!e) continue;
-      drawSaturnGrantMark(ctx,e.x-camX,e.y-camY,boss.x-camX,boss.y-camY,left,tick);
+      drawSaturnGrantMark(ctx,e.x-camX,e.y-camY,boss.x-camX,boss.y-camY,left,tick,t.phase>=3&&id===t.reverseGrantId);
     }
   }
   // Recall: everything holding her ice (aliens, and you) gets a violet diamond and chevrons pointing back to her.
@@ -366,7 +431,8 @@ export function drawSaturnMinimap(ctx: CanvasRenderingContext2D, s: GameState, o
   for (const id of t.grantTargets) {
     const e = s.enemies.find(x => x.id === id && x.hp > 0); if (!e) continue;
     const x = Math.round(ox + (e.tileX + .5) * scale), y = Math.round(oy + (e.tileY + .5) * scale), blink = t.grantTimer <= GRANT_RING_TICKS && Math.floor(s.gameTick / 8) % 2 === 0;
-    ctx.strokeStyle = blink ? '#ffffff' : GRANT_COLOR; ctx.lineWidth = 2; ctx.strokeRect(x - 5, y - 5, 10, 10);
+    const reversed = t.phase >= 3 && id === t.reverseGrantId;
+    ctx.strokeStyle = blink ? '#ffffff' : reversed ? REVERSE_GRANT_COLOR : GRANT_COLOR; ctx.lineWidth = 2; ctx.strokeRect(x - 5, y - 5, 10, 10);
   }
   if (t.field) { const r = SATURN.fieldRadius * scale, x = ox + t.field.x / TILE_SIZE * scale, y = oy + t.field.y / TILE_SIZE * scale; ctx.globalAlpha = .7; ctx.strokeStyle = TIME; ctx.lineWidth = 1; ctx.strokeRect(Math.round(x - r), Math.round(y - r), Math.round(r * 2), Math.round(r * 2)); }
   ctx.restore();
@@ -481,7 +547,7 @@ export function drawSaturnEffects(ctx: CanvasRenderingContext2D, s: GameState, c
   }
   ctx.globalAlpha = 1;
   for (const b of t.beams) {
-    const a = b.ticks / 24, color = b.kind === 'recall' ? RECALL_COLOR : b.kind === 'steal' ? '#ffffff' : GRANT_COLOR;
+    const a = b.ticks / 24, color = b.kind === 'recall' ? RECALL_COLOR : b.kind === 'reverseGrant' ? REVERSE_GRANT_COLOR : b.kind === 'steal' ? '#ffffff' : GRANT_COLOR;
     iceBeam(ctx, b.fromX - camX, b.fromY - camY, b.toX - camX, b.toY - camY, a, color, b.kind === 'steal' ? 7 : 5);
   }
   for (const fx of t.effects) {
@@ -504,6 +570,7 @@ export function drawSaturnEffects(ctx: CanvasRenderingContext2D, s: GameState, c
       for (let k = 0; k < 8; k++) { ctx.save(); ctx.translate(x, y); ctx.rotate(k * Math.PI / 4); panel(ctx, r * .6, -2, 8 + (k % 3) * 3, 4, k % 2 ? '#8fc5e5' : '#e7ffff'); ctx.restore(); }
     }
   }
+  drawFieldHourglass(ctx,t,s.playerX-camX,s.playerY-camY);
   ctx.restore();
 }
 
@@ -515,15 +582,18 @@ export function drawSaturnUnit(ctx: CanvasRenderingContext2D, e: Enemy, x: numbe
   if (e.flashTicks > 0) ctx.filter = 'brightness(1.8)';
   const id = e.id ?? 0, act = e.frostAct;
   if (e.type === 'frostbiter') {
-    // A low ice wolf-block: a wide jaw of white fangs, two slit eyes and swept crystal spines. It crouches before a pounce.
+    // A simple ice cube: a flat square with a bright icy rim, a lighter ice inset and one gloss mark, two square eyes
+    // (white while crouching before a pounce), small pink cheeks and a small v smile. It squashes as it crouches and stretches in the leap.
     const crouch = act && !act.leaping ? 1 - act.ticks / SATURN.frostbiter.crouch : 0, leap = act?.leaping;
     const sy = leap ? -8 : Math.round(crouch * 5), squash = leap ? .9 : 1 + crouch * .15;
     ctx.translate(0, sy); ctx.scale(squash, 2 - squash);
-    ctx.shadowColor = '#8fe3ff'; ctx.shadowBlur = 5; panel(ctx, -15, -12, 30, 24, '#8fe3ff'); ctx.shadowBlur = 0;
-    panel(ctx, -12, -9, 24, 18, '#173a55');
-    for (const k of [-10, -3, 4]) panel(ctx, k, -18, 5, 6, '#d8f8ff');
-    panel(ctx, -9, -5, 6, 3, crouch > .5 ? '#ffffff' : '#ff9fbf'); panel(ctx, 3, -5, 6, 3, crouch > .5 ? '#ffffff' : '#ff9fbf');
-    panel(ctx, -10, 2, 20, 5, '#0b1a28'); for (let k = 0; k < 5; k++) panel(ctx, -9 + k * 4, 2, 2, 4, '#f2fbff');
+    ctx.shadowColor = '#bff4ff'; ctx.shadowBlur = 5; panel(ctx, -13, -13, 26, 26, '#c9f3ff'); ctx.shadowBlur = 0;
+    panel(ctx, -10, -10, 20, 20, '#72cdf0');
+    panel(ctx, -10, -10, 6, 2, '#f2fdff'); panel(ctx, -10, -8, 2, 4, '#f2fdff'); // gloss
+    const eye = crouch > .5 ? '#ffffff' : '#123048';
+    panel(ctx, -8, -5, 6, 6, eye); panel(ctx, 2, -5, 6, 6, eye);
+    panel(ctx, -3, 3, 2, 2, '#123048'); panel(ctx, -1, 5, 2, 2, '#123048'); panel(ctx, 1, 3, 2, 2, '#123048'); // a small v smile
+    panel(ctx, -9, 1, 3, 2, '#ff9fbf'); panel(ctx, 6, 1, 3, 2, '#ff9fbf'); // small pink cheeks
   } else if (e.type === 'sleet_mortar') {
     // A squat turret of packed snow with a wide barrel pointing up; a pale shell shows when it is about to fire.
     const fire = e.shootTicks > 0 ? Math.sin((1 - e.shootTicks / 30) * Math.PI) : 0, bob = Math.round(Math.sin(tick * .06 + id));
@@ -573,56 +643,142 @@ export function drawSaturnAtmosphere(ctx: CanvasRenderingContext2D, s: GameState
 }
 
 
-/**
- * A failed recall: her own ice tears at her across the whole screen. A cold violet-white flash, long ice cracks
- * radiating from her (each a solid shape rotated as one), square shock rings, tumbling fragments and a frosted
- * violet edge. Drawn in screen space over the world, below the HUD; it only reads state.
- */
+const RECALL_SCREEN_CRACKS=Array.from({length:14},(_,i)=>{
+  const random=(salt:number)=>{const v=Math.sin(i*127.1+salt*73.17+21.7)*43758.5453;return v-Math.floor(v);};
+  const angle=random(3)*Math.PI*2,length=.1+random(4)*.15;
+  return{x:.05+random(1)*.9,y:.05+random(2)*.9,angle,length,bend:(random(5)>.5?1:-1)*(.35+random(6)*.4),branch:.3+random(7)*.25};
+});
+function drawRecallScreenCracks(ctx:CanvasRenderingContext2D,w:number,h:number,age:number){
+  const p=Math.max(0,Math.min(1,age/SATURN_BACKLASH_TICKS)),fade=.5+.5*Math.cos(p*Math.PI),rise=Math.min(1,age/8);
+  ctx.save();ctx.shadowBlur=0;ctx.lineJoin='miter';ctx.lineCap='butt';
+  for(const crack of RECALL_SCREEN_CRACKS){
+    const length=Math.min(w,h)*crack.length;
+    ctx.save();ctx.translate(crack.x*w,crack.y*h);ctx.rotate(crack.angle);
+    ctx.beginPath();ctx.moveTo(-length*.5,0);ctx.lineTo(-length*.15,0);ctx.lineTo(length*.12,length*crack.bend*.22);
+    ctx.lineTo(length*.35,length*crack.bend*.22);ctx.lineTo(length*.6,length*crack.bend*.4);
+    ctx.moveTo(-length*.15,0);ctx.lineTo(length*.05,-length*crack.branch*.4);ctx.lineTo(length*.3,-length*crack.branch*.4);
+    ctx.moveTo(length*.35,length*crack.bend*.22);ctx.lineTo(length*.43,-length*crack.branch*.23);ctx.lineTo(length*.66,-length*crack.branch*.23);
+    ctx.moveTo(-length*.32,0);ctx.lineTo(-length*.4,length*crack.branch*.25);
+    ctx.globalAlpha=fade*rise*.18;ctx.strokeStyle='#b18bdb';ctx.lineWidth=6;ctx.stroke();
+    ctx.globalAlpha=fade*rise*.26;ctx.strokeStyle='#ddc5fa';ctx.lineWidth=2;ctx.stroke();ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** Failed recall: six open frost fronts, crystalline wakes and drifting snow. */
 export function drawSaturnBacklash(ctx: CanvasRenderingContext2D, s: GameState, w: number, h: number, camX: number, camY: number, zoom = 1) {
-  const fx = s.saturn?.backlash; if (!fx) return;
-  const age = SATURN_BACKLASH_TICKS - fx.ticks, life = age / SATURN_BACKLASH_TICKS, fade = Math.max(0, 1 - life);
-  const x = Math.max(w * .12, Math.min(w * .88, (fx.x - camX) * zoom)), y = Math.max(h * .12, Math.min(h * .88, (fx.y - camY) * zoom));
-  const reach = Math.hypot(w, h);
-  ctx.save(); ctx.shadowBlur = 0;
-  // 1. Flash: white, then violet.
-  if (age < 12) { ctx.globalAlpha = (1 - age / 12) * .45; ctx.fillStyle = age < 4 ? '#ffffff' : '#e6d6ff'; ctx.fillRect(0, 0, w, h); }
-  ctx.globalAlpha = fade * fade * .16; ctx.fillStyle = RECALL_COLOR; ctx.fillRect(0, 0, w, h);
-  // 2. Ice cracks: twelve long tapered shards shooting out from her, growing then fading.
-  const grow = Math.min(1, age / 10);
-  for (let i = 0; i < 12; i++) {
-    const a = i / 12 * Math.PI * 2 + (i % 2 ? .13 : -.09), len = reach * (.35 + (i % 3) * .14) * grow, wide = 10 + (i % 4) * 4;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
-    ctx.globalAlpha = fade * .55; ctx.fillStyle = RECALL_COLOR;
-    ctx.beginPath(); ctx.moveTo(18, -wide / 2); ctx.lineTo(len, -2); ctx.lineTo(len, 2); ctx.lineTo(18, wide / 2); ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = fade * .9; ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.moveTo(18, -wide / 5); ctx.lineTo(len * .92, -1); ctx.lineTo(len * .92, 1); ctx.lineTo(18, wide / 5); ctx.closePath(); ctx.fill();
-    // a short side branch on every other crack
-    if (i % 2 === 0) { ctx.translate(len * .45, 0); ctx.rotate(.5); ctx.globalAlpha = fade * .7; ctx.fillRect(0, -2, len * .18, 4); }
+  const fx=s.saturn?.backlash;if(!fx)return;
+  const age=SATURN_BACKLASH_TICKS-fx.ticks,p=Math.max(0,Math.min(1,age/SATURN_BACKLASH_TICKS)),fade=.5+.5*Math.cos(p*Math.PI);
+  const px=(fx.x-camX)*zoom,py=(fx.y-camY)*zoom,dx=px-w/2,dy=py-h/2,offscreen=px<0||px>w||py<0||py>h;
+  const edgeScale=offscreen?Math.min(w/2/Math.abs(dx),h/2/Math.abs(dy)):1;
+  const x=offscreen?w/2+dx*edgeScale:px,y=offscreen?h/2+dy*edgeScale:py,reach=Math.hypot(w,h)*.9;
+  ctx.save();ctx.shadowBlur=0;
+  // A gentle violet grade unifies the scene beneath the flat luminous burst layers.
+  const filterIn=Math.min(1,age/6),filter=filterIn*filterIn*(3-2*filterIn)*fade;
+  ctx.globalAlpha=filter*.075;panel(ctx,0,0,w,h,'#ba90e9');
+  const light=ctx.createRadialGradient(x,y,0,x,y,Math.hypot(w,h)*.6);
+  light.addColorStop(0,'rgba(166,85,235,.32)');light.addColorStop(.45,'rgba(184,121,238,.13)');light.addColorStop(1,'rgba(194,151,238,0)');
+  ctx.globalAlpha=filter;ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
+  const vignette=ctx.createRadialGradient(w/2,h/2,Math.min(w,h)*.3,w/2,h/2,Math.hypot(w,h)*.58);
+  vignette.addColorStop(0,'rgba(38,15,63,0)');vignette.addColorStop(.65,'rgba(49,20,75,.08)');vignette.addColorStop(1,'rgba(38,15,63,.28)');
+  ctx.fillStyle=vignette;ctx.fillRect(0,0,w,h);
+  ctx.globalAlpha=Math.pow(Math.max(0,1-age/10),2)*.32;panel(ctx,0,0,w,h,'#ead8ff');
+  drawRecallScreenCracks(ctx,w,h,age);
+  // The original radial ice cracks sit quietly behind the brighter layered wave.
+  const crackGrow=Math.min(1,age/14);
+  for(let i=0;i<12;i++){
+    const angle=i*Math.PI/6+(i%2?.13:-.09),length=reach*(.35+i%3*.14)*crackGrow,width=10+i%4*4;
+    ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+    ctx.globalAlpha=fade*.2;ctx.fillStyle=RECALL_COLOR;
+    ctx.beginPath();ctx.moveTo(18,-width/2);ctx.lineTo(length,-2);ctx.lineTo(length,2);ctx.lineTo(18,width/2);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=fade*.28;ctx.fillStyle='#d9baff';
+    ctx.beginPath();ctx.moveTo(18,-width/5);ctx.lineTo(length*.92,-1);ctx.lineTo(length*.92,1);ctx.lineTo(18,width/5);ctx.closePath();ctx.fill();
+    if(i%2===0){ctx.translate(length*.45,0);ctx.rotate(.5);ctx.globalAlpha=fade*.22;panel(ctx,0,-2,length*.18,4,'#c7a0f5');}
     ctx.restore();
   }
-  // 3. Square shock rings racing outward.
-  for (let k = 0; k < 3; k++) {
-    const q = Math.max(0, life * 1.6 - k * .18); if (q <= 0 || q >= 1) continue;
-    const r = Math.round(30 + q * reach * .5);
-    ctx.globalAlpha = (1 - q) * .8; ctx.strokeStyle = k === 1 ? '#ffffff' : RECALL_COLOR; ctx.lineWidth = 10 - k * 3;
-    ctx.strokeRect(Math.round(x) - r, Math.round(y) - r, r * 2, r * 2);
-  }
-  // 4. Tumbling ice fragments: solid rectangles, each rotated as a whole, falling as they fly.
-  for (let i = 0; i < 28; i++) {
-    const a = i * 2.39996, d = 24 + (i % 6) * 18 + life * (180 + (i % 5) * 70), fall = life * life * 160;
-    const px = x + Math.cos(a) * d, py = y + Math.sin(a) * d * .75 + fall, sw = 6 + (i % 3) * 4, sh = 10 + (i % 4) * 5;
-    ctx.save(); ctx.translate(Math.round(px), Math.round(py)); ctx.rotate(a + life * (i % 2 ? 3 : -3));
-    ctx.globalAlpha = fade * .85; ctx.fillStyle = i % 3 ? '#cdb6ff' : '#9ff1ff'; ctx.fillRect(-sw / 2, -sh / 2, sw, sh);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(-sw / 2, -sh / 2, Math.max(2, sw * .35), sh * .6);
+  // One circular travelling wash, feathered on both sides like Sirius's Holy Light wave.
+  const washFront=p*reach*1.15,washDepth=Math.min(washFront,Math.max(120,washFront*.36)),washStep=washDepth/32;
+  if(washStep>0){
+    ctx.save();ctx.lineJoin='miter';
+    for(let sheet=0;sheet<32;sheet++){
+      const u=(sheet+.5)/32,r=washFront-u*washDepth;
+      ctx.globalAlpha=Math.sin(u*Math.PI)*Math.min(1,(1-p)*3)*.34;
+      const purple=1-u;
+      ctx.strokeStyle=`rgb(${Math.round(231-purple*76)},${Math.round(205-purple*151)},${Math.round(250-purple*15)})`;
+      ctx.globalAlpha*=.65+.95*purple;
+      ctx.lineWidth=washStep+.5;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();
+    }
     ctx.restore();
   }
-  // 5. Frosted violet edge, thick at first and thinning out.
-  const edge = Math.round(Math.min(w, h) * (.08 * fade + .02));
-  ctx.globalAlpha = fade * .55; ctx.fillStyle = RECALL_COLOR;
-  ctx.fillRect(0, 0, w, edge); ctx.fillRect(0, h - edge, w, edge); ctx.fillRect(0, 0, edge, h); ctx.fillRect(w - edge, 0, edge, h);
-  ctx.globalAlpha = fade * .8; ctx.fillStyle = '#ffffff';
-  for (let k = 0; k < 16; k++) { const side = k % 4, t2 = ((k * 97) % 100) / 100, len = 18 + (k % 3) * 14; // icicles hanging off the frame
-    if (side === 0) ctx.fillRect(t2 * w, edge, 4, len * fade); else if (side === 1) ctx.fillRect(t2 * w, h - edge - len * fade, 4, len * fade);
-    else if (side === 2) ctx.fillRect(edge, t2 * h, len * fade, 4); else ctx.fillRect(w - edge - len * fade, t2 * h, len * fade, 4); }
+  // Frost Warden's sixfold identity, using the open wave construction of Absolute Zero.
+  ctx.save();ctx.translate(x,y);
+  for(let echo=0;echo<4;echo++){
+    const travel=(age-echo*7)/66;if(travel<0||travel>=1)continue;
+    const r=18+reach*travel,strength=fade*(1-echo*.22),span=22+r*.22,wake=Math.min(r*.44,130);
+    for(let arm=0;arm<6;arm++){
+      ctx.save();ctx.rotate(arm*Math.PI/3);
+      for(let sheet=23;sheet>=0;sheet--){
+        const u=sheet/23;ctx.globalAlpha=strength*.3*Math.pow(1-u,1.2);
+        panel(ctx,-span,-r+wake*u,span*2,wake/23+1,echo===1?'#bca7f2':'#ae87e7');
+      }
+      ctx.globalAlpha=strength*.3;panel(ctx,-span-5,-r-17,span*2+10,38,RECALL_COLOR);
+      ctx.globalAlpha=strength*.9;panel(ctx,-span,-r-11,span*2,22,echo===1?RECALL_COLOR:'#b893ef');
+      ctx.globalAlpha=strength;panel(ctx,-span*.8,-r-3,span*1.6,6,'#ecdcff');
+      if(echo===0){
+        // Broad crystalline fans overlap like translucent petals, without shaded faces.
+        const fan=24+Math.min(30,r*.06);
+        for(let sheet=2;sheet>=0;sheet--){
+          ctx.save();ctx.translate(0,-r+sheet*10);
+          ctx.globalAlpha=strength*(.26-sheet*.055);
+          panel(ctx,-fan,-10,fan*2,16,sheet===1?RECALL_COLOR:'#bd96ef');
+          panel(ctx,-fan*.75,6,fan*1.5,12,sheet===1?RECALL_COLOR:'#bd96ef');
+          panel(ctx,-fan*.42,18,fan*.84,10,sheet===1?RECALL_COLOR:'#bd96ef');ctx.restore();
+        }
+        // A crystal spine and paired branches cap each moving snowflake arm.
+        ctx.globalAlpha=strength*.85;panel(ctx,-4,-r-34,8,72,'#dcc0ff');
+        panel(ctx,-1,-r-34,3,64,'#f3e7ff');
+        for(const side of [-1,1]){
+          for(let fork=0;fork<2;fork++){
+            ctx.save();ctx.translate(side*(12+fork*6),-r+4+fork*16);ctx.rotate(side*Math.PI/4);
+            ctx.globalAlpha=strength*.7;panel(ctx,-3,-26,6,30,'#b6a8ef');
+            ctx.globalAlpha=strength;panel(ctx,-1,-26,2,26,'#ead5ff');ctx.restore();
+          }
+          ctx.globalAlpha=strength*.65;panel(ctx,side*span-side*12,-r+9,12,3,'#c8b5f3');
+        }
+      }
+      ctx.restore();
+    }
+  }
+  const core=Math.max(0,1-p/.5);
+  ctx.globalAlpha=core*.55;drawSaturnSnowflake(ctx,0,0,48+p*170,'#dec4ff');
+  ctx.globalAlpha=core*.28;drawSaturnSnowflake(ctx,0,0,36+p*140,RECALL_COLOR,Math.PI/6);ctx.restore();
+  // Small rotating translucent ice chips scatter around the breaking frost fronts.
+  for(let i=0;i<96;i++){
+    const angle=i*2.39996,ease=1-(1-p)*(1-p),d=22+reach*(.12+i%6*.065)*ease;
+    const sx=x+Math.cos(angle)*d,sy=y+Math.sin(angle)*d,size=6+i%4*2;
+    ctx.save();ctx.translate(sx,sy);ctx.rotate(angle+p*(i%2?1:-1)*1.8);
+    for(let sheet=2;sheet>=0;sheet--){
+      ctx.save();ctx.translate(-sheet*size*.25,sheet*size*.16);ctx.rotate(sheet*.12);
+      ctx.globalAlpha=fade*(.32-sheet*.07);panel(ctx,-size/2,-size*.7,size,size*1.4,'#ffffff');ctx.restore();
+    }
+    ctx.restore();
+  }
+  for(let i=0;i<64;i++){
+    const angle=i*2.39996+.8,d=reach*p*(.4+i%4*.12),gx=x+Math.cos(angle)*d,gy=y+Math.sin(angle)*d;
+    const shine=Math.pow(Math.max(0,Math.sin(age*.2+i*1.7)),4);
+    ctx.globalAlpha=fade*(.22+shine*.75);panel(ctx,gx-5,gy,11,1,'#ffffff');panel(ctx,gx,gy-5,1,11,'#ffffff');
+  }
+  // Original frosted frame, softened into a faint purple edge with short ice tips.
+  const edge=Math.max(2,Math.round(Math.min(w,h)*(.012*fade+.004)));
+  ctx.globalAlpha=fade*.24;ctx.fillStyle=RECALL_COLOR;
+  ctx.fillRect(0,0,w,edge);ctx.fillRect(0,h-edge,w,edge);ctx.fillRect(0,0,edge,h);ctx.fillRect(w-edge,0,edge,h);
+  for(let i=0;i<16;i++){
+    const side=i%4,along=((i*97)%100)/100,length=(6+i%3*6)*fade;
+    ctx.globalAlpha=fade*.28;ctx.fillStyle='#d5b5fa';
+    if(side===0)ctx.fillRect(along*w,edge,2,length);
+    else if(side===1)ctx.fillRect(along*w,h-edge-length,2,length);
+    else if(side===2)ctx.fillRect(edge,along*h,length,2);
+    else ctx.fillRect(w-edge-length,along*h,length,2);
+  }
   ctx.restore();
 }

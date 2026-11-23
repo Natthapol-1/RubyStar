@@ -1,5 +1,5 @@
 'use client';
-import { drawGuideLaser, drawGuideThornDrop, drawGuideFullSunfire } from './guide-art';
+import { drawGuideLaser, drawGuideThornDrop, drawGuideFullSunfire, drawGuideRuby } from './guide-art';
 import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
@@ -7,7 +7,7 @@ import CelestialSkillGuideCard, { type CelestialGuidePainter } from './Celestial
 import type { Enemy } from './engine';
 import type { EnemyType } from './constants';
 import { GAIA_POD_FUSE } from './constants';
-import { drawGaiaUnit, drawGrowthTile, drawStone, drawRootBind, drawSporeShot, drawSporeBurst } from './gaia-art';
+import { drawGaiaUnit, drawGrowthTile, drawStone, drawRootBind, drawSporeShot, drawSporeBurst, drawSunstoneBloom } from './gaia-art';
 
 // Gaia challenge rule sheet: only what is new on this map, one small animated picture and one line per card.
 
@@ -23,14 +23,7 @@ function player(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.fillStyle = '#e8c93a'; ctx.fillRect(-6, -6, 12, 12); ctx.fillStyle = '#48c8ff'; ctx.fillRect(-5, 0, 10, 4);
   ctx.restore();
 }
-function ruby(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.save(); ctx.translate(x, y); ctx.shadowColor = '#ff4d7a'; ctx.shadowBlur = 5;
-  // A square gem: crisp outer square, darker inset and a pale corner highlight.
-  ctx.fillStyle = '#e8326a'; ctx.fillRect(-11, -11, 22, 22); ctx.shadowBlur = 0;
-  ctx.fillStyle = '#a8183f'; ctx.fillRect(-7, -7, 14, 14);
-  ctx.fillStyle = '#ff6a8f'; ctx.fillRect(-4, -4, 8, 8);
-  ctx.fillStyle = '#ffd0dc'; ctx.fillRect(-9, -9, 5, 5); ctx.restore();
-}
+const ruby = drawGuideRuby; // the shared rule-sheet Ruby
 // A small patch of overgrowth tiles at half scale.
 function tiles(ctx: CanvasRenderingContext2D, x0: number, y0: number, levels: number[][], tick: number) {
   ctx.save(); ctx.translate(x0, y0); ctx.scale(.5, .5);
@@ -43,12 +36,12 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 
 export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: CelestialGuidePainter; drawBoss: (ctx: CanvasRenderingContext2D, x: number, y: number, tick: number) => void }) {
   const cards: { title: string; color: string; text: string; paint: Paint }[] = [
-    { title: 'VINES', color: '#8fdc4a', text: 'Vines slow you and heal the boss. Shoot them away.', paint: (ctx, t) => {
+    { title: 'VINES', color: '#8fdc4a', text: 'Slow you and heal the boss.', paint: (ctx, t) => {
       const cut = Math.floor((t % 120) / 20);
       tiles(ctx, 4, 24, [[1, 2, 2, 3, 3, 2, 2, 1].map((l, x) => x < cut + 2 && x > 0 ? 0 : l), [2, 3, 3, 2, 2, 3, 2, 2], [1, 2, 2, 2, 3, 2, 1, 1]], t);
       player(ctx, 16, 36); drawGuideLaser(ctx, 26, 36, 56 + cut * 24, 36);
     } },
-    { title: 'PRIMAL SKILL', color: '#ffd36a', text: 'Sunfire: clearing vines charges it. Burns nearby enemies and vines; at full charge, strikes a chosen chamber instead.', paint: (ctx, t) => {
+    { title: 'PRIMAL SKILL', color: '#ffd36a', text: 'Sunfire: clearing vines charges it. Burns everything around you, or a chosen chamber when full.', paint: (ctx, t) => {
       const cycle = t % 600, full = cycle >= 240;
       const fill = full ? Math.min(1, (cycle - 240) / 120) : Math.min(.65, cycle / 160);
       ctx.fillStyle = '#1a140a'; ctx.fillRect(14, 98, 72, 10);
@@ -60,13 +53,11 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
       } else {
         player(ctx, 140, 58);
         if (cycle >= 160 && cycle < 220) {
-          const burst = (cycle - 160) / 60, half = 10 + burst * 50;
-          ctx.globalAlpha = 1 - burst; ctx.strokeStyle = '#fff3b8'; ctx.lineWidth = 6;
-          ctx.strokeRect(140 - half, 58 - half, half * 2, half * 2); ctx.globalAlpha = 1;
+          drawSunstoneBloom(ctx,140,58,(cycle-160)/60,.7,1,32,true);
         }
       }
     } },
-    { title: 'SUNSTONES', color: '#ffd36a', text: 'Thorn fields hitting Sunstones hurt the boss and heal you and Ruby.', paint: (ctx, t) => {
+    { title: 'SUNSTONES', color: '#ffd36a', text: 'Thorn fields that hit a Sunstone hurt the boss.', paint: (ctx, t) => {
       const phase = t % 360;
       drawBoss(ctx, 40, 62, t);
       const impact = 150;
@@ -78,8 +69,8 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
         drawStone(ctx, 140, 70, false, Math.max(0, (phase - 240) / 120), t);
         if (phase < 210) {
           const progress = (phase - impact) / 60;
-          ctx.globalAlpha = 1 - progress; ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 4;
-          ctx.strokeRect(106 - progress * 8, 36 - progress * 8, 68 + progress * 16, 68 + progress * 16);
+          drawSunstoneBloom(ctx,140,70,progress,.5,1,24);
+          ctx.globalAlpha = 1 - progress;
           ctx.fillStyle = '#fff3b8'; ctx.fillRect(Math.round(140 - progress * 100) - 4, 66, 8, 8); ctx.globalAlpha = 1;
         }
       }
@@ -91,15 +82,25 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
       ruby(ctx, 100, 60);
       if (ring >= 6) { ctx.globalAlpha = .5 + .5 * Math.sin(t * .3); ctx.strokeStyle = '#ff3b4f'; ctx.lineWidth = 4; ctx.strokeRect(18, 2, 164, 116); ctx.globalAlpha = 1; }
     } },
-    { title: 'SEED PODS', color: '#c6e86a', text: 'Break them before they burst into vines.', paint: (ctx, t) => {
+    { title: 'SEED PODS', color: '#c6e86a', text: 'Burst into vines if left alone.', paint: (ctx, t) => {
       const cycle = t % 200;
       if (cycle < 160) { ctx.save(); ctx.translate(100, 70); ctx.scale(1.6, 1.6); drawGaiaUnit(ctx, unit('seed_pod', 1, { hp: 6, maxHp: 6, windupTicks: GAIA_POD_FUSE * (1 - cycle / 160) }), 0, 0, t); ctx.restore(); }
       else tiles(ctx, 64, 24, [[0, 3, 3, 0], [3, 3, 3, 3], [0, 3, 3, 0]], t);
     } },
-    { title: 'BLOSSOMS', color: '#ff8fc8', text: 'Heal the boss. Destroy one to hurt the boss and heal yourself.', paint: (ctx, t) => {
-      ctx.save(); ctx.translate(70, 70); ctx.scale(1.4, 1.4); drawGaiaUnit(ctx, unit('blossom', 2, { hp: 12, maxHp: 12, shootTicks: t % 120 < 12 ? 12 - t % 120 : 0 }), 0, 0, t); ctx.restore();
-      player(ctx, 160, 64);
-      const u = (t % 120) / 120; if (u < .6) { ctx.fillStyle = '#ffb7dc'; ctx.fillRect(80 + u / .6 * 74, 56, 8, 8); }
+    { title: 'BLOSSOMS', color: '#ff8fc8', text: 'Heal the boss and push you away. Breaking one hurts the boss.', paint: (ctx, t) => {
+      // Loop: a pollen shot, then a pulse bursts and pushes you back.
+      const burst = 130, k = t % 240, ring = k >= burst && k < burst + 24 ? (k - burst) / 24 : -1;
+      const flash = k < 12 ? 12 - k : k >= burst && k < burst + 12 ? burst + 12 - k : 0;
+      ctx.save(); ctx.translate(70, 70); ctx.scale(1.4, 1.4); drawGaiaUnit(ctx, unit('blossom', 2, { hp: 12, maxHp: 12, shootTicks: flash }), 0, 0, t); ctx.restore();
+      const push = k >= burst ? Math.min(1, (k - burst) / 18) : 0;
+      player(ctx, 140 + Math.round(push * 48), 64);
+      if (ring >= 0) for (let r = 0; r < 3; r++) {
+        const u = ring - r * .14; if (u <= 0 || u >= 1) continue;
+        const half = Math.round((10 + u * 84) / 6) * 6;
+        ctx.globalAlpha = (1 - u) * .85; ctx.strokeStyle = r === 1 ? '#ff8fc8' : '#ffd6ec'; ctx.lineWidth = r === 1 ? 6 : 3;
+        ctx.strokeRect(70 - half, 64 - half, half * 2, half * 2); ctx.globalAlpha = 1;
+      }
+      const u = k / 120; if (u < .6) { ctx.fillStyle = '#ffb7dc'; ctx.fillRect(80 + u / .6 * 54, 56, 8, 8); }
     } },
     { title: 'ROOT SNARE', color: '#ff6a7a', text: 'Holds you in place.', paint: (ctx, t) => {
       const cycle = t % 240, caught = cycle >= 50 && cycle < 180;
@@ -128,7 +129,7 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
       if (p > .2 && p < .45) { drawGuideLaser(ctx, 40, 64, 40 + Math.min(1, (p - .2) / .15) * 40, 64); }
       if (p >= .5 && p < .9) { const rise = (p - .5) / .4; ctx.globalAlpha = 1 - rise; ctx.fillStyle = '#7dffb0'; for (const hx of [30, 165]) { ctx.fillRect(hx - 2, 36 - rise * 18, 4, 12); ctx.fillRect(hx - 6, 40 - rise * 18, 12, 4); } ctx.globalAlpha = 1; }
     } },
-    { title: 'POLLEN', color: '#f2d64a', text: 'Yellow haze slows you, halves your laser range and makes vines grow faster.', paint: (ctx, t) => {
+    { title: 'POLLEN', color: '#f2d64a', text: 'Slows you, shortens your laser and makes vines grow faster.', paint: (ctx, t) => {
       const front = Math.floor((t % 240) / 24); // vines creeping quickly across the floor inside the haze
       tiles(ctx, 4, 88, [Array.from({ length: 8 }, (_, x) => x < front - 2 ? 2 : x < front ? 1 : 0)], t);
       ctx.globalAlpha = .18; ctx.fillStyle = '#f2d64a'; ctx.fillRect(0, 0, W, H);
@@ -140,13 +141,13 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
       const reach = 60 + 20 * Math.sin(t * .05); // the short beam stops early
       drawGuideLaser(ctx, 50, 60, 50 + reach, 60);
     } },
-    { title: 'RAGECAP', color: '#ff5a4a', text: 'Fast. Its hit knocks you back, and it spreads vines.', paint: (ctx, t) => {
+    { title: 'RAGECAP', color: '#ff5a4a', text: 'Fast, with a knockback attack. Spreads vines.', paint: (ctx, t) => {
       const p = (t % 210) / 210, x = 30 + Math.min(1, p / .5) * 110; // it rushes in spreading vines, hits you and knocks you back (a 3.5s loop)
       tiles(ctx, 0, 76, [[0, 0, 0, 0, 0, 0, 0, 0].map((_, k) => k * 24 + 12 < x - 10 ? 2 : 0)], t);
       ctx.save(); ctx.translate(x, 60); ctx.scale(1.4, 1.4); drawGaiaUnit(ctx, unit('angry_mushroom', 5, { hp: 14, maxHp: 14, shootTicks: p > .5 && p < .58 ? 10 : 0 }), 0, 0, t); ctx.restore();
       player(ctx, 165 + (p > .5 ? Math.min(1, (p - .5) / .08) * 22 : 0), 60);
     } },
-    { title: 'SPORELING', color: '#b9a8ff', text: 'Shoots spores that slow you on hit and burst into vines.', paint: (ctx, t) => {
+    { title: 'SPORELING', color: '#b9a8ff', text: 'Shoots spores that slow you and grow vines.', paint: (ctx, t) => {
       const cycle = t % 240, fired = cycle >= 50, hit = cycle >= 88;
       drawGaiaUnit(ctx, unit('sporeling', 3, { windupTicks: cycle < 50 ? 50-cycle : 0, shootTicks: cycle >= 50 && cycle < 64 ? 14 : 0 }), 38, 62, t);
       if (fired && !hit) drawSporeShot(ctx, 52 + (cycle-50)/38*85, 62, 1, 0);
