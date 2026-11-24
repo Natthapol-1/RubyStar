@@ -23,7 +23,7 @@ export const SIRIUS = {
   runeCast: 60,           // 1s cast before tracing starts
   runeTicks: 1200,        // 20s to trace it
   phase3RuneBonus: 300,   // phase 3: 5 extra seconds to include a seal
-  runeDamage: 60,         // a traced rune burns 5% of a phase: runes also build Holy Light for the Halo burst
+  runeDamage: 72,         // a traced rune burns 6% of a phase: runes also build Holy Light for the Halo burst
   runeHeal: 45,
   runeFailHeal: 60,      // 5% of a phase, without undoing phase progress
   holyFailLoss: 20,       // a missed rune drains all your energy and this much Holy Light

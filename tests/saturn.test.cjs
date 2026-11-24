@@ -12,14 +12,14 @@ function fresh(){
 const alien=(s,type,x,y,hp=100)=>{const m=e.createEncounterEnemy(s,type,x,y,hp);s.enemies.push(m);return m;};
 const close=(x,y,m)=>assert.ok(Math.abs(x-y)<1e-6,`${m??''} ${x} vs ${y}`);
 
-test('phase 3 sometimes marks four grants with exactly one stable reversed target; earlier phases never do',()=>{
+test('from phase 2 grants sometimes mark four targets with exactly one stable reversed one; phase 1 never does',()=>{
   const random=Math.random;
   try{
     for(const phase of [1,2,3]){
       const{s,t}=fresh();for(let i=0;i<5;i++)alien(s,'normal',20+i,20);
       Math.random=()=>0;a.godSetSaturnPhase(s,phase);t.iceTimer=t.recallTimer=1e6;t.pulse=-1e6;
-      assert.equal(t.grantTargets.length,phase===3?4:3);
-      assert.equal(t.reverseGrantId!==undefined,phase===3);
+      assert.equal(t.grantTargets.length,phase>=S.reverseGrantFromPhase?4:3);
+      assert.equal(t.reverseGrantId!==undefined,phase>=S.reverseGrantFromPhase);
       if(phase===3){
         const id=t.reverseGrantId;Math.random=()=>.99;a.updateSaturn(s);assert.equal(t.reverseGrantId,id,'warning does not reroll');
         t.grantTimer=1;a.updateSaturn(s);assert.equal(t.grantTargets.length,3);assert.equal(t.reverseGrantId,undefined,'normal cycle remains possible');
@@ -80,11 +80,10 @@ test('grant counter damage never hits the reversed target, even when it has less
   }
 });
 
-test('No Freeze prevents Saturn floor, fired-line, alien ice and trail freezes without consuming shield',()=>{
-  for(const kind of ['floor','line','alien','trail']){
+test('No Freeze prevents Saturn floor, fired-line and alien ice freezes without consuming shield',()=>{
+  for(const kind of ['floor','line','alien']){
     const{s,t}=fresh();e.godSetNoFreeze(s,true);s.playerShieldHP=80;
     if(kind==='floor')s.frostIceTiles=[[10,10]];
-    else if(kind==='trail')t.frostTrail=[{x:10,y:10,ticks:-1}];
     else t.temporaryIce=[{x:10,y:10,ticks:60,freezeTicks:kind==='line'?24:72}];
     a.freezeSaturnPlayer(s);assert.equal(s.playerFrozenTicks,0);assert.equal(s.playerShieldHP,80);
     e.godSetNoFreeze(s,false);a.freezeSaturnPlayer(s);assert.ok(s.playerFrozenTicks>0);assert.ok(s.playerShieldHP<80);
@@ -209,7 +208,7 @@ test('Saturn uses 32 frozen tiles without a boss-room bonus and a shorter player
   const{s,t}=fresh();t.iceTimer=0;a.updateSaturn(s);assert.equal(t.nextIce.length,32);
   for(let i=0;i<S.iceWarning;i++)a.updateSaturn(s);
   assert.equal(s.frostIceTiles.length,32);
-  const [x,y]=s.frostIceTiles[0];player(s,x,y);a.freezeSaturnPlayer(s);assert.equal(s.playerFrozenTicks,48);assert.equal(S.fieldTicks,45);
+  const [x,y]=s.frostIceTiles[0];player(s,x,y);a.freezeSaturnPlayer(s);assert.equal(s.playerFrozenTicks,S.normalFreezeTicks);assert.equal(S.fieldTicks,45);
 });
 
 test('Glacier Hulk walks to an adjacent tile within 40 ticks',()=>{
@@ -382,15 +381,15 @@ test('phase 3 grant paths expire after lineIceTicks (1.95 seconds)',()=>{
   for(let i=0;i<a.SATURN.lineIceTicks-1;i++)a.updateSaturn(s);assert.ok(t.temporaryIce.some(i=>i.x===25&&i.y===10));a.updateSaturn(s);assert.ok(!t.temporaryIce.some(i=>i.x===25&&i.y===10));
 });
 
-test('phase 3 paths freeze for 0.4 seconds; overlapping normal floor freezes for 0.8s and shell ice for 1.2s',()=>{
+test('phase 3 paths use their own short freeze; overlapping normal floor and shell ice keep their own freezes',()=>{
   for(const overlap of ['none','floor','shell']){
     const{s,t,boss}=bloomScene(3);near(boss,30,10);player(s,40,40);
     const mob=alien(s,'frostbiter',20,10);t.grantTargets=[mob.id];t.grantTimer=1;a.updateSaturn(s);
-    const path=t.temporaryIce.find(i=>i.x===25&&i.y===10);assert.ok(path);assert.equal(path.freezeTicks,24);
+    const path=t.temporaryIce.find(i=>i.x===25&&i.y===10);assert.ok(path);assert.equal(path.freezeTicks,S.lineFreezeTicks);
     if(overlap==='floor')s.frostIceTiles=[[25,10]];
     if(overlap==='shell')t.shells=[{x:25,y:10,ticks:1}];
     player(s,25,10);a.updateSaturn(s);
-    assert.equal(s.playerFrozenTicks,overlap==='none'?24:overlap==='floor'?48:72,overlap);
+    assert.equal(s.playerFrozenTicks,overlap==='none'?S.lineFreezeTicks:overlap==='floor'?S.normalFreezeTicks:S.enemyFreezeTicks,overlap);
   }
 });
 
@@ -441,90 +440,11 @@ test('a recall from the player does not freeze the player or the boss endpoint',
 });
 
 
-function trailScene(phase=2){
- const scene=fresh(),{s,t,boss}=scene;
- for(let y=8;y<=12;y++)for(let x=8;x<=13;x++)s.map[y][x]=c.T_FLOOR;
- boss.hp=S.phaseHP*(4-phase);t.phase=phase;player(s,8,10);a.updateSaturn(s);return scene;
-}
-function saturnTicks(s,n){for(let i=0;i<n;i++)a.updateSaturn(s);}
-
-test('phase 2 and 3 footsteps freeze after 0.25s and melt after 1.2s',()=>{
- for(const phase of [2,3]){
-  const{s,t}=trailScene(phase);player(s,9,10);a.updateSaturn(s);
-  assert.equal(a.saturnIceAt(s,8,10),false);assert.equal(t.frostTrail.length,1);assert.equal(t.frostTrail[0].ticks,15);
-  saturnTicks(s,14);assert.equal(a.saturnIceAt(s,8,10),false);
-  a.updateSaturn(s);assert.equal(a.saturnIceAt(s,8,10),true);
-  saturnTicks(s,71);assert.equal(a.saturnIceAt(s,8,10),true,'ice lasts through the final tick');
-  a.updateSaturn(s);assert.equal(a.saturnIceAt(s,8,10),false);
-  assert.equal(t.frostTrail.length,0,'standing still lets the trail melt');assert.equal(s.playerFrozenTicks,0);
- }
-});
-
-test('returning to frost trail ice freezes for 12 ticks and removes one-fifth of shield',()=>{
- const{s}=trailScene();player(s,9,10);a.updateSaturn(s);saturnTicks(s,15);
- s.playerShieldHP=40;player(s,8,10);a.updateSaturn(s);
- assert.equal(s.playerFrozenTicks,12);close(s.playerShieldHP,32);
- assert.equal(s.saturn.frostTrail.length,0,'freezing clears the whole path');
- player(s,9,10);a.updateSaturn(s);assert.equal(s.saturn.frostTrail.length,0,'no path is generated while frozen');
- s.playerFrozenTicks=0;a.updateSaturn(s);assert.equal(s.playerFrozenTicks,0,'the cleared path cannot refreeze you');
- player(s,8,10);a.updateSaturn(s);assert.deepEqual(s.saturn.frostTrail,[{x:9,y:10,ticks:S.trailDelay}],'walking after thaw starts a fresh trail');
-});
-
-test('Absolute Zero protects against frost trail ice',()=>{
- const{s,t}=trailScene();player(s,9,10);a.updateSaturn(s);saturnTicks(s,15);
- player(s,8,10);t.field={x:s.playerX,y:s.playerY,ticks:100};a.updateSaturn(s);
- assert.equal(s.playerFrozenTicks,0);assert.equal(a.saturnIceAt(s,8,10),true);
-});
-
-test('no frost trail in phase 1, across teleports or on teleport pads',()=>{
- const{s,t}=trailScene(1);player(s,9,10);a.updateSaturn(s);saturnTicks(s,35);assert.equal(t.temporaryIce.length,0);
- const scene=trailScene();player(scene.s,16,10);a.updateSaturn(scene.s);assert.equal(scene.t.frostTrail.length,0,'teleport does not leave footsteps');
- const [x,y]=c.TELEPORT_PADS[0];player(scene.s,x,y);a.updateSaturn(scene.s);
- scene.s.map[y][x+1]=c.T_FLOOR;player(scene.s,x+1,y);a.updateSaturn(scene.s);
- assert.equal(scene.t.frostTrail.length,0,'pad stays clear');
-});
-
-test('frost trail timers pause with gameplay and clear with the encounter',()=>{
- const{s,t}=trailScene();player(s,9,10);a.updateSaturn(s);const before=JSON.stringify(t.frostTrail);
- s.gamePhase='paused';saturnTicks(s,100);assert.equal(JSON.stringify(t.frostTrail),before);
- s.gamePhase='playing';a.clearSaturnEncounter(s);assert.equal(t.frostTrail.length,0);assert.equal(t.temporaryIce.length,0);
-});
-
-
-test('only five distinct footprints remain and each expires independently',()=>{
- const{s,t}=trailScene();for(let x=3;x<18;x++)s.map[8][x]=c.T_FLOOR;
- player(s,3,8);a.updateSaturn(s);
- for(let x=4;x<=9;x++){player(s,x,8);a.updateSaturn(s);}
- assert.deepEqual(t.frostTrail.map(t=>t.x),[4,5,6,7,8]);
- assert.ok(t.trailFades.some(tile=>tile.x===3&&tile.y===8));
- assert.equal(a.saturnIceAt(s,3,8),false);
- player(s,8,8);a.updateSaturn(s);player(s,9,8);a.updateSaturn(s);
- assert.equal(new Set(t.frostTrail.map(t=>t.x)).size,5,'no duplicate floor tiles');
- player(s,10,8);a.updateSaturn(s);
- const [oldest,next]=[...t.frostTrail].sort((a,b)=>a.ticks-b.ticks);
- saturnTicks(s,72+oldest.ticks);
- assert.equal(a.saturnIceAt(s,oldest.x,oldest.y),false);
- assert.equal(a.saturnIceAt(s,next.x,next.y),true);
- saturnTicks(s,90);assert.deepEqual(t.frostTrail,[]);assert.deepEqual(t.trailFades,[]);
-});
-
-
-test('freezing from ordinary ice fades active ice and pending footsteps after clearing their hazards',()=>{
- const{s,t}=trailScene();player(s,9,10);a.updateSaturn(s);
- t.frostTrail.push({x:11,y:10,ticks:0});s.frostIceTiles=[[9,10]];
- a.updateSaturn(s);assert.equal(s.playerFrozenTicks,S.normalFreezeTicks);assert.deepEqual(t.frostTrail,[]);
- assert.equal(a.saturnIceAt(s,11,10),false);
- assert.deepEqual(t.trailFades.map(tile=>[tile.x,tile.y,tile.footprintTicks>0]),[[8,10,true],[11,10,false]]);
- saturnTicks(s,S.trailReplaceFadeTicks-1);assert.equal(t.trailFades.length,2);
- a.updateSaturn(s);assert.deepEqual(t.trailFades,[]);
-});
-
-
-test('Frost Bloom shares across four tiles but not beyond its expanded radius',()=>{
- for(const distance of [4,4.01]){
+test('Frost Bloom shares out to its radius but not beyond',()=>{
+ for(const distance of [S.bloomRadius,S.bloomRadius+.01]){
   const{s,t}=bloomScene(),donor=alien(s,'frostbiter',20,20),receiver=alien(s,'frostbiter',24,20);
   receiver.x=donor.x+distance*c.TILE_SIZE;donor.icyShieldHP=45;t.bloomTimer=1;a.updateSaturn(s);
-  assert.equal(receiver.icyShieldHP,distance===4?10:0);assert.equal(donor.icyShieldHP,distance===4?35:45);
+  assert.equal(receiver.icyShieldHP,distance===S.bloomRadius?10:0);assert.equal(donor.icyShieldHP,distance===S.bloomRadius?35:45);
  }
 });
 
@@ -534,7 +454,68 @@ test('a meteor hits the Frost Warden for 10% of a phase even through her own fro
   assert.ok(Math.abs(hp-boss.hp-S.phaseHP*S.meteorShare)<1e-6,'took '+(hp-boss.hp));assert.equal(boss.icyShieldHP,500,'her shield is untouched');
 });
 
-test('countering a normal and Hulk grant adds 10.9 and 21.8 boss damage',()=>{
+test('countering a normal and Hulk grant adds about 11.3 and 22.7 boss damage',()=>{
   const{s,t,boss}=fresh();const normal=alien(s,'frostbiter',12,10),hulk=alien(s,'glacier_hulk',10,12);t.grantTargets=[normal.id,hulk.id];
-  a.useSaturnIntercept(s);const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);close(hp-boss.hp,32.7);
+  a.useSaturnIntercept(s);const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);close(hp-boss.hp,34.008);
+});
+
+test('on Saturn F works while frozen in ice and breaks you out; a stun still blocks it',()=>{
+  const{s}=fresh();s.specialSkill='frost_warden';s.specialLockTicks=0;s.playerFrozenTicks=60;s.playerStunned=false;
+  assert.equal(e.useSpecialSkill(s),true,'cast while frozen');assert.equal(s.playerFrozenTicks,0,'thawed');assert.equal(s.specialSkill,null);
+  const q=fresh().s;q.specialSkill='frost_warden';q.specialLockTicks=0;q.playerFrozenTicks=60;q.playerStunned=true;
+  assert.equal(e.useSpecialSkill(q),false,'a stun still blocks it');assert.equal(q.playerFrozenTicks,60);
+  const n=e.createModeState('endless');n.specialSkill='frost_warden';n.specialLockTicks=0;n.playerFrozenTicks=60;n.playerStunned=false;
+  assert.equal(e.useSpecialSkill(n),false,'elsewhere frozen still blocks F');
+});
+
+function anchorScene(){const scene=fresh();scene.t.phase=S.anchorFromPhase;scene.boss.hp=1000;return scene;}
+test('Frost Anchors arrive in phase 3, one per room, with pause, respawn and cleanup',()=>{
+ const{s,t,boss}=fresh();s.noMobs=false;t.spawnTimer=1e6;a.updateSaturn(s);assert.equal(s.enemies.filter(e=>e.type==='frost_anchor').length,0);
+ boss.hp=2400;a.updateSaturn(s);assert.equal(s.enemies.filter(e=>e.type==='frost_anchor').length,0,'not yet in phase 2');
+ boss.hp=1200;a.updateSaturn(s);const anchors=s.enemies.filter(e=>e.type==='frost_anchor');assert.equal(anchors.length,4);assert.equal(new Set(anchors.map(e=>c.chamberOfTile(e.tileX,e.tileY))).size,4);
+ for(const e of anchors){assert.equal(e.hp,S.anchorHP);for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)assert.ok(s.map[e.tileY+dy]?.[e.tileX+dx]!==undefined&&s.map[e.tileY+dy][e.tileX+dx]!==c.T_WALL,'clear two-tile wall buffer');assert.ok(e.type==='frost_anchor');assert.ok(!t.grantTargets.includes(e.id));assert.ok(c.TELEPORT_PADS.every(([x,y])=>x!==e.tileX||y!==e.tileY));}
+ const gone=anchors[0];e.damageEnemy(s,gone,100);e.killEnemy(s,s.enemies.indexOf(gone));assert.equal(s.enemies.filter(e=>e.type==='frost_anchor').length,3);
+ const timer=t.anchorTimer;s.gamePhase='paused';a.updateSaturn(s);assert.equal(t.anchorTimer,timer);s.gamePhase='playing';t.anchorTimer=0;a.updateSaturn(s);assert.equal(s.enemies.filter(e=>e.type==='frost_anchor').length,4);
+ player(s,11,10);a.updateSaturn(s);assert.deepEqual(t.frostTrail,[]);a.clearSaturnEncounter(s);assert.equal(s.enemies.filter(e=>e.type==='frost_anchor').length,0);
+});
+test('anchor aura blocks grant counters, but time stop still works; destroying it restores counters immediately',()=>{
+ const{s,t,boss}=anchorScene(),mob=alien(s,'frostbiter',11,10),pillar=alien(s,'frost_anchor',12,10,S.anchorHP);
+ t.grantTargets=[mob.id];a.useSaturnIntercept(s);assert.equal(a.saturnTimeStopped(s,mob),true);assert.equal(a.inSaturnCounterField(s,mob.x,mob.y),false);
+ const hp=boss.hp;t.grantTimer=1;a.updateSaturn(s);assert.equal(mob.icyShieldHP,S.grantAmount);assert.equal(s.playerShieldHP,0);assert.equal(boss.hp,hp);assert.equal(pillar.hp,S.anchorHP);
+ e.damageEnemy(s,pillar,100);e.killEnemy(s,s.enemies.indexOf(pillar));assert.equal(a.inSaturnCounterField(s,mob.x,mob.y),true);
+ t.grantTargets=[mob.id];t.grantTimer=1;a.updateSaturn(s);assert.ok(s.playerShieldHP>0);assert.ok(boss.hp<hp);
+});
+test('anchor suppression depends only on the player, not on enemy or cast positions',()=>{
+ const{s,t}=anchorScene(),mob=alien(s,'frostbiter',15,10);alien(s,'frost_anchor',20,10,S.anchorHP);
+ a.useSaturnIntercept(s);assert.equal(a.saturnAnchorBlocks(s,s.playerX,s.playerY),false);assert.equal(a.inSaturnField(s,mob.x,mob.y),true);assert.equal(a.inSaturnCounterField(s,mob.x,mob.y),true);
+ t.grantTargets=[mob.id];t.grantTimer=1;a.updateSaturn(s);assert.equal(mob.icyShieldHP,0);assert.ok(s.playerShieldHP>0);
+ player(s,16,10);assert.equal(a.inSaturnCounterField(s,mob.x,mob.y),false);
+ player(s,10,10);assert.equal(a.inSaturnCounterField(s,mob.x,mob.y),true);
+});
+test('anchor aura prevents recall blocking and keeps anchors out of grants and Frost Bloom',()=>{
+ const{s,t,boss}=anchorScene(),mob=alien(s,'frostbiter',11,10),pillar=alien(s,'frost_anchor',12,10,S.anchorHP);
+ mob.icyShieldHP=45;t.playerIce=20;s.playerShieldHP=20;a.useSaturnIntercept(s);t.recallTimer=1;const hp=boss.hp;a.updateSaturn(s);
+ assert.equal(s.playerShieldHP,0);assert.equal(mob.icyShieldHP,0);assert.ok(boss.hp>hp);assert.ok(!t.effects.some(e=>e.kind==='recallCounter'));
+ mob.icyShieldHP=45;t.bloomTimer=1;t.grantTimer=1;a.updateSaturn(s);assert.equal(pillar.icyShieldHP,0);assert.ok(!t.grantTargets.includes(pillar.id));
+});
+
+test('Frost Anchor placement rejects walls within two tiles, including diagonal walls and map edges',()=>{
+ const{s}=fresh();for(let y=6;y<=14;y++)for(let x=6;x<=14;x++)s.map[y][x]=c.T_FLOOR;
+ assert.equal(a.saturnAnchorSpotClear(s,10,10),true);
+ for(const [dx,dy]of [[1,0],[2,0],[-2,0],[0,2],[2,2],[-2,-2]]){s.map[10+dy][10+dx]=c.T_WALL;assert.equal(a.saturnAnchorSpotClear(s,10,10),false);s.map[10+dy][10+dx]=c.T_FLOOR;}
+ s.map[10][13]=c.T_WALL;assert.equal(a.saturnAnchorSpotClear(s,10,10),true,'wall three tiles away is allowed');
+ assert.equal(a.saturnAnchorSpotClear(s,0,0),false);
+});
+
+test('Frost Anchor suppression covers all of each outermost tile and ends exactly at tile edges',()=>{
+ const{s}=anchorScene();alien(s,'frost_anchor',20,20,S.anchorHP);const lo=20-S.anchorRadius,hi=21+S.anchorRadius;
+ for(const [x,y]of [[lo*48,lo*48],[hi*48-.01,hi*48-.01],[(hi-1)*48+47,20.5*48]])assert.equal(a.saturnAnchorBlocks(s,x,y),true);
+ for(const [x,y]of [[lo*48-.01,20.5*48],[hi*48,20.5*48],[20.5*48,hi*48]])assert.equal(a.saturnAnchorBlocks(s,x,y),false);
+});
+
+test('destroying a Frost Anchor grants ordinary shield, respects the cap and gives no meteor reward',()=>{
+ for(const [start,meteor,expected]of [[0,false,20],[195,false,200],[0,true,0]]){
+  const{s,t}=anchorScene();s.playerShieldHP=start;const pillar=alien(s,'frost_anchor',12,10,S.anchorHP);e.damageEnemy(s,pillar,100);e.killEnemy(s,s.enemies.indexOf(pillar),meteor);
+  assert.equal(s.playerShieldHP,expected);assert.equal(t.playerIce,0);assert.equal(s.enemies.includes(pillar),false);if(!meteor)assert.equal(s.playerSaturnShield,true);
+ }
 });

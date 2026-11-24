@@ -202,6 +202,39 @@ function dusk(downed=false){
 return {aegis,construct,dawn,dusk};
 }
 
+/** Ambient particles around the Aegis Sentinel and the Astral Twins, like the other bosses' motes and embers: the
+ * Sentinel trails orbiting gold and ivory shield shards with a few rising sand grains; Dawn (melee) circles hot ember
+ * squares that flicker; Dusk (ranged) circles small twinkling star crosses. Small, separated, glow 5 or less. */
+function drawBossParticles(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, tick: number) {
+  ctx.save(); ctx.shadowBlur = 0;
+  if (e.type === 'aegis_sentinel') {
+    for (let i = 0; i < 6; i++) {
+      const a = tick * .02 + i * Math.PI / 3 + e.id, d = 33 + 3 * Math.sin(tick * .05 + i);
+      ctx.globalAlpha = .55 + .35 * Math.abs(Math.sin(tick * .06 + i * 1.3)); ctx.fillStyle = i % 2 ? '#fff0cd' : '#e6c77a';
+      ctx.shadowColor = '#e6c77a'; ctx.shadowBlur = 4; ctx.fillRect(Math.round(Math.cos(a) * d) - 2, Math.round(Math.sin(a) * d * .8) - 2, i % 3 ? 3 : 5, i % 3 ? 5 : 3);
+    }
+    ctx.shadowBlur = 0;
+    for (let i = 0; i < 3; i++) { const life = ((tick * .012 + i / 3 + e.id * .13) % 1); ctx.globalAlpha = Math.sin(life * Math.PI) * .6; ctx.fillStyle = '#d9bd84'; ctx.fillRect(-18 + i * 17, 20 - Math.round(life * 34), 2, 2); }
+  } else if (e.type === 'astral_twins' && (e.twin?.downedTicks ?? 0) <= 0) {
+    if (e.twin?.index === 1) { // Dusk: twinkling star crosses
+      for (let i = 0; i < 4; i++) {
+        const a = -tick * .015 + i * Math.PI / 2 + e.id, d = 34, tw = .35 + .65 * Math.abs(Math.sin(tick * .07 + i * 1.7)), r = 2 + Math.round(tw * 2);
+        const x = Math.round(Math.cos(a) * d), y = Math.round(Math.sin(a) * d * .85);
+        ctx.globalAlpha = tw; ctx.fillStyle = i % 2 ? '#d8f1ff' : '#83cfff'; ctx.shadowColor = '#83cfff'; ctx.shadowBlur = 4;
+        ctx.fillRect(x - r, y - 1, r * 2, 2); ctx.fillRect(x - 1, y - r, 2, r * 2);
+      }
+    } else { // Dawn: hot ember squares
+      for (let i = 0; i < 5; i++) {
+        const a = tick * .035 + i * Math.PI * 2 / 5 + e.id, d = 30 + 2 * Math.sin(tick * .09 + i), flick = Math.floor(tick / 5 + i) % 3;
+        ctx.globalAlpha = flick === 0 ? .45 : .85; ctx.fillStyle = flick === 2 ? '#ffe1c8' : i % 2 ? '#ffb39a' : '#f08062';
+        ctx.shadowColor = '#f08062'; ctx.shadowBlur = 5; const s = i % 2 ? 3 : 4;
+        ctx.fillRect(Math.round(Math.cos(a) * d) - s / 2, Math.round(Math.sin(a) * d * .85) - s / 2, s, s);
+      }
+    }
+  }
+  ctx.restore();
+}
+
 export function drawEncounterEnemy(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number, showHealth = true): boolean {
   if (e.type !== 'aegis_sentinel' && e.type !== 'aegis_construct' && e.type !== 'astral_twins') return false;
   ctx.save(); ctx.translate(Math.round(sx), Math.round(sy));
@@ -211,6 +244,7 @@ export function drawEncounterEnemy(ctx: CanvasRenderingContext2D, e: Readonly<En
   const spawn = Math.max(0, Math.min(1, (e.visualSpawnTicks ?? 0) / 30));
   const bob = e.type === 'aegis_construct' || downed ? 0 : Math.round(Math.sin(tick * .045 + e.id) * 1.2);
   ctx.save(); ctx.translate(0, bob);
+  if (!spawn) drawBossParticles(ctx, e, tick);
   const giving=(e.twin?.transferGiveTicks??0)/TWIN_TRANSFER_FX_TICKS;
   ctx.globalAlpha = (1-spawn*.7)*(1-.3*Math.sin(giving*Math.PI));
   const scale = e.type === 'aegis_sentinel' ? .93 : e.type === 'astral_twins' ? .9 : 1;

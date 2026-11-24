@@ -68,8 +68,11 @@ export function drawBinaryGround(ctx: CanvasRenderingContext2D, s: GameState, ca
   for (const g of s.enemies) {
     if (g.type !== 'grounder' || g.hp <= 0) continue;
     const r = (BINARY.grounder.reach + .5) * TILE_SIZE, x = Math.round(g.x - camX), y = Math.round(g.y - camY);
-    ctx.save(); ctx.globalAlpha = .07; ctx.fillStyle = '#9aa3b5'; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    ctx.globalAlpha = .45; ctx.strokeStyle = '#9aa3b5'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.strokeRect(x - r, y - r, r * 2, r * 2); ctx.restore();
+    ctx.save();ctx.globalAlpha=.075;ctx.fillStyle='#9aa3b5';ctx.fillRect(x-r,y-r,r*2,r*2);
+    ctx.setLineDash([12,7]);ctx.lineDashOffset=-tick*.12;
+    ctx.globalAlpha=.1;ctx.strokeStyle='#8291aa';ctx.lineWidth=11;ctx.strokeRect(x-r,y-r,r*2,r*2);
+    ctx.globalAlpha=.5;ctx.strokeStyle='#9aaabd';ctx.lineWidth=6;ctx.strokeRect(x-r,y-r,r*2,r*2);
+    ctx.globalAlpha=.45;ctx.strokeStyle='#c1cfdf';ctx.lineWidth=2;ctx.strokeRect(x-r,y-r,r*2,r*2);ctx.restore();
   }
   // A dead Pulsar's field: its reach in the pole's colour, chevrons showing its pull or push on you, a shrinking
   // blast square inside it and a pulsing core, all brightening as the explosion nears.
@@ -366,6 +369,7 @@ export function drawBinaryMinimap(ctx: CanvasRenderingContext2D, s: GameState, o
     ctx.fillStyle = POLE_COLORS[m.pole];
     ctx.fillRect(x - 3, y - 3, 6, 2); ctx.fillRect(x - 3, y - 3, 2, 6); ctx.fillRect(x + 1, y - 3, 2, 6);
   }
+
 }
 
 /**

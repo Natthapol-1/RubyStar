@@ -2,7 +2,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),test=require('n
 require.extensions['.ts']=(m,f)=>{let src=fs.readFileSync(f,'utf8');if(f.endsWith('engine.ts'))src+='\nexport const sporeTest={updateEnemyShots,updateEnemies};';m._compile(ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017}}).outputText,f);};
 const e=require('../game/engine.ts'),c=require('../game/constants.ts'),ai=require('../game/aliens.ts'),g=require('../game/gaia.ts'),F=c.GAIA_SPORE_SHOT,T=c.TILE_SIZE;
 function player(s,x,y){Object.assign(s,{playerTileX:x,playerTargetX:x,playerTileY:y,playerTargetY:y,playerX:(x+.5)*T,playerY:(y+.5)*T});}
-function fresh(){const s=e.createModeState('trial','thorn_weaver');s.enemies=[];s.noMobs=true;s.rubyTileX=s.rubyTileY=45;for(let y=1;y<50;y++)for(let x=1;x<50;x++)s.map[y][x]=c.T_FLOOR;player(s,10,10);const mob=e.createEncounterEnemy(s,'sporeling',5,10,5);mob.attackTimer=0;s.enemies.push(mob);return{s,mob};}
+function fresh(){const s=e.createModeState('trial','thorn_weaver');s.enemies=[];s.noMobs=true;s.rubyTileX=s.rubyTileY=45;for(let y=1;y<50;y++)for(let x=1;x<50;x++)s.map[y][x]=c.T_FLOOR;player(s,10,10);if(s.gaia)s.gaia.stones=[]; // random stones would block growth on the tiles under test
+ const mob=e.createEncounterEnemy(s,'sporeling',5,10,5);mob.attackTimer=0;s.enemies.push(mob);return{s,mob};}
 function advance(s,m,n){for(let i=0;i<n;i++){s.gameTick++;ai.updateRegularAlien(s,m,false);}}
 function shot(s,m,extra={}){return{x:s.playerX-F.speed,y:s.playerY,dx:F.speed,dy:0,ownerId:m.id,ticks:0,spore:true,...extra};}
 test('Sporeling warns then shoots one travelling, non-homing spore instead of melee or laser damage',()=>{

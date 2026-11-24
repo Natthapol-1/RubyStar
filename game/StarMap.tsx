@@ -66,13 +66,18 @@ export default function CelestialTrialsMap({ loreByWorld }: { loreByWorld: Parti
           background-size: 83px 79px, 131px 127px, 197px 173px; background-position: 7px 19px, 53px 3px, 101px 67px; }
         .sm-inner { position:relative; max-width:1200px; width:100%; height:100%; min-height:0; margin:0 auto; display:grid; grid-template-rows:auto auto auto minmax(0,1fr) auto; gap:8px; }
         .sm-title { margin:0; text-align: center; font-family: var(--font-pixel); font-size: clamp(1.4rem, 3.4vw, 2.2rem); letter-spacing: .1em;
-          color: #c9cfff; text-shadow: 0 0 16px #7f8cff88, 3px 3px 0 #1a1d3a; }
+          color: #c9cfff; text-shadow: 0 0 6px #7f8cff88, 3px 3px 0 #1a1d3a; }
         .sm-sub { text-align: center; font-family: var(--font-mono); font-size: .78rem; letter-spacing: .28em; color: #8d93b3; margin:0; }
-        .sm-map { position: relative; width:100%; height:100%; min-height:0; border: 2px solid #262c48; background:#080d1a80; overflow: hidden; }
+        .sm-map { position: relative; width:100%; height:100%; min-height:0; border: 1px solid #3d4878; background:#080d1a80; overflow: hidden; box-shadow: inset 0 0 0 3px #0d1226; }
+        .sm-map::before { content:''; position:absolute; inset:6px; pointer-events:none; z-index:0; opacity:.8; background:
+          linear-gradient(#7f8cff,#7f8cff) 0 0 / 18px 2px no-repeat, linear-gradient(#7f8cff,#7f8cff) 0 0 / 2px 18px no-repeat,
+          linear-gradient(#7f8cff,#7f8cff) 100% 0 / 18px 2px no-repeat, linear-gradient(#7f8cff,#7f8cff) 100% 0 / 2px 18px no-repeat,
+          linear-gradient(#7f8cff,#7f8cff) 0 100% / 18px 2px no-repeat, linear-gradient(#7f8cff,#7f8cff) 0 100% / 2px 18px no-repeat,
+          linear-gradient(#7f8cff,#7f8cff) 100% 100% / 18px 2px no-repeat, linear-gradient(#7f8cff,#7f8cff) 100% 100% / 2px 18px no-repeat; }
         .sm-route { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; filter: drop-shadow(0 0 3px #7f8cff); }
         .sm-node { position: absolute; transform: translate(-50%, -50%); padding: 0; background: none; border: 0; cursor: pointer; color: inherit; font: inherit;
-          filter: drop-shadow(0 0 10px var(--glow)); transition: filter 160ms ease, transform 160ms ease; }
-        .sm-node:hover, .sm-node:focus-visible { outline: none; filter: drop-shadow(0 0 18px var(--glow)); transform: translate(-50%, -50%) scale(1.08); }
+          filter: drop-shadow(0 0 4px var(--glow)); transition: filter 160ms ease, transform 160ms ease; }
+        .sm-node:hover, .sm-node:focus-visible { outline: none; filter: drop-shadow(0 0 6px var(--glow)); transform: translate(-50%, -50%) scale(1.08); }
         .sm-art { position: relative; display: block; width: var(--s); height: var(--s); animation: smFloat 3.2s ease-in-out infinite; animation-delay: var(--delay); }
         @keyframes smFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
         .sm-label { position: absolute; left: 50%; top: calc(100% + 10px); transform: translateX(-50%); white-space: nowrap;
@@ -98,7 +103,7 @@ export default function CelestialTrialsMap({ loreByWorld }: { loreByWorld: Parti
           linear-gradient(var(--glow), var(--glow)) 100% 100% / 14px 3px no-repeat, linear-gradient(var(--glow), var(--glow)) 100% 100% / 3px 14px no-repeat; }
         @keyframes smPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
         .sm-panel { display: flex; align-items: center; gap: 24px; margin-top:0; padding:14px 20px; background: #10131ff2;
-          border: 2px solid var(--glow); box-shadow: 0 0 16px color-mix(in srgb, var(--glow) 30%, transparent); }
+          border: 2px solid var(--glow); box-shadow: inset 0 0 0 3px #161a2c, 0 0 6px color-mix(in srgb, var(--glow) 35%, transparent); }
         .sm-panel-name { font-family: var(--font-pixel); font-size: 1rem; line-height: 1.6; color: var(--glow); }
         .sm-panel-row { margin-top: 4px; font-family: var(--font-mono); font-size: .85rem; color: #b9bdd6; }
         .sm-panel-row strong { color: #e7e9f6; }
@@ -110,8 +115,8 @@ export default function CelestialTrialsMap({ loreByWorld }: { loreByWorld: Parti
         .sm-gem-reward strong { display:block; font-family:var(--font-pixel); font-size:.7rem; text-shadow:0 0 8px color-mix(in srgb,var(--gem) 35%,transparent); }
         .sm-panel-note { margin-top: 6px; font-family: var(--font-mono); font-size: .75rem; color: #7d84a3; }
         .sm-begin { flex-shrink:0; padding: 14px 20px; font-family: var(--font-pixel); font-size: .8rem; cursor: pointer; white-space: nowrap;
-          color: #0b0c14; background: var(--glow); border: 2px solid #ffffffaa; box-shadow: 0 0 14px color-mix(in srgb, var(--glow) 50%, transparent); }
-        .sm-begin:hover, .sm-begin:focus-visible { outline: none; filter: brightness(1.12); box-shadow: 0 0 22px var(--glow); }
+          color: #0b0c14; background: var(--glow); border: 2px solid #ffffffaa; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--glow) 70%, #000), 0 0 6px color-mix(in srgb, var(--glow) 50%, transparent); }
+        .sm-begin:hover, .sm-begin:focus-visible { outline: none; filter: brightness(1.12); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--glow) 70%, #000), 0 0 8px var(--glow); }
         .sm-actions { display:flex; align-items:stretch; gap:10px; flex-shrink:0; }
         .sm-lore-button, .sm-lore-close { display:inline-grid; place-items:center; padding:6px 9px; cursor:pointer; color:#e6e4ff; background:#17182b;
           border:1px solid #827bb1; box-shadow:inset 0 0 0 3px #22253d; }
@@ -147,8 +152,8 @@ export default function CelestialTrialsMap({ loreByWorld }: { loreByWorld: Parti
         .sm-lore-body p { margin:0 0 .9em; }
         /* EXIT stands out against the dark map: brighter frame, panel fill and a soft glow (overrides the shared button's inline style). */
         .sm-exit button { padding: 12px 22px !important; font-size: 1rem !important; gap: 10px !important; color: #e7e9f6 !important; background: #161b36 !important;
-          border: 2px solid #7f8cff !important; border-radius: 0 !important; box-shadow: 0 0 12px #7f8cff55; }
-        .sm-exit button:hover, .sm-exit button:focus-visible { outline: none; color: #ffffff !important; background: #222a52 !important; border-color: #c9cfff !important; box-shadow: 0 0 18px #7f8cffaa; }
+          border: 2px solid #7f8cff !important; border-radius: 0 !important; box-shadow: inset 0 0 0 3px #0e1228, 0 0 6px #7f8cff55; }
+        .sm-exit button:hover, .sm-exit button:focus-visible { outline: none; color: #ffffff !important; background: #222a52 !important; border-color: #c9cfff !important; box-shadow: inset 0 0 0 3px #0e1228, 0 0 8px #7f8cffaa; }
         .sm-node.sm-locked { filter: grayscale(1) brightness(.45); }
         .sm-node.sm-locked:hover, .sm-node.sm-locked:focus-visible { filter: grayscale(1) brightness(.6); transform: translate(-50%, -50%); }
         .sm-node.sm-locked .sm-art { animation: none; }

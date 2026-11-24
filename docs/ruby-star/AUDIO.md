@@ -10,7 +10,7 @@ Singularity sound repeats until field expiry; use its gapless 1.046s loop with s
 
 ## Sources and licences
 
-Sound effects come from Uppbeat, Pixabay and Mixkit; background music comes from Fesliyan Studios, whose terms allow free use with credit and require a purchased licence once the game earns money. The in-game Credits panel (`game/Credits.tsx`, under Settings) names all four; keep it in step when a new source is added.
+Sound effects come from Uppbeat, Pixabay and Mixkit; background music comes from Fesliyan Studios under a commercial licence (their donation licence: permanent, covering their whole library, with video game use permitted and no credit required). Uppbeat's free-plan terms target video and online content, so confirm its coverage for a sold game or replace those sounds. The in-game Credits panel (`game/Credits.tsx`, under Settings) names all four; keep it in step when a new source is added.
 
 ## Music toggle
 
@@ -18,7 +18,9 @@ The HUD MUSIC button (next to RULES) turns the background music on or off and re
 
 ## Audio settings
 
-Desktop audio settings independently scale BGM, attack recordings and other game/UI effects without changing their original relative mix. Preferences persist in the versioned local profile; paused loop lifecycles remain unchanged. The MUSIC button provides a quick BGM toggle. All clips and fonts are local for offline play; see [Windows desktop](DESKTOP.md).
+Desktop audio settings independently scale BGM, attack recordings and other game/UI effects without changing their original relative mix. Preferences persist in the versioned local profile; paused loop lifecycles remain unchanged. The shared gameplay BGM (`rubyStarBGM.mp3`) uses .63162 base gain before the music preference, across all modes and challenge maps. The MUSIC button provides a quick BGM toggle. All clips and fonts are local for offline play; see [Windows desktop](DESKTOP.md).
+
+Charge-wave release layers `laserBeam.mp3` at 1.5× the normal laser gain (.45675 × Attack mix), pitched up to 1.5×, over the existing two `chargeWave.mp3` layers. Normal laser shots keep their original pitch.
 
 ## Menu sounds
 
@@ -260,13 +262,15 @@ Weapon sounds play on the attack channel through `WEAPON_SFX` (`gambit.ts`). Eac
 | Orbital Strike | `falling-thing.wav` when called (-22 dB, pitch 1.4); `bombExplode.wav` on impact (-18 dB, pitch .95) |
 | Arc Blade | `slash.mp3` (-20 dB, pitch 1.1) |
 | Comet Dash | `charging.wav` when charging starts (-24 dB, pitch 1.2); `speedBoost.mp3` on the dash (-20 dB, pitch 1.2) |
-| Chain Spark | `jupiter-fence-hit.mp3` (-20 dB, pitch 1.25) |
-| Boomerang Disc | `venus-sand-sweep.wav` (-22 dB, pitch 1.6) |
-| Sentry | `place_bomb.wav` when placed (-22 dB, pitch 1.2); `laserBullet.mp3` per shot (-26 dB, pitch 1.5) |
+| Ruby Sling | `place_bomb.wav` on the latch (-22 dB, pitch 1.2); `speedBoost.mp3` on the fling (-20 dB, pitch 1.4); `bombExplode.wav` on landing (-19 dB, pitch 1.25) |
 | Gravity Well | `reverse.mp3` (-20 dB) |
-| Ruby Lance | `laserBeam.mp3` at the Laser's level, pitch .8 |
+| Ruby Leap | `speedBoost.mp3` on the jump (-20 dB, pitch .9); `bombExplode.wav` on landing (-19 dB, pitch .85) |
+| Siphon Nova | `charging.wav` when charging starts (-24 dB, pitch .85); `shield.mp3` on the burst (-20 dB, pitch .8) |
+| Star Cannon | `laserBullet.mp3` on firing (-20 dB, pitch .55); `bombExplode.wav` when the orb bursts (-20 dB, pitch 1.1) |
+| Glint chip | `gem_passive_2.wav` when collected (-26 dB, pitch 1.6) |
+| Storm Mark | `jupiter-fence-hit.mp3` on marking (-22 dB, pitch 1.4) and on each lightning burst (-23 dB, pitch 1.15) |
 
-Like the base attacks, a weapon that hits plays the alien-hit sound once per volley (each disc or dash contact counts separately). Gravity Well pulses play no hit sound.
+Like the base attacks, a weapon that hits plays the alien-hit sound once per volley (each dash contact counts separately). When the weapon's cooldown ends it plays the shared primal-skill ready cue (`fenceReady`).
 
 ## Reserved sound assets
 

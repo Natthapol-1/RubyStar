@@ -3,7 +3,7 @@ import { drawGuideBullet } from './guide-art';
 import { useEffect, useRef } from 'react';
 import { bindingLabel } from './controls';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
-import { drawSaturnUnit, drawSaturnGrantMark, drawSaturnSnowflake, GRANT_COLOR, RECALL_COLOR } from './saturn-art';
+import { drawSaturnUnit, drawFrostAnchor, drawFrostAnchorZone, drawSaturnGrantMark, drawSaturnSnowflake, GRANT_COLOR, RECALL_COLOR } from './saturn-art';
 import { drawMobIceShield } from './ice-shield-art';
 import { drawGuidePlayer } from './guide-art';
 import type { Enemy } from './engine';
@@ -19,7 +19,7 @@ const cards = [
   ['GLACIER HULK', 'Slams the ground around it, freezing it. Gets a double frost shield.'],
   ['FROST BLOOM', 'Shielded aliens spread frost shields to allies and get faster and stronger.'],
   ['FREEZING LINES', 'Her grant and recall lines leave frozen paths.'],
-  ['FROST TRAIL', 'Your path freezes behind you.'],
+  ['FROST ANCHORS', 'Ice pillars block your Absolute Zero counters while you’re nearby. Destroying one grants you a shield.'],
   ['REVERSED GRANTS', 'A gold snowflake marks a reversed grant. It shields its target only when caught by Absolute Zero.'],
 ] as const;
 
@@ -77,14 +77,13 @@ export default function SaturnGuide({ drawCelestial, drawFrozenTile, drawBoss }:
         } else if (i === 4) { // blizzard and a frozen tile
           ctx.save(); ctx.translate(55, 60); drawFrozenTile(ctx, -24, -24, tick); ctx.restore();
           drawGuidePlayer(ctx, 140, 60); for (let k = 0; k < 10; k++) { ctx.fillStyle = '#dcf6ff'; ctx.fillRect((k * 37 - tick * 2) % 200 + 200 * (k * 37 - tick * 2 < 0 ? 1 : 0), (k * 23 + tick) % 120, 3, 2); }
-        } else if (i === 10) { // cyan footsteps turn to ice after the delay
-          const trail=tick%180;
-          for(let k=0;k<6;k++) {
-            const x=20+k*26,age=trail-(k*24+18);
-            if(age>=0&&age<15){ctx.globalAlpha=.3;ctx.fillStyle='#76dce8';ctx.fillRect(x-14,46,28,28);ctx.globalAlpha=1;}
-            if(age>=15){ctx.save();ctx.translate(x,60);ctx.scale(.6,.6);drawFrozenTile(ctx,-24,-24,tick);ctx.restore();}
-          }
-          drawGuidePlayer(ctx,20+Math.min(6,trail/24)*26,60);
+        } else if (i === 10) { // Destroying the pillar removes the counter suppression.
+          const p=loop(180),broken=p>.55;
+          drawGuidePlayer(ctx,34,75);drawSaturnUnit(ctx,unit('frostbiter'),153,65,tick);
+          if(!broken){drawFrostAnchorZone(ctx,99,64,tick,55);drawFrostAnchor(ctx,99,64,tick);if(p>.25)drawGuideBullet(ctx,45+(p-.25)/.3*40,66,1,0);}
+          else if(p<.75)burst(99,64,(p-.55)/.2,'#d4eaff');
+          if(!broken)drawMobIceShield(ctx,153,65,22,tick);
+          else{shield(34,75);if(p<.8){ctx.globalAlpha=1-(p-.55)/.25;ctx.fillStyle='#d7f8ff';ctx.fillRect(153-(p-.55)/.25*115,56,7,4);ctx.globalAlpha=1;}}
         } else if (i === 9) { // a fired line from her to an alien leaves frozen tiles along it
           drawBoss(ctx, 35, 60, tick); drawSaturnUnit(ctx, unit('frostbiter'), 168, 60, tick);
           const fired = tick % 180 > 70;
@@ -135,8 +134,8 @@ export default function SaturnGuide({ drawCelestial, drawFrozenTile, drawBoss }:
     {[
       { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 2, 3, 4], skill: true },
       { title: 'ENEMIES', indices: [5, 6, 7], skill: false },
-      { title: 'PHASE 2+', indices: [8, 10], skill: false },
-      { title: 'PHASE 3', indices: [9, 11], skill: false },
+      { title: 'PHASE 2+', indices: [8, 11], skill: false },
+      { title: 'PHASE 3', indices: [9, 10], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>
     <h4 className="rs-guide-group-title">{section.title}</h4>
     <div className="rs-nep-grid">
@@ -144,7 +143,7 @@ export default function SaturnGuide({ drawCelestial, drawFrozenTile, drawBoss }:
         <canvas ref={el => { refs.current[i] = el; }} width={200} height={120} aria-hidden="true" />
         <h5 style={{ color: i === 2 ? RECALL_COLOR : '#d2f5ff' }}>{title === 'PRIMAL SKILL' ? `PRIMAL SKILL (${bindingLabel('mapSkill')})` : title}</h5><p>{text}</p>
       </article>; })}
-      {section.skill && <CelestialSkillGuideCard name="Saturn Guard" description="Shields you and Ruby." color="#68e0c9" draw={drawCelestial} />}
+      {section.skill && <CelestialSkillGuideCard name="Saturn Guard" description="Shields you and Ruby, and breaks you out of ice." color="#68e0c9" draw={drawCelestial} />}
     </div></section>)}
   </div>;
 }

@@ -1366,6 +1366,10 @@ const singularity: WorldTheme = {
     const px = Math.floor(tx / 3), py = Math.floor(ty / 2), plate = hash(px, py, 4);
     block(ctx, x, y, S, S, ['#15111f', '#171122', '#13101d', '#18121f', '#121320'][Math.floor(plate * 5)]);
     ctx.globalAlpha = .035; block(ctx, x, y, S, S, color); ctx.globalAlpha = 1;
+    // Every tile is its own panel: a slightly different shade, a dark seam on its lower-right and a faint lit upper-left lip.
+    ctx.globalAlpha = .05 + n * .06; block(ctx, x + 2, y + 2, S - 4, S - 4, n > .5 ? '#2a2238' : '#000000'); ctx.globalAlpha = 1;
+    block(ctx, x, y + S - 2, S, 2, '#07060c'); block(ctx, x + S - 2, y, 2, S, '#07060c');
+    block(ctx, x, y, S - 2, 1, '#221b2d'); block(ctx, x, y, 1, S - 2, '#1f1929');
     // Plate bevels: a faint lit upper-left edge and a darker lower-right edge.
     if (ty % 2 === 0) block(ctx, x, y + 4, S, 1, '#251c32');
     if (tx % 3 === 0) block(ctx, x + 4, y, 1, S, '#221a2e');

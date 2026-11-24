@@ -1,11 +1,10 @@
 import { TILE_SIZE } from './constants';
-import { GAMBIT, WEAPONS } from './gambit';
+import { GAMBIT, GLINT, WEAPONS, markTarget, novaRadius } from './gambit';
 import type { GameState } from './engine';
-import { bindings, keyLabel, type ControlAction } from './controls';
+import { bindings, keyLabel } from './controls';
 
-/** The controls behind the three slots; each slot card shows the first key the player bound to it. */
-const SLOT_ACTIONS: ControlAction[] = ['laser', 'bullet', 'mapSkill'];
-export function slotKeyLabel(slot: number) { const code = bindings()[SLOT_ACTIONS[slot]][0]; return code ? keyLabel(code) : 'UNBOUND'; }
+/** The first key or button bound to the Primal Skill control, which fires the run's weapon. */
+export function weaponKeyLabel() { const code = bindings().mapSkill[0]; return code ? keyLabel(code) : 'UNBOUND'; }
 
 // Star Gambit weapon visuals in the player-attack style: three-layer bands (a wide glowing base, a light middle, a white
 // core), square rims with inner accent squares, pixel rays and compass-star flashes. Glow stays at 6 or less. Drawing
@@ -51,20 +50,6 @@ export function drawGambitEffects(ctx: CanvasRenderingContext2D, s: GameState, c
   const g = s.gambit; if (!g) return;
   const tick = s.gameTick, R = (v: number) => Math.round(v);
   ctx.save();
-  // Gravity Well: violet rims closing in on a dark core again and again, pixel rays drawn inward, a turning star.
-  for (const w of g.wells) {
-    const x = (w.x + .5) * T - camX, y = (w.y + .5) * T - camY, r = (GAMBIT.well.radius + .5) * T, fade = Math.min(1, w.ticks / 20), c = WEAPONS.well.color;
-    ctx.save(); ctx.setLineDash([12, 8]); ctx.lineDashOffset = -tick; ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.globalAlpha = .7 * fade; ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.strokeRect(R(x - r), R(y - r), R(r * 2), R(r * 2)); ctx.restore();
-    ctx.globalAlpha = .08 * fade; ctx.fillStyle = c; ctx.fillRect(R(x - r), R(y - r), R(r * 2), R(r * 2));
-    for (let k = 0; k < 3; k++) {
-      const p = (tick / 40 + k / 3) % 1, rr = r * (1 - p);
-      ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.globalAlpha = fade * Math.sin(p * Math.PI) * .7; ctx.strokeStyle = k % 2 ? '#e8d8ff' : c; ctx.lineWidth = 3; ctx.strokeRect(R(x - rr), R(y - rr), R(rr * 2), R(rr * 2)); ctx.restore();
-    }
-    for (const [dx, dy] of EIGHT) { const p = (tick * .025 + (dx + 2) * .13 + (dy + 2) * .07) % 1, d = r * (1 - p) * (dx && dy ? .9 : 1); ray(ctx, x + dx * d, y + dy * d, -dx, -dy, '#e8d8ff', fade * Math.sin(p * Math.PI) * .9, 10); }
-    block(ctx, x, y, 22, '#140a24', fade);
-    ctx.save(); ctx.globalAlpha = fade; ctx.strokeStyle = '#e8d8ff'; ctx.lineWidth = 2; ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.strokeRect(R(x - 11), R(y - 11), 22, 22); ctx.restore();
-    ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.floor(tick / 6) * Math.PI / 8); star(ctx, 0, 0, 20, '#e8d8ff', fade * .9); ctx.restore();
-  }
   // Orbital Strike: gold corner brackets close on the 3×3 area while a star falls toward it; on impact a white-cored
   // column, a bomb-style square blast with an accent ring, eight pixel rays and a fading star.
   for (const st of g.strikes) {
@@ -87,22 +72,119 @@ export function drawGambitEffects(ctx: CanvasRenderingContext2D, s: GameState, c
       star(ctx, x, y, 40 + p * 30, '#fff3d4', f * f);
     }
   }
-  // Ruby Lance: Ruby's rose beam in the Laser's three bands, with a star flash on Ruby.
-  for (const l of g.lances) {
-    const ox = (l.x + .5) * T - camX, oy = (l.y + .5) * T - camY, f = Math.min(1, l.ticks / 12);
-    for (const [ex, ey] of l.ends) band(ctx, [[ox, oy], [(ex + .5) * T - camX, (ey + .5) * T - camY]], f, [WEAPONS.lance.color, '#ffc2d6', '#ffffff'], [46, 18, 4]);
-    star(ctx, ox, oy, 44, '#ffe6eb', f);
-  }
-  // Chain Spark: a zigzag bolt in three bands between each hit (like the chain cast), a rim flash and star on every target.
-  for (const sp of g.sparks) {
-    const f = Math.min(1, sp.ticks / 12), c = WEAPONS.spark.color;
-    for (let i = 1; i < sp.pts.length; i++) {
-      const [ax, ay] = sp.pts[i - 1], [bx, by] = sp.pts[i], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1, flip = sp.ticks % 4 < 2 ? 1 : -1;
-      const pts = Array.from({ length: 6 }, (_, k) => { const t = k / 5, off = k === 0 || k === 5 ? 0 : (k % 2 ? 1 : -1) * 10 * flip; return [ax + dx * t - dy / len * off - camX, ay + dy * t + dx / len * off - camY] as [number, number]; });
-      band(ctx, pts, f, ['#ffcc33', c, '#ffffff'], [12, 6, 2]);
-      rim(ctx, bx - camX, by - camY, 16 + (1 - f) * 8, f, '#ffcc33', '#ffffff', c, 6); star(ctx, bx - camX, by - camY, 24, '#ffffff', f);
+  // Gravity Well: a short warning of closing violet brackets, then violet rims closing in on a dark core again and
+  // again, pixel rays drawn inward and a turning star.
+  for (const w of g.wells) {
+    const x = (w.x + .5) * T - camX, y = (w.y + .5) * T - camY, r = (GAMBIT.well.radius + .5) * T, c = WEAPONS.well.color;
+    if (w.delay > 0) {
+      const p = 1 - w.delay / GAMBIT.well.delay, rr = r * (1.4 - .4 * p);
+      ctx.globalAlpha = .06 + .1 * p; ctx.fillStyle = c; ctx.fillRect(R(x - r), R(y - r), R(r * 2), R(r * 2));
+      ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.globalAlpha = .9; ctx.fillStyle = c;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const cx = x + sx * rr, cy = y + sy * rr; ctx.fillRect(R(cx - (sx > 0 ? 14 : 0)), R(cy - 2), 14, 4); ctx.fillRect(R(cx - 2), R(cy - (sy > 0 ? 14 : 0)), 4, 14); }
+      ctx.restore(); continue;
     }
+    const fade = Math.min(1, w.ticks / 20);
+    ctx.save(); ctx.setLineDash([12, 8]); ctx.lineDashOffset = -tick; ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.globalAlpha = .7 * fade; ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.strokeRect(R(x - r), R(y - r), R(r * 2), R(r * 2)); ctx.restore();
+    ctx.globalAlpha = .08 * fade; ctx.fillStyle = c; ctx.fillRect(R(x - r), R(y - r), R(r * 2), R(r * 2));
+    for (let k = 0; k < 3; k++) {
+      const p = (tick / 40 + k / 3) % 1, rr = r * (1 - p);
+      ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.globalAlpha = fade * Math.sin(p * Math.PI) * .7; ctx.strokeStyle = k % 2 ? '#e8d8ff' : c; ctx.lineWidth = 3; ctx.strokeRect(R(x - rr), R(y - rr), R(rr * 2), R(rr * 2)); ctx.restore();
+    }
+    for (const [dx, dy] of EIGHT) { const p = (tick * .025 + (dx + 2) * .13 + (dy + 2) * .07) % 1, d = r * (1 - p) * (dx && dy ? .9 : 1); ray(ctx, x + dx * d, y + dy * d, -dx, -dy, '#e8d8ff', fade * Math.sin(p * Math.PI) * .9, 10); }
+    block(ctx, x, y, 22, '#140a24', fade);
+    ctx.save(); ctx.globalAlpha = fade; ctx.strokeStyle = '#e8d8ff'; ctx.lineWidth = 2; ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.strokeRect(R(x - 11), R(y - 11), 22, 22); ctx.restore();
+    ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.floor(tick / 6) * Math.PI / 8); star(ctx, 0, 0, 20, '#e8d8ff', fade * .9); ctx.restore();
   }
+  // Ruby Sling: a rose tether from you to Ruby while held; Ruby flies as a turning gem with a three-band streak; it lands
+  // in a rose square blast with rays and star sparks (the stunned enemies show the usual stun).
+  if (g.sling && s.rubyTileX !== -1 && !s.playerCarryingRuby) {
+    const rx = (s.rubyTileX + .5) * T - camX, ry = (s.rubyTileY + .5) * T - camY, f = .6 + .3 * Math.sin(tick * .3);
+    band(ctx, [[s.playerX - camX, s.playerY - camY], [rx, ry]], f, [WEAPONS.sling.color, '#ffd0dc', '#ffffff'], [10, 5, 2]);
+    rim(ctx, rx, ry, T * .55, .8, WEAPONS.sling.color, '#ffffff', '#ffd0dc', 4);
+  }
+  if (g.slingFlight) {
+    const f = g.slingFlight, p = 1 - f.ticks / GAMBIT.sling.flight, ax = (f.fromX + .5) * T - camX, ay = (f.fromY + .5) * T - camY;
+    const bx = (f.toX + .5) * T - camX, by = (f.toY + .5) * T - camY, x = ax + (bx - ax) * p, y = ay + (by - ay) * p - Math.sin(p * Math.PI) * T * .6;
+    band(ctx, [[ax + (bx - ax) * Math.max(0, p - .35), ay + (by - ay) * Math.max(0, p - .35)], [x, y]], .8, [WEAPONS.sling.color, '#ffd0dc', '#ffffff'], [22, 9, 3]);
+    ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.PI / 4 + p * Math.PI * 2); ctx.shadowColor = '#ff2f6f'; ctx.shadowBlur = 6;
+    ctx.fillStyle = '#ff1155'; ctx.fillRect(-13, -13, 26, 26); ctx.shadowBlur = 0; ctx.fillStyle = '#a8183f'; ctx.fillRect(-8, -8, 16, 16);
+    ctx.fillStyle = '#ff6a8f'; ctx.fillRect(-8, -8, 16, 6); ctx.fillStyle = '#ffd0dc'; ctx.fillRect(-8, -8, 5, 5); ctx.restore();
+  }
+  // Ruby Leap: in the air, a pale arc trails behind you and closing brackets mark where you will land; then a landing
+  // blast that pushes outward.
+  if (g.leapFlight) {
+    const f = g.leapFlight, p = 1 - f.ticks / f.total, pts: [number, number][] = [];
+    for (let k = 0; k <= 8; k++) { const q = p * k / 8; pts.push([f.fromX + (f.toX - f.fromX) * q - camX, f.fromY + (f.toY - f.fromY) * q - camY - Math.sin(q * Math.PI) * T * 1.2]); }
+    band(ctx, pts, .8, [WEAPONS.leap.color, '#ffe4ec', '#ffffff'], [18, 7, 3]);
+    const lx = f.toX - camX, ly = f.toY - camY, r = (GAMBIT.leap.radius + .5) * T * (1.3 - .3 * p);
+    ctx.globalAlpha = .06 + .12 * p; ctx.fillStyle = WEAPONS.leap.color; ctx.fillRect(R(lx - r), R(ly - r), R(r * 2), R(r * 2));
+    ctx.save(); ctx.shadowColor = WEAPONS.leap.color; ctx.shadowBlur = 6; ctx.globalAlpha = .9; ctx.fillStyle = f.ticks < 10 && Math.floor(tick / 3) % 2 ? '#ffffff' : WEAPONS.leap.color;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const cx = lx + sx * r, cy = ly + sy * r; ctx.fillRect(R(cx - (sx > 0 ? 14 : 0)), R(cy - 2), 14, 4); ctx.fillRect(R(cx - 2), R(cy - (sy > 0 ? 14 : 0)), 4, 14); }
+    ctx.restore();
+  }
+  // Glint chips: small gold crystals on their point (bigger for richer chips) with a pale facet and a white glint,
+  // bobbing gently; they blink in their last seconds and stretch into a short streak while flying to you.
+  for (const d of g.drops) {
+    if (!d.speed && d.ticks < GLINT.blink && Math.floor(tick / 5) % 2) continue;
+    const size = 8 + Math.min(6, d.value / 70), x = d.x - camX, y = d.y - camY - (d.speed ? 0 : Math.round(Math.sin((tick + d.x) * .08) * 2));
+    if (d.speed) { const dx = s.playerX - d.x, dy = s.playerY - d.y, l = Math.hypot(dx, dy) || 1; band(ctx, [[x - dx / l * 18, y - dy / l * 18], [x, y]], .7, ['#ffd23f', '#fff2b0', '#ffffff'], [10, 5, 2]); }
+    ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.PI / 4); ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 5;
+    ctx.fillStyle = '#c9901a'; ctx.fillRect(-size / 2, -size / 2, size, size); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(-size / 2 + 2, -size / 2 + 2, size - 4, size - 4);
+    ctx.fillStyle = '#fff2b0'; ctx.fillRect(-size / 2 + 2, -size / 2 + 2, size / 2, size / 2 - 1);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(-size / 2 + 2, -size / 2 + 2, 2, 2); ctx.restore();
+  }
+  // Siphon Nova: while charging, a mint square field grows around you with inward rays and a pulsing edge; the release
+  // is a mint square burst rolling out to the field's edge, with plus-shaped heal sparks rising off you.
+  if (g.weapon === 'nova' && g.charge > 0) {
+    const p = g.charge / GAMBIT.nova.charge, r = (novaRadius(p) + .5) * T, x = s.playerX - camX, y = s.playerY - camY, c = WEAPONS.nova.color;
+    ctx.globalAlpha = .07 + .08 * p; ctx.fillStyle = c; ctx.fillRect(R(x - r), R(y - r), R(r * 2), R(r * 2));
+    ctx.save(); ctx.setLineDash([10, 8]); ctx.lineDashOffset = tick; ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.globalAlpha = .6 + .3 * Math.sin(tick * .3); ctx.strokeStyle = p >= 1 && Math.floor(tick / 4) % 2 ? '#ffffff' : c; ctx.lineWidth = 3; ctx.strokeRect(R(x - r), R(y - r), R(r * 2), R(r * 2)); ctx.restore();
+    for (const [dx, dy] of EIGHT) ray(ctx, x + dx * (r - 6), y + dy * (r - 6), -dx, -dy, '#dcfff0', .5 + .4 * p, 6);
+  }
+  for (const n of g.novas) {
+    const f = n.ticks / 26, q = 1 - f, x = n.x - camX, y = n.y - camY, r = (n.radius + .5) * T * (.35 + .65 * Math.min(1, q * 2)), c = WEAPONS.nova.color;
+    if (q < .2) { ctx.globalAlpha = (1 - q * 5) * .35; ctx.fillStyle = '#dcfff0'; ctx.fillRect(R(x - r), R(y - r), R(r * 2), R(r * 2)); }
+    rim(ctx, x, y, r, f, c, '#ffffff', '#dcfff0', 12);
+    if (n.hits) for (let k = 0; k < 4; k++) { const hx = x + (k - 1.5) * 14, hy = y - 30 - q * 40 - (k % 2) * 10; ctx.globalAlpha = f; ctx.fillStyle = c; ctx.fillRect(R(hx - 2), R(hy - 7), 4, 14); ctx.fillRect(R(hx - 7), R(hy - 2), 14, 4); }
+    ctx.globalAlpha = 1;
+  }
+  // Star Cannon: a big pale-blue orb three tiles across (a square rim around a dark ring and a bright core) with a
+  // three-band trail.
+  for (const o of g.orbs) {
+    const x = o.x - camX, y = o.y - camY, l = Math.hypot(o.dx, o.dy) || 1, c = WEAPONS.cannon.color;
+    const h = GAMBIT.cannon.radius * T;
+    band(ctx, [[x - o.dx / l * h * 2.2, y - o.dy / l * h * 2.2], [x, y]], .8, [c, '#d8f6ff', '#ffffff'], [h * 1.8, h * .8, 8]);
+    ctx.save(); ctx.translate(R(x), R(y)); ctx.shadowColor = c; ctx.shadowBlur = 6;
+    ctx.fillStyle = c; ctx.fillRect(R(-h), R(-h), R(h * 2), R(h * 2)); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#123a5a'; ctx.fillRect(R(-h + 10), R(-h + 10), R(h * 2 - 20), R(h * 2 - 20));
+    ctx.fillStyle = '#d8f6ff'; ctx.fillRect(R(-h * .55), R(-h * .55), R(h * 1.1), R(h * 1.1));
+    ctx.rotate(Math.floor(tick / 5) * Math.PI / 8); ctx.fillStyle = '#ffffff'; ctx.fillRect(R(-h * .28), R(-h * .28), R(h * .56), R(h * .56)); ctx.restore();
+  }
+  for (const b of g.blasts) {
+    if (b.kind === 'cannon') {
+      const f = b.ticks / 18, x = (b.x + .5) * T - camX, y = (b.y + .5) * T - camY, out = T * (GAMBIT.cannon.radius + (1 - f) * .9);
+      rim(ctx, x, y, out, f, WEAPONS.cannon.color, '#ffffff', '#d8f6ff', 10);
+      for (const [dx, dy] of EIGHT) ray(ctx, x + dx * out, y + dy * out, dx, dy, '#d8f6ff', f, 8);
+      continue;
+    }
+    const f = b.ticks / 24, p = 1 - f, x = (b.x + .5) * T - camX, y = (b.y + .5) * T - camY;
+    const leap = b.kind === 'leap', c = leap ? WEAPONS.leap.color : WEAPONS.sling.color, half = ((leap ? GAMBIT.leap.radius : GAMBIT.sling.radius) + .5) * T, out = half * (.55 + p * .55);
+    if (p < .25) { ctx.globalAlpha = (1 - p * 4) * .5; ctx.fillStyle = '#ffe4ec'; ctx.fillRect(R(x - half), R(y - half), R(half * 2), R(half * 2)); }
+    rim(ctx, x, y, out, f, c, '#ffffff', leap ? '#ffd0dc' : '#ff2f6f', 12);
+    for (const [dx, dy] of EIGHT) ray(ctx, x + dx * out, y + dy * out, dx, dy, '#ffe4ec', f, 10);
+    star(ctx, x, y, 30 + p * 24, '#ffffff', f * f);
+  }
+  // Storm Mark: yellow corner brackets and a small bolt over the marked enemy; while aiming, faint brackets on the enemy
+  // the mark would take.
+  const markRing = (e: { x: number; y: number }, a: number, size: number) => {
+    const x = e.x - camX, y = e.y - camY, r = T * size, c = WEAPONS.mark.color;
+    ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = 6; ctx.globalAlpha = a; ctx.fillStyle = c;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const cx = x + sx * r, cy = y + sy * r; ctx.fillRect(R(cx - (sx > 0 ? 12 : 0)), R(cy - 2), 12, 4); ctx.fillRect(R(cx - 2), R(cy - (sy > 0 ? 12 : 0)), 4, 12); }
+    ctx.restore();
+  };
+  if (g.mark) { const e = s.enemies.find(o => o.id === g.mark!.id); if (e) { markRing(e, g.mark.ticks < 60 && Math.floor(tick / 6) % 2 ? .4 : .95, .7 + .05 * Math.sin(tick * .2)); block(ctx, e.x - camX, e.y - camY - T * .95, 8, '#ffffff', .9); block(ctx, e.x - camX + 4, e.y - camY - T * .95 + 6, 6, WEAPONS.mark.color, .9); } }
+  else if (g.weapon === 'mark' && g.cd <= 0) { const e = markTarget(s); if (e) markRing(e, .35, .8); }
   // Arc Blade: a faceted crescent in three bands sweeping in front of you, with white sparks at both tips.
   for (const a of g.arcs) {
     const f = a.ticks / 14, base = Math.atan2(a.dy, a.dx), sweep = (1 - f) * .5, d = T * (1.15 + (1 - f) * .35), c = WEAPONS.blade.color;
@@ -112,9 +194,8 @@ export function drawGambitEffects(ctx: CanvasRenderingContext2D, s: GameState, c
   }
   // Comet Dash: while charging, a cyan square closes in around you with rays drawn inward, blinking white when full; the
   // dash leaves a three-band streak from where it started, with trailing blocks.
-  const dashSlot = g.slots.indexOf('dash');
-  if (dashSlot >= 0 && g.charge[dashSlot] > 0) {
-    const p = g.charge[dashSlot] / GAMBIT.dash.charge, x = s.playerX - camX, y = s.playerY - camY, r = T * (1.1 - .45 * p);
+  if (g.weapon === 'dash' && g.charge > 0) {
+    const p = g.charge / GAMBIT.dash.charge, x = s.playerX - camX, y = s.playerY - camY, r = T * (1.1 - .45 * p);
     ctx.save(); ctx.shadowColor = WEAPONS.dash.color; ctx.shadowBlur = 6; ctx.globalAlpha = .25 + .65 * p; ctx.strokeStyle = p >= 1 && Math.floor(tick / 4) % 2 ? '#ffffff' : WEAPONS.dash.color; ctx.lineWidth = 2 + Math.round(p * 3);
     ctx.strokeRect(R(x - r), R(y - r), R(r * 2), R(r * 2)); ctx.restore();
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) ray(ctx, x + dx * (r + 10), y + dy * (r + 10), -dx, -dy, '#e4ffff', p * .8, 5);
@@ -124,53 +205,11 @@ export function drawGambitEffects(ctx: CanvasRenderingContext2D, s: GameState, c
     band(ctx, [[g.dash.fromX - camX, g.dash.fromY - camY], [s.playerX - camX, s.playerY - camY]], f, [c, '#d8f6ff', '#ffffff'], [34, 14, 4]);
     for (let k = 1; k <= 4; k++) block(ctx, s.playerX - camX - (s.playerKnockback?.dirX ?? 0) * k * 14, s.playerY - camY - (s.playerKnockback?.dirY ?? 0) * k * 14, 20 - k * 3, k % 2 ? '#ffffff' : c, f * (.8 - k * .15));
   }
-  // Boomerang Disc: a turning green square with a glowing rim, dark ring and pale core, trailing three fading blocks.
-  for (const d of g.discs) {
-    const vx = d.back ? s.playerX - d.x : d.dx, vy = d.back ? s.playerY - d.y : d.dy, vl = Math.hypot(vx, vy) || 1;
-    for (let k = 1; k <= 3; k++) block(ctx, d.x - camX - vx / vl * k * 14, d.y - camY - vy / vl * k * 14, 18 - k * 4, WEAPONS.disc.color, .5 - k * .12);
-    ctx.save(); ctx.translate(R(d.x - camX), R(d.y - camY)); ctx.rotate(Math.floor(tick / 2) * Math.PI / 8);
-    ctx.shadowColor = WEAPONS.disc.color; ctx.shadowBlur = 6; ctx.globalAlpha = 1; ctx.fillStyle = WEAPONS.disc.color; ctx.fillRect(-15, -15, 30, 30);
-    ctx.shadowBlur = 0; ctx.fillStyle = '#0d2a12'; ctx.fillRect(-10, -10, 20, 20); ctx.fillStyle = '#e9ffe3'; ctx.fillRect(-4, -4, 8, 8); ctx.fillRect(-15, -15, 5, 5);
-    ctx.restore();
-  }
-  // Sentry: a lilac turret (glowing rim, dark body, corner studs, blinking lens) whose shots are small three-band bolts
-  // with a muzzle flash and a rim flash on the target; it flickers in its last second.
-  for (const t of g.sentries) {
-    const x = (t.x + .5) * T - camX, y = (t.y + .5) * T - camY, fade = t.ticks < 60 && Math.floor(t.ticks / 6) % 2 ? .4 : 1, c = WEAPONS.sentry.color;
-    ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = 6; block(ctx, x, y, 28, c, fade); ctx.restore();
-    block(ctx, x, y, 20, '#1d1530', fade); block(ctx, x, y + 6, 20, '#2a1f44', fade);
-    block(ctx, x, y - 2, 8, Math.floor(tick / 15) % 2 ? '#ffffff' : c, fade);
-    for (const [cx, cy] of [[-12, -12], [8, -12], [-12, 8], [8, 8]]) { ctx.globalAlpha = fade; ctx.fillStyle = '#efe4ff'; ctx.fillRect(R(x + cx), R(y + cy), 4, 4); }
-    if (t.shot) {
-      const f = t.shot.ticks / 8, tx = t.shot.x - camX, ty = t.shot.y - camY;
-      band(ctx, [[x, y - 2], [tx, ty]], f, [c, '#efe4ff', '#ffffff'], [10, 4, 2]); block(ctx, x, y - 2, 12, '#ffffff', f);
-      rim(ctx, tx, ty, 12, f, c, '#ffffff', '#efe4ff', 4);
-    }
-  }
   // A small four-block cursor marker for weapons aimed at the cursor.
-  if (g.slots.some(id => id === 'orbital' || id === 'well' || id === 'dash' || id === 'disc' || id === 'blade')) {
+  if (g.weapon === 'orbital' || g.weapon === 'well') { // Orbital Strike and Gravity Well aim at the cursor; the rest follow your facing, movement or Ruby
     const x = g.cursorX - camX, y = g.cursorY - camY; ctx.globalAlpha = .8; ctx.fillStyle = '#ffffff';
     for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) ctx.fillRect(R(x + dx * 8 - 2), R(y + dy * 8 - 2), 4, 4);
   }
-  ctx.restore();
-}
-
-/** Three slot boxes at the bottom centre: the weapon's colour, its name and button, and its cooldown or charge. */
-export function drawGambitHud(ctx: CanvasRenderingContext2D, s: GameState, w: number, h: number) {
-  const g = s.gambit; if (!g) return;
-  const bw = 150, bh = 40, gap = 10, x0 = Math.round(w / 2 - (bw * 3 + gap * 2) / 2), y0 = h - bh - 18, keys = [0, 1, 2].map(slotKeyLabel);
-  ctx.save();
-  g.slots.forEach((id, i) => {
-    const wpn = WEAPONS[id], x = x0 + i * (bw + gap), max = id === 'laser' || id === 'blaster' || id === 'dash' ? 0 : GAMBIT[id].cooldown;
-    const cdLeft = id === 'dash' ? g.cd[i] / GAMBIT.dash.cooldown : max ? g.cd[i] / max : 0, charge = id === 'dash' ? g.charge[i] / GAMBIT.dash.charge : 0;
-    ctx.globalAlpha = .9; ctx.fillStyle = '#10131f'; ctx.fillRect(x, y0, bw, bh);
-    ctx.globalAlpha = 1; ctx.strokeStyle = cdLeft > 0 ? '#3a4460' : wpn.color; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y0 + 1, bw - 2, bh - 2);
-    if (cdLeft > 0) { ctx.globalAlpha = .35; ctx.fillStyle = wpn.color; ctx.fillRect(x + 2, y0 + bh - 6, (bw - 4) * (1 - cdLeft), 4); }
-    if (charge > 0) { ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 2, y0 + bh - 6, (bw - 4) * charge, 4); }
-    ctx.globalAlpha = cdLeft > 0 ? .5 : 1; ctx.fillStyle = wpn.color; ctx.font = '8px "Press Start 2P", monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText(wpn.name, x + 8, y0 + 8);
-    ctx.globalAlpha = .7; ctx.fillStyle = '#b2bad2'; ctx.font = '10px monospace'; ctx.fillText(keys[i], x + 8, y0 + 22);
-  });
   ctx.restore();
 }
 

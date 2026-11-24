@@ -205,7 +205,7 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
         <h5 style={{ color: card.color }}>{card.title==='PRIMAL SKILL'?'PRIMAL SKILL ('+bindingLabel('mapSkill')+')':card.title}</h5>
         <p>{card.text}</p>
       </article>; })}
-      {section.skill && <CelestialSkillGuideCard name="Gaia’s Roots" description="Clears vines, stops regrowth and slows and damages enemies." color="#a5de65" draw={drawCelestial} />}
+      {section.skill && <CelestialSkillGuideCard name="Gaia’s Roots" description="Clears vines and thorn fields, stops regrowth and slows and damages enemies." color="#a5de65" draw={drawCelestial} />}
     </div></section>)}
   </div>;
 }

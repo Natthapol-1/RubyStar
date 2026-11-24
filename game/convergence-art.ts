@@ -15,13 +15,27 @@ export function drawConvergenceMinimap(ctx:CanvasRenderingContext2D,state:Readon
   const a=state.trial?.devourer?.convergence;if(!a||a.stage==='blast')return;
   const x=Math.round(mapX+a.x/S*scale),y=Math.round(mapY+a.y/S*scale),pulse=.7+.3*Math.abs(Math.sin(tick*.09));
   ctx.save();ctx.shadowBlur=0;ctx.globalAlpha=1;
-  ctx.fillStyle='#7134a2';ctx.fillRect(x-6,y-6,12,12);ctx.fillRect(x-9,y-3,3,5);ctx.fillRect(x+6,y-4,3,3);
-  ctx.fillStyle='#32153e';ctx.fillRect(x-4,y-4,8,8);
-  ctx.fillStyle='#b6ff9a';ctx.fillRect(x-2,y-3,4,3);ctx.fillRect(x-3,y+2,6,1);
-  ctx.globalAlpha=pulse;ctx.strokeStyle='#caff9c';ctx.lineWidth=2;
-  const r=11+Math.round((1-pulse)*5),arm=5;
-  for(const dx of [-1,1])for(const dy of [-1,1]){
-    ctx.beginPath();ctx.moveTo(x+dx*(r-arm),y+dy*r);ctx.lineTo(x+dx*r,y+dy*r);ctx.lineTo(x+dx*r,y+dy*(r-arm));ctx.stroke();
+  // Two translucent square signals separate the gathering point from ordinary boss dots.
+  for(let i=0;i<2;i++){
+    const phase=(tick/70+i*.5)%1,r=14+phase*17;
+    ctx.globalAlpha=(1-phase)*.46;ctx.strokeStyle=i?'#caff9c':'#b578ee';ctx.lineWidth=4;
+    ctx.strokeRect(x-r,y-r,r*2,r*2);
+    ctx.globalAlpha=(1-phase)*.65;ctx.lineWidth=1;ctx.strokeRect(x-r,y-r,r*2,r*2);
+  }
+  ctx.globalAlpha=1;ctx.fillStyle='#08070f';ctx.fillRect(x-10,y-10,20,20);
+  ctx.fillStyle='#a45bdd';ctx.fillRect(x-8,y-8,16,16);ctx.fillRect(x-11,y-4,3,7);ctx.fillRect(x+8,y-5,3,5);
+  ctx.fillStyle='#32153e';ctx.fillRect(x-5,y-5,10,10);
+  ctx.fillStyle='#e3ffc1';ctx.fillRect(x-3,y-4,6,4);ctx.fillStyle='#b6ff9a';ctx.fillRect(x-4,y+3,8,2);
+  const r=15+Math.round((1-pulse)*5),arm=7;
+  for(const [width,color]of [[5,'#0b0b13'],[3,'#caff9c']] as const){
+    ctx.globalAlpha=pulse;ctx.strokeStyle=color;ctx.lineWidth=width;
+    for(const dx of [-1,1])for(const dy of [-1,1]){
+      ctx.beginPath();ctx.moveTo(x+dx*(r-arm),y+dy*r);ctx.lineTo(x+dx*r,y+dy*r);ctx.lineTo(x+dx*r,y+dy*(r-arm));ctx.stroke();
+    }
+  }
+  for(let i=0;i<4;i++){
+    const q=(tick/45+i*.25)%1,d=19+(1-q)*12,dx=i===0?1:i===2?-1:0,dy=i===1?1:i===3?-1:0;
+    ctx.globalAlpha=Math.sin(q*Math.PI)*.85;ctx.fillStyle='#e3ffc1';ctx.fillRect(Math.round(x+dx*d)-1,Math.round(y+dy*d)-1,3,3);
   }
   ctx.restore();
 }

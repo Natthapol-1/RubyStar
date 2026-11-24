@@ -275,7 +275,7 @@ test('Halo with full Holy Light bursts: heavy unreduced damage to the Prayer, da
   const{s,boss}=fresh();const mob=e.createEncounterEnemy(s,'bellringer',3,3,500);s.enemies.push(mob);
   s.sirius.holy=100;const hp=boss.hp;si.useHalo(s);
   assert.equal(hp-boss.hp,S.burstBoss);assert.equal(500-mob.hp,S.burstAlien);assert.equal(s.sirius.holy,0);
-  assert.ok(S.burstBoss>=S.runeDamage*4,'the burst outweighs the runes that built it');
+  assert.ok(S.burstBoss>=S.runeDamage*3,'the burst stays a major share of the damage');
 });
 
 test('filling Holy Light resets the Halo cooldown',()=>{

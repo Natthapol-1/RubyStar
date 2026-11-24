@@ -475,3 +475,14 @@ test('full Sunfire overlay fades in and out on the gameplay clock and freezes on
  s.gaia.sunCharge=0;for(let i=0;i<15;i++)g.updateGaia(s);assert.ok(Math.abs(s.gaia.sunReadyFade-.5)<1e-8);
  for(let i=0;i<16;i++)g.updateGaia(s);assert.equal(s.gaia.sunReadyFade,0);
 });
+
+test("Gaia's Roots removes her active thorn-field tiles inside its area, like Sunfire, and leaves fields outside it", () => {
+  const { s, boss } = fresh();
+  const [far] = roomTiles(s, (c.chamberOfTile(s.playerTileX, s.playerTileY) + 2) % 4);
+  s.thornPatches = [{ x: s.playerX, y: s.playerY, radius: c.THORN_RADIUS, ticks: 500, ownerId: boss.id },
+    { x: (far[0] + .5) * c.TILE_SIZE, y: (far[1] + .5) * c.TILE_SIZE, radius: c.THORN_RADIUS, ticks: 500, ownerId: boss.id }];
+  const away = s.thornPatches[1];
+  s.specialSkill = 'thorn_weaver'; s.specialLockTicks = 0;
+  assert.equal(e.useSpecialSkill(s), true);
+  assert.deepEqual(s.thornPatches, [away], 'the field under you is gone; the far one stays');
+});

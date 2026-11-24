@@ -1,3 +1,4 @@
+import { drawCelestialBodyIcon } from './celestial-body-art';
 import { TILE_SIZE, T_FLOOR, T_WALL } from './constants';
 import { drawFieryKingModel, drawSunBackdrop, drawSunCover, drawSunFloorTile } from './sun-art';
 import { GEM_CUTS, gemMaterial } from './gemstone-cuts';
@@ -50,35 +51,12 @@ function drawForgeCourt(ctx: Ctx, tick: number) {
   ctx.shadowBlur = 0;
 }
 
-// Quantized bands give the star the same stepped outline at every scale.
+// The Sun on approach, drawn exactly like its star-map icon (celestial-body-art.ts), with a warm halo.
 function solarDisc(ctx: Ctx, x: number, y: number, r: number, t: number) {
   const glow = ctx.createRadialGradient(x, y, r * .8, x, y, r * 1.55);
   glow.addColorStop(0, '#ff631c48'); glow.addColorStop(1, '#ff631c00');
   ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
-  ctx.save(); ctx.translate(Math.round(x), Math.round(y));
-  const bands = discBands(ctx, r, 20);
-  ctx.clip();
-  const surface = ctx.createRadialGradient(-r * .28, -r * .29, r * .06, 0, 0, r * 1.08);
-  surface.addColorStop(0, '#ffc471');
-  surface.addColorStop(.47, '#ff9a36');
-  surface.addColorStop(.79, '#ed6824');
-  surface.addColorStop(1, '#a53420');
-  ctx.fillStyle = surface; ctx.fillRect(-r - 1, -r - 1, 2*r + 2, 2*r + 2);
-  for (const { row, y: y0, bottom, half } of bands) {
-    const height = bottom - y0;
-    for (let k = 0; k < 4; k++) {
-      const f = hash(row, k + 10), length = half * (.09 + f * .25);
-      const at = (hash(row, k + 31) * .8 + t * .018) % .8;
-      block(ctx, -half + half * 2 * at, y0, length, height, k % 2 ? '#ffbe6740' : '#67223d36');
-    }
-  }
-  ctx.restore();
-  ctx.save();
-  ctx.shadowColor = '#ffc769'; ctx.shadowBlur = 20;
-  block(ctx, x - r * .28, y - r * .18, r * .56, r * .36, '#ffd379');
-  block(ctx, x - r * .18, y - r * .28, r * .36, r * .56, '#ffd379');
-  block(ctx, x - r * .17, y - r * .17, r * .34, r * .34, '#fff0ad');
-  ctx.restore();
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); drawCelestialBodyIcon(ctx, 'sun', r, t); ctx.restore();
 }
 
 function solarWind(ctx: Ctx, t: number, strength: number) {

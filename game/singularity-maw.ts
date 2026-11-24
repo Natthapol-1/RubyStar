@@ -22,7 +22,7 @@ export interface SingularityTrial {
   hookFx?: { x: number; y: number; ticks: number; kind: 'slam' | 'wall' | 'latch' }[];
   feast?: { count: number; ticks: number }; // the swallow chain
   jaw?: { tx: number; ty: number; ticks: number; snap: number; hit?: boolean }; // a jaw warning (ticks left), then biting (snap left)
-  jawTimer?: number;
+  jawTimer?: number; jawTotal?: number;
   gas?: GasCloud[];                          // toxic gas clouds (phase 2+)      // ticks to the next jaw; a stun waiting for your knockback to land
   horizonCooldown?: number;
   soulTimer?: number; soullessTimer?: number; phaseStartTick?: number; // when this phase began (for the lone-body rescue)
@@ -541,6 +541,9 @@ function rescueLoneBody(s: GameState, t: SingularityTrial) {
 const JAW_SOUND_LEAD = 11; // ticks: the bite sound's crunch comes about 0.19 s in at 1.35× pitch
 function updateJaw(s: GameState, t: SingularityTrial) {
   const J = SC.jaw;
+  t.jawTimer ??= J.firstTicks;
+  t.jawTotal ??= J.firstTicks;
+  if (t.jawTimer > 0) t.jawTimer--;
   if (t.jaw) {
     const jaw = t.jaw;
     if (jaw.ticks > 0) {
@@ -551,10 +554,10 @@ function updateJaw(s: GameState, t: SingularityTrial) {
     else if (--jaw.snap <= 0) t.jaw = undefined;
     return;
   }
-  t.jawTimer ??= J.firstTicks;
-  if (--t.jawTimer > 0) return;
+  if (t.jawTimer > 0) return;
   const every = t.phase >= 2 ? J.everyTicksLate : J.everyTicks; // more often from phase 2
   t.jawTimer = every[0] + Math.floor(Math.random() * (every[1] - every[0]));
+  t.jawTotal = t.jawTimer;
   t.jaw = { tx: s.playerTileX, ty: s.playerTileY, ticks: J.warn, snap: J.snap };
   playAudioOneShot('/sounds/charging.wav', .4, .5);
 }
@@ -585,7 +588,7 @@ const hooked = (t: SingularityTrial, e: Enemy) => t.hook?.id === e.id || !!t.fli
 const held = (t: SingularityTrial, e: Enemy) => !!e.devourer?.merging || hooked(t, e) || !!e.devourer?.landTicks;
 /** A body that can be hooked: a living copy (not the original). */
 const hookable = (e: Enemy) => !e.devourer?.merging && e.hp > 0 && !e.devourer?.consumed && !e.devourer?.landTicks && (e.type === 'devourer' ? (e.devourer?.generation ?? 0) > 0 : !isBossType(e.type) && e.type !== 'aegis_construct'); // not mid-jump; a bursting copy too: holding pauses its fuse
-/** The body the hook would catch now: in-sight targets before ones behind walls, then the nearest Devourer copy within range, else the nearest other mob. A Void Shell keeps a copy out
+/** The body the hook would catch now: in-sight targets before ones behind walls, then Devourer copies (in sight: the most stacks, nearest on a tie; behind walls: the nearest), else the nearest other mob. A Void Shell keeps a copy out
  * of the hook's grasp until it is broken. */
 export function hookTarget(s: GameState): Enemy | undefined {
   const t = s.trial?.devourer; if (!t || t.hook || (t.hookCooldown ?? 0) > 0) return undefined;
@@ -594,6 +597,7 @@ export function hookTarget(s: GameState): Enemy | undefined {
   return s.enemies.filter(e => hookable(e) && !held(t, e) && !voidShelled(e) && Math.hypot(e.tileX - s.playerTileX, e.tileY - s.playerTileY) <= SC.hook.range)
     .sort((a, b) => Number(seen(b)) - Number(seen(a))
       || Number(b.type === 'devourer') - Number(a.type === 'devourer') // then Devourer copies
+      || (seen(a) ? (b.type === 'devourer' ? b.chargeDirX : 0) - (a.type === 'devourer' ? a.chargeDirX : 0) : 0) // in sight: the most stacks first; behind walls: just the nearest
       || Math.hypot(a.x - s.playerX, a.y - s.playerY) - Math.hypot(b.x - s.playerX, b.y - s.playerY))[0];
 }
 /** The engine asks whether a body's own AI should wait: held, in flight, or stunned by a slam. Counts the stun down. */
@@ -616,20 +620,21 @@ export function pressGravityHook(s: GameState): boolean {
 }
 /** Auto-aim: the Maw (preferred) or other body within throwing range closest to the way you face, within aimCone. */
 function hookAim(s: GameState, t: SingularityTrial, held: Enemy, fx: number, fy: number): [number, number] | null {
-  const px = s.playerTileX, py = s.playerTileY, cos = Math.cos(SC.hook.aimCone * Math.PI / 180), reach = SC.hook.fling + 1;
+  const px = held.tileX, py = held.tileY, cos = Math.cos(SC.hook.aimCone * Math.PI / 180), reach = SC.hook.fling + 1;
   const score = (x: number, y: number, bonus: number) => { const dx = x - px, dy = y - py, d = Math.hypot(dx, dy); if (!d || d > reach) return -1; const c = (dx * fx + dy * fy) / d; return c >= cos ? c + bonus : -1; };
   const options = [...(t.maws ?? []).map(m => [m.tx, m.ty, score(m.tx, m.ty, 1)] as const),
     ...s.enemies.filter(o => o !== held && hookable(o)).map(o => [o.tileX, o.tileY, score(o.tileX, o.tileY, 0)] as const)].filter(o => o[2] >= 0).sort((a, b) => b[2] - a[2]);
   return options.length ? [options[0][0], options[0][1]] : null;
 }
-/** C up (or the hold runs out): the body is drawn into your hands and thrown the way you face, bending toward a Maw or
- * body near that line. */
+/** C up (or the hold runs out): draw the body into your hands only across clear sight, then throw it the way you face. */
 export function releaseGravityHook(s: GameState) {
   const t = s.trial?.devourer; if (!t?.hook) return;
   const e = s.enemies.find(x => x.id === t.hook!.id); t.hook = undefined; t.hookCooldown = SC.hook.cooldown;
   if (!e || e.hp <= 0) return;
   const len = Math.hypot(s.playerDirX, s.playerDirY), fx = len ? s.playerDirX / len : 1, fy = len ? s.playerDirY / len : 0;
-  const px = s.playerTileX, py = s.playerTileY;
+  // Only draw the body into your hands across clear floor. A remote grab must not teleport it through cover.
+  const clear = hasLineOfSight(s.map, s.playerTileX, s.playerTileY, e.tileX, e.tileY);
+  const px = clear ? s.playerTileX : e.tileX, py = clear ? s.playerTileY : e.tileY;
   Object.assign(e, { tileX: px, tileY: py, targetTileX: px, targetTileY: py, x: (px + .5) * TILE_SIZE, y: (py + .5) * TILE_SIZE, stepProgress: 0, path: [], singularityPull: undefined });
   const aim = hookAim(s, t, e, fx, fy), [ax, ay] = aim ?? [px + Math.round(fx * SC.hook.fling), py + Math.round(fy * SC.hook.fling)];
   (t.flings ??= []).push({ id: e.id, ax, ay, dx: 0, dy: 0, left: Math.abs(ax - px) + Math.abs(ay - py) + (aim ? 2 : 0), moved: 0 });
@@ -688,7 +693,7 @@ function updateHook(s: GameState, t: SingularityTrial) {
     const rx = f.ax - e.tileX, ry = f.ay - e.tileY;
     if (f.left <= 0 || (!rx && !ry)) { end(); stun(e, SC.hook.endStun); continue; }
     const axes: [number, number][] = Math.abs(rx) >= Math.abs(ry) ? [[Math.sign(rx), 0], [0, Math.sign(ry)]] : [[0, Math.sign(ry)], [Math.sign(rx), 0]];
-    [f.dx, f.dy] = axes.find(([dx, dy]) => (dx || dy) && isFloorTile(s.map, e.tileX + dx, e.tileY + dy)) ?? axes[0];
+    [f.dx, f.dy] = axes[0]; // A throw hits cover; it never routes around a blocked step.
     if (!isFloorTile(s.map, e.tileX + f.dx, e.tileY + f.dy)) {
       end(); (t.hookFx ??= []).push({ x: e.x + f.dx * TILE_SIZE / 2, y: e.y + f.dy * TILE_SIZE / 2, ticks: 22, kind: 'wall' });
       if (devourerSoundAllowed(s, 'hit')) playAudioOneShot('/sounds/hitHurt.wav', .4, .9);
@@ -763,6 +768,6 @@ export function clearSingularityMaws(s: GameState) {
   const t = s.trial?.devourer as SingularityTrial | undefined; if (!t) return;
   t.convergence = undefined; t.convergenceTimer = SC.convergence.everyTicks;
   for (const e of s.enemies) if (e.devourer) e.devourer.merging = false;
-  t.soullessTimer = undefined; t.hook = undefined; t.hookCooldown = 0; t.flings = []; t.hookFx = []; t.feast = undefined; t.jaw = undefined; t.jawTimer = undefined; t.gas = []; t.swallows = []; t.bursts = []; t.shellBreaks = []; t.fEatCooldown = 0; t.soulSigns = [];
+  t.soullessTimer = undefined; t.hook = undefined; t.hookCooldown = 0; t.flings = []; t.hookFx = []; t.feast = undefined; t.jaw = undefined; t.jawTimer = undefined; t.jawTotal = undefined; t.gas = []; t.swallows = []; t.bursts = []; t.shellBreaks = []; t.fEatCooldown = 0; t.soulSigns = [];
 }
 export const mawRoomOf = (m: Maw) => chamberOfTile(m.tx, m.ty);

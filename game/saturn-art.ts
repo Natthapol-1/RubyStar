@@ -343,23 +343,12 @@ export function drawSaturnGround(ctx: CanvasRenderingContext2D, s: GameState, ca
   const t = s.saturn; if (!t) return;
   const tick = s.gameTick, boss = saturnBoss(s);
   ctx.save(); ctx.shadowBlur = 0;
-  // Departed footsteps are tinted immediately, before becoming hazardous frozen tiles.
-  const trailWarnings = [
-    ...(t.frostTrail ?? []).map(tile => ({ ...tile, opacity: 1 })),
-    ...(t.trailFades ?? []).map(tile => ({ ...tile, ticks: tile.footprintTicks, opacity: tile.ticks / SATURN.trailReplaceFadeTicks })),
-  ];
-  for (const tile of trailWarnings) {
-    if (tile.ticks <= 0 || !isFloorTile(s.map, tile.x, tile.y)) continue;
-    const progress = 1 - tile.ticks / SATURN.trailDelay;
-    const x = tile.x * TILE_SIZE - camX, y = tile.y * TILE_SIZE - camY;
-    ctx.save();
-    ctx.globalAlpha = (.22 + .12 * progress) * tile.opacity;
-    panel(ctx, x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4, '#76dce8');
-    ctx.globalAlpha = (.35 + .25 * progress) * tile.opacity;
-    ctx.strokeStyle = '#a9e5ff';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 3, y + 3, TILE_SIZE - 6, TILE_SIZE - 6);
-    ctx.restore();
+  for(const e of s.enemies)if(e.type==='frost_anchor'&&e.hp>0){
+    const x=e.x-camX,y=e.y-camY,r=(SATURN.anchorRadius+.5)*TILE_SIZE;
+    // Flat, feathered light sheets show the exact square suppression boundary.
+    ctx.save();ctx.beginPath();
+    for(let ty=Math.max(0,e.tileY-SATURN.anchorRadius);ty<=e.tileY+SATURN.anchorRadius;ty++)for(let tx=Math.max(0,e.tileX-SATURN.anchorRadius);tx<=e.tileX+SATURN.anchorRadius;tx++)if(isFloorTile(s.map,tx,ty))ctx.rect(tx*TILE_SIZE-camX,ty*TILE_SIZE-camY,TILE_SIZE,TILE_SIZE);
+    ctx.clip();drawFrostAnchorZone(ctx,x,y,tick,r);ctx.restore();
   }
   // Next frozen-floor layout.
   for (const [x, y] of t.nextIce) { ctx.strokeStyle = '#a9e5ff77'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.strokeRect(x * 48 - camX + 3, y * 48 - camY + 3, 42, 42); ctx.setLineDash([]); drawSaturnSnowflake(ctx, (x + .5) * 48 - camX, (y + .5) * 48 - camY, 14, '#c7f4ff40'); }
@@ -393,7 +382,7 @@ export function drawSaturnGround(ctx: CanvasRenderingContext2D, s: GameState, ca
     const left = t.grantTimer;
     for (const id of t.grantTargets) {
       const e = s.enemies.find(x => x.id === id && x.hp > 0); if (!e) continue;
-      drawSaturnGrantMark(ctx,e.x-camX,e.y-camY,boss.x-camX,boss.y-camY,left,tick,t.phase>=3&&id===t.reverseGrantId);
+      drawSaturnGrantMark(ctx,e.x-camX,e.y-camY,boss.x-camX,boss.y-camY,left,tick,t.phase>=SATURN.reverseGrantFromPhase&&id===t.reverseGrantId);
     }
   }
   // Recall: everything holding her ice (aliens, and you) gets a violet diamond and chevrons pointing back to her.
@@ -431,8 +420,20 @@ export function drawSaturnMinimap(ctx: CanvasRenderingContext2D, s: GameState, o
   for (const id of t.grantTargets) {
     const e = s.enemies.find(x => x.id === id && x.hp > 0); if (!e) continue;
     const x = Math.round(ox + (e.tileX + .5) * scale), y = Math.round(oy + (e.tileY + .5) * scale), blink = t.grantTimer <= GRANT_RING_TICKS && Math.floor(s.gameTick / 8) % 2 === 0;
-    const reversed = t.phase >= 3 && id === t.reverseGrantId;
+    const reversed = t.phase >= SATURN.reverseGrantFromPhase && id === t.reverseGrantId;
     ctx.strokeStyle = blink ? '#ffffff' : reversed ? REVERSE_GRANT_COLOR : GRANT_COLOR; ctx.lineWidth = 2; ctx.strokeRect(x - 5, y - 5, 10, 10);
+  }
+  for(const e of s.enemies)if(e.type==='frost_anchor'&&e.hp>0){
+    const x=Math.round(ox+e.x/TILE_SIZE*scale),y=Math.round(oy+e.y/TILE_SIZE*scale),r=(SATURN.anchorRadius+.5)*scale;
+    const inside=Math.max(Math.abs(e.tileX-Math.floor(s.playerX/TILE_SIZE)),Math.abs(e.tileY-Math.floor(s.playerY/TILE_SIZE)))<=SATURN.anchorRadius;
+    const pulse=.9+.1*Math.sin(s.gameTick*.07);
+    ctx.globalAlpha=(inside?.18:.12)*pulse;ctx.fillStyle='#aa83ec';ctx.fillRect(x-r,y-r,r*2,r*2);
+    ctx.globalAlpha=.8;ctx.strokeStyle='#171328';ctx.lineWidth=4;ctx.strokeRect(x-r,y-r,r*2,r*2);
+    ctx.globalAlpha=(inside?1:.85)*pulse;ctx.strokeStyle=inside?'#e2ccff':'#c1a0f3';ctx.lineWidth=2;ctx.strokeRect(x-r,y-r,r*2,r*2);
+    // A larger, high-contrast pillar silhouette stays distinct from alien dots.
+    ctx.globalAlpha=1;panel(ctx,x-6,y-8,12,16,'#111e34');
+    panel(ctx,x-4,y-5,8,10,'#8ec3ef');panel(ctx,x-2,y-7,4,3,'#bfdeff');panel(ctx,x-5,y+5,10,2,'#b8c7f1');
+    panel(ctx,x-1,y-3,3,6,'#f0fbff');
   }
   if (t.field) { const r = SATURN.fieldRadius * scale, x = ox + t.field.x / TILE_SIZE * scale, y = oy + t.field.y / TILE_SIZE * scale; ctx.globalAlpha = .7; ctx.strokeStyle = TIME; ctx.lineWidth = 1; ctx.strokeRect(Math.round(x - r), Math.round(y - r), Math.round(r * 2), Math.round(r * 2)); }
   ctx.restore();
@@ -576,7 +577,51 @@ export function drawSaturnEffects(ctx: CanvasRenderingContext2D, s: GameState, c
 
 // ─── Her aliens ──────────────────────────────────────────────────────────────
 
+export function drawFrostAnchorZone(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number,r:number){
+ ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;
+ const pulse=.75+.25*Math.sin(tick*.05);
+ ctx.globalAlpha=.085*pulse;ctx.fillStyle='#9d7ed4';ctx.fillRect(-r,-r,r*2,r*2);
+ const tint=ctx.createRadialGradient(0,0,0,0,0,r*1.42);tint.addColorStop(0,'#b899e5');tint.addColorStop(1,'#b899e500');
+ ctx.globalAlpha=.065*pulse;ctx.fillStyle=tint;ctx.fillRect(-r,-r,r*2,r*2);
+ for(let i=15;i>=0;i--){const u=i/15,d=r-u*Math.min(36,r*.3);ctx.globalAlpha=.055*(1-u)*pulse;ctx.strokeStyle='#aa95dc';ctx.lineWidth=3;ctx.strokeRect(-d,-d,d*2,d*2);}
+ ctx.setLineDash([14,7]);ctx.lineDashOffset=-tick*.15;
+ ctx.globalAlpha=.3*pulse;ctx.strokeStyle='#9f84dd';ctx.lineWidth=11;ctx.strokeRect(-r,-r,r*2,r*2);
+ ctx.globalAlpha=.8*pulse;ctx.strokeStyle='#c5aded';ctx.lineWidth=6;ctx.strokeRect(-r,-r,r*2,r*2);
+ ctx.globalAlpha=.9*pulse;ctx.strokeStyle='#ece0ff';ctx.lineWidth=2;ctx.strokeRect(-r,-r,r*2,r*2);
+ ctx.restore();
+}
+export function drawFrostAnchor(ctx:CanvasRenderingContext2D,x:number,y:number,tick:number){
+ ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;
+ const breath=.5+.5*Math.sin(tick*.055),bob=Math.round(Math.sin(tick*.035));
+ // A broad, irregular frozen monolith grows straight out of a broken ice bed.
+ ctx.globalAlpha=.25;panel(ctx,-24,6,13,14,'#a6c5ef');panel(ctx,12,2,13,18,'#bba9e4');
+ ctx.globalAlpha=.55;panel(ctx,-21,13,41,8,'#91badb');panel(ctx,-15,20,30,4,'#b3d8ee');
+ ctx.globalAlpha=.95;ctx.fillStyle='#7faed0';
+ ctx.beginPath();ctx.moveTo(-18,16);ctx.lineTo(-18,-17);ctx.lineTo(-14,-17);ctx.lineTo(-14,-30);ctx.lineTo(-6,-30);ctx.lineTo(-6,-38);
+ ctx.lineTo(2,-38);ctx.lineTo(2,-25);ctx.lineTo(10,-25);ctx.lineTo(10,-31);ctx.lineTo(17,-31);ctx.lineTo(17,-15);ctx.lineTo(21,-15);ctx.lineTo(21,16);ctx.closePath();ctx.fill();
+ ctx.globalAlpha=.75;ctx.strokeStyle='#c5eaf8';ctx.lineWidth=1.2;ctx.stroke();
+ // Transparent ice sheets overlap; neither side is lit as a bevel.
+ ctx.globalAlpha=.25;panel(ctx,-17,-16,12,31,'#b8e9fa');panel(ctx,4,-22,12,37,'#b6a7e9');
+ ctx.globalAlpha=.22;panel(ctx,-12,-27,8,39,'#d4f1fa');panel(ctx,10,-11,9,24,'#c5e6f5');
+ // An open dark fissure contains a suspended block of cold light.
+ ctx.globalAlpha=1;panel(ctx,-6,-18,13,29,'#284359');panel(ctx,-9,-11,19,15,'#284359');
+ ctx.globalAlpha=.2+breath*.08;panel(ctx,-8,-12+bob,17,17,'#9b9bdf');
+ ctx.globalAlpha=.8;panel(ctx,-4,-8+bob,9,12,'#accdf0');
+ ctx.globalAlpha=.95;panel(ctx,-2,-6+bob,5,8,'#edfaff');
+ // Short luminous seams suggest cracked ice without internal facet panels.
+ ctx.globalAlpha=.65;ctx.strokeStyle='#d4f1fa';ctx.lineWidth=1.2;
+ ctx.beginPath();ctx.moveTo(-16,-8);ctx.lineTo(-11,-8);ctx.lineTo(-11,-1);ctx.moveTo(12,0);ctx.lineTo(16,0);ctx.lineTo(16,7);ctx.stroke();
+ ctx.globalAlpha=.75;panel(ctx,-4,-45+bob,4,4,'#c9ecfa');ctx.globalAlpha=.4;panel(ctx,14,-38-bob,3,4,'#baa7e5');
+ for(let i=0;i<8;i++){
+  const p=(tick*.009+i*.125)%1,px=(i%2?1:-1)*(19+Math.sin(i*2+p*3)*5),py=15-p*54,fade=Math.sin(p*Math.PI);
+  ctx.globalAlpha=fade*.5;panel(ctx,px,py,i%3?2:3,i%3?3:2,i%3?'#c3e9ff':'#c4b2eb');
+  if(i%4===0){ctx.globalAlpha=fade*.8;panel(ctx,px-2,py,6,1,'#effbff');panel(ctx,px,py-2,1,6,'#effbff');}
+ }
+ ctx.restore();
+}
+
 export function drawSaturnUnit(ctx: CanvasRenderingContext2D, e: Enemy, x: number, y: number, tick: number, stopped = false) {
+  if(e.type==='frost_anchor'){drawFrostAnchor(ctx,x,y,tick);drawEnemyHealthBar(ctx,e,x,y);return true;}
   if (e.type !== 'frostbiter' && e.type !== 'sleet_mortar' && e.type !== 'glacier_hulk') return false;
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.shadowBlur = 0;
   if (e.flashTicks > 0) ctx.filter = 'brightness(1.8)';

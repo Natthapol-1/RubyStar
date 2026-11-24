@@ -48,12 +48,16 @@ import { drawSiriusGround, drawSiriusEffects, drawSiriusHolyRays, drawSiriusBurs
 import MagnetStatus from './MagnetStatus';
 import { TWIN_REVIVE_TICKS } from './constants';
 import GambitLoadout from './GambitLoadout';
-import { pressSlot, holdSlot, releaseSlot, GAMBIT_WAVE_TICKS } from './gambit';
-import { drawGambitEffects, drawGambitHud, drawGambitBackdrop } from './gambit-art';
+import GambitWeaponStatus from './GambitWeaponStatus';
+import GambitSlotMachine from './GambitSlotMachine';
+import GambitShop from './GambitShop';
+import { pressWeapon, holdWeapon, releaseWeapon, GAMBIT, GAMBIT_WAVE_TICKS, godShiftWave, oxygenBill, oxygenDrain, wavesToBill } from './gambit';
+import { drawGambitEffects, drawGambitBackdrop } from './gambit-art';
 import { BINARY, BINARY_TWIN_COLORS, POLE_COLORS, binaryTwins, swapTicks as binarySwapTicks, swapPole, godSetBinaryPhase, godJumpTwins, godCollideTwins } from './binary';
 import { BINARY_CHAMBER_COLORS, isBinaryMap, drawBinaryBackdrop, drawBinaryCover, drawBinaryFloor, drawBinaryAmbience } from './binary-world-art';
 import { drawBinaryGround, drawBinaryEffects, drawBinaryCollisionScreen, drawPoleFrame, drawBinaryMinimap, drawBinaryUnit, drawBinaryScreen } from './binary-art';
 import TimeStopStatus from './TimeStopStatus';
+import TetherStatus from './TetherStatus';
 import ShieldAmount from './ShieldAmount';
 import { SATURN, saturnBlizzard, saturnTimeStopped, useSaturnIntercept, godSetSaturnPhase, godSaturnGrant, godSaturnRecall } from './saturn';
 
@@ -811,9 +815,11 @@ function drawMinimap(
       const [r1, c1, r2, c2] = CHAMBER_BOUNDS[chamber];
       if (x > c1 && x < c2 && y > r1 && y < r2) return true;
     }
-    return state.map[y][x] !== T_WALL && (chamber >= 0 || HALLWAY_BOUNDS.some(
+    // HALLWAY_BOUNDS describe the standard four-chamber station only; on the Bazaar Ring they would overlap its own
+    // corridors and merge them into the plaza's outline.
+    return state.map[y][x] !== T_WALL && (chamber >= 0 || (CHAMBER_BOUNDS.length === 4 && HALLWAY_BOUNDS.some(
       ([r1, c1, r2, c2]) => y >= r1 && y <= r2 && x >= c1 && x <= c2,
-    ));
+    )));
   };
   ctx.save();
   for (let y = 0; y < MAP_ROWS; y++) {
@@ -2216,11 +2222,25 @@ function drawPlayerChain(ctx: CanvasRenderingContext2D, x1: number, y1: number, 
 
 function drawPlayerWave(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, powered: boolean, ticks: number,tint?:'solar'|'emerald'|'opal'|'amber'|'echo') {
   if(tint==='echo'){ctx.save();ctx.filter='hue-rotate(130deg) saturate(.8)';ctx.globalAlpha=.85;drawPlayerWave(ctx,x,y,radius,false,ticks);ctx.restore();return;}
-  ctx.save();const fade=Math.min(1,ticks/30),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#29ba7c':tint==='solar'?'#ff5b66':powered?'#ffbb22':'#22cfff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffe0ca':tint==='amber'?'#ffd65b':powered?'#fff4b8':'#e4ffff',accent=tint==='opal'?'#ed99cc':tint==='emerald'?'#19a96c':tint==='solar'?'#e63956':tint==='amber'?'#ffad24':powered?'#ff6d37':'#9b7cff';
-  ctx.shadowColor=base;ctx.shadowBlur=Math.min(6,32);ctx.globalAlpha=fade*.85;ctx.strokeStyle=base;ctx.lineWidth=18;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
-  ctx.shadowBlur=Math.min(6,10);ctx.globalAlpha=fade;ctx.strokeStyle=light;ctx.lineWidth=6;ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
+  ctx.save();const fade=Math.min(1,ticks/30),base=tint==='opal'||tint==='amber'?'#8fcaff':tint==='emerald'?'#29ba7c':tint==='solar'?'#ff5b66':powered?'#ffcc00':'#44ddff',light=tint==='opal'?'#ffd0eb':tint==='emerald'?'#b8ffe1':tint==='solar'?'#ffd8bd':tint==='amber'?'#ffd65b':powered?'#ffee88':'#aaffff',accent=tint==='opal'?'#ed99cc':tint==='emerald'?'#19a96c':tint==='solar'?'#e63956':tint==='amber'?'#ffad24':powered?'#ffcc00':'#44ddff';
+  // Motion sheets stay behind the expanding front, fading toward the inner side.
+  const inwardWake=(front:number,width:number,color:string,strength:number)=>{
+    const span=Math.min(width,Math.max(0,front-4)),step=span/32;
+    ctx.shadowBlur=0;ctx.strokeStyle=color;
+    for(let i=31;i>=0;i--){
+      const u=(i+.5)/32,r=Math.max(1,front-u*span);
+      ctx.globalAlpha=fade*strength*Math.pow(1-u,1.5);ctx.lineWidth=step+.1;
+      ctx.strokeRect(x-r,y-r,r*2,r*2);
+    }
+  };
+  inwardWake(Math.max(1,radius-7),Math.min(powered?72:58,radius*.65),base,.38);
+  // The laser's broad colored light, luminous middle and white core, wrapped into a square front.
+  for(const [width,color,alpha,glow]of [[powered?38:30,base,.35,6],[powered?16:12,light,.85,4],[powered?4:3,'#ffffff',1,0]] as const){
+    ctx.shadowColor=base;ctx.shadowBlur=glow;ctx.globalAlpha=fade*alpha;ctx.strokeStyle=color;ctx.lineWidth=width;
+    ctx.strokeRect(x-radius,y-radius,radius*2,radius*2);
+  }
   for(const [ratio,color,alpha]of [[.76,accent,.65],[.5,base,.35]] as const){
-    const r=radius*ratio;ctx.shadowColor=color;ctx.shadowBlur=Math.min(6,12);ctx.globalAlpha=fade*alpha;ctx.strokeStyle=color;ctx.lineWidth=5;ctx.strokeRect(x-r,y-r,r*2,r*2);
+    const r=radius*ratio;inwardWake(Math.max(1,r-2),Math.min(20,r*.35),color,alpha*.28);ctx.shadowColor=color;ctx.shadowBlur=Math.min(6,12);ctx.globalAlpha=fade*alpha;ctx.strokeStyle=color;ctx.lineWidth=5;ctx.strokeRect(x-r,y-r,r*2,r*2);
   }
   ctx.shadowBlur=Math.min(6,0);ctx.globalAlpha=fade*.1;ctx.fillStyle=base;ctx.fillRect(x-radius,y-radius,radius*2,radius*2);
   ctx.shadowColor=base;ctx.shadowBlur=Math.min(6,10);
@@ -2531,39 +2551,56 @@ function drawBombDevice(ctx: CanvasRenderingContext2D, x: number, y: number, pow
   drawCompassStar(ctx,15,-27,12,light);ctx.fillStyle='#ffffff';ctx.fillRect(14,-28,2,2);ctx.restore();
 }
 
-function drawBombBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number,opal=false,amber=false,trap=false) {
-  if(trap){drawTrapBlast(ctx,x,y,radius,ticks);return;}
-  ctx.save();const fade=Math.min(1,ticks/28),progress=1-fade,r=Math.max(0,radius);
-  const glow=opal||amber?'#83bfff':'#ff6a25',base=opal||amber?'#8fcaff':'#ff9c38',light=opal?'#ffd0eb':amber?'#ffd65b':'#fff1b6',accent=opal?'#ed99cc':amber?'#ffad24':'#ffce53';
-  ctx.shadowColor=glow;ctx.shadowBlur=Math.min(6,30);ctx.globalAlpha=fade*.8;ctx.strokeStyle=base;ctx.lineWidth=18;ctx.strokeRect(x-r,y-r,r*2,r*2);
-  ctx.shadowBlur=Math.min(6,10);ctx.globalAlpha=fade;ctx.strokeStyle=light;ctx.lineWidth=5;ctx.strokeRect(x-r,y-r,r*2,r*2);
-  const inner=r*.65;ctx.globalAlpha=fade*.6;ctx.strokeStyle=accent;ctx.lineWidth=6;ctx.strokeRect(x-inner,y-inner,inner*2,inner*2);
-  ctx.shadowBlur=Math.min(6,0);ctx.globalAlpha=fade*.14;ctx.fillStyle=opal||amber?'#83bfff':'#ff6a25';ctx.fillRect(x-r,y-r,r*2,r*2);
-  ctx.shadowColor=opal||amber?'#a8cfff':'#ff8833';ctx.shadowBlur=Math.min(6,10);
-  for(let i=0;i<12;i++){
-    const angle=i*Math.PI/6,reach=r*(.6+progress*.4),px=x+Math.cos(angle)*reach,py=y+Math.sin(angle)*reach;
-    const height=9+Math.sin(progress*Math.PI)*(12+i%3*6);ctx.globalAlpha=fade*.8;ctx.fillStyle=i%2?(opal||amber?'#8fcaff':'#ff833d'):(opal?'#ed99cc':amber?'#ffad24':'#ffcf6c');
-    ctx.fillRect(Math.round(px)-4,Math.round(py-height),8,height);ctx.fillStyle=opal?'#fff0fa':amber?'#fff2a3':'#fff2c7';ctx.fillRect(Math.round(px)-1,Math.round(py-height)+3,3,Math.max(3,height*.45));
+// Player bombs and hostile blasts share a flat light material, with distinct palettes and debris.
+function drawLayeredBombExplosion(ctx:CanvasRenderingContext2D,x:number,y:number,radius:number,ticks:number,palette:readonly string[],hostile=false){
+  const [base,light,accent,core]=palette,fade=Math.max(0,Math.min(1,ticks/28)),p=1-fade,r=Math.max(0,radius);
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.shadowBlur=0;ctx.lineJoin='miter';
+  // The bright leading pressure edge leaves a broad translucent sheet on its inner side.
+  for(let layer=2;layer>=0;layer--){
+    const front=r*[1,.72,.46][layer],strength=fade*[1,.52,.28][layer],wake=Math.min(front*.6,layer?24:hostile?52:66),step=wake/20;
+    if(front<2)continue;
+    for(let i=19;i>=0;i--){const u=(i+.5)/20,extent=front-u*wake;
+      ctx.globalAlpha=strength*.28*Math.pow(1-u,1.5);ctx.strokeStyle=layer===1?accent:base;ctx.lineWidth=step+.1;ctx.strokeRect(-extent,-extent,extent*2,extent*2);
+    }
+    ctx.globalAlpha=strength*.15;ctx.strokeStyle=base;ctx.lineWidth=layer?14:30;ctx.strokeRect(-front,-front,front*2,front*2);
+    ctx.globalAlpha=strength*.8;ctx.strokeStyle=layer===1?accent:light;ctx.lineWidth=layer?6:12;ctx.strokeRect(-front,-front,front*2,front*2);
+    ctx.globalAlpha=strength*.95;ctx.strokeStyle=core;ctx.lineWidth=layer?2.2:5;ctx.strokeRect(-front,-front,front*2,front*2);
   }
-  ctx.globalAlpha=fade*.75;drawCompassStar(ctx,x,y,66+progress*54,(opal?'#b3d7ff':amber?'#ffcf4a':'#ffb744'));ctx.globalAlpha=fade*fade*.9;drawCompassStar(ctx,x,y,36,(opal?'#fff0fa':amber?'#fff2a3':'#fff2c7'));ctx.restore();
+  // Four broad release tongues anchor the explosion, without an opaque screen flash.
+  const burst=Math.max(0,1-p/.65),reach=14+r*.42;
+  for(let i=0;i<4;i++){
+    ctx.save();ctx.rotate(i*Math.PI/2);
+    const sheet=ctx.createLinearGradient(0,0,reach,0);sheet.addColorStop(0,light);sheet.addColorStop(.35,base);sheet.addColorStop(1,base+'00');
+    ctx.globalAlpha=burst*.24;ctx.fillStyle=sheet;ctx.fillRect(0,-(hostile?7:10),reach,hostile?14:20);
+    ctx.globalAlpha=burst*.7;ctx.fillStyle=core;ctx.fillRect(4,-1,Math.min(reach*.45,30),2);ctx.restore();
+  }
+  // Detached hot chips carry a translucent rear sheet and a small luminous leading edge.
+  const travel=1-Math.pow(1-p,2);
+  for(let i=0;i<28;i++){
+    const angle=i*2.39996,d=r*(.35+(i%5)*.105),size=3+i%4,alpha=fade*(.5+(i%3)*.1);
+    ctx.save();ctx.translate(Math.cos(angle)*d,Math.sin(angle)*d);ctx.rotate(angle+p*(i%2?1:-1)*.28);
+    ctx.globalAlpha=alpha*.2;ctx.fillStyle=i%3?base:accent;ctx.fillRect(-size*2.4,-size*.6,size*3.4,size*1.2);
+    ctx.globalAlpha=alpha*.6;ctx.fillRect(-size,-size*.4,size*1.8,size*.8);
+    ctx.globalAlpha=alpha*.85;ctx.fillStyle=i%3?light:core;ctx.fillRect(size*.5,-size*.4,1.5,size*.8);
+    if(i%4===0){ctx.globalAlpha=fade*.8;ctx.fillStyle=core;ctx.fillRect(-3,0,7,1);ctx.fillRect(0,-3,1,7);}ctx.restore();
+  }
+  // A compact overlapping square core opens and fades beneath the pressure fronts.
+  const flash=Math.max(0,1-p/.42),size=12+travel*22;
+  ctx.globalAlpha=flash*.18;ctx.fillStyle=accent;ctx.fillRect(-size,-size,size*2,size*2);
+  ctx.globalAlpha=flash*.6;ctx.fillStyle=light;ctx.fillRect(-9,-9,18,18);
+  ctx.globalAlpha=flash*.9;ctx.fillStyle=core;ctx.fillRect(-4,-4,8,8);
+  ctx.restore();
 }
 
-// A Trapper mine: the same blast as the player's bomb, recoloured crimson so it reads as hostile.
-// Trapper mines use crimson; the Binary Star echo's bomb uses the same blast in its rose.
+function drawBombBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number,opal=false,amber=false,trap=false) {
+  if(trap){drawTrapBlast(ctx,x,y,radius,ticks);return;}
+  const palette=opal?['#83bfff','#c6e7ff','#ed99cc','#fff0fa']:amber?['#83bfff','#c6e7ff','#ffcc50','#fff4ce']:['#ff7e32','#ffcf75','#f4a13a','#fff6dd'];
+  drawLayeredBombExplosion(ctx,x,y,radius,ticks,palette);
+}
+
+// Crimson, tighter fragments distinguish hostile mines/Bombers from the player's warm blast.
 function drawTrapBlast(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, ticks: number, echo = false) {
-  if(echo){ctx.save();ctx.filter='hue-rotate(-28deg) saturate(.75) brightness(1.15)';drawTrapBlast(ctx,x,y,radius,ticks);ctx.restore();return;}
-  ctx.save();const fade=Math.min(1,ticks/28),progress=1-fade,r=Math.max(0,radius);
-  ctx.shadowColor='#ff2a4a';ctx.shadowBlur=6;ctx.globalAlpha=fade*.8;ctx.strokeStyle='#ff4d6a';ctx.lineWidth=18;ctx.strokeRect(x-r,y-r,r*2,r*2);
-  ctx.globalAlpha=fade;ctx.strokeStyle='#ffd0d8';ctx.lineWidth=5;ctx.strokeRect(x-r,y-r,r*2,r*2);
-  const inner=r*.65;ctx.globalAlpha=fade*.6;ctx.strokeStyle='#ff8aa0';ctx.lineWidth=6;ctx.strokeRect(x-inner,y-inner,inner*2,inner*2);
-  ctx.shadowBlur=0;ctx.globalAlpha=fade*.14;ctx.fillStyle='#ff2a4a';ctx.fillRect(x-r,y-r,r*2,r*2);
-  ctx.shadowColor='#ff5470';ctx.shadowBlur=6;
-  for(let i=0;i<12;i++){
-    const angle=i*Math.PI/6,reach=r*(.6+progress*.4),px=x+Math.cos(angle)*reach,py=y+Math.sin(angle)*reach;
-    const height=9+Math.sin(progress*Math.PI)*(12+i%3*6);ctx.globalAlpha=fade*.8;ctx.fillStyle=i%2?'#ff4d6a':'#ff9aae';
-    ctx.fillRect(Math.round(px)-4,Math.round(py-height),8,height);ctx.fillStyle='#ffe4ea';ctx.fillRect(Math.round(px)-1,Math.round(py-height)+3,3,Math.max(3,height*.45));
-  }
-  ctx.globalAlpha=fade*.75;drawCompassStar(ctx,x,y,66+progress*54,'#ff6680');ctx.globalAlpha=fade*fade*.9;drawCompassStar(ctx,x,y,36,'#ffe4ea');ctx.restore();
+  drawLayeredBombExplosion(ctx,x,y,radius,ticks,echo?['#da669f','#f5bfd7','#aa88dd','#fff0f9']:['#e93e5c','#ff9bad','#b94e89','#fff0f3'],true);
 }
 
 function drawResourcePickup(ctx: CanvasRenderingContext2D, x: number, y: number, health: boolean | 'shield', tick: number) {
@@ -4398,19 +4435,6 @@ function drawBattlefield(ctx: CanvasRenderingContext2D, state: GameState, camX: 
     const key = tile.x + ',' + tile.y;
     iceOpacity.set(key, Math.max(iceOpacity.get(key) ?? 0, Math.min(1, tile.ticks / 30)));
   }
-  for (const tile of state.saturn?.frostTrail ?? []) {
-    if (tile.ticks > 0) continue;
-    const key = tile.x + ',' + tile.y;
-    const remaining = SATURN.trailIceTicks + tile.ticks;
-    iceOpacity.set(key, Math.max(iceOpacity.get(key) ?? 0, Math.min(1, remaining / 30)));
-  }
-  for (const tile of state.saturn?.trailFades ?? []) {
-    if (tile.footprintTicks > 0) continue;
-    const key = tile.x + ',' + tile.y;
-    const previousOpacity = Math.min(1, (SATURN.trailIceTicks + tile.footprintTicks) / 30);
-    const opacity = previousOpacity * tile.ticks / SATURN.trailReplaceFadeTicks;
-    iceOpacity.set(key, Math.max(iceOpacity.get(key) ?? 0, opacity));
-  }
   const x0=Math.max(0,Math.floor(camX/size)-1),y0=Math.max(0,Math.floor(camY/size)-1),x1=Math.min(MAP_COLS-1,Math.ceil((camX+viewW)/size)+1),y1=Math.min(MAP_ROWS-1,Math.ceil((camY+viewH)/size)+1);
   const ocean=!!state.neptune,solar=!!state.sun,forest=!!state.gaia,moon=isMoonMap(state),binaryWorld=isBinaryMap(state),theme=worldTheme(state);
   const battlefieldColor=(ch:number)=>{
@@ -5652,7 +5676,6 @@ function drawGame(
   if(state.jupiter)drawFlashLayer(ctx,ctx=>drawJupiterTransition(ctx,state,canvasW,canvasH,state.gameTick));
   if(state.jupiter)drawFlashLayer(ctx,ctx=>drawOverdriveWarning(ctx,state,canvasW,canvasH,state.gameTick));
   if(state.binary)drawBinaryScreen(ctx,state,canvasW,canvasH);
-  if(state.gambit)drawGambitHud(ctx,state,canvasW,canvasH);
   if(state.sirius)drawSiriusScreen(ctx,state,canvasW,canvasH);
   if(state.sirius)drawFlashLayer(ctx,ctx=>drawSiriusBurst(ctx,state,canvasW,canvasH));
   if (state.moon) drawMoonDarkOverlay(ctx, state, canvasW, canvasH, state.gameTick);
@@ -5721,6 +5744,18 @@ function GuardianCountdown({ label, ticks, total, color }: { label: string; tick
   </div>;
 }
 
+function SingularityCountdowns({devourer}:{devourer:NonNullable<NonNullable<GameState['trial']>['devourer']>}){
+  const conv=devourer.convergence,cfg=SINGULARITY_CHALLENGE.convergence,J=SINGULARITY_CHALLENGE.jaw;
+  const gathering=conv&&conv.stage!=='blast';
+  const jawTicks=devourer.jawTimer??J.firstTicks;
+  const jawTotal=devourer.jawTotal??Math.max(J.firstTicks,jawTicks);
+  return <div style={{display:'flex',gap:8}}>
+    <div style={{flex:2,minWidth:0}}><GuardianCountdown label={gathering?'GATHER':'CONVERGE'}
+      ticks={gathering?conv.ticks:(devourer.convergenceTimer??cfg.everyTicks)} total={gathering?(conv.gatherTicks??convergenceGatherTicks(conv.members.length)):cfg.everyTicks} color={gathering?'#d8ff9c':'#b995df'}/></div>
+    <div style={{flex:1,minWidth:0}}><GuardianCountdown label="JAW" ticks={jawTicks} total={jawTotal} color="#9bcf91"/></div>
+  </div>;
+}
+
 function GuardianBar({ state }: { state: GameState }) {
   if(state.trial?.mapOnly&&!state.enemies.some(e=>e.type===state.trial!.boss&&e.hp>0))return <div className="rs-guardian" style={{color:'#a8e8d7'}}><span className="rs-guardian-name">{worldTheme(state)?.name??'SATURN · FROZEN RINGS'}</span></div>;
   const boss = state.trial!.boss, color = ENEMY_CONFIGS[boss].color;
@@ -5739,13 +5774,8 @@ function GuardianBar({ state }: { state: GameState }) {
         <span className="rs-guardian-fill" style={{width:`${(phase<devourer.phase?0:phase>devourer.phase?1:fill)*100}%`,opacity:phase===devourer.phase?1:.55}}/>
       </span>)}</span>
       </div>
-      {(() => { // the convergence countdown, drawn like every other map's countdown bar
-        const conv = devourer.convergence, cfg = SINGULARITY_CHALLENGE.convergence;
-        const gathering = conv && conv.stage !== 'blast';
-        const total = gathering ? (conv.gatherTicks ?? convergenceGatherTicks(conv.members.length)) : cfg.everyTicks;
-        return <GuardianCountdown label={gathering ? 'GATHERING' : 'CONVERGENCE'}
-          ticks={gathering ? conv.ticks : (devourer.convergenceTimer ?? cfg.everyTicks)} total={total} color={gathering ? '#d8ff9c' : '#b995df'} />;
-      })()}
+      <SingularityCountdowns devourer={devourer}/>
+
     </div>;
   }
   const binary = state.binary;
@@ -6212,7 +6242,9 @@ export function createArrivalScenery(id: Exclude<TrialBody, 'sun'>, boss: BossTy
       try {
         guardians.forEach((enemy, i) => {
           const split = guardians.length > 1 ? (i === 0 ? -1 : 1) : 0;
-          const scale = (guardians.length > 1 ? 1.5 : 100 / (TILE_SIZE * ENEMY_CONFIGS[boss].bodyFraction)) + advance * .12;
+          // The Devourer's original is swollen by its stacks; size the standoff by its base body so it matches the other guardians.
+          const swell = enemy.type === 'devourer' ? devourerBodyScale(enemy) : 1;
+          const scale = (guardians.length > 1 ? 1.5 : 100 / (TILE_SIZE * ENEMY_CONFIGS[boss].bodyFraction * swell)) + advance * .12;
           ctx.save();
           try {
             ctx.translate(640 + split * (103 - 20 * advance), 315 + advance * 32 + split * 15);
@@ -6484,10 +6516,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       }
       // Auto-fire bullet while right mouse button is held — fires at exactly the same rate
       // as spam-clicking, since useBullet is already self-gated by the raw bulletCooldown.
-      if (state.gambit) {
-        if (rightMouseHeldRef.current || keyboardBulletHeldRef.current) holdSlot(state, 1);
-        if (snowballMouseHeldRef.current || snowballKeyHeldRef.current) holdSlot(state, 2);
-      } else if ((rightMouseHeldRef.current || keyboardBulletHeldRef.current) && state.gamePhase === 'playing' && state.bulletCooldown <= 0) {
+      if (state.gambit && (snowballMouseHeldRef.current || snowballKeyHeldRef.current)) holdWeapon(state); // Star Gambit: the weapon on the Primal Skill control
+      if ((rightMouseHeldRef.current || keyboardBulletHeldRef.current) && state.gamePhase === 'playing' && state.bulletCooldown <= 0) {
         useBullet(state);
       }
       const previousPhase=state.gamePhase;
@@ -6644,13 +6674,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         if (e.repeat || keyboardLaserHeldRef.current) return;
         keyboardLaserHeldRef.current = true;
         if (!mouseDownTimeRef.current) mouseDownTimeRef.current = Date.now();
-        if (state.gambit) pressSlot(state, 0); else useLaser(state); rerender(); return;
+        useLaser(state); rerender(); return;
       }
       if (key.toLowerCase() === 'l') {
         e.preventDefault();
         if (e.repeat || keyboardBulletHeldRef.current) return;
         keyboardBulletHeldRef.current = true;
-        if (state.gambit) pressSlot(state, 1); else useBullet(state); rerender(); return;
+        useBullet(state); rerender(); return;
       }
 
       // Movement
@@ -6681,7 +6711,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         return;
       }
       if (mapSkillKey) {
-        e.preventDefault();if(!e.repeat){snowballKeyHeldRef.current=true;if(state.gambit)pressSlot(state,2);else if(state.neptune&&state.gamePhase==='playing')beginNeptuneChorusPress(state,'key');else activateMapSkill(state);}return;
+        e.preventDefault();if(!e.repeat){snowballKeyHeldRef.current=true;if(state.gambit)pressWeapon(state);else if(state.neptune&&state.gamePhase==='playing')beginNeptuneChorusPress(state,'key');else activateMapSkill(state);}return;
       }
       if (key === 'r') { e.preventDefault(); useSpeedBoost(state); rerender(); return; }
       if (key === 'e' || key === 'E') {
@@ -6693,14 +6723,14 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
     const onKeyUp = (e: KeyboardEvent) => {
       const key=gameKey(e);
-      if(controlForCode(e.code)==='mapSkill'){snowballKeyHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);return;}if(finishNeptuneChorusPress('key'))return;if(!snowballMouseHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
+      if(controlForCode(e.code)==='mapSkill'){snowballKeyHeldRef.current=false;if(stateRef.current?.gambit){releaseWeapon(stateRef.current);return;}if(finishNeptuneChorusPress('key'))return;if(!snowballMouseHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
       if (key === ' ' && stateRef.current?.sun) stateRef.current.sun.charging = false;
       if (key.toLowerCase() === 'k') {
         keyboardLaserHeldRef.current = false;
         if (!pointerLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
         return;
       }
-      if (key.toLowerCase() === 'l') { keyboardBulletHeldRef.current = false; if (stateRef.current?.gambit) releaseSlot(stateRef.current, 1); return; }
+      if (key.toLowerCase() === 'l') { keyboardBulletHeldRef.current = false; return; }
       const state = stateRef.current;
       if (!state) return;
       const dirMap: Record<string, [number, number]> = {
@@ -6739,7 +6769,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
     const action=mouseControl(e.button);
     if(action==='mapSkill'){
       e.preventDefault();
-      if(state?.gambit&&!showRules){snowballMouseHeldRef.current=true;pressSlot(state,2);rerender();return;} // Star Gambit: the middle slot
+      if(state?.gambit&&!showRules){snowballMouseHeldRef.current=true;pressWeapon(state);rerender();return;} // Star Gambit: the run's weapon
       if(state&&!showRules){snowballMouseHeldRef.current=true;if(state.neptune&&state.gamePhase==='playing')beginNeptuneChorusPress(state,'mouse');else activateMapSkill(state);}
       return;
     }
@@ -6748,21 +6778,21 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
       pointerLaserHeldRef.current = true;
       if (!mouseDownTimeRef.current) mouseDownTimeRef.current = Date.now();
-      if (state.gambit) pressSlot(state, 0); else useLaser(state); // Star Gambit: the left slot's weapon; holding still charges the wave
+      useLaser(state);
       rerender();
     } else if (action === 'bullet') {
       e.preventDefault();
       rightMouseHeldRef.current = true;
-      if (state.gambit) pressSlot(state, 1); else useBullet(state);
+      useBullet(state);
       rerender();
     }else if(action==='boost'){useSpeedBoost(state);rerender();}else if(action==='bomb'){useBomb(state);rerender();}else if(action==='ruby'){toggleCarryRuby(state);rerender();}else if(action==='heal'){if(state.sun)state.sun.charging=true;if(!sunStationNearPlayer(state))healRuby(state);rerender();}else if(action==='teleport'){if(tryActivateTeleport(state))playUiSfx('teleport');rerender();}else if(action==='celestial'){useSpecialSkill(state);rerender();}
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     const action=mouseControl(e.button);
-    if(action==='mapSkill'){snowballMouseHeldRef.current=false;if(stateRef.current?.gambit){releaseSlot(stateRef.current,2);rerender();return;}if(finishNeptuneChorusPress('mouse'))return;if(!snowballKeyHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
+    if(action==='mapSkill'){snowballMouseHeldRef.current=false;if(stateRef.current?.gambit){releaseWeapon(stateRef.current);rerender();return;}if(finishNeptuneChorusPress('mouse'))return;if(!snowballKeyHeldRef.current&&stateRef.current){releaseGravityHook(stateRef.current);rerender();}return;}
     if(action==='heal'&&stateRef.current?.sun)stateRef.current.sun.charging=false;
-    if (action === 'bullet') { rightMouseHeldRef.current = false; if (stateRef.current?.gambit) { releaseSlot(stateRef.current, 1); rerender(); } return; }
+    if (action === 'bullet') { rightMouseHeldRef.current = false; return; }
     if (action !== 'laser') return;
     pointerLaserHeldRef.current = false;
     if (!keyboardLaserHeldRef.current) { mouseDownTimeRef.current = 0; stopChargeSound(); }
@@ -7021,9 +7051,19 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-stage > strong { display: block; font-family: var(--font-pixel); font-size: 30px; line-height: 1.15; color: #f4e7ff; text-shadow: 0 0 14px #bb75ff99; }
         @media (max-width: 1279px) { .rs-gambit-hud { --batt-w: 54px; } } /* room for Glint beside the energy bar */
         .rs-wave > span { color: #ffd27a; } .rs-wave > strong { color: #fff3c8; text-shadow: 0 0 14px #ffb84d99; }
-        .rs-wave { position: relative; padding-bottom: 16px; }
+        .rs-wave { position: relative; z-index: 3; padding-bottom: 16px; } /* above the right HUD column, so the shop button beside it takes its own clicks */
         .rs-wave > i { position: absolute; left: 50%; bottom: 5px; transform: translateX(-50%); display: block; width: 150px; height: 6px; box-sizing: border-box; border: 1px solid #ffd27a88; background: rgba(0,0,0,.4); }
         .rs-wave > i > b { display: block; height: 100%; background: #ffd27a; box-shadow: 0 0 6px #ffb84d; }
+        /* The shop button sits beside the WAVE box. It is placed with a margin, not a transform: the HUD's pressed-button
+           style moves buttons with a transform, which would make this one jump away mid-click. */
+        .ruby-star-ui .rs-hud .rs-shop-btn { position: absolute; left: calc(100% + 44px); top: 50%; margin-top: -24px; width: 48px; height: 48px; min-height: 0;
+          display: grid; place-items: center; padding: 0 !important; color: #ffe6a6 !important; background: #2b2414 !important; border: 2px solid #ffd27a !important;
+          box-shadow: 0 3px 0 #030811; cursor: pointer; }
+        .ruby-star-ui .rs-hud .rs-shop-btn:hover, .ruby-star-ui .rs-hud .rs-shop-btn:focus-visible { outline: none; background: #3a2f18 !important; border-color: #fff3c8 !important; box-shadow: 0 0 10px #ffd27a66, 0 3px 0 #030811; }
+        .ruby-star-ui .rs-hud .rs-shop-btn:active { transform: none; margin-top: -23px; }
+        .ruby-star-ui .rs-hud .rs-shop-btn:disabled { opacity: .5; cursor: default; }
+        .rs-shop-btn svg { display: block; }
+
         .rs-time { display: flex; gap: 6px; align-items: center; font-size: var(--font-stat); color: #b8cce0; font-weight: 700; }
         .rs-time > span:last-child { font-family: var(--font-pixel); font-size: var(--font-score); color: #a5bfd7; }
         @media (min-width: 850px) and (max-width: 1300px) {
@@ -7118,7 +7158,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         </div>
       </div>}
       {showControlSettings&&<ControlSettings onClose={()=>setShowControlSettings(false)}/>}
-      <BGMController ref={bgmRef} visible={false} src={['/sounds/rubyStarBGM.mp3']} volume={[0.29]} />
+      <BGMController ref={bgmRef} visible={false} src={['/sounds/rubyStarBGM.mp3']} volume={[0.63162]} />
 
       {/* Rotate prompt */}
       <div className="rotate-overlay" style={{
@@ -7147,7 +7187,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       {state?.gamePhase === 'skillChoice' && !showRules && <StartingSkillChoice state={state}
         onChoose={kind => { if (chooseStartingSkill(state, kind)) rerender(); }} />}
 
-      {state?.gamePhase === 'loadout' && !showRules && <GambitLoadout state={state} onClose={() => { const current = stateRef.current; if (current?.gamePhase === 'loadout') { current.gamePhase = 'playing'; playUiSfx('close'); } rerender(); }} />}
+      {state?.gamePhase === 'shop' && !showRules && <GambitShop state={state} onClose={() => { const current = stateRef.current; if (current?.gamePhase === 'shop') { current.gamePhase = 'playing'; playUiSfx('close'); } rerender(); }} />}
+      {state?.gamePhase === 'loadout' && !showRules && state.gambit && !state.gambit.picked && <GambitSlotMachine state={state} onDone={() => { const current = stateRef.current; if (current?.gamePhase === 'loadout') { current.gamePhase = 'playing'; rerender(); } }} />}
+      {state?.gamePhase === 'loadout' && !showRules && state.gambit?.picked && <GambitLoadout state={state} onClose={() => { const current = stateRef.current; if (current?.gamePhase === 'loadout') { current.gamePhase = 'playing'; playUiSfx('close'); } rerender(); }} />}
       {state?.gamePhase === 'constellation' && !showRules && <ConstellationChoice
         choices={state.constellationChoices} toggleMode={state.godConstellationMode} active={state.constellations}
         onClose={() => { closeGodConstellations(state); rerender(); }}
@@ -7271,18 +7313,28 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             <svg width="14" height="18" viewBox="0 0 10 14" aria-hidden="true" shapeRendering="crispEdges"><path d="M3 0H7V2H10V12H7V14H3V12H0V2H3Z" fill="#ffd23f" /></svg>
             <span style={{ minWidth: 24, fontFamily: 'var(--font-pixel)', fontSize: 12, color: '#ffd23f' }}>{state.gambit.glint}</span>
           </div>}
-
           </div>
         </div>
         {state?.gambit ? <div className="rs-stage rs-wave" aria-label={`Wave ${state.gambit.wave}`}>
           <span>WAVE</span>
           <strong>{state.gambit.wave}</strong>
           <i role="meter" aria-label="Wave time left" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.gambit.waveTicks / GAMBIT_WAVE_TICKS * 100)}><b style={{ width: `${state.gambit.waveTicks / GAMBIT_WAVE_TICKS * 100}%` }} /></i>
+          <button type="button" className="rs-shop-btn" aria-label="Open the shop" title="Shop" disabled={state.gamePhase !== 'playing'}
+            onClick={() => { const current = stateRef.current; if (current?.gambit && current.gamePhase === 'playing') { current.gamePhase = 'shop'; playUiSfx('page'); rerender(); } }}>
+            <svg width="28" height="28" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">{/* a blocky shopping bag: two thin handles rising from a wide bag that flares at the bottom, with a Glint chip on it */}<path d="M5 2H7V6H6V3H5ZM9 2H11V3H10V6H9Z" fill="currentColor" /><path d="M5 1H11V2H5Z" fill="currentColor" /><path d="M3 5H13V7H14V15H2V7H3Z" fill="currentColor" /><path d="M3 6H13V7H3Z" fill="#2b2414" opacity=".45" /><path d="M7 9H9V10H10V12H9V13H7V12H6V10H7Z" fill="#ffd23f" /></svg>
+          </button>
         </div> : state?.trial ? <GuardianBar state={state} /> : <div className="rs-stage" aria-label={`Stage ${state?.bossesKilled ?? 0}`}>
           <span>STAGE</span>
           <strong>{state?.bossesKilled ?? 0}</strong>
         </div>}
         <div className="rs-hud-right">
+          {/* Star Gambit (right group, clear of the centre): the oxygen bill (amount and waves until it is due), or the debt in red while unpaid */}
+          {state?.gambit && (() => { const g = state.gambit, debt = g.debt > 0, flash = g.billFlash > 0 && Math.floor(g.billFlash / 10) % 2 === 0;
+            const label = debt ? `Oxygen debt ${g.debt} Glint: you lose ${oxygenDrain(g.debt)} HP per second until it is paid` : `Oxygen bill ${oxygenBill(state)} Glint in ${wavesToBill(state)} wave${wavesToBill(state) > 1 ? 's' : ''}`;
+            return <div aria-label={label} title={label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 6px', border: `2px solid ${debt ? '#ff5a6a' : flash ? '#ffffff' : '#3a6f8a'}`, background: debt ? '#3a1018' : '#0d1a24' }}>
+              <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 11, color: debt ? '#ff5a6a' : '#e7f6ff' }}>{debt ? `-${g.debt}` : oxygenBill(state)}</span>
+              {!debt && <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: '#6c8fa6' }}>{wavesToBill(state)}W</span>}
+            </div>; })()}
           <div className="rs-time">
             <span>TIME</span>
             <span>{timeSurvived}s</span>
@@ -7293,6 +7345,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.trial && <CelestialStatus name={SPECIAL_SKILLS[state.trial.skill].name}
             color={state.trial.skill === 'devourer' ? '#bcbccd' : SPECIAL_SKILLS[state.trial.skill].color}
             cooldown={state.specialSkill ? 0 : state.trial.cooldown || trialSkillCooldown(state.trial.skill)} totalCooldown={trialSkillCooldown(state.trial.skill)} />}
+          {state?.gambit && <GambitWeaponStatus weapon={state.gambit.weapon} cooldown={state.gambit.cd} totalCooldown={GAMBIT[state.gambit.weapon].cooldown} charge={state.gambit.weapon === 'dash' ? state.gambit.charge / GAMBIT.dash.charge : state.gambit.weapon === 'nova' ? state.gambit.charge / GAMBIT.nova.charge : 0} />}
+          {state?.trial?.devourer && <TetherStatus cooldown={state.trial.devourer.hookCooldown??0} totalCooldown={SINGULARITY_CHALLENGE.hook.cooldown} active={!!state.trial.devourer.hook}/> }
           {state?.saturn && <TimeStopStatus cooldown={state.saturn.cooldown} totalCooldown={SATURN.cooldown} flip={state.saturn.castTicks} />}
           {state?.jupiter && <VoltFenceStatus cooldown={state.jupiter.wallCooldown} />}
           {state?.sun && <CoolingWaveStatus cooldown={state.sun.waveCooldown} empowered={state.sun.quenchedTicks > 0} casts={state.sun.empoweredCasts} />}
@@ -7300,18 +7354,6 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.sirius && <HaloStatus cooldown={state.sirius.haloCooldown} totalCooldown={SIRIUS.haloCooldown} floating={state.sirius.halo > 0} full={state.sirius.holy >= 100} />}
           {state?.venus && <SandSweepStatus cooldown={state.venus.sweepCooldown} totalCooldown={VENUS.sweepCooldown} />}
           {state?.binary && <MagnetStatus pole={state.binary.pole} cooldown={state.binary.poleCooldown} totalCooldown={BINARY.poleCooldown} />}
-          {isGodQuery && (
-            <button
-              className="btn btn-ghost"
-              aria-pressed={state?.godMode ?? false}
-              style={{
-                fontSize: '0.7rem', padding: '4px 10px',
-                color: state?.godMode ? 'var(--success)' : undefined,
-                borderColor: state?.godMode ? 'var(--success)' : undefined
-              }}
-              onClick={() => { if (stateRef.current) { stateRef.current.godMode = !stateRef.current.godMode; if(stateRef.current.godMode)stateRef.current.immortal=false; rerender(); } }}
-            >GOD</button>
-          )}
           {isDesktop()&&<MenuButton className="btn btn-ghost" aria-label="Pause" title="Pause" style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={()=>{setShowPause(true);setShowRules(true);}}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M5 3H10V21H5ZM14 3H19V21H14Z" fill="#b8dfed"/><path d="M6 5H8V18H6ZM15 5H17V18H15Z" fill="#edfaff"/></svg></MenuButton>}
           <MenuButton className="btn btn-ghost" aria-label="Music" aria-pressed={musicEnabled} title={musicEnabled ? 'Mute background music' : 'Play background music'} style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={toggleMusic}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{opacity:musicEnabled?1:.5,filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M8 3H21V17H18V20H13V15H18V8H11V20H8V23H3V18H8Z" fill="currentColor"/><path d="M11 4H19V6H11Z" fill="#f1fff8"/></svg></MenuButton>
           <MenuButton className="btn btn-ghost" sound="page" aria-label="Rules" title="Rules" style={{width:42,padding:8,display:'grid',placeItems:'center'}}
@@ -7537,9 +7579,12 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
               onClick={()=>{if(stateRef.current)openGodBlessings(stateRef.current);rerender();}}>Blessings</button>
           </div>}
           {!trialInfo&&<div className="rs-god-actions" style={{gridTemplateColumns:"repeat(2,minmax(0,1fr))"}}>
-            {!trialInfo && <button type="button" disabled={phase !== 'playing' || !!state?.constellationChoices.length}
+            {!trialInfo && mode !== 'gambit' && <button type="button" disabled={phase !== 'playing' || !!state?.constellationChoices.length}
               style={{ cursor: phase === 'playing' ? 'pointer' : 'default', background: '#243148', color: '#bce2ff', border: '2px solid #72baff', opacity: phase === 'playing' ? 1 : 0.5 }}
               onClick={() => { if (stateRef.current) godAdvanceStage(stateRef.current); rerender(); }}>Stage +1</button>}
+            {mode === 'gambit' && ([1, -1] as const).map(delta => <button key={delta} type="button" disabled={phase !== 'playing' || (delta < 0 && (state?.gambit?.wave ?? 1) <= 1)}
+              style={{ cursor: phase === 'playing' ? 'pointer' : 'default', background: '#243148', color: '#bce2ff', border: '2px solid #72baff', opacity: phase === 'playing' ? 1 : 0.5 }}
+              onClick={() => { if (stateRef.current) godShiftWave(stateRef.current, delta); rerender(); }}>{delta > 0 ? 'Wave +1' : 'Wave −1'}</button>)}
             {(mode==='endless'||mode==='ascension')&&<button type="button" disabled={phase!=='playing'||!!state?.constellationChoices.length||(state?.bossesKilled??0)>=20}
               title="Jump to Stage 20 while keeping the current run" style={{background:'#243148',color:'#bce2ff',border:'2px solid #72baff',cursor:'pointer'}}
               onMouseEnter={()=>playUiSfx('hover')} onClick={()=>{playUiSfx('ascension');if(stateRef.current)godJumpStage20(stateRef.current);rerender();}}>STAGE 20</button>}
@@ -7556,6 +7601,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
 
           {mode === 'gambit' && <button type="button" aria-label="Choose weapons" title="Open the weapon loadout screen" style={{ width:'100%', background:'#2b2414', color:'#ffe6a6', border:'2px solid #ffd27a', cursor:'pointer', fontWeight:700 }}
             disabled={phase !== 'playing'} onClick={() => { const current = stateRef.current; if (current?.gambit && current.gamePhase === 'playing') { current.gamePhase = 'loadout'; playUiSfx('page'); rerender(); } }}>WEAPONS</button>}
+          {mode === 'gambit' && <button type="button" aria-label="Add 1000 Glint" title="Add 1000 Glint" style={{ width:'100%', background:'#2b2414', color:'#ffd23f', border:'2px solid #ffd23f', cursor:'pointer', fontWeight:700 }}
+            onClick={() => { const current = stateRef.current; if (current?.gambit) { current.gambit.glint += 1000; playUiSfx('confirm'); rerender(); } }}>+1000 GLINT</button>}
           {!trialInfo && mode !== 'gambit' && <div className="rs-event-controls">
             {(Object.keys(AMBIENT_EVENTS) as AmbientEventKind[]).map(kind => <button key={kind} type="button"
               aria-label={'Create ' + AMBIENT_EVENTS[kind].name}

@@ -1,4 +1,4 @@
-import { drawPlanetSurface } from './planet-surface';
+import { drawCelestialBodyIcon } from './celestial-body-art';
 import { createArrivalScenery } from './RubyStarGame';
 import { CELESTIAL_BLESSINGS } from './endless-builds';
 import { GEM_CUTS, gemMaterial } from './gemstone-cuts';
@@ -36,71 +36,14 @@ const guardianSounds: Record<Destination, readonly (readonly [file: string, volu
   singularity: [['reverse.mp3', .7], ['grow.wav', .5]],
 };
 
+/** The destination world, drawn exactly like its star-map planet (celestial-body-art.ts), with a soft halo in its colour. */
 function destination(ctx: Ctx, id: Destination, x: number, y: number, r: number, t: number) {
-  const { rim, shade, accent } = worlds[id];
-  ctx.save(); ctx.translate(x, y);
-  const glow = ctx.createRadialGradient(0, 0, r * .3, 0, 0, r * 1.65);
-  glow.addColorStop(0, rim + '66'); glow.addColorStop(1, rim + '00');
+  const { rim } = worlds[id];
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y));
+  const glow = ctx.createRadialGradient(0, 0, r * .5, 0, 0, r * 1.45);
+  glow.addColorStop(0, rim + '40'); glow.addColorStop(1, rim + '00');
   ctx.fillStyle = glow; ctx.fillRect(-2*r,-2*r,4*r,4*r);
-
-  if (id === 'sirius' || id === 'binary') {
-    const star = (x0: number, y0: number, s: number, color: string) => {
-      ctx.shadowColor = color; ctx.shadowBlur = 18;
-      block(ctx, x0-s, y0-s*.08, 2*s, s*.16, color);
-      block(ctx, x0-s*.08, y0-s, s*.16, 2*s, color);
-      block(ctx, x0-s*.33, y0-s*.33, s*.66, s*.66, color);
-      block(ctx, x0-s*.17, y0-s*.17, s*.34, s*.34, accent);
-      ctx.shadowBlur = 0;
-    };
-    if (id === 'binary') {
-      const orbit = Math.sin(t * 1.8) * r * .2;
-      star(-r*.54, orbit, r*.66, rim); star(r*.54, -orbit, r*.54, shade);
-    } else {
-      star(0, 0, r, rim); star(r*.82, -r*.48, r*.2, '#e8ecff');
-    }
-  } else if (id === 'singularity') {
-    ctx.save(); ctx.rotate(-.22);
-    ctx.shadowColor = rim; ctx.shadowBlur = 22;
-    block(ctx, -r*1.45, -r*.075, r*2.9, r*.15, rim);
-    ctx.restore();
-    discBands(ctx, r*.67, 15);
-    ctx.fillStyle = '#020207'; ctx.fill();
-    ctx.strokeStyle = rim; ctx.lineWidth = 1.5; ctx.stroke();
-    for (let i = 0; i < 18; i++) {
-      const angle = i * 2.4 + t * .6, distance = r * (1.4 - ((hash(i, 8) + t*.2) % 1)*.75);
-      block(ctx, Math.cos(angle)*distance, Math.sin(angle)*distance*.56, 3+i%4, 2+i%3, i%3 ? shade : accent);
-    }
-  } else {
-    const ring = (front: boolean) => {
-      ctx.save(); ctx.rotate(-.23);
-      ctx.beginPath(); ctx.rect(-2*r, front ? 0 : -r, 4*r, r); ctx.clip();
-      const points = Array.from({ length: 25 }, (_, i) => {
-        const angle = i * Math.PI * 2 / 24;
-        return [Math.cos(angle), Math.sin(angle)] as const;
-      });
-      for (const [size, width, color] of [
-        [1.66, .044, front ? '#b3ddd4' : '#406e70'],
-        [1.54, .078, front ? '#e1f7e3' : '#699f99'],
-        [1.43, .038, front ? '#80c3bb' : '#375c67'],
-      ] as const) {
-        ctx.beginPath();
-        points.forEach(([x, y], i) => {
-          const px = x * r * size, py = y * r * size * .255;
-          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        });
-        ctx.closePath();
-        ctx.lineWidth = r * width; ctx.strokeStyle = color; ctx.stroke();
-      }
-      ctx.restore();
-    };
-    if (id === 'saturn') ring(false);
-    ctx.save();
-    discBands(ctx, r, 19);
-    ctx.clip();
-    drawPlanetSurface(ctx, id, r, t, rim, shade, accent);
-    ctx.restore();
-    if (id === 'saturn') ring(true);
-  }
+  drawCelestialBodyIcon(ctx, id, id === 'saturn' ? r * .78 : r, t); // Saturn's wide ring would leave the frame at full size
   ctx.restore();
 }
 

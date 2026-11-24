@@ -88,16 +88,12 @@ fs.writeFileSync(path.join(out,'saturn-enemies.png'),gallery.toBuffer('image/png
 console.log('Rendered Saturn: marked targets, grant, recall, time-stop field, alien attacks and models.');
 
 
-// Pause after five footsteps so the oldest ice is visibly fading.
-scene('saturn-frost-trail',(s,m,boss)=>{
+// A destructible Frost Anchor and its local counter-suppression area.
+scene('saturn-frost-anchors',(s,m,boss)=>{
  s.noMobs=true;boss.hp=saturn.SATURN.phaseHP*2;boss.phaseTimer=1e6;s.saturn.phase=2;
  s.saturn.iceTimer=s.saturn.grantTimer=s.saturn.recallTimer=1e6;s.saturn.pulse=-1e6;
- const pool=engine.freeChamberTiles(s,0),start=pool.slice().sort((a,b)=>Math.hypot(a[0]-8,a[1]-10)-Math.hypot(b[0]-8,b[1]-10))[0];
- const path=pool.map(([x,y])=>engine.bfs(s.map,...start,x,y)).filter(p=>p.length>=7&&p.every(([x,y])=>!c.TELEPORT_PADS.some(([px,py])=>x===px&&y===py))).sort((a,b)=>a.length-b.length)[0];
- const place=([x,y])=>Object.assign(s,{playerTileX:x,playerTargetX:x,playerTileY:y,playerTargetY:y,playerX:(x+.5)*48,playerY:(y+.5)*48});
- s.saturn.frostTrail=[];place(start);s.saturn.lastTrailTile={x:start[0],y:start[1]};
- for(const tile of path.slice(0,6)){place(tile);saturn.updateSaturn(s);for(let i=0;i<7;i++)saturn.updateSaturn(s);}
- for(let i=0;i<36;i++)saturn.updateSaturn(s);
+ const pool=engine.freeChamberTiles(s,0).filter(([x,y])=>saturn.saturnAnchorSpotClear(s,x,y)),tile=pool.slice().sort((a,b)=>Math.hypot(a[0]-s.playerTileX-2,a[1]-s.playerTileY)-Math.hypot(b[0]-s.playerTileX-2,b[1]-s.playerTileY))[0];
+ s.enemies.push(engine.createEncounterEnemy(s,'frost_anchor',tile[0],tile[1],saturn.SATURN.anchorHP));
 });
 
 

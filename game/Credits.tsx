@@ -4,7 +4,7 @@ import {APP_VERSION} from './app-version';
 
 // The credits panel, opened from Settings. Keep this list in step with the sources recorded in docs/ruby-star/AUDIO.md.
 const SECTIONS: { title: string; lines: string[] }[] = [
- { title: 'GAME', lines: ['Ruby Star', 'Design, programming and art by Natthapol'] },
+ { title: 'GAME', lines: ['Ruby Star', 'Design, programming and art by Natthapol and my beloved ChatGPT and Claude'] },
  { title: 'MUSIC', lines: ['Fesliyan Studios — fesliyanstudios.com'] },
  { title: 'SOUND EFFECTS', lines: ['Uppbeat — uppbeat.io', 'Pixabay — pixabay.com', 'Mixkit — mixkit.co'] },
  { title: 'FONTS', lines: ['Press Start 2P — The Press Start 2P Project Authors (SIL Open Font License 1.1)', 'Share Tech Mono — Carrois Type Design (SIL Open Font License 1.1)'] },

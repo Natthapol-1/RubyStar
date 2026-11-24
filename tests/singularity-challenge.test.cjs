@@ -51,8 +51,8 @@ test('each meal adds a stack and heals; full stacks light the fuse, and the burs
  for(const b of bodies(s)){assert.equal(b.maxHp,SC.copyHP[0]);assert.equal(b.chargeDirX,0);}
 });
 
-test('a stacked copy killed by hand leaves one copy per two stacks; a Maw swallows a full one without a split',()=>{
- const s=fresh(),root=calm(bodies(s)[0]);root.chargeDirX=5;root.devourer.generation=1;kill(s,root);assert.equal(bodies(s).length,3);
+test('a stacked copy killed by hand leaves one copy per stack; a Maw swallows a full one without a split',()=>{
+ const s=fresh(),root=calm(bodies(s)[0]);root.chargeDirX=5;root.devourer.generation=1;kill(s,root);assert.equal(bodies(s).length,5);
  const m=fresh();emptyRoom(m);setMaw(m,10,10);player(m,3,3);const full=calm(bodies(m)[0]);full.devourer.generation=1;full.chargeDirX=SC.maxStacks[0];full.devourer.gorgeTicks=60;place(full,10,10);
  const spare=e.createEncounterEnemy(m,'devourer',3,18,80);spare.devourer={generation:1,challenge:true};spare.encounterId=full.encounterId;m.enemies.push(spare);
  tickMaws(m);assert.ok(!m.enemies.includes(full));assert.deepEqual(bodies(m),[spare],'swallowed whole, no copies');
@@ -286,12 +286,15 @@ test('the hook resets between rounds while Lost Souls carry over; paused gamepla
  assert.equal(s.trial.devourer.phase,2);assert.equal(s.trial.devourer.hook,undefined);assert.equal(s.trial.devourer.hookCooldown,0);
  assert.equal(souls(s).length,1,'Lost Souls carry over into the next phase');
 });
-test('holding past the limit flings on its own and the hook is immediately ready again',()=>{
+test('holding past the limit flings on its own and the hook recharges for 0.8 seconds',()=>{
  const s=fresh();emptyRoom(s);setMaw(s,18,18);player(s,10,10);s.rubyTileX=-1;
  const b=calm(bodies(s)[0]);b.chargeDirX=0;b.devourer.generation=1;b.windupTicks=999;place(b,12,10);
  assert.ok(maw.pressGravityHook(s));tickMaws(s,SC.hook.maxTicks);
- assert.equal(s.trial.devourer.hook,undefined,'auto release');assert.equal(s.trial.devourer.hookCooldown,0);
- place(b,12,10);b.devourer.stunTicks=0;s.trial.devourer.flings=[];assert.equal(maw.pressGravityHook(s),true);
+ assert.equal(s.trial.devourer.hook,undefined,'auto release');assert.equal(s.trial.devourer.hookCooldown,48);
+ place(b,12,10);b.devourer.stunTicks=0;s.trial.devourer.flings=[];assert.equal(maw.pressGravityHook(s),false);
+ s.gamePhase='paused';tickMaws(s,60);assert.equal(s.trial.devourer.hookCooldown,48);s.gamePhase='playing';
+ tickMaws(s,47);assert.equal(s.trial.devourer.hookCooldown,1);assert.equal(maw.pressGravityHook(s),false);
+ tickMaws(s);assert.equal(s.trial.devourer.hookCooldown,0);assert.equal(maw.pressGravityHook(s),true);
 });
 
 test('each Maw idles small, warns, then opens wide; the two open together; you are pulled only while one is open',()=>{
@@ -799,7 +802,7 @@ test('a meteor destroys copies in its chamber but never the phase original',()=>
 });
 
 
-test('Convergence pushes five tiles away once, quickly, and normal walls stop the push',()=>{
+test('Convergence pushes ten tiles away once, quickly, and normal walls stop the push',()=>{
  for(const [dx,dy,expected]of [[3,0,[1,0]],[-3,0,[-1,0]],[0,3,[0,1]],[0,-3,[0,-1]],[3,3,[1,0]],[0,0,[1,0]]]){
   const s=convergenceSetup(1,1),t=s.trial.devourer;emptyRoom(s);player(s,12,12);s.playerDirX=1;s.playerDirY=0;
   const b=bodies(s)[0];t.convergence={x:s.playerX-dx*48,y:s.playerY-dy*48,stage:'gather',ticks:1,count:1,members:[{id:b.id,x:b.x,y:b.y,tx:b.tileX,ty:b.tileY}]};
@@ -810,12 +813,12 @@ test('Convergence pushes five tiles away once, quickly, and normal walls stop th
   const elapsed=SC.convergence.blastTicks-t.convergence.ticks,radius=maw.convergenceWaveRadius(s,t.convergence,elapsed),need=Math.max(Math.abs(dx*48),Math.abs(dy*48),Math.min(Math.abs(dx*48),Math.abs(dy*48))/.65);
   assert.ok(radius>=need,'knockback coincides with the stepped front reaching the player');
   if(elapsed>0)assert.ok(maw.convergenceWaveRadius(s,t.convergence,elapsed-1)<need,'push does not wait past the first contact frame');
-  assert.deepEqual([s.playerKnockback.dirX,s.playerKnockback.dirY],expected);assert.equal(s.playerKnockback.tilesLeft,5);assert.equal(s.playerKnockback.speedMult,2.4);
+  assert.deepEqual([s.playerKnockback.dirX,s.playerKnockback.dirY],expected);assert.equal(s.playerKnockback.tilesLeft,10);assert.equal(s.playerKnockback.speedMult,6);
   const push=s.playerKnockback;maw.updateConvergence(s,t);assert.equal(s.playerKnockback,push,'subsequent blast frames do not restart the push');
   if(dx===3){
    s.map[12][15]=c.T_WALL;
    for(let i=0;i<80&&s.playerKnockback;i++)e.singularityTest.updatePlayer(s);
-   assert.equal(s.playerTileX,14,'wall stops the five-tile push');assert.equal(s.playerTileY,12);
+   assert.equal(s.playerTileX,14,'wall stops the ten-tile push');assert.equal(s.playerTileY,12);
   }
  }
 });
@@ -845,4 +848,41 @@ test('gathering adds two seconds for every family size and next countdown runs d
  s.gamePhase='rules';maw.updateConvergence(s,t);assert.equal(t.convergenceTimer,C.everyTicks-20,'pause freezes countdown');s.gamePhase='playing';
  for(let i=20;i<C.blastTicks;i++)maw.updateConvergence(s,t);
  assert.equal(t.convergence,undefined);assert.equal(t.convergenceTimer,C.everyTicks-C.blastTicks,'visual expiry does not restart the countdown');
+});
+
+
+
+test('the ten-tile Convergence push remains quick on open floor',()=>{
+ const run=(tiles,speed)=>{const s=fresh();player(s,10,10);s.playerCarryingRuby=false;for(let x=8;x<30;x++)s.map[10][x]=c.T_FLOOR;
+ s.playerKnockback={dirX:1,dirY:0,started:false,tilesLeft:tiles,shaken:true,speedMult:speed};let ticks=0;
+ while(s.playerKnockback&&ticks<100){e.singularityTest.updatePlayer(s);ticks++;}assert.equal(s.playerTileX,10+tiles);return ticks;};
+ const old=run(8,4),updated=run(10,SC.convergence.knockSpeedMult);assert.ok(updated<=old*1.2,'longer push remains brisk: '+updated+' vs '+old);
+});
+
+
+test('a remote hook never teleports its target through cover on release; the throw stops on its own side',()=>{
+ for(const dir of [-1,1]){
+  const s=fresh();emptyRoom(s);player(s,10,10);s.trial.devourer.maws=[mawAt(40,40),mawAt(41,41)];
+  const b=calm(bodies(s)[0]);b.devourer.generation=1;place(b,13,10);s.map[10][12]=c.T_WALL;
+  assert.ok(maw.pressGravityHook(s),'grabs through cover');s.playerDirX=dir;s.playerDirY=0;maw.releaseGravityHook(s);
+  assert.equal(b.tileX,13,'release keeps it on the remote side');
+  for(let i=0;i<100&&s.trial.devourer.flings.length;i++){tickMaws(s);swarm(s);assert.ok(b.x>=13*48,'never crosses cover');}
+  assert.equal(s.trial.devourer.flings.length,0);
+  if(dir<0){assert.equal(b.tileX,13);assert.ok(b.devourer.stunTicks>0,'wall impact');}
+  else assert.ok(b.tileX>13,'can throw away from cover');
+ }
+});
+
+test('a diagonal throw stops at its blocked leading step rather than finding a way around the wall',()=>{
+ const s=fresh();emptyRoom(s);player(s,10,10);s.trial.devourer.maws=[mawAt(40,40),mawAt(41,41)];
+ const b=calm(bodies(s)[0]);b.devourer.generation=1;place(b,10,11);assert.ok(maw.pressGravityHook(s));
+ s.playerDirX=1;s.playerDirY=1;s.map[10][11]=c.T_WALL;maw.releaseGravityHook(s);tickMaws(s);
+ assert.equal(s.trial.devourer.flings.length,0);assert.deepEqual([b.tileX,b.tileY],[10,10]);assert.ok(b.devourer.stunTicks>0);
+});
+
+test('Jaw restarts its next countdown at warning onset and keeps counting through the attack',()=>{
+ const s=fresh();emptyRoom(s);player(s,10,10);s.trial.devourer.maws=[mawAt(40,40),mawAt(41,41)];s.trial.devourer.jawTimer=1;
+ tickMaws(s);const t=s.trial.devourer,total=t.jawTotal;assert.ok(t.jaw);assert.equal(t.jawTimer,total);
+ tickMaws(s,10);assert.equal(t.jawTimer,total-10);assert.ok(t.jaw);
+ s.gamePhase='paused';tickMaws(s,10);assert.equal(t.jawTimer,total-10,'pause freezes countdown');
 });

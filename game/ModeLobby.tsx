@@ -15,11 +15,12 @@ import GameSettings from './GameSettings';
 import LobbyUtilityIcon from './LobbyUtilityIcon';
 import ExplorationTerminal from './ExplorationTerminal';
 import CelestialBackdrop from './CelestialBackdrop';
+import ModeEmblem from './ModeEmblem';
 import { playUiSfx, UiSfx } from './ui-sfx';
 
 type ModeCard = { id: string; title: string; tag?: string; description: string; path?: string; color: string; sound: UiSfx };
 
-const MODES: ModeCard[] = [
+const ALL_MODES: ModeCard[] = [
   {
     id: 'tutorial', title: 'FIRST ORBIT', tag: 'TUTORIAL', color: '#7fd7ff', sound: 'confirm', path: '/tutorial',
     description: 'Learn to move, fight, power up with star energy, protect Ruby, teleport, dodge meteors and cast a celestial skill.',
@@ -32,7 +33,13 @@ const MODES: ModeCard[] = [
     id: 'trials', title: 'CELESTIAL CHALLENGE', color: '#9aa8ff', sound: 'ascension', path: '/challenge',
     description: 'Travel to a world and face its guardian in an epic multi-phase boss battle with its own rules.',
   },
+  {
+    id: 'gambit', title: 'STAR GAMBIT', tag: 'IN DEVELOPMENT', color: '#ffd27a', sound: 'confirm', path: '/gambit',
+    description: 'Make a Wager, pull the slot machine for your weapon and keep the bazaar breathing.',
+  },
 ];
+// Star Gambit is still in development: release builds leave its card out (its route answers 404 there too).
+const MODES: ModeCard[] = process.env.NODE_ENV === 'production' ? ALL_MODES.filter(m => m.id !== 'gambit') : ALL_MODES;
 
 // The Endless Space card asks Endless or Ascension once Ascension is unlocked.
 const ENDLESS_STARTS: ModeCard[] = [
@@ -40,26 +47,9 @@ const ENDLESS_STARTS: ModeCard[] = [
   { id: 'ascension', title: 'ASCENSION', color: '#c99bff', sound: 'ascension', path: '/ascension', description: 'Start at stage 10 with celestial powers awakened.' },
 ];
 
-// Square pixel emblems for each mode, drawn with CSS blocks.
+// Mode emblems: canvas art drawn with the game's own style (ModeEmblem.tsx).
 function Emblem({ id }: { id: string }) {
-  if (id === 'tutorial') return <div className="rs-emblem">
-    <span className="rs-orbit-path" /><span className="rs-gem rs-gem-small" />
-    <span className="rs-orbit-arm"><span className="rs-orbit-ship" /></span>
-  </div>;
-  if (id === 'trials') return <div className="rs-emblem">
-    <span className="rs-tp">
-      <span className="rs-tp-ring rs-tp-ring-back" /><span className="rs-tp-planet" /><span className="rs-tp-ring rs-tp-ring-front" />
-    </span>
-    <span className="rs-tp-moon" /><span className="rs-tp-spark rs-tp-spark-a" /><span className="rs-tp-spark rs-tp-spark-b" />
-  </div>;
-  if (id === 'gambit') return <div className="rs-emblem"><span className="rs-gambit">
-    <span className="rs-gambit-card rs-gambit-card-a"><span className="rs-glint" /></span><span className="rs-gambit-card rs-gambit-card-b"><span className="rs-glint" /></span>
-  </span><span className="rs-tp-spark rs-gambit-spark" />
-  </div>;
-  return <div className="rs-emblem">
-    {id === 'ascension' && <><span className="rs-ray rs-ray-a" /><span className="rs-ray rs-ray-b" /><span className="rs-crown" /></>}
-    <span className={id === 'ascension' ? 'rs-gem rs-gem-ascended' : 'rs-gem'} />
-  </div>;
+  return <ModeEmblem id={id} />;
 }
 
 export default function RubyStarLobby() {
@@ -192,17 +182,8 @@ export default function RubyStarLobby() {
           .rs-card-name { font-size:1.15rem; margin-top:12px; }.rs-card-desc { font-size:.72rem; margin-top:8px; }
           .rs-card[data-slot="-1"] { transform:translateX(-310px) scale(.68); }.rs-card[data-slot="1"] { transform:translateX(310px) scale(.68); }
         }
-        /* a hand of two solid bevelled cards fanned from the bottom, each with a pale glint; the hand floats and glows as one */
-        .rs-gambit { position:absolute; inset:0; filter:drop-shadow(0 0 14px #ffb84d); animation:rsGemFloat 2.6s ease-in-out infinite; }
-        .rs-gambit-card { position:absolute; width:52px; height:72px; background:#ffd27a; display:grid; place-items:center;
-          box-shadow:inset -8px -8px 0 #b8862e, inset 6px 6px 0 #fff0b8; }
-        .rs-gambit-card-a { left:32px; top:30px; transform-origin:50% 110%; transform:rotate(-16deg); background:#e0ad4e; box-shadow:inset -8px -8px 0 #8f6420, inset 6px 6px 0 #ffdf94; }
-        .rs-gambit-card-b { left:56px; top:28px; transform-origin:50% 110%; transform:rotate(9deg); }
-        /* Glint: a flat stepped pale-yellow crystal */
-        .rs-glint { width:20px; height:28px; background:#fff3c8; clip-path:polygon(30% 0,70% 0,70% 14%,100% 14%,100% 86%,70% 86%,70% 100%,30% 100%,30% 86%,0 86%,0 14%,30% 14%); }
-        .rs-gambit-spark { left:110px; top:16px; }
-        .rs-start { position:fixed; inset:0; z-index:20; display:grid; place-items:center; background:#05060ccc; }
-        .rs-start-panel { display:flex; flex-direction:column; align-items:center; gap:28px; padding:44px 52px 52px; background:#10131ff7; border:3px solid #ff4f8b; box-shadow:inset 0 0 0 3px #1c1222,0 0 24px #ff2f6f44; }
+        .rs-start { position:fixed; inset:0; z-index:20; display:grid; place-items:center; background:#05060ccc; } /* no outer panel: the two choices sit on the dimmed lobby */
+        .rs-start-panel { display:flex; flex-direction:column; align-items:center; gap:28px; padding:44px 52px 52px; }
         .rs-start-title { font-family:var(--font-pixel); font-size:1.1rem; letter-spacing:.1em; color:#ff6f9f; text-shadow:0 0 14px #ff2f6f66; }
         .rs-start-options { display:flex; gap:18px; }
         .rs-start-option { width:260px; padding:30px 24px; display:flex; flex-direction:column; align-items:center; text-align:center; background:#141a2b; color:inherit; font:inherit; cursor:pointer;

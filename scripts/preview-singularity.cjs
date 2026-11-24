@@ -117,21 +117,6 @@ console.log('Rendered Venus, both Sirius lighting states and Singularity in two 
   if(before!==JSON.stringify(s))throw Error('Merge animation mutated gameplay');mergeCtx.drawImage(frame,i*w,0);
  }
  fs.writeFileSync(path.join(out,'singularity-merge.png'),mergeSheet.toBuffer('image/png'));
- // Actual floor-following absorption, then the arrival animation; drawing remains read-only.
- const m=s.trial.devourer.maws[0];s.singularity=null;
- const entry=tiles.map(([x,y])=>({x,y,path:engine.bfs(s.map,x,y,m.tx,m.ty)}))
-  .filter(p=>Math.hypot(p.x-m.tx,p.y-m.ty)<=c.SINGULARITY_CHALLENGE.mawRadius&&p.path.length>=2&&p.path.length<=4)
-  .sort((a,b)=>Math.abs(a.path.length-3)-Math.abs(b.path.length-3))[0];
- Object.assign(s,{playerX:(entry.x+.5)*48,playerY:(entry.y+.5)*48,playerTileX:entry.x,playerTargetX:entry.x,playerTileY:entry.y,playerTargetY:entry.y,specialSkill:'devourer'});
- engine.useSpecialSkill(s);s.specialEffects=[];s.playerCastTicks=0;
- const absorption=createCanvas(w*4,h),absorptionCtx=absorption.getContext('2d'),travel=entry.path.length*24;
- let elapsed=0;
- for(const [i,age] of [0,Math.floor(travel/2),travel+12,travel+38].entries()){
-  while(elapsed<age){s.singularity.ticks--;s.gameTick++;maw.pullFieldIntoMaw(s);elapsed++;}
-  const frame=createCanvas(w,h),before=JSON.stringify(s);renderer.exports.drawGame(frame.getContext('2d'),s,w,h,s.gameTick,0,false);
-  if(before!==JSON.stringify(s))throw Error('Absorption drawing mutated gameplay');absorptionCtx.drawImage(frame,i*w,0);
- }
- fs.writeFileSync(path.join(out,'singularity-absorption.png'),absorption.toBuffer('image/png'));
 
 
 }

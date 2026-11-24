@@ -98,11 +98,13 @@ export default function SingularityGuide({ drawCelestial, drawBody }: { drawCele
         if (fly < 1) { if (!towing) for (let k = 1; k <= 3; k++) { ctx.globalAlpha = .5 - k * .12; ctx.fillStyle = CYAN; ctx.fillRect(bx + k * 10 - 5, 55, 10, 10); } ctx.globalAlpha = 1; drawBody(ctx, bx, 60, tick, { scale: .42 }); }
         else { const q = Math.min(1, (p - .75) / .15); ctx.globalAlpha = 1 - q; ctx.strokeStyle = GREEN; ctx.lineWidth = 4; ctx.strokeRect(36 - 14 - q * 20, 46 - q * 20, 28 + q * 40, 28 + q * 40); ctx.globalAlpha = 1; }
       },
-      devourer: ctx => { // a body walks to a soul, eats it and swells with a new stack, then a full one swells to burst
-        const p = loop(210);
-        if (p < .4) { soul(ctx, 140, 62, tick, 2, false); drawBody(ctx, 60 + p / .4 * 60, 60, tick, { scale: .45 }); }
-        else if (p < .65) { const q = Math.min(1, (p - .4) / .1); drawBody(ctx, 120, 60, tick, { scale: .45 + .1 * q, flash: q < .5 }); }
-        else drawBody(ctx, 120, 62, tick, { scale: .55, gorge: (p - .65) / .35 });
+      devourer: ctx => { // a body walks to a soul, eats it and swells with a new stack, then a full one swells and bursts into copies
+        const p = loop(270);
+        if (p < .3) { soul(ctx, 140, 62, tick, 2, false); drawBody(ctx, 60 + p / .3 * 60, 60, tick, { scale: .45 }); }
+        else if (p < .5) { const q = Math.min(1, (p - .3) / .08); drawBody(ctx, 120, 60, tick, { scale: .45 + .1 * q, flash: q < .5 }); }
+        else if (p < .75) drawBody(ctx, 120, 62, tick, { scale: .55, gorge: (p - .5) / .25 });
+        else { const q = Math.min(1, (p - .75) / .2); ctx.globalAlpha = 1 - q; ctx.strokeStyle = GREEN; ctx.lineWidth = 4; ctx.strokeRect(120 - 50 * q, 62 - 50 * q, 100 * q, 100 * q); ctx.globalAlpha = 1;
+          for (const [tx, ty] of [[40, 30], [184, 32], [110, 104]]) drawBody(ctx, 120 + (tx - 120) * q, 62 + (ty - 62) * q - Math.sin(q * Math.PI) * 14, tick, { scale: .32 }); }
       },
       convergence: ctx => { // bodies fly into one spot one at a time, it swells, then a square blast rolls out past you
         const p = loop(210), cx = 70, cy = 60, from = [[20, 22], [24, 100], [126, 20], [120, 102]];

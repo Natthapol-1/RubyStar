@@ -20,7 +20,7 @@ Gaia’s book button beside Begin Challenge opens [The Surprise Party for a Rock
 - **Clearing:**
   - Lasers and bullets take 1 level off each tile they hit.
   - Waves and bombs clear their whole radius.
-  - Gaia's Roots (your challenge skill, F; 25s field here instead of 30s, returns 35s after a cast) clears its whole field when cast (any level) and stops growth inside it while it lasts.
+  - Gaia's Roots (your challenge skill, F; 25s field here instead of 30s, returns 35s after a cast) clears its whole field when cast (any level), removes her active thorn-field tiles inside it the same way Sunfire does, and stops growth inside it while it lasts.
   - Meteors **scorch** their whole room: growth goes to 0 and nothing regrows for 10s.
   - **Clearing heal:** every growth level your attacks or Gaia's Roots cut heals you and Ruby 0.1 HP each (`GAIA_CLEAR_HEAL`), with no cap, so a wave, bomb or Gaia's Roots cast through thick growth can heal a lot at once (up to max HP). It is paid once per tick with at most one heal effect per second and follows normal healing rules (the Bleeder curse blocks your share). Meteor scorch and Sunfire burns do not heal.
 - **Ruby:** placed Ruby keeps every tile within 2 (Chebyshev distance) clean. If every floor tile in the ring at distance 3 reaches vines, the ring closes and squeezes Ruby for 3 per second. The ring is outlined orange at 80% coverage and red when closed. Carried Ruby has no ward.

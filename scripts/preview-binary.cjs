@@ -58,3 +58,13 @@ console.log('wrote binary-world.png and binary-backdrop.png');
  }
  fs.writeFileSync(path.join(out,'binary-collision.png'),sheet.toBuffer('image/png'));
 }
+
+// Grounder field readability with its muted thick battlefield boundary.
+{
+ const state=engine.createModeState('trial','astral_twins');state.noMobs=true;state.resources=[];state.enemies=[];state.gameTick=120;state.binary.phase=2;
+ const tiles=engine.freeChamberTiles(state,0),tile=tiles.sort((a,b)=>Math.hypot(a[0]-12,a[1]-10)-Math.hypot(b[0]-12,b[1]-10))[0];
+ state.enemies.push(engine.createEncounterEnemy(state,'grounder',tile[0],tile[1],30));
+ const cv=createCanvas(1280,720),before=JSON.stringify(state);renderer.exports.drawGame(cv.getContext('2d'),state,1280,720,120,0,false);
+ if(before!==JSON.stringify(state))throw Error('Grounder art mutated state');
+ fs.writeFileSync(path.join(out,'binary-grounder-field.png'),cv.toBuffer('image/png'));
+}

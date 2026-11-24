@@ -6,12 +6,17 @@
         .sm-spark { position: absolute; width: 10px; height: 10px; pointer-events: none; animation: smTwinkle 2.2s ease-in-out infinite;
           background: linear-gradient(#ffffff, #ffffff) 50% 0 / 2px 100% no-repeat, linear-gradient(#ffffff, #ffffff) 0 50% / 100% 2px no-repeat; }
         @keyframes smTwinkle { 0%, 100% { opacity: .15; transform: scale(.5); } 50% { opacity: .9; transform: scale(1); } }
-        .sm-orb { position: absolute; inset: 0; z-index: 1; clip-path: polygon(28% 0, 72% 0, 100% 28%, 100% 72%, 72% 100%, 28% 100%, 0 72%, 0 28%); }
-        .sm-core { position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -50%);
-          clip-path: polygon(28% 0, 72% 0, 100% 28%, 100% 72%, 72% 100%, 28% 100%, 0 72%, 0 28%); }
+        /* Planet bodies use a chunky stepped circle (8 rows with widths snapped to the same grid, so every step is square): a rim layer, then the body inset by 2px. */
+        .sm-orb { position: absolute; inset: 0; z-index: 1; clip-path: polygon(75.0% 0.0%,75.0% 12.5%,87.5% 12.5%,87.5% 25.0%,93.8% 25.0%,93.8% 37.5%,100.0% 37.5%,100.0% 50.0%,100.0% 50.0%,100.0% 62.5%,93.8% 62.5%,93.8% 75.0%,87.5% 75.0%,87.5% 87.5%,75.0% 87.5%,75.0% 100.0%,25.0% 100.0%,25.0% 87.5%,12.5% 87.5%,12.5% 75.0%,6.2% 75.0%,6.2% 62.5%,0.0% 62.5%,0.0% 50.0%,0.0% 50.0%,0.0% 37.5%,6.2% 37.5%,6.2% 25.0%,12.5% 25.0%,12.5% 12.5%,25.0% 12.5%,25.0% 0.0%); }
+        .sm-halo { z-index: 0; } /* the Singularity's radiating light layers sit behind its body */
+        .sm-glint { position: absolute; left: 22%; top: 20%; width: 16%; height: 12%; z-index: 2; opacity: .85; } /* one pale square glint instead of a bevel highlight */
+        .sm-orb.sm-soft { clip-path: polygon(25% 0%,75% 0%,75% 9%,91% 9%,91% 25%,100% 25%,100% 75%,91% 75%,91% 91%,75% 91%,75% 100%,25% 100%,25% 91%,9% 91%,9% 75%,0% 75%,0% 25%,9% 25%,9% 9%,25% 9%); } /* between the Moon's notched square and the Sun's circle: a square with two-step rounded corners */
+        .sm-orb.sm-cushion { clip-path: polygon(14.3% 0,85.7% 0,85.7% 12.5%,100% 12.5%,100% 87.5%,85.7% 87.5%,85.7% 100%,14.3% 100%,14.3% 87.5%,0 87.5%,0 12.5%,14.3% 12.5%); } /* the Ruby gemstone's notched-square silhouette (cushion cut), for small worlds */
+        .sm-orb-body { inset: 5px; } /* a bold border in a darker shade of the planet */
+        .sm-core { position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -50%); clip-path: polygon(75.0% 0.0%,75.0% 12.5%,87.5% 12.5%,87.5% 25.0%,93.8% 25.0%,93.8% 37.5%,100.0% 37.5%,100.0% 50.0%,100.0% 50.0%,100.0% 62.5%,93.8% 62.5%,93.8% 75.0%,87.5% 75.0%,87.5% 87.5%,75.0% 87.5%,75.0% 100.0%,25.0% 100.0%,25.0% 87.5%,12.5% 87.5%,12.5% 75.0%,6.2% 75.0%,6.2% 62.5%,0.0% 62.5%,0.0% 50.0%,0.0% 50.0%,0.0% 37.5%,6.2% 37.5%,6.2% 25.0%,12.5% 25.0%,12.5% 12.5%,25.0% 12.5%,25.0% 0.0%); }
         .sm-spot { position: absolute; z-index: 2; }
         .sm-ray { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #ffcf5a; }
-        .sm-ray-h { width: 150%; height: 6px; } .sm-ray-v { width: 6px; height: 150%; }
+        .sm-ray-h { width: 150%; height: 12px; } .sm-ray-v { width: 12px; height: 150%; }
         .sm-diamond { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(45deg); }
         .sm-twin { position: absolute; }
         .sm-ring { position: absolute; left: 50%; top: 50%; box-sizing: border-box; border-style: solid; }

@@ -257,7 +257,7 @@ export function hallwayOfTile(tileX: number, tileY: number): number {
 export type EnemyType = 'normal' | 'armored' | 'fast' | 'bomber' | 'sniper' | 'healer' | 'charger' | 'ghost' | 'splitter' | 'mini_splitter' | 'shielder' | 'energy_leech' | 'lancer' | 'enchanter' | 'bleeder' | 'snatcher' | 'impostor' | 'shooter' | 'reflector' | 'trapper' | 'dropper' | 'blinker' | 'jammer' | 'spook' | 'grappler' | 'fiery_king' | 'splitter_queen' | 'queen_echo' | 'storm_reaper' | 'devourer' | 'frost_warden' | 'blind_prayer' | 'sea_chanter' | 'thorn_weaver' | 'aegis_sentinel' | 'aegis_construct' | 'astral_twins'
   | 'fish_blue' | 'fish_red' | 'stinger' | 'water_clone' | 'water_bomb' | 'jellyfish' | 'pufferfish'
   | 'seed_pod' | 'blossom' | 'sporeling' | 'vine_crawler' | 'angry_mushroom' | 'lifebloom'
-  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_hound' | 'moon_mimic' | 'cinder_wisp' | 'lost_soul' | 'soulless' | 'toxic_soulless' | 'sand_relic' | 'sand_core' | 'sand_scarab' | 'sand_scorpion' | 'dune_worm' | 'emberling' | 'scorch_sapper' | 'flare_spitter' | 'frostbiter' | 'sleet_mortar' | 'glacier_hulk' | 'lodestone' | 'grounder' | 'pulsar' | 'zealot' | 'bellringer' | 'mason' | 'penitent';
+  | 'moon_illusion' | 'mirror_mite' | 'moon_shade' | 'moon_hound' | 'moon_mimic' | 'cinder_wisp' | 'lost_soul' | 'soulless' | 'toxic_soulless' | 'sand_relic' | 'sand_core' | 'sand_scarab' | 'sand_scorpion' | 'dune_worm' | 'emberling' | 'scorch_sapper' | 'flare_spitter' | 'frost_anchor' | 'frostbiter' | 'sleet_mortar' | 'glacier_hulk' | 'lodestone' | 'grounder' | 'pulsar' | 'zealot' | 'bellringer' | 'mason' | 'penitent';
 
 export const ENERGY_LEECH_DRAIN = 30;
 
@@ -339,6 +339,8 @@ export const KNOCKBACK_SHAKE_AMOUNT = 6;
 
 export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   // Saturn aliens: their attacks live in saturn.ts (SATURN.frostbiter / mortar / hulk); damage values here are for reference.
+  frost_anchor: { maxHp: 45, speed: 0, color: '#9ab5ef', shieldColor: '#dcf4ff', bodyFraction: .8, scoreValue: 0,
+    damageToPlayer: 0, damageToRuby: 0, attackCooldown: 9999, attackRange: 0, bombExplodeRange: 0 },
   frostbiter: { // pounces onto the tile you stood on and strips your shield
     maxHp: 12, speed: 1.4, color: '#8fe3ff', shieldColor: '#e4ffff', bodyFraction: .66, scoreValue: 20,
     damageToPlayer: 14, damageToRuby: 10, attackCooldown: 120, attackRange: 4, bombExplodeRange: 0,
@@ -370,11 +372,11 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   },
   soulless: { // Singularity: a soulless skeleton that hunts you; the swarm will not eat it (spawned by singularity-maw.ts)
     maxHp: 30, speed: 4, color: '#c5bcae', shieldColor: '#eee4d2', bodyFraction: .9, scoreValue: 15,
-    damageToPlayer: 12, damageToRuby: 8, attackCooldown: 80, attackRange: 6, bombExplodeRange: 0,
+    damageToPlayer: 12, damageToRuby: 11, attackCooldown: 80, attackRange: 6, bombExplodeRange: 0,
   },
   toxic_soulless: { // Singularity phase 3: a Soulless full of gas; it leaves a trail of gas puffs as it walks
     maxHp: 30, speed: 0.9, color: '#7dff8a', shieldColor: '#c6ffb0', bodyFraction: .6, scoreValue: 15,
-    damageToPlayer: 8, damageToRuby: 5, attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
+    damageToPlayer: 8, damageToRuby: 7, attackCooldown: 60, attackRange: 1, bombExplodeRange: 0,
   },
   lost_soul: { // Singularity: a harmless wanderer the swarm eats to grow; one hit kills it
     maxHp: 1, speed: 0, color: '#d8fff0', shieldColor: '#9dff8a', bodyFraction: .5, scoreValue: 0,
@@ -979,7 +981,7 @@ export const SINGULARITY_CHALLENGE = {
   // hand it leaves one per two stacks; a Maw swallows it whole. A copy is full at bodyStacks; only the original carries
   // the phase's maxStacks.
   // mealStacks: stacks each Lost Soul gives; a copy is full at bodyStacks
-  phaseHP: [150, 150, 150], copyHP: [130, 130, 130], stackHP: 25, bodyStacks: 3, mealStacks: 1, maxStacks: [11, 11, 11], gorgeTicks: 180, familyCap: [40, 48, 56], stacksPerCopy: 2, // familyCap: most bodies alive per phase
+  phaseHP: [150, 150, 150], copyHP: [130, 130, 130], stackHP: 25, bodyStacks: 3, mealStacks: 1, maxStacks: [12, 12, 12], gorgeTicks: 120, familyCap: [40, 48, 56], stacksPerCopy: 1, // familyCap: most bodies alive per phase
   // The full burst, within 3 tiles: 20 and a 2-tile shove to you, 10 to a placed Ruby, 30 to other enemies (Lost Souls are spared).
   burst: { radius: 6, damage: 12, rubyDamage: 5, enemyDamage: 30, knock: 3 },
   // A body leaving in a random jump (or flung by gas) blasts where it was: smaller than a burst.
@@ -987,7 +989,7 @@ export const SINGULARITY_CHALLENGE = {
   soulKillHeal: 2, // killing a Lost Soul yourself heals you 3 (meteors give nothing)
   // bodySpeed: bodies walk 80% faster than the normal Devourer.
   newbornSpeed: 3, bodySpeed: 1.8, weakestGeneration: 2, generationSpeed: .97, generationDamage: .97, generationScale: .98, minimumScale: .7, minimumStats: .6,
-  convergence: { everyTicks: 2580, gatherTicks: 120, gatherExtraTicks: 120, bodyTicks: 6, chargeTicks: 0, blastTicks: 180, waveTicks: 45, waveEchoTicks: 4, maxDamage: 45, rubyShare: .5, knock: 5, knockSpeedMult: 2.4,
+  convergence: { everyTicks: 2580, gatherTicks: 120, gatherExtraTicks: 120, bodyTicks: 6, chargeTicks: 0, blastTicks: 180, waveTicks: 45, waveEchoTicks: 4, maxDamage: 63.3, rubyShare: .5, knock: 10, knockSpeedMult: 6,
     // Damage scales with distance from the gather point: nearMult within nearTiles, easing (quadratic) down to farMult at
     // farTiles and beyond; the chamber diagonally opposite the gather point always takes farMult.
     nearMult: 1.5, farMult: .5, nearTiles: 6, farTiles: 40 },
@@ -997,27 +999,28 @@ export const SINGULARITY_CHALLENGE = {
   wellPullSpeed: 6,                                  // forced step speed for every pull (Maw and F)
   // Each Maw idles small (mawRadius), warns, then opens wide (mawOpenRadius, faster pulls) on a repeating cycle; the
   // two Maws are half a cycle apart. You are pulled only while a Maw is open.
-  mawEatCooldown: 30, // ticks after a Maw (or the F field) swallows a copy before it can swallow another
+  mawEatCooldown: 42, // ticks after a Maw (or the F field) swallows a copy before it can swallow another
   mawCycle: { closed: 960, warn: 90, open: 210 }, mawOpenRadius: 5, mawOpenPulse: 6,
   mawRadius: 2, mawSwellRadius: 5, mawPulse: 14, mawSwellPulse: 6, mawInnerRadius: 2, mawInnerMult: 4, mawInnerHeavyMult: 5, heavyPulseMult: 18 / 14, fullPullMult: 1.35, // a body one stack from full (or bursting) is pulled 35% less often // tiles; ticks between pulls
   playerRadius: 1.5, playerSwellRadius: 5, playerPulse: 100, playerSwellPulse: 30, playerInnerMult: 2, // a resting Maw pulls you only from the tiles around its centre
-  horizonDamage: 30, horizonFling: 3, horizonCooldown: 60,
+  horizonDamage: 20, horizonFling: 3, horizonCooldown: 60,
   mawCount: [2, 2, 2], mawMoveTicks: [2100, 2100, 2100], mawPreview: 300,
   swallowHeal: 6, swallowEnergy: 4, bodySwallowHeal: 8, bodySwallowBonus: 5, // a swallowed copy heals bodySwallowHeal (scaled by the Feast chain) + bodySwallowBonus
   // Feast: swallowing bodies within feastWindow of each other builds a chain; each heals and energises more (up to feastMax).
   feastWindow: 240, feastStep: .5, feastMax: 4, feastEnergy: 4,
   // Gravity Hook (C): hold to latch the nearest body within hookRange tiles in sight and tow it; release (or after
   // hookMaxTicks) flings it hookFling tiles the way you face. A fling swallows it on reaching a Maw's inner tiles, slams
-  // it into another enemy (both stunned, no damage) or a wall. There is no release cooldown. aimCone: the throw bends
+  // it into another enemy (both stunned, no damage) or a wall. Release starts a 0.8-second cooldown. aimCone: the throw bends
   // toward a Maw (preferred) or body within this many degrees of your facing and within reach.
-  hook: { range: 8, maxTicks: 180, cooldown: 0, towGap: 1.6, towSpeed: 7, fling: 7, aimCone: 30, flingSpeed: 11, slamDamage: 0, slamStun: 180, wallDamage: 0, wallStun: 60, endStun: 30,
+  hook: { range: 8, maxTicks: 180, cooldown: 48, towGap: 1.6, towSpeed: 7, fling: 7, aimCone: 30, flingSpeed: 11, slamDamage: 0, slamStun: 180, wallDamage: 0, wallStun: 60, endStun: 30,
     soullessImpact: 10 }, // a Soulless (either kind) in a hook slam or thrown into a wall takes this damage; a Lost Soul dies
   mawSoulless: { every: 60, damage: 10 }, // a Soulless (either kind) on a Maw's centre tile takes damage each every ticks it stays there
-  foodRadius: 12,
+  foodRadius: 44, // tiles; a bit over two 20-tile chambers, so bodies cross into the next chamber for food
   loneBodyTicks: 1800, // in a phase's first 30s, a lone body (not already bursting) bursts at once with the phase's full stacks
   spreadChance: .6, // a body on or next to another body steps away from it this often instead of following its path
   aggroTicks: 60, // a body you hit ignores food and hunts you for this long (each hit restarts it)
   fleeRadius: 6, // with no food to chase, a body runs from you within this many tiles, and otherwise roams away from you
+  fleeSpeed: 1.3, // a body running from you moves 30% faster (stacks with the meal boost)
   // Toxic gas (from phase 2): count clouds of radius tiles drift at speed px/tick, each living lifeTicks (a range) with
   // fade-in and fade-out, then re-forming elsewhere. Inside one you move at slow speed and your view hazes over. A
   // Devourer that touches one bursts at once: with stacks, into its copies; without, it is flung across the map.
@@ -1046,7 +1049,7 @@ export const SINGULARITY_CHALLENGE = {
   // Void Shell (phase 3): some new copies carry a shell that absorbs hp damage. The Gravity Hook cannot catch a shelled copy.
   shell: { fromPhase: 3, chance: .3, hp: 60 },
   soundGap: 60, eatSoundGap: 150, // eatSoundGap: the swarm eats constantly, so meals play at most every 2.5s // ticks: each repeatable Singularity sound (bites, meals, bursts, swallows, hook hits...) plays at most this often
-  fTicks: 360, // the F Singularity lasts 6s in the challenge (18s elsewhere)
+  fTicks: 480, // the F Singularity lasts 8s in the challenge (18s elsewhere)
   fPullTicks: 10, // the F Singularity pulls every 10 ticks here (15 elsewhere); Devourer bodies on two of every three pulses
 } as const;
 
@@ -1187,7 +1190,7 @@ export const TUTORIAL_STEP_PAUSE = 75; // ticks of "done" feedback before the ne
 export const TRIAL_BOSS_DELAY = 300;        // ticks (5s) before the guardian's arrival warning starts
 export const SPECIAL_RECAST_LOCK = 90; // endless: 1.5s after a cast before F works again, so a skill earned by that cast isn't wasted
 export const TRIAL_SKILL_COOLDOWN = 1200;   // ticks (20s) after casting before the skill returns
-export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2100, splitter_queen: 900, fiery_king: 1620, storm_reaper: 540, devourer: 540 }; // Gaia's Roots: 35s; Lunar Echo: 15s; Solar Flare: 27s; Jupiter Storm: 9s; Singularity: 9s
+export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2100, splitter_queen: 900, fiery_king: 1620, storm_reaper: 540, devourer: 540, frost_warden: 900 }; // Gaia's Roots: 35s; Lunar Echo: 15s; Solar Flare: 27s; Jupiter Storm: 9s; Saturn: 15s; Singularity: 9s
 export function trialSkillCooldown(skill: SpecialSkill) { return TRIAL_SKILL_COOLDOWNS[skill] ?? TRIAL_SKILL_COOLDOWN; }
 
 // Neptune challenge (Sea Chanter): three phases with their own HP (NEPTUNE_PHASE_HPS). Healing can never lift her into a

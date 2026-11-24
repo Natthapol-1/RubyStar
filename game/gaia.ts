@@ -154,6 +154,7 @@ export function gaiaClearRootsField(state: GameState) {
   const r = Math.ceil(SPECIAL_WEAVER_RADIUS / TILE_SIZE), fx = Math.floor(field.x / TILE_SIZE), fy = Math.floor(field.y / TILE_SIZE);
   // It wipes its whole field clean and keeps it from regrowing while it lasts.
   for (let y = fy - r - 1; y <= fy + r; y++) for (let x = fx - r - 1; x <= fx + r; x++) if (inGaiaRootsField(state, x, y)) gaiaClearTile(state, x, y, 3);
+  burnSunfireThorns(state, (x, y) => inGaiaRootsField(state, x, y)); // and, like Sunfire, removes her active thorn-field tiles inside it
 }
 export function gaiaScorchRoom(state: GameState, chamber: number) {
   const gaia = state.gaia; if (!gaia) return;

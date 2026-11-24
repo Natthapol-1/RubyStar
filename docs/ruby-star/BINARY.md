@@ -62,7 +62,7 @@ Every twin attack on this map, ordinary or new, deals 85% of its listed damage (
 - Binary Star alien (`grounder`) from phase 2 (`BINARY.grounder`): one arrives every 20 seconds on its own timer (not part of regular spawns; No Mobs stops it), at most two alive, at least 6 tiles from you. 30 HP, movement speed 1.5, never attacks.
 - It walks to the nearest living twin and stays within 2 tiles of it (`updateGrounder`). Any twin within 3 tiles of a living Grounder (square reach) is **grounded** (`grounded`): your field and your twin's field do not move it, a swap does not jolt it, and it cannot take part in a collision. Lodestone bursts still work on it.
 - Killing it stuns the twin it was escorting for 1 second (`killStun`).
-- Look: a heavy squat slate block with a grey rim, dark inset, two dim eyes and an anchor spike driven into the floor with a pulse running down it. A faint dashed grey square marks its reach; a grounded twin wears a grey frame with four heavy corner blocks.
+- Look: a heavy squat slate block with a grey rim, dark inset, two dim eyes and an anchor spike driven into the floor with a pulse running down it. A restrained slate floor tint and bold dashed square mark its reach, with a muted 6px blue-grey band, soft 2px pale core and faint translucent shoulder ([field reference](visual-reference/binary-grounder-field.png)); a grounded twin wears a grey frame with four heavy corner blocks.
 
 ## Phase 3
 
