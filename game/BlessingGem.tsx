@@ -2,11 +2,11 @@ import {GEM_CUTS,gemMaterial} from './gemstone-cuts';
 import {CELESTIAL_BLESSINGS,type CelestialBlessing} from './endless-builds';
 
 // The desktop Ruby icon's solid rim, deep inset, broad highlight and luminous core.
-export default function BlessingGem({kind}:{kind:CelestialBlessing}){
+export default function BlessingGem({kind,compact=false}:{kind:CelestialBlessing;compact?:boolean}){
  const gem=CELESTIAL_BLESSINGS[kind],[outline,table]=GEM_CUTS[gem.cut],m=gemMaterial(kind,gem.color);
  const glintX=gem.cut==='sapphire'?33:gem.cut==='shard'?32:gem.cut==='crystal'?34:25;
  const glintY=gem.cut==='sapphire'?28:gem.cut==='crystal'?17:21;
- return <svg viewBox="0 0 80 68" aria-hidden="true" data-gemstone={kind} style={{overflow:'visible',filter:`drop-shadow(0 0 3px ${gem.color}a0) drop-shadow(0 0 7px ${gem.color}40)`}} shapeRendering="crispEdges">
+ return <svg viewBox={compact?'12 0 56 68':'0 0 80 68'} aria-hidden="true" data-gemstone={kind} style={{overflow:'visible',filter:`drop-shadow(0 0 3px ${gem.color}a0) drop-shadow(0 0 7px ${gem.color}40)`}} shapeRendering="crispEdges">
   <path d={outline} fill={m.rim}/>
   <path d={outline} fill={m.shade} transform="translate(40 34) scale(.82) translate(-40 -34)"/>
   <path d={table} fill={m.body}/>

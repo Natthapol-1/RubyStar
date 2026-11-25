@@ -12,6 +12,7 @@ import RulesModal from '@/components/RulesModal';
 import RubyStarGuide from './RubyStarGuide';
 import MenuButton from './MenuButton';
 import GameSettings from './GameSettings';
+import SettingsButton from './SettingsButton';
 import LobbyUtilityIcon from './LobbyUtilityIcon';
 import ExplorationTerminal from './ExplorationTerminal';
 import CelestialBackdrop from './CelestialBackdrop';
@@ -200,8 +201,8 @@ export default function RubyStarLobby() {
         <svg viewBox="0 0 16 16" width={22} height={22} shapeRendering="crispEdges" aria-hidden="true"><rect x="1" y="3" width="14" height="10" fill="#2a1830" stroke="#ff8ac8" strokeWidth="1"/><rect x="1" y="3" width="2" height="2" fill="#ff8ac8"/><rect x="1" y="11" width="2" height="2" fill="#ff8ac8"/><rect x="13" y="3" width="2" height="2" fill="#ff8ac8"/><rect x="13" y="11" width="2" height="2" fill="#ff8ac8"/><rect x="6" y="5" width="2" height="6" fill="#ffd6ec"/><rect x="8" y="6" width="2" height="4" fill="#ffd6ec"/><rect x="10" y="7" width="1" height="2" fill="#ffd6ec"/></svg>
        </MenuButton>
        <MenuButton sound="page" aria-label="Rules" title="Rules" onClick={()=>setRulesOpen(true)} style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid #778cae',color:'#c7ddec',fontFamily:'var(--font-pixel)',fontSize:18,cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a'}}>?</MenuButton>
-       {(['book','settings'] as const).map(kind=><MenuButton key={kind} sound="page" aria-label={kind==='book'?'Exploration terminal':'Settings'} title={kind==='book'?'Exploration terminal · Guidebook':'Settings'} onClick={()=>{if(kind==='book')setTerminal(true);else setSettingsOpen(true);}}
-        style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid '+(kind==='book'?'#827bb1':'#639d9a'),cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c'}}><LobbyUtilityIcon kind={kind}/></MenuButton>)}
+       <MenuButton sound="page" aria-label="Exploration terminal" title="Exploration terminal · Guidebook" onClick={()=>setTerminal(true)} style={{width:48,height:44,display:'grid',placeItems:'center',padding:7,background:'#10192be8',border:'1px solid #827bb1',cursor:'pointer',boxShadow:'inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c'}}><LobbyUtilityIcon kind="book"/></MenuButton>
+       <SettingsButton onClick={()=>setSettingsOpen(true)}/>
       </div>
       <RulesModal isOpen={rulesOpen} onClose={()=>setRulesOpen(false)} title=":: ENDLESS SPACE" playSound={kind=>playUiSfx(kind)}><RubyStarGuide showEnemyGuide={false} endlessOnly/></RulesModal>
       <p aria-label={'Version '+APP_VERSION} style={{position:'fixed',right:16,bottom:12,zIndex:5,fontFamily:'var(--font-pixel)',fontSize:9,color:'#6f8496',pointerEvents:'none'}}>v{APP_VERSION}</p>

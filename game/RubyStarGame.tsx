@@ -14,11 +14,14 @@ import { canEnter, isDesktop, getProfile, highestStage, saveRun, restoreRun, res
 import { FrameMeter, observeDiscoveries } from './desktop-runtime';
 
 import MapSpecialSkillHint from './MapSpecialSkillHint';
-import ControlSettings from './ControlSettings';
+import GameSettings from './GameSettings';
+import SettingsButton from './SettingsButton';
+import EndlessBossBar from './EndlessBossBar';
+import BlessingSlots from './BlessingSlots';
+import RunBuildOverview from './RunBuildOverview';
+import BlessingGem from './BlessingGem';
 import {gameKey,mouseControl,bindingLabel,tutorialInstruction,controlForCode} from './controls';
 import MenuButton from './MenuButton';
-import AudioSliders from './AudioSliders';
-import DisplaySettings from './DisplaySettings';
 import { shakeScale, reduceFlashing, REDUCED_FLASH_ALPHA } from './display-settings';
 import BlessingAfterglow from './BlessingAfterglow';
 import {drawDiamondBlessingShield,drawBlessingBehindPlayer,drawBlessingCombatEffects,drawSapphireHitCorners} from './blessing-art';
@@ -4567,6 +4570,98 @@ function drawSpaceBackdrop(ctx: CanvasRenderingContext2D, viewW: number, viewH: 
   ctx.restore();
 }
 
+// Fixed sky geometry keeps the richer backdrop deterministic without per-frame random generation.
+const skyHash=(i:number,seed:number)=>{const value=Math.sin(i*127.1+seed*311.7)*43758.5453;return value-Math.floor(value);};
+const endlessSkyStars=Array.from({length:260},(_,i)=>({x:skyHash(i,2),y:skyHash(i,3),layer:i%7===0?2:i%3===0?1:0,phase:skyHash(i,4)*Math.PI*2,warm:i%13===0}));
+const endlessSkyClouds=Array.from({length:42},(_,i)=>({x:skyHash(i,22)-.5,y:skyHash(i,23)-.5,w:60+skyHash(i,24)*130,h:20+skyHash(i,25)*48}));
+
+function drawEndlessSpaceBackdrop(ctx:CanvasRenderingContext2D,w:number,h:number,camX:number,camY:number,tick:number){
+  ctx.save();ctx.shadowBlur=0;
+  const sky=ctx.createLinearGradient(0,0,w,h);
+  sky.addColorStop(0,'#04091b');sky.addColorStop(.45,'#09091f');sky.addColorStop(.78,'#030712');sky.addColorStop(1,'#01030a');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
+  // Broad atmospheric light behind stepped clouds, kept below the station's neon contrast.
+  for(const [fx,fy,color]of [[.12,.2,'#193d79'],[.72,.52,'#43236d'],[.4,1.05,'#0f4759']] as const){
+    const x=fx*w-camX*.025+Math.sin(tick*.0003)*18,y=fy*h-camY*.02;
+    const light=ctx.createRadialGradient(x,y,10,x,y,Math.max(w,h)*.55);
+    light.addColorStop(0,color+'58');light.addColorStop(.55,color+'19');light.addColorStop(1,color+'00');
+    ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
+  }
+  // The original quiet diagonal light band, without lanes, cutouts or hard-edged details.
+  ctx.save();ctx.translate(w/2,h/2);ctx.rotate(-.42);ctx.translate(-camX*.02,0);
+  for(let layer=0;layer<3;layer++){
+    const width=260-layer*80;ctx.globalAlpha=.008+layer*.005;ctx.fillStyle='#a6b4e8';
+    ctx.fillRect(-w*1.2,-width/2,w*2.8,width);
+  }
+  ctx.restore();
+  // Billows are built from solid rectangular masses; their translucent edges stay quiet.
+  for(const [n,fx,fy,color]of [[0,.16,.32,'#346aa2'],[1,.8,.7,'#664394'],[2,.35,.94,'#257c8c']] as const){
+    const cx=fx*w-camX*.035+Math.sin(tick*.0002+n)*12,cy=fy*h-camY*.03;
+    for(let layer=2;layer>=0;layer--)for(let i=0;i<endlessSkyClouds.length;i++){
+      const cloud=endlessSkyClouds[(i+n*13)%endlessSkyClouds.length],scale=1+layer*.55;
+      ctx.globalAlpha=(.008+(2-layer)*.007)*(1-Math.abs(cloud.x));ctx.fillStyle=color;
+      ctx.fillRect(cx+cloud.x*440*scale-cloud.w*scale/2,cy+cloud.y*135*scale-cloud.h*scale/2,cloud.w*scale,cloud.h*scale);
+    }
+  }
+  // Broad near-black pockets restore the original sky's depth between the colored clouds.
+  for(const [fx,fy,radius]of [[.17,.6,.38],[.93,.86,.46]] as const){
+    const x=w*fx-camX*.02,y=h*fy-camY*.02;
+    const shade=ctx.createRadialGradient(x,y,0,x,y,Math.max(w,h)*radius);
+    shade.addColorStop(0,'#01030ac4');shade.addColorStop(.45,'#01030a70');shade.addColorStop(1,'#01030a00');
+    ctx.globalAlpha=1;ctx.fillStyle=shade;ctx.fillRect(0,0,w,h);
+  }
+  // Distant ice giant: a complete stepped silhouette and two halves of a tilted ring.
+  const px=w*.79-camX*.018,py=h*.22-camY*.018,r=Math.min(78,w*.065);
+  ctx.save();ctx.translate(px,py);
+  const halo=ctx.createRadialGradient(-r*.25,-r*.25,r*.6,0,0,r*2.1);
+  halo.addColorStop(0,'#627d9c12');halo.addColorStop(1,'#627d9c00');ctx.globalAlpha=1;ctx.fillStyle=halo;ctx.fillRect(-r*2.2,-r*2.2,r*4.4,r*4.4);
+  const ring=(front:boolean)=>{
+    ctx.save();ctx.rotate(-.24);ctx.scale(1,.22);ctx.lineWidth=front?5:8;
+    ctx.strokeStyle=front?'#4c6078':'#263951';ctx.globalAlpha=.7;ctx.beginPath();
+    for(let i=0;i<=8;i++){
+      const angle=(front?0:Math.PI)+i*Math.PI/8,x=Math.cos(angle)*r*1.95,y=Math.sin(angle)*r*1.95;
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.lineWidth=2;ctx.strokeStyle='#627da3';ctx.globalAlpha=front?.4:.16;ctx.stroke();ctx.restore();
+  };
+  ring(false);
+  for(let row=-16;row<16;row++){
+    const y=row*r/16,half=Math.floor(Math.sqrt(Math.max(0,r*r-(y+r/32)**2))/4)*4;
+    ctx.globalAlpha=1;ctx.fillStyle='#101b30';ctx.fillRect(-half,y,half*2,r/16+1);
+    ctx.fillStyle=row%5<2?'#26384d':'#1d2e43';ctx.fillRect(-half,y,half*.86,r/16+1);
+    ctx.fillStyle='#425e87';ctx.globalAlpha=.45;ctx.fillRect(-half,y,Math.max(2,5*(1-(row+16)/36)),r/16+1);
+    ctx.globalAlpha=.35;ctx.fillStyle='#080e20';ctx.fillRect(half*.3,y,half*.7,r/16+1);
+  }
+  ring(true);ctx.restore();
+  // Companion moon low on the opposite side, far enough away to remain background detail.
+  const mx=w*.13-camX*.012,my=h*.79-camY*.012,mr=18;
+  for(let row=-4;row<4;row++){
+    const half=Math.round(Math.sqrt(Math.max(0,mr*mr-(row*4+2)**2))/4)*4;
+    ctx.globalAlpha=.8;ctx.fillStyle='#17263b';ctx.fillRect(mx-half,my+row*4,half*2,4);
+    ctx.globalAlpha=.3;ctx.fillStyle='#71929c';ctx.fillRect(mx-half,my+row*4,3,4);
+  }
+  // Three star depths scroll continuously; only the closest pinpricks breathe slowly.
+  for(const star of endlessSkyStars){
+    const par=[.035,.075,.14][star.layer];
+    const x=((star.x*(w+32)-camX*par)%(w+32)+w+32)%(w+32)-16;
+    const y=((star.y*(h+32)-camY*par)%(h+32)+h+32)%(h+32)-16;
+    const pulse=star.layer===2?.8+Math.sin(tick*.012+star.phase)*.2:1;
+    const size=star.layer===2?2:1;
+    ctx.globalAlpha=[.17,.3,.62][star.layer]*pulse;ctx.fillStyle=star.warm?'#d7bc9a':'#a2bee7';ctx.fillRect(x,y,size,size);
+    if(star.layer===2&&star.phase<2){
+      ctx.globalAlpha=.13*pulse;ctx.fillRect(x-4,y+.5,10,1);ctx.fillRect(x+.5,y-4,1,10);
+    }
+  }
+  // Sparse distant traffic glides behind the station, with no warning-like streaks or flashes.
+  for(let i=0;i<5;i++){
+    const span=w+120,x=((skyHash(i,40)*span+tick*(.025+i*.004)-camX*.09)%span+span)%span-60,y=skyHash(i,41)*h-camY*.04;
+    ctx.globalAlpha=.15;ctx.fillStyle=i%2?'#7c94a8':'#89a9b3';ctx.fillRect(x,y,6,2);
+    ctx.globalAlpha=.06;ctx.fillRect(x-9,y,8,1);
+  }
+  ctx.restore();
+}
+
 // Endless floor detail, kept faint so units stay dominant: a soft bevel on each tile, slightly stronger seams grouping
 // tiles into 2×2 plates with tiny corner rivets, and on a few tiles (fixed per tile) an inset panel, a chamber-coloured
 // circuit trace with a node and a slow travelling glint, or a vent grille.
@@ -5142,7 +5237,8 @@ function drawWorldBackdrop(ctx: CanvasRenderingContext2D, state: GameState, view
   else if (isBinaryMap(state)) drawBinaryBackdrop(ctx, viewW, viewH, camX, camY, state.gameTick, state); // Binary Star: two orbiting stars
   else if (isMoonMap(state)) drawMoonBackdrop(ctx, viewW, viewH, camX, camY, tickN); // the Moon: a shadowy crystal cavern
   else if (state.gambit) drawGambitBackdrop(ctx, viewW, viewH, camX, camY, tickN); // Star Gambit: a dusk trading port
-  else drawSpaceBackdrop(ctx, viewW, viewH, camX, camY, tickN); // endless: a quiet starfield behind the station
+  else if(state.mode==='endless'||state.mode==='ascension')drawEndlessSpaceBackdrop(ctx,viewW,viewH,camX,camY,tickN);
+  else drawSpaceBackdrop(ctx, viewW, viewH, camX, camY, tickN);
   drawSingularitySuction(ctx, state, viewW, viewH, camX, camY); // the Singularity: a sucking Maw drags the void behind the station
 }
 
@@ -6266,7 +6362,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   useEffect(()=>{try{setGodCollapsed(localStorage.getItem('rubyStar.godCollapsed')==='1');}catch{}},[]);
   const toggleGodCollapsed=()=>setGodCollapsed(collapsed=>{try{localStorage.setItem('rubyStar.godCollapsed',collapsed?'0':'1');}catch{}return !collapsed;});
   const [showPause,setShowPause]=useState(false);
-  const [showControlSettings,setShowControlSettings]=useState(false);
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [buildOverviewOpen,setBuildOverviewOpen]=useState(false);
   const [resumePrompt,setResumePrompt]=useState(false);
   const resumePendingRef=useRef(false);
   const perfEnabled=useRef(false);
@@ -6307,7 +6404,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
   const siriusMap = trialInfo?.boss === 'blind_prayer', venusMap = trialInfo?.boss === 'aegis_sentinel';
   const sunMap = trialInfo?.boss === 'fiery_king', jupiterMap = trialInfo?.boss === 'storm_reaper';
   const neptuneMap = trialInfo?.boss === 'sea_chanter', gaiaMap = trialInfo?.boss === 'thorn_weaver', moonMap = trialInfo?.boss === 'splitter_queen';
-  const [showRules, setShowRules] = useState(venusMap || singularityMap || siriusMap || saturnMap || binaryMap || jupiterMap || sunMap || neptuneMap || gaiaMap || moonMap); // play starts at once (Neptune opens its own sheet first); RULES opens the sheet
+  const [rulesOpen, setShowRules] = useState(venusMap || singularityMap || siriusMap || saturnMap || binaryMap || jupiterMap || sunMap || neptuneMap || gaiaMap || moonMap); // play starts at once (Neptune opens its own sheet first); RULES opens the sheet
+  const showRules = rulesOpen || settingsOpen || buildOverviewOpen;
   const [, forceRender] = useState(0);
   const [isGodQuery, setIsGodQuery] = useState(false);
   useEffect(()=>{
@@ -6471,6 +6569,24 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       stopAmbientEventSounds();
     };
   }, [cancelNeptuneChorusPress]);
+
+  useEffect(()=>{
+    if(mode!=='endless'&&mode!=='ascension')return;
+    const close=()=>setBuildOverviewOpen(false);
+    const down=(event:KeyboardEvent)=>{
+      if(event.code==='Escape'&&buildOverviewOpen){event.preventDefault();event.stopImmediatePropagation();close();return;}
+      if(controlForCode(event.code)!=='buildOverview'||(event.code==='Tab'&&(event.altKey||event.ctrlKey||event.metaKey)))return;
+      if(rulesOpen||settingsOpen||showPause||resumePrompt||stateRef.current?.gamePhase!=='playing')return;
+      event.preventDefault();event.stopImmediatePropagation();
+      if(event.repeat)return;
+      if(buildOverviewOpen){close();playUiSfx('back');return;}
+      const state=stateRef.current;state.playerQueuedDirX=0;state.playerQueuedDirY=0;
+      setBuildOverviewOpen(true);playUiSfx('page');
+    };
+    window.addEventListener('keydown',down,true);window.addEventListener('blur',close);
+    return()=>{window.removeEventListener('keydown',down,true);window.removeEventListener('blur',close);};
+  },[mode,rulesOpen,settingsOpen,showPause,resumePrompt,buildOverviewOpen]);
+  useEffect(()=>{if(rulesOpen||settingsOpen||showPause||resumePrompt)setBuildOverviewOpen(false);},[rulesOpen,settingsOpen,showPause,resumePrompt]);
 
   // ── Game loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -6995,7 +7111,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-end-stage { text-align: center; color: #e8cbff; }
         .rs-end-stage > span { display: block; font-family: var(--font-mono); font-size: 15px; font-weight: 700; letter-spacing: .15em; margin-bottom: 12px; }
         .rs-end-stage > strong { display: block; font-family: var(--font-pixel); font-size: 54px; line-height: 1.3; color: #f0dfff; text-shadow: 0 0 18px #b978ff66; }
-        .rs-end-record { position:absolute; top:24px; right:24px; text-align:right; font-family:var(--font-pixel); line-height:1.7; color:#f5d78e; }
+        .rs-end-record { position:absolute; top:24px; right:24px; text-align:center; font-family:var(--font-pixel); line-height:1.7; color:#f5d78e; }
         .rs-end-panel:has(.rs-end-record) h2 { text-align:center; margin-bottom:30px; }
         .rs-end-record > span { display:block; font-size:8px; }
         .rs-end-record > strong { display:block; margin-top:4px; font-size:16px; text-shadow:0 0 8px #e8bd4933; }
@@ -7026,6 +7142,41 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         .rs-hud-vitals { flex-wrap: nowrap; gap: 8px 10px; }
         .rs-hud-right { justify-content: flex-end; gap: 10px; }
         .rs-stage { min-width: 100px; padding: 7px 16px; text-align: center; }
+        .rs-build-overlay { position:fixed;inset:0;z-index:400;display:grid;place-items:center;padding:24px;background:#050b16ed; }
+        .rs-build-panel { width:min(1000px,100%);max-height:calc(100dvh - 48px);display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;outline:none;border:1px solid #7297ae;background:#0e192b;box-shadow:inset 0 0 0 3px #182b40;color:#dbe9f2; }
+        .rs-build-header { display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px;border-bottom:1px solid #31465e; }
+        .rs-build-header h2 { margin:0;font-family:var(--font-pixel);font-size:18px;color:#bde2e7; }
+        .rs-build-header p { margin:10px 0 0;font:11px var(--font-pixel);color:#a7b1d6; }
+        .rs-build-header > span { font:10px var(--font-pixel);color:#8da9b9;line-height:1.8;text-align:right; }
+        .rs-build-scroll { min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px; }
+        .rs-build-panel h3 { margin:0 0 16px;font:11px var(--font-pixel);color:#b4cbdc;line-height:1.6; }
+        .rs-build-panel h3 span { color:#718a9e;margin-left:8px; }
+        .rs-build-skill { padding:16px 18px;margin-bottom:24px;border:1px solid #334b64;background:#142238; }
+        .rs-build-skill strong { font:12px var(--font-pixel);line-height:1.6; }
+        .rs-build-panel p { font-family:var(--font-mono);font-size:15px;line-height:1.5; }
+        .rs-build-skill p { margin:8px 0; }
+        .rs-build-columns { display:grid;grid-template-columns:1.2fr 1fr;gap:24px; }
+        .rs-build-panel ul { list-style:none;padding:0;margin:0;display:grid;gap:10px; }
+        .rs-build-panel li { display:flex;gap:12px;align-items:flex-start;padding:14px;background:#142238;border:1px solid #2b4058; }
+        .rs-build-panel h4 { margin:0;font:11px var(--font-pixel);line-height:1.7; }
+        .rs-build-panel li p { margin:6px 0 0;color:#b4c7d7; }
+        .rs-build-art { width:44px;height:40px;flex-shrink:0; }
+        .rs-build-art svg { display:block;width:100%;height:100%;filter:none !important; }
+        .rs-build-empty { color:#849db2;margin:0; }
+        .rs-stage-core { display:flex;align-items:center;justify-content:center;gap:14px; }
+        .rs-stage-core > strong { min-width:56px;display:block;font-family:var(--font-pixel);font-size:30px;line-height:1.15;color:#f4e7ff;text-shadow:0 0 14px #bb75ff99; }
+        .rs-blessing-slots { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;flex:1;min-width:0;max-width:108px; }
+        .rs-blessing-slot { display:block;min-width:0;filter:grayscale(1);opacity:.22; }
+        .rs-blessing-slot[data-active] { filter:saturate(.65);opacity:.8; }
+        .rs-blessing-slot svg { display:block;width:100%;height:32px;filter:none !important; }
+        .rs-stardust-indicator { display:inline-block;width:16px;height:12px;margin-left:5px;vertical-align:middle; }
+        .rs-stardust-indicator svg { width:100%;height:100%;filter:none !important; }
+        .rs-endless-boss { width:min(330px,24vw);display:grid;gap:7px;margin-top:10px; }
+        .rs-endless-encounter { min-width:0; }
+        .rs-endless-twins { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px; }
+        .rs-endless-boss .rs-guardian-bar { height:12px;border:1px solid color-mix(in srgb,var(--guardian) 50%,#334155);padding:2px;background:#0b1020;box-shadow:none; }
+        .rs-endless-boss .rs-guardian-fill { box-shadow:none; }
+        .rs-endless-next { --guardian:#7f90b3; }
         .rs-guardian { width: min(330px, 24vw); padding: 6px 0; text-align: center; }
         .rs-guardian-name { display: block; margin-bottom: 7px; white-space: nowrap; font-family: var(--font-pixel); font-size: 11px; letter-spacing: .1em; color: var(--guardian); text-shadow: 0 0 10px var(--guardian); }
         .rs-guardian-name[style*="font-size"] { transform: translateY(3.5px); }
@@ -7078,6 +7229,9 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           .rs-saturn-hud .rs-hud-vitals { grid-template-columns: max-content; }
           .rs-saturn-hud .rs-hud-vitals > :last-child { grid-column: auto; }
         }
+        @media (min-width:1024px) and (max-width:1250px) {
+          .rs-endless-hud .rs-hud-vitals { display:grid;grid-template-columns:repeat(2,max-content);gap:6px 10px; }
+        }
         @media (max-width: 1000px) {
           .ruby-star-ui .rs-hud { gap: 8px; }
           .rs-hud-left, .rs-hud-right { gap: 8px; }
@@ -7097,6 +7251,8 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           line-height: 1.2; box-shadow: inset 0 1px 0 #ffffff16, 0 3px 0 #030811;
           text-shadow: 0 1px 0 #0008;
         }
+        .ruby-star-ui .rs-hud button.rs-icon-button { display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0 !important; }
+        .ruby-star-ui .rs-hud button.rs-settings-button { border:1px solid #639d9a !important;background:#10192be8 !important;box-shadow:inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c; }
         .ruby-star-ui .rs-hud button:hover { background: #2d5175 !important; border-color: #b6e4ff !important; }
         .ruby-star-ui .rs-hud button[aria-pressed="true"] { background: #19513b !important; border-color: #86efb0 !important; color: #dcffea !important; }
         .ruby-star-ui .rs-hud button:active { transform: translateY(1px); box-shadow: inset 0 1px 0 #ffffff16, 0 1px 0 #030811; }
@@ -7142,22 +7298,28 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         }
       `}</style>
 
-      <style>{`.rs-pause-panel .btn{width:100%;text-align:left;justify-content:flex-start;font-family:var(--font-pixel);font-size:10px;line-height:1.6;padding:9px 12px;background:#10192be8;border:1px solid #6f93ad;box-shadow:inset 0 0 0 3px #18263a,0 0 12px #8fc9e31c;letter-spacing:.08em;color:#dfedf5}.rs-pause-panel .btn:hover{background:#172741;border-color:#a8d8ea}`}</style>
+      <style>{`
+        .rs-pause-panel { width:380px;max-width:calc(100vw - 48px);max-height:calc(100dvh - 48px);overflow-y:auto;box-sizing:border-box;display:grid;gap:12px;padding:30px;background:#0c1525;border:1px solid #7198ad;box-shadow:inset 0 0 0 4px #17263b,0 0 36px #67bec51c;font-family:var(--font-pixel);text-align:center;color:#e7f2f6; }
+        .rs-pause-panel h2 { margin:0 0 12px;padding-bottom:20px;border-bottom:1px solid #2a4157;font-size:18px;letter-spacing:.16em;line-height:1.5;color:#bce8e2;text-shadow:0 0 12px #8fd6ce33; }
+        .rs-pause-panel .btn { width:100%;min-height:48px;text-align:center;justify-content:center;font-family:var(--font-pixel);font-size:11px;line-height:1.6;padding:12px;background:#101d30;border:1px solid #496981;box-shadow:inset 0 0 0 3px #17283b;letter-spacing:.08em;color:#d9e9f2; }
+        .rs-pause-panel .btn:first-of-type { background:#163331;border-color:#83c9bd;box-shadow:inset 0 0 0 3px #1b4240;color:#e1fff3; }
+        .rs-pause-panel .btn:last-child { margin-top:16px;border-color:#865766;color:#efb7c4; }
+        .rs-pause-panel .btn:hover,.rs-pause-panel .btn:focus-visible { background:#20384d;border-color:#b1e0ed;outline:2px solid #b1e0ed;outline-offset:3px; }
+        .rs-pause-panel .btn:first-of-type:hover { background:#24514b; }
+      `}</style>
       {(showPause||resumePrompt)&&<div role="dialog" aria-modal="true" aria-label={resumePrompt?'Resume saved run':'Paused'} onClick={e=>{if(e.target===e.currentTarget&&!resumePrompt){playUiSfx('close');setShowPause(false);setShowRules(false);rerender();}}} style={{position:'fixed',inset:0,zIndex:300,background:'#050810ed',display:'grid',placeItems:'center'}} onKeyDown={e=>e.stopPropagation()}>
-        <div className="rs-pause-panel" style={{border:'2px solid #9aa8ff',background:'#10131f',padding:28,color:'#e7e9f6',width:440,maxWidth:"calc(100vw - 48px)",maxHeight:"calc(100vh - 48px)",overflowY:'auto',boxSizing:"border-box",fontFamily:"var(--font-pixel)",textAlign:"left",display:'grid',gap:12}}>
-          <h2 style={{fontSize:16,margin:"0 0 4px",color:'#ff6f9f'}}>{resumePrompt?'SAVED ORBIT':'PAUSED'}</h2>
-          <MenuButton autoFocus className="btn" onClick={()=>{if(resumePrompt){const saved=restoreRun(mode,trialId);if(saved)stateRef.current=saved;}resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(false);rerender();}}>{resumePrompt?'RESUME SAVED RUN':'CONTINUE'}</MenuButton>
-          {resumePrompt?<MenuButton className="btn" onClick={()=>{updateProfile(p=>{delete p.resumes[resumeKey(mode,trialId)];});resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(!!trialInfo);}}>START NEW RUN</MenuButton>:<>
-            <MenuButton className="btn" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void flushProfile().then(()=>router.push('/'));}}>SAVE & RETURN TO LOBBY</MenuButton>
-            <AudioSliders/>
-            <DisplaySettings/>
-            <MenuButton className="btn" sound="page" onClick={()=>setShowControlSettings(true)}>CONTROLS</MenuButton>
-            <MenuButton className="btn" onClick={()=>void window.rubyDesktop?.fullscreen()}>FULLSCREEN / WINDOW · F11</MenuButton>
-            <MenuButton className="btn" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void window.rubyDesktop?.quit();}}>SAVE & QUIT</MenuButton>
+        <div className="rs-pause-panel">
+          <h2>{resumePrompt?'SAVED ORBIT':'PAUSED'}</h2>
+          <MenuButton autoFocus className="btn" onClick={()=>{if(resumePrompt){const saved=restoreRun(mode,trialId);if(saved)stateRef.current=saved;}resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(false);rerender();}}>{resumePrompt?'RESUME':'CONTINUE'}</MenuButton>
+          {resumePrompt?<><MenuButton className="btn" onClick={()=>{updateProfile(p=>{delete p.resumes[resumeKey(mode,trialId)];});resumePendingRef.current=false;setResumePrompt(false);setShowPause(false);setShowRules(!!trialInfo);}}>RESTART</MenuButton><MenuButton className="btn" sound="back" onClick={()=>router.push(trialInfo?'/challenge':'/')}>BACK</MenuButton></>:<>
+            <MenuButton className="btn" onClick={()=>{setShowPause(false);setShowRules(false);handleRestart();}}>RESTART</MenuButton>
+            <MenuButton className="btn" sound="back" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void flushProfile().then(()=>router.push('/'));}}>LOBBY</MenuButton>
+            <MenuButton className="btn" sound="back" onClick={()=>{if(stateRef.current)saveRun(stateRef.current,trialId);void window.rubyDesktop?.quit();}}>QUIT</MenuButton>
           </>}
         </div>
       </div>}
-      {showControlSettings&&<ControlSettings onClose={()=>setShowControlSettings(false)}/>}
+      {buildOverviewOpen&&state&&<RunBuildOverview state={state}/>}
+      {settingsOpen&&<GameSettings onClose={()=>setSettingsOpen(false)}/>}
       <BGMController ref={bgmRef} visible={false} src={['/sounds/rubyStarBGM.mp3']} volume={[0.63162]} />
 
       {/* Rotate prompt */}
@@ -7176,7 +7338,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       </div>
 
       <RulesModal
-        isOpen={showRules && !showPause && !resumePrompt}
+        isOpen={rulesOpen && !settingsOpen && !showPause && !resumePrompt && !buildOverviewOpen}
         onClose={() => { setShowRules(false); startMusic(); }}
         title={singularityMap ? ':: THE SINGULARITY' : trialInfo?.boss === 'aegis_sentinel' ? ':: VENUS' : trialInfo?.boss === 'blind_prayer' ? ':: SIRIUS' : saturnMap ? ':: SATURN' : jupiterMap ? ':: JUPITER' : sunMap ? ':: THE SUN' : neptuneMap ? ':: NEPTUNE' : gaiaMap ? ':: GAIA' : moonMap ? ':: THE MOON' : ':: RUBY STAR'}
         playSound={button => playUiSfx(button)}
@@ -7207,9 +7369,6 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           touchStartRef.current=null;setJoyThumb({x:0,y:0});rerender();
         }
       }}/>} 
-      {!!state?.build.blessings.length&&<div aria-label="Active celestial blessings" style={{display:'flex',flexWrap:'wrap',justifyContent:'center',gap:'6px 16px',padding:'5px 12px',background:'#0b1120',fontFamily:'var(--font-mono)',fontSize:11}}>
-        {state.build.blessings.map(kind=><span key={kind} title={CELESTIAL_BLESSINGS[kind].description} style={{color:CELESTIAL_BLESSINGS[kind].color}}>{CELESTIAL_BLESSINGS[kind].name}</span>)}
-      </div>}
 
       {!!state?.constellations.length && <div aria-label="Active constellations" style={{
         display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px 16px', padding: '5px 12px',
@@ -7221,7 +7380,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       </div>}
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className={state?.saturn?'rs-hud rs-saturn-hud':state?.gambit?'rs-hud rs-gambit-hud':'rs-hud'}>
+      <div className={state?.saturn?'rs-hud rs-saturn-hud':state?.gambit?'rs-hud rs-gambit-hud':(mode==='endless'||mode==='ascension')?'rs-hud rs-endless-hud':'rs-hud'}>
         <div className="rs-hud-left">
           <BackButton href={trialInfo ? '/challenge' : '/'} playSound={() => {if(stateRef.current)saveRun(stateRef.current,trialId);playUiSfx('back');}} arrow={<PixelArrow direction="left" />} />
           <div className="rs-hud-vitals">
@@ -7324,8 +7483,13 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
             <svg width="28" height="28" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">{/* a blocky shopping bag: two thin handles rising from a wide bag that flares at the bottom, with a Glint chip on it */}<path d="M5 2H7V6H6V3H5ZM9 2H11V3H10V6H9Z" fill="currentColor" /><path d="M5 1H11V2H5Z" fill="currentColor" /><path d="M3 5H13V7H14V15H2V7H3Z" fill="currentColor" /><path d="M3 6H13V7H3Z" fill="#2b2414" opacity=".45" /><path d="M7 9H9V10H10V12H9V13H7V12H6V10H7Z" fill="#ffd23f" /></svg>
           </button>
         </div> : state?.trial ? <GuardianBar state={state} /> : <div className="rs-stage" aria-label={`Stage ${state?.bossesKilled ?? 0}`}>
-          <span>STAGE</span>
-          <strong>{state?.bossesKilled ?? 0}</strong>
+          <span>STAGE{state?.build.blessings.includes('stardust')&&<span className="rs-stardust-indicator" role="img" aria-label="Stardust active" title={CELESTIAL_BLESSINGS.stardust.description}><BlessingGem kind="stardust"/></span>}</span>
+          <div className="rs-stage-core" style={state&&(mode==='endless'||mode==='ascension')?{width:'min(330px,24vw)'}:undefined}>
+           {state&&state.bossesKilled>=20&&(mode==='endless'||mode==='ascension')&&<BlessingSlots side="left" active={state.build.blessings}/>}
+           <strong>{state?.bossesKilled ?? 0}</strong>
+           {state&&state.bossesKilled>=20&&(mode==='endless'||mode==='ascension')&&<BlessingSlots side="right" active={state.build.blessings}/>}
+          </div>
+          {state&&(mode==='endless'||mode==='ascension')&&<EndlessBossBar state={state}/>}
         </div>}
         <div className="rs-hud-right">
           {/* Star Gambit (right group, clear of the centre): the oxygen bill (amount and waves until it is due), or the debt in red while unpaid */}
@@ -7354,10 +7518,11 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
           {state?.sirius && <HaloStatus cooldown={state.sirius.haloCooldown} totalCooldown={SIRIUS.haloCooldown} floating={state.sirius.halo > 0} full={state.sirius.holy >= 100} />}
           {state?.venus && <SandSweepStatus cooldown={state.venus.sweepCooldown} totalCooldown={VENUS.sweepCooldown} />}
           {state?.binary && <MagnetStatus pole={state.binary.pole} cooldown={state.binary.poleCooldown} totalCooldown={BINARY.poleCooldown} />}
-          {isDesktop()&&<MenuButton className="btn btn-ghost" aria-label="Pause" title="Pause" style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={()=>{setShowPause(true);setShowRules(true);}}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M5 3H10V21H5ZM14 3H19V21H14Z" fill="#b8dfed"/><path d="M6 5H8V18H6ZM15 5H17V18H15Z" fill="#edfaff"/></svg></MenuButton>}
-          <MenuButton className="btn btn-ghost" aria-label="Music" aria-pressed={musicEnabled} title={musicEnabled ? 'Mute background music' : 'Play background music'} style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={toggleMusic}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{opacity:musicEnabled?1:.5,filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M8 3H21V17H18V20H13V15H18V8H11V20H8V23H3V18H8Z" fill="currentColor"/><path d="M11 4H19V6H11Z" fill="#f1fff8"/></svg></MenuButton>
-          <MenuButton className="btn btn-ghost" sound="page" aria-label="Rules" title="Rules" style={{width:42,padding:8,display:'grid',placeItems:'center'}}
+          {isDesktop()&&<MenuButton className="btn btn-ghost rs-icon-button" aria-label="Pause" title="Pause" style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={()=>{setShowPause(true);setShowRules(true);}}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M5 3H10V21H5ZM14 3H19V21H14Z" fill="#b8dfed"/><path d="M6 5H8V18H6ZM15 5H17V18H15Z" fill="#edfaff"/></svg></MenuButton>}
+          <MenuButton className="btn btn-ghost rs-icon-button" aria-label="Music" aria-pressed={musicEnabled} title={musicEnabled ? 'Mute background music' : 'Play background music'} style={{width:42,padding:8,display:'grid',placeItems:'center'}} onClick={toggleMusic}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" shapeRendering="crispEdges" style={{opacity:musicEnabled?1:.5,filter:'drop-shadow(0 0 3px #a8d5ea44)'}}><path d="M8 3H21V17H18V20H13V15H18V8H11V20H8V23H3V18H8Z" fill="currentColor"/><path d="M11 4H19V6H11Z" fill="#f1fff8"/></svg></MenuButton>
+          <MenuButton className="btn btn-ghost rs-icon-button" sound="page" aria-label="Rules" title="Rules" style={{width:42,padding:8,display:'grid',placeItems:'center'}}
             onClick={() => setShowRules(true)}><span aria-hidden="true" style={{fontFamily:'var(--font-pixel)',fontSize:18,lineHeight:1}}>?</span></MenuButton>
+          <SettingsButton onClick={()=>setSettingsOpen(true)}/>
         </div>
       </div>
 
@@ -7859,7 +8024,7 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
         {phase === 'lost' && (
           <div className="game-over-overlay rs-game-over">
             <section className="rs-end-panel" role="dialog" aria-modal="true" aria-labelledby="rs-end-title">
-              {!trialInfo&&isDesktop()&&(mode==='endless'||mode==='ascension')&&<div className="rs-end-record"><span>HIGHEST RUN</span><strong>STAGE {Math.max(highestStage(mode),state?.bossesKilled??0)}</strong></div>}
+              {!trialInfo&&isDesktop()&&(mode==='endless'||mode==='ascension')&&<div className="rs-end-record"><span>HIGHEST</span><strong>{Math.max(highestStage(mode),state?.bossesKilled??0)}</strong></div>}
               <h2 id="rs-end-title">{trialInfo ? 'GAME OVER' : 'RUBY STAR'}</h2>
               {!trialInfo && <div className="rs-end-body">
                 <div className="rs-end-stage"><span>STAGE</span><strong>{state?.bossesKilled ?? 0}</strong></div>

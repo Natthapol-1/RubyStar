@@ -49,12 +49,12 @@ export default function CelestialBody({ trial }: { trial: Trial }) {
       <Orb soft rim="#2f55b8" light="#9fc0ff" style={{ background: '#3f78e8', boxShadow: shade(s, '#1f3e9a', '#9fc0ff') }} />
       <span className="sm-spot" style={{ left: '30%', top: '42%', width: s * .24, height: s * .14, background: '#1b2f78' }} />
     </>;
-    case 'sirius': return <> {/* a bright star in the click-star style: solid gold compass bars, a pale yellow core with a white top-left in a dark-bordered gold square, four diagonal sparks */}
+    case 'sirius': return <> {/* gold compass bars, a full pale-yellow core with a white top-left quarter, light gold border and four diagonal sparks */}
       <span className="sm-ray sm-ray-h sm-pulse" style={{ background: '#ffe680', width: '190%', height: Math.max(4, Math.round(s * .12)), boxShadow: '0 0 5px #ffd24a' }} />
       <span className="sm-ray sm-ray-v sm-pulse" style={{ background: '#ffe680', height: '190%', width: Math.max(4, Math.round(s * .12)), boxShadow: '0 0 5px #ffd24a' }} />
       {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([dx, dy], i) => <span key={i} className="sm-spot sm-pulse" style={{ left: `calc(50% + ${dx * s * .3}px - ${s * .06}px)`, top: `calc(50% + ${dy * s * .3}px - ${s * .06}px)`, width: s * .12, height: s * .12, background: '#fff3b0' }} />)}
-      <span className="sm-core" style={{ width: s * .42, height: s * .42, background: '#ffe680', clipPath: 'none', zIndex: 2, boxShadow: '0 0 0 3px #d29a2a, 0 0 6px #fff6c8' }} />
-      <span className="sm-core" style={{ width: s * .26, height: s * .26, background: '#ffffff', clipPath: 'none', zIndex: 3, boxShadow: `inset ${-Math.round(s * .12)}px ${-Math.round(s * .12)}px 0 #fff8d2` }} />
+      <span className="sm-core" style={{ width: s * .42, height: s * .42, background: '#f4d572', clipPath: 'none', zIndex: 2, boxShadow: '0 0 0 3px #e4b94e, 0 0 6px #fff6c8' }} />
+      <span className="sm-core" style={{ width: s * .26, height: s * .26, background: '#fff8d2', clipPath: 'none', zIndex: 3 }}><span style={{position:'absolute',inset:'0 50% 50% 0',background:'#ffffff'}}/></span>
     </>;
     case 'binary': return <> {/* two small stars in the Ruby gemstone's notched-square silhouette, coral and blue, on a dashed link */}
       <span className="sm-twin-link" />
@@ -75,5 +75,6 @@ export default function CelestialBody({ trial }: { trial: Trial }) {
 }
 
 export function WorldPortrait({trial}:{trial:Trial}){
- return <div aria-label={trial.name} style={{width:96,height:96,display:'grid',placeItems:'center'}}><span style={{width:52,height:52,position:'relative',display:'block'}}><CelestialBody trial={{...trial,size:52}}/></span></div>;
+ const size=trial.id==='moon'?40:52;
+ return <div className="rs-world-portrait" data-world={trial.id} aria-label={trial.name} style={{width:96,height:96,display:'grid',placeItems:'center'}}><span style={{width:size,height:size,position:'relative',display:'block'}}><CelestialBody trial={{...trial,size}}/></span></div>;
 }

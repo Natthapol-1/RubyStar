@@ -7,7 +7,7 @@ type Layer = readonly [file: string, gain: number, rate: number, seconds: number
 const cues: Record<AmbientEventKind, Partial<Record<Stage, readonly Layer[]>>> = {
   blackhole: {
     warning: [['celestial/solar-flare-swoosh.wav', .2835, 1, 1.6]],
-    active: [['reverse.mp3', .1782, 1, 1.2]],
+    active: [['reverse.mp3', .7128, 1, 1.2]],
   },
   shootingStar: {
     warning: [['light.mp3', .32, 1.25, 1.4]],

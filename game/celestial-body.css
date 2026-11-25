@@ -2,6 +2,7 @@
         @keyframes smRays { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
         .sm-twin-link { position: absolute; left: 22%; top: 30%; width: 56%; height: 34%; border-top: 2px dashed #ffffff55; transform: rotate(-30deg); }
         .sm-orbit-a { animation: smBob 2.6s ease-in-out infinite; } .sm-orbit-b { animation: smBob 2.6s ease-in-out infinite reverse; }
+        .rs-world-portrait[data-world="binary"] .sm-orbit-a, .rs-world-portrait[data-world="binary"] .sm-orbit-b { animation:none; }
         @keyframes smBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 3px; } }
         .sm-spark { position: absolute; width: 10px; height: 10px; pointer-events: none; animation: smTwinkle 2.2s ease-in-out infinite;
           background: linear-gradient(#ffffff, #ffffff) 50% 0 / 2px 100% no-repeat, linear-gradient(#ffffff, #ffffff) 0 50% / 100% 2px no-repeat; }

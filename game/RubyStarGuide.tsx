@@ -19,6 +19,7 @@ const controls = () => [
   [bindingLabel('heal'), 'Heal when near Ruby'],
   [bindingLabel('teleport'), 'Teleport on or next to a pad'],
   [bindingLabel('celestial'), 'Use your celestial skill'],
+  [bindingLabel('buildOverview'), 'Open/close run build'],
 ];
 
 export default function RubyStarGuide({showEnemyGuide=true,endlessOnly=false}:{showEnemyGuide?:boolean;endlessOnly?:boolean}={}) {

@@ -74,7 +74,7 @@ Comets play the meteor warning pulse once when an area is marked, `falling-thing
 
 | Event | Warning | Active |
 | --- | --- | --- |
-| Black Hole | `celestial/solar-flare-swoosh.wav`, gain .2835, rate 1 | Retriggers `reverse.mp3` every 0.35s of event time, gain .1782, rate 1; overlapping tails up to 1.2s, maximum four voices |
+| Black Hole | `celestial/solar-flare-swoosh.wav`, gain .2835, rate 1 | Retriggers `reverse.mp3` every 0.35s of event time, gain .7128, rate 1; overlapping tails up to 1.2s, maximum four voices |
 | Shooting Star | `light.mp3`, gain .32, rate 1.25 | Solar swoosh, gain .35, rate 1.5; pickup adds energy-pickup cue at .4/rate 1.2 |
 | Eclipse | `celestial/skill-ready.wav`, gain .3, rate .65 (full cue, about 1.6s) | Retriggers `seaDive.mp3` every 2s, gain .28, rate .65, tails up to 4.8s; maximum three voices |
 | Supernova | `kingFireSpell.mp3`, gain .35, rate .65 | Formation layers Solar flare (.45/rate .75) and swoosh (.4/rate .85). Triggered charge uses `celestial/solar-flare-swoosh.wav` (.4/rate 1), followed by the detonation mix above |

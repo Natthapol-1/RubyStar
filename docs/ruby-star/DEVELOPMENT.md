@@ -24,6 +24,10 @@ Ruby Star is a real-time top-down survival/defense game in Arkade, a Next.js 15 
 | `game/BombStatus.tsx` | Icon-only HUD bomb ready/armed/cooldown indicator |
 | `game/CelestialStatus.tsx`, `game/MoonMarkStatus.tsx`, `game/CoolingWaveStatus.tsx` | Icon-only HUD ready/recharging indicators: the celestial skill (Celestial Challenge), the Moon Mark (Moon challenge) and Hydro Pulse (Sun challenge) |
 | `game/ModeLobby.tsx` | Mode lobby: title, carousel of mode cards, routing |
+| `game/RunBuildOverview.tsx` | Rebindable toggle for the read-only run build panel for Endless/Ascension, using existing constellation, gemstone and celestial-skill data. Local UI state pauses gameplay without modifying the run. |
+| `game/BlessingSlots.tsx` | Fixed five-gem groups flanking the Endless/Ascension stage number from Stage 20; dim placeholders and colored owned gems. |
+| `game/EndlessBossBar.tsx` | Endless/Ascension NEXT BOSS placeholder and per-encounter boss HP bars, grouping linked bodies. |
+| `game/SettingsButton.tsx`, `game/GameSettings.tsx` | Shared lobby and gameplay Settings button/panel; gameplay pauses while it is open. The challenge star map has no Settings button. |
 | `game/gambit.ts`, `game/gambit-art.ts`, `game/GambitLoadout.tsx`, `game/GambitWeaponStatus.tsx`, `game/GambitSlotMachine.tsx`, `game/GambitShop.tsx`, `app/gambit/page.tsx` | Star Gambit (in development, see [Star Gambit](STAR-GAMBIT.md)): the single weapon and its effects, weapon/backdrop art, loadout picker and route. The Bazaar layout lives in `constants.ts` (`applyChamberLayout`, `generateBazaarMap`); `MAP_COLS`/`MAP_ROWS` follow the active layout. |
 | `game/RubyStarGame.tsx` | The game for a given mode: canvas renderers, input, animation loop, camera, HUD, God panel, touch controls |
 | `app/tutorial/page.tsx`, `endless/page.tsx`, `ascension/page.tsx` | Mode routes; each renders `RubyStarGame` with its mode, started by `createModeState` in `engine.ts` |
@@ -31,7 +35,7 @@ Ruby Star is a real-time top-down survival/defense game in Arkade, a Next.js 15 
 | `game/neptune-refrain.ts`, `game/neptune-refrain-art.ts`, `game/NeptuneRefrainBar.tsx` | Ocean’s Melody: surfaced listen/answer rhythm, pending heal settlement, deferred Ocean’s Chorus readiness, synthesized notes and the live score below Neptune’s HP. See [Neptune](NEPTUNE.md). |
 | `game/trials.ts`, `challenge/page.tsx`, `challenge/[body]/page.tsx` | Celestial Challenge data (body, guardian boss, map position), star map page and per-world route (`trial` mode in the engine) |
 | `game/CutscenePlayer.tsx`, `game/cutscene-art.ts`, `game/ChallengeEntry.tsx`, `game/challenge-arrival.ts`, `game/sun-arrival.ts` | Canvas playback and ship art shared by the intro and all challenge arrivals. The challenge route checks access and first-visit state before mounting the game. |
-| `game/display-settings.ts`, `game/DisplaySettings.tsx`, `game/PhotosensitivityNotice.tsx` | Comfort settings: Screen Shake (off / low / full) and Reduce Flashing, kept in the profile (`display`) on desktop and in localStorage on the web, shown in lobby Settings and the pause menu; the one-time photosensitivity notice before the first-launch intro |
+| `game/display-settings.ts`, `game/DisplaySettings.tsx`, `game/PhotosensitivityNotice.tsx` | Comfort settings: Screen Shake (off / low / full) and Reduce Flashing, kept in the profile (`display`) on desktop and in localStorage on the web, shown in the shared lobby/gameplay Settings panel; the one-time photosensitivity notice before the first-launch intro |
 | `game/Credits.tsx`, `game/app-version.ts` | Credits panel under Settings, and the release version from `package.json` (injected as `NEXT_PUBLIC_APP_VERSION` by `next.config.ts`), shown in the lobby corner, Settings and Credits |
 | `game/ui-sfx.ts` | Synthesized sci-fi menu cues for the lobby, rule sheet, EXIT and teleport menu |
 | `game/CelestialSkillGuideCard.tsx` | Shared animated F-skill card for every challenge rule sheet, using the real celestial cast renderer |
@@ -45,7 +49,7 @@ Ruby Star is a real-time top-down survival/defense game in Arkade, a Next.js 15 
 | `game/GaiaGuide.tsx`, `game/MoonGuide.tsx` | Gaia and Moon challenge rule sheets (same picture-card format) |
 | `game/VictoryScreen.tsx` | Full-screen challenge victory celebration (canvas burst, fanfare, buttons) |
 | `tests/*.test.cjs` | Node gameplay regression tests; transpile TypeScript directly |
-| `scripts/preview-*.cjs` | Render actual game drawing functions to PNG; no replacement mockup artwork |
+| `scripts/preview-*.cjs` | Render actual game drawing functions to PNG (including `preview-endless-background.cjs` for the Endless sky); no replacement mockup artwork |
 | `scripts/check-ruby-*.cjs`, `scripts/check-charge-cycle.cjs` | Browser UI and repeated-charge checks |
 | `public/sounds/`, `public/sounds/celestial/` | Audio assets; preserve the existing layered mix |
 | `docs/ruby-star/visual-reference/` | Source-rendered visual references |

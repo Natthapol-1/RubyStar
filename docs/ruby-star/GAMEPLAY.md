@@ -42,6 +42,7 @@ Four connected chambers in a 2×2 grid: ALPHA top-left, BETA top-right, GAMMA bo
 | Q | Place bomb; press again to detonate |
 | E | Carry/place Ruby |
 | Space | Heal while carrying or near Ruby, including on teleport pads |
+| Tab | Open/close run build (Endless/Ascension; rebindable) |
 | X | Open teleport destination choice while on a pad or any of its eight neighboring tiles |
 | 1–4 / click a chamber on the teleport map | Choose teleport destination |
 | Escape / X during choice | Cancel teleport |

@@ -2,7 +2,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {_electron:electron}=require('playwright');
 const output=path.resolve('.tmp/desktop-smoke');fs.mkdirSync(output,{recursive:true});
 const userData=fs.mkdtempSync(path.join(output,'profile-'));let app,page;const errors=[];
-async function launch(){app=await electron.launch({timeout:120000,...(process.argv[2]?{executablePath:path.resolve(process.argv[2]),args:['--user-data-dir='+userData]}:{args:[path.resolve('desktop/main.cjs')]}),env:{...process.env,RUBY_STAR_TEST_DATA:userData}});page=await app.firstWindow({timeout:120000});page.setDefaultTimeout(60000);page.on('pageerror',error=>errors.push(error.message));const notice=page.getByRole('button',{name:'CONTINUE',exact:true});try{await notice.waitFor({timeout:20000});await notice.click();}catch{} // a fresh profile opens on the photosensitivity notice
+// Skip the opening presentation so this smoke check can exercise the tutorial gate directly.
+fs.mkdirSync(path.join(userData,'saves'));fs.writeFileSync(path.join(userData,'saves/profile-v1.json'),JSON.stringify({version:1,tutorialCompleted:false,introSeen:true,photosensitivitySeen:true,highestEndless:0,defeated:[],completed:[],encountered:[],constellations:[],skills:[],settings:{music:0,attack:1,effects:1},resumes:{}}));
+async function launch(){app=await electron.launch({timeout:120000,...(process.argv[2]?{executablePath:path.resolve(process.argv[2]),args:['--user-data-dir='+userData]}:{args:[path.resolve('desktop/main.cjs')]}),env:{...process.env,RUBY_STAR_TEST_DATA:userData}});page=await app.firstWindow({timeout:120000});page.setDefaultTimeout(60000);page.on('pageerror',error=>errors.push(error.message));
  await page.getByRole('heading',{name:'RUBY STAR',exact:true}).waitFor();}
 async function stateSetup(){await page.evaluate(()=>{window.__state=()=>{const canvas=document.querySelector('.rs-hud')?.parentElement?.querySelector('canvas');if(!canvas)throw Error('Canvas missing');let fiber=canvas[Object.keys(canvas).find(k=>k.startsWith('__reactFiber'))];for(;fiber;fiber=fiber.return)for(let hook=fiber.memoizedState;hook;hook=hook.next){const s=hook.memoizedState?.current;if(s?.gamePhase&&s?.map)return s;}throw Error('State missing');};});}
 async function close(){if(app){await app.close();app=null;}}
@@ -24,9 +26,14 @@ async function close(){if(app){await app.close();app=null;}}
  await page.keyboard.down('d');await page.waitForTimeout(180);await page.keyboard.up('d');
  await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Paused',exact:true}).waitFor();
  const tick=await page.evaluate(()=>window.__state().gameTick);await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>window.__state().gameTick),tick);
+ assert.deepEqual(await page.getByRole('dialog',{name:'Paused',exact:true}).getByRole('button').allTextContents(),['CONTINUE','RESTART','LOBBY','QUIT']);
+ await page.getByRole('button',{name:'CONTINUE',exact:true}).click();
+ await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByRole('slider',{name:'attack volume'}).fill('0.35');
- await page.getByRole('button',{name:'SAVE & RETURN TO LOBBY',exact:true}).click();await page.getByRole('heading',{name:'RUBY STAR',exact:true}).waitFor();
- await close();await launch();await page.locator('.rs-card[data-slot="0"]').click();await page.getByRole('dialog',{name:'Resume saved run'}).waitFor();await page.getByRole('button',{name:'RESUME SAVED RUN',exact:true}).click();await stateSetup();assert.ok(await page.evaluate(()=>window.__state().gameTick)>=tick);
+ await page.getByRole('button',{name:'CLOSE',exact:true}).click();
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'LOBBY',exact:true}).click();await page.getByRole('heading',{name:'RUBY STAR',exact:true}).waitFor();
+ await close();await launch();await page.locator('.rs-card[data-slot="0"]').click();await page.getByRole('dialog',{name:'Resume saved run'}).waitFor();await page.getByRole('button',{name:'RESUME',exact:true}).click();await stateSetup();assert.ok(await page.evaluate(()=>window.__state().gameTick)>=tick);
  assert.equal(await page.evaluate(async()=>(await window.rubyDesktop.load()).data.settings.attack),.35);
  await page.keyboard.press('F11');await page.waitForTimeout(300);assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isFullScreen()),true);await page.keyboard.press('F11');await page.waitForTimeout(300);
  for(const [width,height]of [[1024,600],[1280,720],[1920,1080]]){await app.evaluate(({BrowserWindow},{width,height})=>BrowserWindow.getAllWindows()[0].setSize(width,height),{width,height});await page.waitForTimeout(100);assert.ok(await page.locator('canvas').first().evaluate(c=>c.width>0&&c.height>0));}

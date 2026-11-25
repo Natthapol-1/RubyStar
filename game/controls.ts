@@ -1,11 +1,11 @@
 import {getProfile,isDesktop,updateProfile} from './profile';
 export const DEFAULT_BINDINGS={
  moveUp:['KeyW','ArrowUp'],moveDown:['KeyS','ArrowDown'],moveLeft:['KeyA','ArrowLeft'],moveRight:['KeyD','ArrowRight'],
- laser:['Mouse0'],bullet:['Mouse2'],boost:['KeyR','ShiftLeft'],bomb:['KeyQ'],ruby:['KeyE'],heal:['Space'],teleport:['KeyX'],celestial:['KeyF'],mapSkill:['Mouse1'],
+ laser:['Mouse0'],bullet:['Mouse2'],boost:['KeyR','ShiftLeft'],bomb:['KeyQ'],ruby:['KeyE'],heal:['Space'],teleport:['KeyX'],celestial:['KeyF'],mapSkill:['Mouse1'],buildOverview:['Tab'],
 } as const;
 export type ControlAction=keyof typeof DEFAULT_BINDINGS;
-export const CONTROL_LABELS:Record<ControlAction,string>={moveUp:'MOVE UP',moveDown:'MOVE DOWN',moveLeft:'MOVE LEFT',moveRight:'MOVE RIGHT',laser:'LASER / CHARGE WAVE',bullet:'BULLETS',boost:'SPEED BOOST',bomb:'BOMB',ruby:'CARRY / PLACE RUBY',heal:'HEAL / STATION',teleport:'TELEPORT',celestial:'CELESTIAL SKILL',mapSkill:'PRIMAL SKILL'};
-const canonical:Record<ControlAction,string>={moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',laser:'k',bullet:'l',boost:'r',bomb:'q',ruby:'e',heal:' ',teleport:'x',celestial:'f',mapSkill:'c'};
+export const CONTROL_LABELS:Record<ControlAction,string>={moveUp:'MOVE UP',moveDown:'MOVE DOWN',moveLeft:'MOVE LEFT',moveRight:'MOVE RIGHT',laser:'LASER / CHARGE WAVE',bullet:'BULLETS',boost:'SPEED BOOST',bomb:'BOMB',ruby:'CARRY / PLACE RUBY',heal:'HEAL / STATION',teleport:'TELEPORT',celestial:'CELESTIAL SKILL',mapSkill:'PRIMAL SKILL',buildOverview:'OPEN/CLOSE RUN BUILD'};
+const canonical:Record<ControlAction,string>={moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',laser:'k',bullet:'l',boost:'r',bomb:'q',ruby:'e',heal:' ',teleport:'x',celestial:'f',mapSkill:'c',buildOverview:'BuildOverview'};
 export function bindings():Record<ControlAction,string[]>{const saved=getProfile().keyBindings;return Object.fromEntries(Object.entries(DEFAULT_BINDINGS).map(([action,codes])=>[action,(Array.isArray(saved?.[action])&&saved![action].every(code=>typeof code==='string')?saved![action]:[...codes])])) as Record<ControlAction,string[]>;}
 export function controlForCode(code:string):ControlAction|undefined{return (Object.keys(DEFAULT_BINDINGS) as ControlAction[]).find(action=>bindings()[action].includes(code));}
 export function gameKey(event:Pick<KeyboardEvent,'code'|'key'>){const action=controlForCode(event.code);return action?canonical[action]:event.key==='Escape'||/^[1-7]$/.test(event.key)?event.key:'';}
@@ -16,7 +16,8 @@ export function setBinding(action:ControlAction,slot:number,code:string|null):st
  const current=bindings();
  if(code){
   if(code.startsWith('Mouse')&&!/^Mouse[012]$/.test(code))return 'Use the left, middle or right mouse button.';
-  if(['Escape','F3','F11','Tab','Enter','MetaLeft','MetaRight','AltLeft','AltRight'].includes(code))return 'That key is reserved.';
+  if((code==='Tab'&&action!=='buildOverview')||['Escape','F3','F11','Enter','MetaLeft','MetaRight','AltLeft','AltRight'].includes(code))return 'That key is reserved.';
+  if(code.startsWith('Mouse')&&action==='buildOverview')return 'Run build needs a keyboard key.';
   if(code.startsWith('Mouse')&&action.startsWith('move'))return 'Movement needs a keyboard key.';
   for(const [other,codes]of Object.entries(current))if(codes.some((value,index)=>value===code&&(other!==action||index!==slot)))return `${keyLabel(code)} IS ALREADY USED BY ${CONTROL_LABELS[other as ControlAction]}.`;
  }
