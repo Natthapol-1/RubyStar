@@ -486,3 +486,15 @@ test("Gaia's Roots removes her active thorn-field tiles inside its area, like Su
   assert.equal(e.useSpecialSkill(s), true);
   assert.deepEqual(s.thornPatches, [away], 'the field under you is gone; the far one stays');
 });
+
+test('a Blossom heals the guardian from another chamber at the slightly raised rate, capped to its phase',()=>{
+ const {s,boss,blossom}=blossomNearPlayer();
+ const move=(unit,x,y)=>Object.assign(unit,{tileX:x,tileY:y,targetTileX:x,targetTileY:y,x:(x+.5)*c.TILE_SIZE,y:(y+.5)*c.TILE_SIZE});
+ move(boss,...roomTiles(s,0)[0]);move(blossom,...roomTiles(s,3)[0]);
+ s.gaia.growth.fill(0);s.gaia.blossomTimer=s.gaia.podTimer=s.gaia.snareTimer=1e9;blossom.phaseTimer=1e9;
+ assert.notEqual(c.chamberOfTile(boss.tileX,boss.tileY),c.chamberOfTile(blossom.tileX,blossom.tileY));
+ boss.hp=PH*1.5;s.gaia.secondTimer=1;g.updateGaia(s);
+ assert.ok(Math.abs(boss.hp-(PH*1.5+19.5))<1e-9);
+ boss.hp=PH*2-1;s.gaia.secondTimer=1;g.updateGaia(s);assert.equal(boss.hp,PH*2);
+ assert.equal(c.GAIA_BLOSSOM_SHOT_GAP,180);assert.equal(c.GAIA_BLOSSOM_SHOT_DAMAGE,4);
+});

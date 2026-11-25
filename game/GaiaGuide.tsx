@@ -87,11 +87,11 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
       if (cycle < 160) { ctx.save(); ctx.translate(100, 70); ctx.scale(1.6, 1.6); drawGaiaUnit(ctx, unit('seed_pod', 1, { hp: 6, maxHp: 6, windupTicks: GAIA_POD_FUSE * (1 - cycle / 160) }), 0, 0, t); ctx.restore(); }
       else tiles(ctx, 64, 24, [[0, 3, 3, 0], [3, 3, 3, 3], [0, 3, 3, 0]], t);
     } },
-    { title: 'BLOSSOMS', color: '#ff8fc8', text: 'Heal the boss and push you away. Breaking one hurts the boss.', paint: (ctx, t) => {
+    { title: 'BLOSSOMS', color: '#ff8fc8', text: 'Heal the boss from anywhere and push you away. Breaking one hurts the boss.', paint: (ctx, t) => {
       // Loop: a pollen shot, then a pulse bursts and pushes you back.
       const burst = 130, k = t % 240, ring = k >= burst && k < burst + 24 ? (k - burst) / 24 : -1;
       const flash = k < 12 ? 12 - k : k >= burst && k < burst + 12 ? burst + 12 - k : 0;
-      ctx.save(); ctx.translate(70, 70); ctx.scale(1.4, 1.4); drawGaiaUnit(ctx, unit('blossom', 2, { hp: 12, maxHp: 12, shootTicks: flash }), 0, 0, t); ctx.restore();
+      ctx.save(); ctx.translate(70, 70); ctx.scale(1.4, 1.4); drawGaiaUnit(ctx, unit('blossom', 2, { hp: 12, maxHp: 12, shootTicks: flash }), 0, 0, t, false); ctx.restore();
       const push = k >= burst ? Math.min(1, (k - burst) / 18) : 0;
       player(ctx, 140 + Math.round(push * 48), 64);
       if (ring >= 0) for (let r = 0; r < 3; r++) {
@@ -171,6 +171,13 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
       if (progress > 0 && progress < 1) { ctx.globalAlpha = .3; drawStone(ctx, returning ? 148 : 52, 71, true, 0, t); ctx.globalAlpha = 1; }
       drawStone(ctx, x, 71, true, 0, t);
     } },
+    { title: 'THORN WEAVER', color: '#8fdc4a', text: 'Drops thorn fields on you, grows vines as she walks and heals on them.', paint: (ctx, t) => {
+      const cycle = t % 240, walk = Math.min(1, cycle / 120), bossX = 32 + walk * 52;
+      tiles(ctx, 4, 48, [[0, 1, 2, 3].map(x => 28 + x * 24 < bossX + 12 ? 2 : 0)], t);
+      drawBoss(ctx, bossX, 56, t);
+      if (cycle < 200) drawGuideThornDrop(ctx, 154, 64, cycle < 120 ? cycle * 90 / 120 : 90 + cycle - 120, t);
+      player(ctx, 154, 64);
+    } },
   ];
 
   const refs = useRef<(HTMLCanvasElement | null)[]>([]);
@@ -194,7 +201,7 @@ export default function GaiaGuide({ drawBoss, drawCelestial }: { drawCelestial: 
     <p className="rs-guide-intro" style={{ color: '#ffe6a6', fontWeight: 700 }}>Clear vines, charge Sunfire and bait thorn fields onto Sunstones.</p>
     {[
       { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 2, 3, 8, 9], skill: true },
-      { title: 'ENEMIES', indices: [4, 10, 11, 12], skill: false },
+      { title: 'ENEMIES', indices: [14, 4, 10, 11, 12], skill: false },
       { title: 'PHASE 2+', indices: [5, 6], skill: false },
       { title: 'PHASE 3', indices: [7, 13], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>

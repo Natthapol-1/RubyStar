@@ -279,11 +279,11 @@ test('a mirror stops your laser and bullets and bounces their damage into you', 
   boss.tileX = boss.tileY = 0; // out of the way
   const hp = s.playerHP;
   e.useLaser(s);
-  assert.ok(Math.abs(hp - s.playerHP - c.LASER_DMG) < 1e-9, 'laser bounced into you');
+  assert.ok(Math.abs(hp - s.playerHP - c.LASER_DMG * c.MOON_MIRROR_REFLECT) < 1e-9, 'laser bounced into you');
   assert.equal(behind.hp, 4, 'nothing behind the mirror is hit');
   s.playerHP = hp; s.laserBullets = [{ x: col + .5, y: row + .5, dx: c.BULLET_SPEED, dy: 0, powered: false, ticks: 0, mirror: false }];
   for (let i = 0; i < 30 && s.laserBullets.length; i++) e.tick(s);
-  assert.ok(Math.abs(hp - s.playerHP - c.BULLET_DMG) < 1e-9, 'bullet bounced into you');
+  assert.ok(Math.abs(hp - s.playerHP - c.BULLET_DMG * c.MOON_MIRROR_REFLECT) < 1e-9, 'bullet bounced into you');
   assert.equal(behind.hp, 4);
 });
 
@@ -572,15 +572,26 @@ test('a shade hit shoves a placed Ruby away from it, a tile at a time', () => {
   assert.equal(s.moon.rubyPush, null);
 });
 
+test('every shove costs a shade 30% of its max HP, so its fourth kills it', () => {
+  const { s } = fresh();
+  const [x, y] = rubyRow(s);
+  s.playerCarryingRuby = false; s.rubyTileX = x; s.rubyTileY = y;
+  const shade = e.createEncounterEnemy(s, 'moon_shade', x - 1, y, 10); s.enemies.push(shade);
+  for (const left of [.7, .4, .1]) { moon.moonShadePushRuby(s, shade); assert.ok(Math.abs(shade.hp - shade.maxHp * left) < 1e-6); }
+  moon.moonShadePushRuby(s, shade);
+  assert.ok(!s.enemies.includes(shade));
+});
+
 test('walls stop the shove, and picking Ruby up cancels it', () => {
   const { s } = fresh();
   const [x, y] = rubyRow(s);
   s.playerCarryingRuby = false; s.rubyTileX = x; s.rubyTileY = y;
-  s.map[y][x + 1] = c.T_WALL; // cover right behind Ruby
+  const around = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [x + dx, y + dy]), was = around.map(([ax, ay]) => s.map[ay][ax]);
+  for (const [ax, ay] of around) s.map[ay][ax] = c.T_WALL; // boxed in on every side
   moon.moonShadePushRuby(s, e.createEncounterEnemy(s, 'moon_shade', x - 1, y, 6));
   stepPush(s);
   assert.deepEqual([s.rubyTileX, s.rubyTileY], [x, y], 'blocked by the wall');
-  s.map[y][x + 1] = c.T_FLOOR;
+  around.forEach(([ax, ay], i) => { s.map[ay][ax] = was[i]; });
   moon.moonShadePushRuby(s, e.createEncounterEnemy(s, 'moon_shade', x - 1, y, 6));
   s.rubyTileX = -1; // carried
   stepPush(s);
@@ -666,7 +677,18 @@ test('a shade hunts Ruby placed in its own chamber', () => {
   assert.equal(c.chamberOfTile(shade.tileX, shade.tileY), 0);
 });
 
-test('a shade lines up on the pad side of Ruby, so its shove pushes Ruby away from the pad', () => {
+test('a shove never brings Ruby onto or beside the pad, from whichever side the shade strikes', () => {
+  const { s } = fresh(); s.playerCarryingRuby = false;
+  for (const [px, py] of c.TELEPORT_PADS) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [0, 3], [2, 2]]) for (const [sx, sy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const x = px + dx, y = py + dy; if (s.map[y][x] !== c.T_FLOOR) continue;
+    s.rubyTileX = x; s.rubyTileY = y;
+    moon.moonShadePushRuby(s, e.createEncounterEnemy(s, 'moon_shade', x + sx, y + sy, 6)); stepPush(s);
+    const now = Math.max(Math.abs(s.rubyTileX - px), Math.abs(s.rubyTileY - py));
+    assert.ok(now > 0 && (now > 1 || s.rubyTileX === x && s.rubyTileY === y), `pad ${px},${py} ruby ${dx},${dy} from ${sx},${sy}`);
+  }
+});
+
+test('a shade goes straight to Ruby and its shove keeps Ruby off the pad', () => {
   for (const room of [0, 1, 2, 3]) {
     const { s, shade } = shadeIn(room);
     const pad = c.TELEPORT_PADS.find(([px, py]) => c.chamberOfTile(px, py) === room);
@@ -679,7 +701,7 @@ test('a shade lines up on the pad side of Ruby, so its shove pushes Ruby away fr
     for (let i = 0; i < 1500 && s.rubyHP === hp; i++) e.tick(s);
     assert.ok(s.rubyHP < hp, 'room ' + room + ': Ruby hit');
     for (let i = 0; i < 20; i++) e.tick(s); // let the shove finish
-    assert.ok(Math.hypot(s.rubyTileX - pad[0], s.rubyTileY - pad[1]) > before, `room ${room}: pushed away from the pad (${before} -> ${Math.hypot(s.rubyTileX - pad[0], s.rubyTileY - pad[1])})`);
+    assert.ok(Math.max(Math.abs(s.rubyTileX - pad[0]), Math.abs(s.rubyTileY - pad[1])) > 1, `room ${room}: pushed away from the pad (${before} -> ${Math.hypot(s.rubyTileX - pad[0], s.rubyTileY - pad[1])})`);
     assert.equal(c.chamberOfTile(shade.tileX, shade.tileY), room);
   }
 });

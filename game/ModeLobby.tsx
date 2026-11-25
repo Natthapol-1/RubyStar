@@ -104,7 +104,6 @@ export default function RubyStarLobby() {
   return (
     <main className="ruby-star-ui rs-lobby">
       <style>{`
-        body:has(.ruby-star-ui)::after { display: none; }
         .rs-lobby { height:100dvh; min-height:0; display:grid; place-items:center; box-sizing: border-box; padding:16px 24px; color: #e7e9f6; overflow: hidden;
           background: radial-gradient(circle at 50% 18%, #2a1230 0%, transparent 42%), radial-gradient(circle at 80% 85%, #10203a 0%, transparent 45%), #07080f; }
         .rs-lobby-stars { position: fixed; inset: 0; pointer-events: none; opacity: .55;

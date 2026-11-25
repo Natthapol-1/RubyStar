@@ -93,7 +93,7 @@ export default function NeptuneGuide({ drawBoss, drawCelestial }: { drawCelestia
   const cards: { title: string; color: string; text: string; paint: Paint }[] = [
     { title: 'PRIMAL SKILL', color: '#a0ecff', text: 'Ocean Melody: tap to play a note. Hold when Ocean Chorus is full to strike a chosen chamber.', paint: drawNeptunePrimalPreview },
     { title: 'OCEAN CHORUS', color: '#79cce0', text: 'Charges as you heal.', paint: drawNeptuneChorusPreview },
-    { title: 'THREE PHASES', color: '#6fb6ff', text: 'HP marks show when the boss dives.', paint: (ctx, t) => {
+    { title: 'SEA CHANTER', color: '#6fb6ff', text: 'Dives at each mark on her HP bar.', paint: (ctx, t) => {
       drawBoss(ctx, 100, 50, t, false);
       for (let i = 0; i < 3; i++) {
         const x = 22 + i * 54; ctx.fillStyle = '#0a1422'; ctx.fillRect(x, 96, 50, 10);
@@ -187,8 +187,8 @@ export default function NeptuneGuide({ drawBoss, drawCelestial }: { drawCelestia
     <div className="rs-guide-nav"><h3>NEPTUNE CHALLENGE</h3></div>
     <p className="rs-guide-intro" style={{ color: '#ffe6a6', fontWeight: 700 }}>Destroy her echoes and answer her melody to defeat the Sea Chanter.</p>
     {[
-      { title: 'GENERAL RULES & SKILLS', indices: [2, 3, 4, 0, 1, 12, 13], skill: true },
-      { title: 'ENEMIES', indices: [5, 6, 7, 9], skill: false },
+      { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 13], skill: true },
+      { title: 'ENEMIES', indices: [2, 3, 4, 12, 5, 6, 7, 9], skill: false },
       { title: 'PHASE 2+', indices: [8, 10], skill: false },
       { title: 'PHASE 3', indices: [11, 14], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>

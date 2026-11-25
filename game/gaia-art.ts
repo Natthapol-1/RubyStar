@@ -355,7 +355,7 @@ export function drawGaiaOverlay(ctx: CanvasRenderingContext2D, state: Readonly<G
 }
 
 // Gaia's plants and aliens. Returns false for any other unit.
-export function drawGaiaUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number): boolean {
+export function drawGaiaUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, sx: number, sy: number, tick: number, showBlossomAura = true): boolean {
   if (e.type !== 'seed_pod' && e.type !== 'blossom' && e.type !== 'sporeling' && e.type !== 'vine_crawler' && e.type !== 'angry_mushroom' && e.type !== 'lifebloom') return false;
   ctx.save(); ctx.translate(Math.round(sx), Math.round(sy)); ctx.shadowBlur = 0;
   if (e.flashTicks > 0) ctx.filter = 'brightness(1.8)';
@@ -368,13 +368,43 @@ export function drawGaiaUnit(ctx: CanvasRenderingContext2D, e: Readonly<Enemy>, 
     block(ctx, -size / 2, -size + 6, size / 3, size, '#7fb03a'); block(ctx, size / 6, -size + 6 + 4, 4, size - 8, '#e0f8a0');
     block(ctx, -4, -size + 2, 8, 4, '#3f7a2c');
   } else if (e.type === 'blossom') {
+    ctx.scale(1.15,1.15);
+    // The original pink flower has sickly petals and a hostile mouth, with a restrained red haze behind it.
+    if(showBlossomAura){
+      const breath=.8+.2*Math.sin(tick*.035+e.id);
+      const aura=ctx.createRadialGradient(0,-5,8,0,-5,40);
+      aura.addColorStop(0,'#f32758c4');aura.addColorStop(.55,'#d11d4780');aura.addColorStop(1,'#9d102c00');
+      ctx.globalAlpha=breath;ctx.fillStyle=aura;ctx.fillRect(-42,-47,84,84);ctx.globalAlpha=1;
+      for(let i=0;i<4;i++){
+        const life=((tick*.005+i*.25+e.id*.07)%1),angle=i*Math.PI/2+.35;
+        ctx.globalAlpha=(1-life)*.6;ctx.fillStyle='#db3f51';
+        block(ctx,Math.cos(angle)*(20+life*9)-1,-5+Math.sin(angle)*(20+life*9)-life*6-1,2,2,'#db3f51');
+      }
+      ctx.globalAlpha=1;
+    }
     const pulse = Math.round(Math.sin(tick * .1 + e.id) * 2);
     block(ctx, -2, 2, 4, 18, '#3f7a2c'); block(ctx, -12, 10, 10, 6, '#5fae3e'); block(ctx, 2, 6, 10, 6, '#5fae3e');
     ctx.shadowColor = '#ff8fc8'; ctx.shadowBlur = 4;
-    for (const [dx, dy] of [[0, -12], [12, 0], [0, 12], [-12, 0]]) block(ctx, dx - 7 - (dx ? pulse : 0) * Math.sign(dx), dy - 7 - (dy ? pulse : 0) * Math.sign(dy) - 6, 14, 14, '#ff8fc8');
+    for (const [dx,dy] of [[0,-12],[12,0],[0,12],[-12,0]]) {
+      const x=dx-7-(dx?pulse:0)*Math.sign(dx),y=dy-13-(dy?pulse:0)*Math.sign(dy);
+      block(ctx,x,y,14,14,'#ff8fc8');
+      ctx.shadowBlur=0;
+      block(ctx,x+(dx<0?0:7),y+10,7,4,'#ce83a9');
+      block(ctx,x+(dx<0?0:10),y+12,4,2,'#c27d9e');
+      block(ctx,x+(dy<0?1:10),y+2,3,5,'#da8eb5');
+      ctx.shadowBlur=4;
+    }
     ctx.shadowBlur = 0;
     for (const [dx, dy] of [[0, -12], [12, 0], [0, 12], [-12, 0]]) block(ctx, dx - 3, dy - 3 - 6, 6, 6, '#ffd6ec');
-    block(ctx, -6, -12, 12, 12, '#ffd36a'); block(ctx, -6, -12, 4, 4, '#fff3b8');
+    block(ctx,-7,-13,14,14,'#b8914e');block(ctx,-5,-11,10,10,'#39151f');
+    const tonguePhase=(tick+e.id*37)%260;
+    if(tonguePhase<44){
+      const length=Math.round(Math.sin(tonguePhase/44*Math.PI)*14);
+      block(ctx,-2,-5,4,length,'#d44864');block(ctx,-1,-5,1,length,'#f48fa2');
+      if(length>8){block(ctx,-3,length-6,2,3,'#d44864');block(ctx,1,length-6,2,3,'#d44864');}
+    }
+    block(ctx,-5,-11,2,4,'#fff4d2');block(ctx,3,-11,2,4,'#fff4d2');
+    block(ctx,-5,-5,2,4,'#e8d6b9');block(ctx,3,-5,2,4,'#e8d6b9');
     if (e.shootTicks > 0) { ctx.globalAlpha = e.shootTicks / 12; block(ctx, -10, -16, 20, 20, '#fff0f8'); ctx.globalAlpha = 1; }
   } else if (e.type === 'lifebloom') {
     // A friendly white-mint flower with a glowing green cross at its heart; it fades out in its last two seconds.

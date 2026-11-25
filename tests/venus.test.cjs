@@ -52,6 +52,39 @@ test('breaking the wrong totem blows its whole chamber at once and moves it, kee
  assert.notDeepEqual([wrong.enemy.tileX,wrong.enemy.tileY],at,'moved');assert.ok(inPlay(s,wrong),'shows its new spot');assert.equal(wrong.order,2);
 });
 
+test('wrong-order explosions keep the remaining overload timer in every phase, even after repeated mistakes',()=>{
+ for(const phase of [1,2,3]){
+  const s=fresh();if(phase>1)v.godSetVenusPhase(s,phase);spawnAll(s);
+  const p=s.venus.totems[2],life=p.life;
+  for(let mistake=0;mistake<2;mistake++){
+   if(!inPlay(s,p))s.enemies.push(p.enemy);hit(s,p.enemy,999);
+   assert.equal(p.life,life-mistake*7,'phase '+phase+': the mistake must not reset its countdown');
+   assert.equal(p.enemy.hp,V.totemHP);assert.equal(s.venus.next,0);run(s,7);
+  }
+  assert.equal(p.life,life-14);
+ }
+});
+
+test('a wrong-order move still explodes on schedule after the preceding totem',()=>{
+ const s=fresh();spawnAll(s);const previous=s.venus.totems[1],wrong=s.venus.totems[2];
+ previous.life=3;wrong.life=5;if(!inPlay(s,wrong))s.enemies.push(wrong.enemy);hit(s,wrong.enemy,999);
+ const moved=[wrong.enemy.tileX,wrong.enemy.tileY];run(s,3);
+ assert.equal(previous.overload,V.overloadTicks);assert.equal(wrong.life,2);
+ run(s,2);assert.equal(wrong.overload,V.overloadTicks);assert.equal(previous.overload,V.overloadTicks-2);
+ run(s,V.overloadTicks-2);assert.equal(previous.life,V.lifeTicks[0]);assert.equal(wrong.overload,2);
+ assert.deepEqual([wrong.enemy.tileX,wrong.enemy.tileY],moved,'the later scheduled blast has not happened yet');
+ run(s,2);assert.notDeepEqual([wrong.enemy.tileX,wrong.enemy.tileY],moved);assert.equal(wrong.life,V.lifeTicks[0]);
+});
+
+test('breaking a wrong totem during its warning preserves the remaining warning time',()=>{
+ const s=fresh();spawnAll(s);const p=s.venus.totems[2];p.life=1;run(s,11);const warning=p.overload;
+ assert.equal(warning,V.overloadTicks-10);hit(s,p.enemy,999);
+ assert.equal(p.overload,warning);assert.equal(p.enemy.totem.overloadTicks,warning);
+ const moved=[p.enemy.tileX,p.enemy.tileY];run(s,warning-1);
+ assert.equal(p.overload,1);assert.deepEqual([p.enemy.tileX,p.enemy.tileY],moved);
+ run(s,1);assert.equal(p.overload,0);assert.equal(p.life,V.lifeTicks[0]);assert.notDeepEqual([p.enemy.tileX,p.enemy.tileY],moved);
+});
+
 test('destroying the sequence in order breaks the shield; it returns with a new sequence later',()=>{
  const s=fresh();spawnAll(s);s.immortal=false;s.playerHP=20;
  for(let i=0;i<s.venus.total;i++){const p=s.venus.totems.find(q=>q.order===i);if(!inPlay(s,p))s.enemies.push(p.enemy);const bhp=boss(s).hp,last=i===s.venus.total-1;hit(s,p.enemy,999);assert.equal(s.venus.next,i+1);

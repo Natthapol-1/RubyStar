@@ -93,7 +93,7 @@ Every challenge has an in-game rule sheet (`game/<World>Guide.tsx`, opened befor
 
 **Layout**
 - Title `<WORLD> CHALLENGE`, then one bold line that says the goal of the fight.
-- Sections in this order, leaving out any that are empty: **General rules & skills** (map rules, the primal skill card and the shared celestial skill card), **Enemies** (the boss and the map's own aliens), **Phase 2+**, **Phase 3**. A mechanic goes under the first phase it appears in.
+- Sections in this order, leaving out any that are empty: **General rules & skills** (the map's own rules and objects, the primal skill card and the shared celestial skill card), **Enemies** (a card named after the boss, then everything the boss does and its weak points, then the map's own aliens), **Phase 2+**, **Phase 3**. A mechanic goes under the first phase it appears in.
 - Each card: a short title, one small looping picture drawn with the real game art, and one or two short sentences.
 
 **Writing**

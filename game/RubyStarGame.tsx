@@ -944,7 +944,11 @@ function drawMinimap(
   for (const e of state.enemies) {
     if (e.type !== 'blossom' || e.hp <= 0) continue;
     const x = Math.round(MX + (e.tileX + .5) * S), y = Math.round(MY + (e.tileY + .5) * S);
-    ctx.save(); ctx.globalAlpha = .75 + .25 * Math.abs(Math.sin(tickN * .12)); ctx.shadowColor = '#ff8fc8'; ctx.shadowBlur = 5;
+    ctx.save();
+    const aura=ctx.createRadialGradient(x,y,3,x,y,13);
+    aura.addColorStop(0,'#fa33566e');aura.addColorStop(.6,'#e22c5038');aura.addColorStop(1,'#b71e3400');
+    ctx.globalAlpha=.8+.2*Math.sin(tickN*.045+e.id);ctx.fillStyle=aura;ctx.fillRect(x-13,y-13,26,26);
+    ctx.globalAlpha = .85 + .15 * Math.abs(Math.sin(tickN * .06)); ctx.shadowColor = '#ff8fc8'; ctx.shadowBlur = 5;
     ctx.fillStyle = '#ff8fc8'; ctx.fillRect(x - 2, y - 6, 4, 4); ctx.fillRect(x - 2, y + 2, 4, 4); ctx.fillRect(x - 6, y - 2, 4, 4); ctx.fillRect(x + 2, y - 2, 4, 4);
     ctx.shadowBlur = 0; ctx.fillStyle = '#ffd36a'; ctx.fillRect(x - 2, y - 2, 4, 4);
     ctx.restore();
@@ -5565,7 +5569,7 @@ function drawGame(
 
   for(const decoy of state.build.queenDecoys??[]){
     const x=decoy.x-camX,y=decoy.y-camY;
-    ctx.save();ctx.globalAlpha=.72;ctx.fillStyle='#ad79da';ctx.fillRect(x-17,y-17,34,34);ctx.fillStyle='#402553';ctx.fillRect(x-12,y-12,24,24);ctx.fillStyle='#c39aff';ctx.fillRect(x-3,y-11,6,22);ctx.fillRect(x-6,y-7,12,14);ctx.fillStyle='#7540a5';ctx.fillRect(x-3,y-7,6,14);ctx.fillStyle='#eedaff';ctx.fillRect(x-2,y-6,4,12);ctx.fillStyle='#ad79da';ctx.fillRect(x-3,y-23,6,6);ctx.strokeStyle='#d5acff';ctx.lineWidth=4;ctx.strokeRect(x-20,y-20,40,40);ctx.fillStyle='#cc9ff5';ctx.fillRect(x-17,y+23,34*Math.max(0,Math.min(1,decoy.hp/BLESSING.amethystDecoyHP)),2);ctx.restore();
+    ctx.save();ctx.globalAlpha=.72;ctx.fillStyle='#ad79da';ctx.fillRect(x-13,y-13,26,26);ctx.fillStyle='#402553';ctx.fillRect(x-12,y-12,24,24);ctx.fillStyle='#c39aff';ctx.fillRect(x-3,y-11,6,22);ctx.fillRect(x-6,y-7,12,14);ctx.fillStyle='#7540a5';ctx.fillRect(x-3,y-7,6,14);ctx.fillStyle='#eedaff';ctx.fillRect(x-2,y-6,4,12);ctx.fillStyle='#ad79da';ctx.fillRect(x-3,y-23,6,6);ctx.strokeStyle='#d5acff';ctx.lineWidth=4;ctx.strokeRect(x-20,y-20,40,40);ctx.fillStyle='#cc9ff5';ctx.fillRect(x-17,y+23,34*Math.max(0,Math.min(1,decoy.hp/BLESSING.amethystDecoyHP)),2);ctx.restore();
   }
   if(state.lunarDecoy){
     const decoy=state.lunarDecoy,x=decoy.x-camX,y=decoy.y-camY;
@@ -7035,7 +7039,6 @@ export default function RubyStarGame({ mode, trialId }: { mode: RubyStarMode; tr
       background: 'var(--void)', overflow: 'hidden', touchAction: 'none',
     }}>
       <style>{`
-        body:has(.ruby-star-ui)::after { display: none; }
         .ruby-star-ui .btn, .ruby-star-ui .modal-content { border-radius: 2px; }
         .ruby-star-ui .battery { border-width: 2px; border-radius: 2px; background: #090f1c; }
         .ruby-star-ui .battery-fill, .ruby-star-ui .battery-nub { border-radius: 0; }

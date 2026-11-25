@@ -9,7 +9,7 @@ import { drawGuidePlayer } from './guide-art';
 import type { Enemy } from './engine';
 
 const cards = [
-  ['FROST SHIELDS', 'The boss gives frost shields to her aliens. Breaking them hurts her; hitting her directly does little.'],
+  ['FROST WARDEN', 'Gives frost shields to her aliens. Breaking them hurts her; hitting her directly does little.'],
   ['MARKED TARGETS', 'Snowflakes mark her next shield targets. Kill one first to hurt her and gain a shield.'],
   ['RECALL', 'Violet diamonds mark shields she pulls back to heal. If none return, she is hurt instead.'],
   ['PRIMAL SKILL', 'Absolute Zero: stops time around you. Catching her grants steals the shield.'],
@@ -132,8 +132,8 @@ export default function SaturnGuide({ drawCelestial, drawFrozenTile, drawBoss }:
   return <div className="rs-guide"><div className="rs-guide-nav"><h3>SATURN CHALLENGE</h3></div>
     <p className="rs-guide-intro" style={{ color: '#ffe6a6', fontWeight: 700 }}>Break or steal the boss’s frost shield and block her recalls with Absolute Zero.</p>
     {[
-      { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 2, 3, 4], skill: true },
-      { title: 'ENEMIES', indices: [5, 6, 7], skill: false },
+      { title: 'GENERAL RULES & SKILLS', indices: [4, 3], skill: true },
+      { title: 'ENEMIES', indices: [0, 1, 2, 5, 6, 7], skill: false },
       { title: 'PHASE 2+', indices: [8, 11], skill: false },
       { title: 'PHASE 3', indices: [9, 10], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>

@@ -197,6 +197,8 @@ Entering darkness plays the supplied Dark Magic recording (`moon-darkness-entry.
 
 When banked healing is paid out on the Queen's jump, the departure-chamber pulse plays `moonHealingWave`: `/sounds/gem_passive_2.wav` at .75 volume, original speed and pitch, through the shared effects mix. It plays once with the visible healing pulse, globally, with no loop or extra synthesized/recorded layers; a jump without banked healing plays no healing cue.
 
+A Shade shoving Ruby plays `saturn-warning.mp3` at .6 (Saturn’s grant warning, also Venus’s totem arrival), over its strike sound.
+
 The real Moon Queen's attack recording and click layer play at 90% of their usual volume. Illusions, other maps, and her teleport/reveal cues keep their existing mix.
 
 ### Moon reveal

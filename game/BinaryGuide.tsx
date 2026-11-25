@@ -26,8 +26,8 @@ const cards = {
 type CardKey = keyof typeof cards;
 
 const SECTIONS: { title: string; keys: CardKey[]; skill?: boolean }[] = [
-  { title: 'GENERAL RULES & SKILLS', keys: ['lives', 'rooms', 'pole', 'collision'], skill: true },
-  { title: 'ENEMIES', keys: ['dawn', 'dusk', 'beam', 'lodestone', 'pulsar'] },
+  { title: 'GENERAL RULES & SKILLS', keys: ['pole'], skill: true },
+  { title: 'ENEMIES', keys: ['dawn', 'dusk', 'lives', 'rooms', 'collision', 'beam', 'lodestone', 'pulsar'] },
   { title: 'PHASE 2+', keys: ['magnets', 'grounder'] },
   { title: 'PHASE 3', keys: ['reversal', 'charge'] },
 ];

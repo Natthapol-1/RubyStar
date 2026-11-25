@@ -107,6 +107,20 @@ export default function MoonGuide({ drawQueen, drawBlinker, drawCelestial }: { d
       if (cycle >= 60 && cycle < 76) { const k = (cycle - 60) / 16; ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#7fe0ff'; ctx.lineWidth = 3; ctx.strokeRect(40 - 12 - k * 14, 60 - 12 - k * 14, 24 + k * 28, 24 + k * 28); ctx.strokeRect(166 - 24 + k * 12, 92 - 24 + k * 12, 48 - k * 24, 48 - k * 24); ctx.globalAlpha = 1; }
       if (warped) player(ctx, 166, 92); else player(ctx, 40, 60);
     } },
+    { title: 'SHADOW QUEEN', color: '#dd88ff', text: 'Shoots you or Ruby through cover. When she jumps, she leaves a healing field based on the damage she took.', paint: (ctx, t) => {
+      const cycle = t % 180, jumped = cycle >= 70;
+      if (jumped) { // the field where she stood: a violet square with rising heal crosses, fading out
+        const k = (cycle - 70) / 110;
+        ctx.globalAlpha = (1 - k) * .3; ctx.fillStyle = '#b98cff'; ctx.fillRect(28, 28, 64, 64);
+        ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#a9e6ff'; ctx.lineWidth = 3; ctx.strokeRect(28, 28, 64, 64);
+        ctx.fillStyle = '#b8ffd8';
+        for (const [x, y] of [[44, 76], [60, 62], [76, 80]]) { const cy = y - k * 30; ctx.fillRect(x - 2, cy - 6, 4, 12); ctx.fillRect(x - 6, cy - 2, 12, 4); }
+        ctx.globalAlpha = 1;
+      }
+      if (!jumped) drawQueen(ctx, 60, 60, t, false); // she jumps away; you stay where you are
+      player(ctx, 140, 60);
+      if (!jumped && cycle >= 20 && cycle < 50) drawGuideLaser(ctx, 130, 60, 130 - 50 * (cycle - 20) / 30, 60);
+    } },
   ];
 
   const refs = useRef<(HTMLCanvasElement | null)[]>([]);
@@ -129,8 +143,8 @@ export default function MoonGuide({ drawQueen, drawBlinker, drawCelestial }: { d
     <div className="rs-guide-nav"><h3>MOON CHALLENGE</h3></div>
     <p className="rs-guide-intro" style={{ color: '#ffe6a6', fontWeight: 700 }}>The Queen hides among illusions. Moon Mark tracks its target, while Lunar Echo draws attacks.</p>
     {[
-      { title: 'GENERAL RULES & SKILLS', indices: [0, 2, 3, 1], skill: true },
-      { title: 'ENEMIES', indices: [4, 8, 5, 10], skill: false }, // mite, mimic, crystal hound, shatter
+      { title: 'GENERAL RULES & SKILLS', indices: [3, 1], skill: true },
+      { title: 'ENEMIES', indices: [12, 0, 2, 10, 4, 8, 5], skill: false }, // the Queen, hiding, reveal and shatter, then mite, mimic, crystal hound
       { title: 'PHASE 2+', indices: [7, 6], skill: false },          // mirrors, shade
       { title: 'PHASE 3', indices: [9, 11], skill: false },          // darkness, blinker
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>

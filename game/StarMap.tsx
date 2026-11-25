@@ -58,7 +58,6 @@ export default function CelestialTrialsMap({ loreByWorld }: { loreByWorld: Parti
   return (
     <main className="ruby-star-ui sm-page">
       <style>{`
-        body:has(.ruby-star-ui)::after { display: none; }
         .sm-page { height:100dvh; min-height:0; overflow:hidden; box-sizing: border-box; padding:16px 24px; color: #e7e9f6;
           background: radial-gradient(circle at 20% 50%, #3a1a10 0%, transparent 35%), radial-gradient(circle at 85% 80%, #14142a 0%, transparent 40%), #06070d; }
         .sm-stars { position: fixed; inset: 0; pointer-events: none; opacity: .6;

@@ -963,7 +963,7 @@ export const DEVOURER_ABSORB_COOLDOWN_GEN_STEP = 60;  // ... and each later gene
 export const DEVOURER_COPY_FIRST_MEAL = 180; // ticks (3s) before a newborn copy can eat
 export const DEVOURER_STACK_HP_PCT = 0.05; // fraction of max HP gained (and healed) per stack
 export const DEVOURER_STACK_DAMAGE = 0.5; // extra player/Ruby damage per stack
-export const DEVOURER_ENDLESS_BITE_BONUS = 1; // endless mode: +1 bite damage to the player and Ruby
+export const DEVOURER_ENDLESS_BITE_BONUS = 2; // endless mode: +2 bite damage to the player and Ruby
 export const DEVOURER_KNOCKBACK_CHANCE = .3, DEVOURER_KNOCKBACK_TILES = 2; // 30% of its bites on you also shove you 2 tiles
 export const DEVOURER_HUNGRY_BELOW = 2;    // at 0–1 stacks she hunts aliens to eat before the player
 export const DEVOURER_FULL_HEAL_PCT = 0.01; // eating at the stack cap heals this much instead
@@ -1190,7 +1190,7 @@ export const TUTORIAL_STEP_PAUSE = 75; // ticks of "done" feedback before the ne
 export const TRIAL_BOSS_DELAY = 300;        // ticks (5s) before the guardian's arrival warning starts
 export const SPECIAL_RECAST_LOCK = 90; // endless: 1.5s after a cast before F works again, so a skill earned by that cast isn't wasted
 export const TRIAL_SKILL_COOLDOWN = 1200;   // ticks (20s) after casting before the skill returns
-export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2100, splitter_queen: 900, fiery_king: 1620, storm_reaper: 540, devourer: 540, frost_warden: 900 }; // Gaia's Roots: 35s; Lunar Echo: 15s; Solar Flare: 27s; Jupiter Storm: 9s; Saturn: 15s; Singularity: 9s
+export const TRIAL_SKILL_COOLDOWNS: Partial<Record<SpecialSkill, number>> = { thorn_weaver: 2100, splitter_queen: 840, fiery_king: 1620, storm_reaper: 540, devourer: 540, frost_warden: 900 }; // Gaia's Roots: 35s; Lunar Echo: 14s; Solar Flare: 27s; Jupiter Storm: 9s; Saturn: 15s; Singularity: 9s
 export function trialSkillCooldown(skill: SpecialSkill) { return TRIAL_SKILL_COOLDOWNS[skill] ?? TRIAL_SKILL_COOLDOWN; }
 
 // Neptune challenge (Sea Chanter): three phases with their own HP (NEPTUNE_PHASE_HPS). Healing can never lift her into a
@@ -1312,11 +1312,13 @@ export const MOON_MIMIC_CAP = 4;             // ...with at most this many alive
 export const MOON_MIMIC_TRUE_TICKS: [number, number] = [120, 240];   // 2–4s in its own form, then it poses as an illusion for good
 export const MOON_MITE_KILL_HEAL = 10;       // on top of the usual +5 kill heal
 export const MOON_MITE_HINT_TICKS = 300;     // a mite kill shows two rooms on the minimap for 5s: hers and one other
-export const MOON_HIT_HEAL = .3;             // this share of the HP she loses to your attacks heals you when she next jumps
+export const MOON_HIT_HEAL = .315;             // this share of the HP she loses to your attacks heals you when she next jumps
 export const MOON_MIRROR_STRIPS = 5;         // phase 2+: mirror strips per room; walkable, but they bounce your laser and bullets back into you
 export const MOON_MIRROR_LENGTH = 3;         // tiles per strip
+export const MOON_MIRROR_REFLECT = .8;      // share of a shot's damage a mirror bounces back into you
 export const MOON_MIRROR_SHIFT = 1200;       // every 20s the mirrors move to new spots
 export const MOON_MIRROR_FADE = 30;          // visual: old panes fade out, new ones fade in
+export const MOON_SHADE_PUSH_COST = .3; // share of its max HP a shade loses with every shove of Ruby
 export const MOON_SHADE_RUBY_PUSH = 3, MOON_RUBY_PUSH_STEP = 5; // a shade hit shoves a placed Ruby this many tiles away, one tile every this many ticks
 export const MOON_MARK_TICKS = 360;          // C marks the nearest Queen or illusion for 6s; the mark follows her jumps
 export const MOON_MARK_COOLDOWN = 600;       // 10s from each cast
@@ -1381,7 +1383,7 @@ export const GAIA_LIFEBLOOM_MAX: Record<1 | 2 | 3, number> = { 1: 1, 2: 2, 3: 3 
 export const GAIA_LIFEBLOOM_HEAL = 25, GAIA_LIFEBLOOM_LIFE = 900;
 export const GAIA_BLOSSOM_KILL_HEAL = 15;         // breaking a blossom heals you this much
 export const GAIA_BLOSSOM_SELF_DAMAGE = .08;     // breaking a blossom costs her this share of the phase
-export const GAIA_BLOSSOM_HEAL = .006;           // share of phase HP per second, per blossom
+export const GAIA_BLOSSOM_HEAL = .0065;          // share of phase HP per second, per blossom, from any room
 export const GAIA_BLOSSOM_SHOT_GAP = 180, GAIA_BLOSSOM_SHOT_RANGE = 7, GAIA_BLOSSOM_SHOT_DAMAGE = 4;
 export const GAIA_POLLEN_SLOW_TICKS = 60, GAIA_POLLEN_SLOW = .7;
 // Blossom pulse: an instant wave-like burst that knocks you back, fired only while you are in reach (it waits otherwise).

@@ -8,7 +8,7 @@ import { drawJupiterSlowAura, drawJupiterSlowImpact, drawShardEffects, drawJupit
 import type { GameState } from './engine';
 
 const cards = [
-  ['THE HUNT', 'Charges, pursues twice, then races for Storm Shards.'],
+  ['STORM REAPER', 'Charges, pursues twice, then races for Storm Shards.'],
   ['CHARGING', 'Takes less damage while charging and pursuing. The Reaper\'s chamber explodes when charging ends.'],
   ['STORM PURSUIT', 'When pursuit begins, storms hit every chamber but yours.'],
   ['PRIMAL SKILL', 'Volt Fence: dashes forward, leaving a fence that hurts and slows enemies.'],

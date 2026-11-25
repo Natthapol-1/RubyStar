@@ -3,14 +3,17 @@ import {bindingLabel} from './controls';
 
 import { useEffect, useRef } from 'react';
 import CelestialSkillGuideCard, { type CelestialGuidePainter } from './CelestialSkillGuideCard';
-import { drawFlareSpitter, drawFlareFireball, drawSunburstWarning, drawBurningTile, drawCoolingRipple, drawCoolingStation, drawSunUnit } from './sun-art';
+import { drawFlareSpitter, drawFlareFireball, drawSunburstWarning, drawBurningTile, drawCoolingRipple, drawCoolingStation, drawQuenchedKing, drawSunUnit } from './sun-art';
 import type { Enemy } from './engine';
 import { SUN } from './constants';
+import { drawGuidePlayer } from './guide-art';
+
+const KING = { type: 'fiery_king', id: 1, x: 0, y: 0, hp: 100, maxHp: 100 } as Enemy;
 
 const guideCards = () => [
   ['TEMPERATURE', 'At full heat, an eruption damages everyone but the King.'],
   ['CINDER WISPS', 'Keep spawning and raise heat while alive.'],
-  ['THE KING', 'Chases you or Ruby. Hitting him stops his arena blast.'],
+  ['FIERY KING', 'Chases you or Ruby. Hitting him stops his arena blast.'],
   ['PRIMAL SKILL', 'Hydro Pulse: clears nearby wisps and flames, cools the arena and calms the King.'],
   ['EMBERLINGS', 'Resist damage while burning. Water puts them out.'],
   ['COOLING STATIONS', <>Hold {bindingLabel('heal')} nearby to charge. A full station cools the arena.</>],
@@ -23,9 +26,9 @@ const guideCards = () => [
 ] as const;
 
 const sections = [
-  { title: 'GENERAL RULES & SKILLS', cards: [0, 5, 3, 8], solar: true },
-  { title: 'ENEMIES', cards: [2, 6, 1, 4], solar: false },
-  { title: 'PHASE 2', cards: [7, 11], solar: false },
+  { title: 'GENERAL RULES & SKILLS', cards: [0, 5, 3], solar: true },
+  { title: 'ENEMIES', cards: [2, 6, 8, 1, 4], solar: false },
+  { title: 'PHASE 2+', cards: [7, 11], solar: false },
   { title: 'PHASE 3', cards: [10, 9], solar: false },
 ];
 
@@ -44,11 +47,19 @@ export default function SunGuide({ drawCelestial, drawKing }: { drawCelestial: C
           ctx.fillStyle = '#41261f'; ctx.fillRect(25, 46, 150, 24); ctx.fillStyle = '#ff8a47'; ctx.fillRect(25, 46, 150 * (.5 + (tick % 180) / 360), 24);
         } else if (i === 5) drawCoolingStation(ctx, { id: 0, x: 0, y: 0, charge: Math.min(100, (tick % 200) / 150 * 100), blocked: false }, 100, 65, tick, true);
         else if (i === 3) drawCoolingRipple(ctx, 100, 65, SUN.waveVisualTicks - rippleTick % SUN.waveVisualTicks, false, 65);
-        else if (i === 8) { // the heat bar drains to zero, then flashes icy white
-          const k = tick % 200, heat = k < 130 ? .5 * (1 - k / 130) : 0, flash = k >= 130 ? Math.max(0, 1 - (k - 130) / 50) : 0;
-          ctx.fillStyle = '#41261f'; ctx.fillRect(25, 46, 150, 24); ctx.fillStyle = '#ff8a47'; ctx.fillRect(25, 46, 150 * heat, 24);
-          if (k >= 130) { ctx.globalAlpha = .35 + .65 * flash; ctx.strokeStyle = '#d8fbff'; ctx.lineWidth = 3; ctx.strokeRect(23, 44, 154, 28); ctx.globalAlpha = flash * .5; ctx.fillStyle = '#bff4ff'; ctx.fillRect(0, 0, 200, 120); ctx.globalAlpha = 1;
-            ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#d8fbff'; ctx.fillText('0', 100, 63); }
+        else if (i === 8) { // the heat bar drains to zero with an icy flash, then five quick Hydro Pulses hit the stunned King
+          const k = tick % 300;
+          if (k < 90) {
+            const heat = k < 65 ? .5 * (1 - k / 65) : 0, flash = k >= 65 ? 1 - (k - 65) / 25 : 0;
+            ctx.fillStyle = '#41261f'; ctx.fillRect(25, 46, 150, 24); ctx.fillStyle = '#ff8a47'; ctx.fillRect(25, 46, 150 * heat, 24);
+            if (k >= 65) { ctx.strokeStyle = '#d8fbff'; ctx.lineWidth = 3; ctx.strokeRect(23, 44, 154, 28); ctx.globalAlpha = flash * .5; ctx.fillStyle = '#bff4ff'; ctx.fillRect(0, 0, 200, 120); ctx.globalAlpha = 1; }
+          } else {
+            const age = k - 100, cast = Math.min(4, Math.floor(age / 24)), since = age - cast * 24, firing = age >= 0 && since < 36;
+            ctx.save(); ctx.translate(138 + (firing && since > 8 && since < 18 ? (since % 4 < 2 ? 2 : -2) : 0), 58); ctx.scale(.55, .55); drawQuenchedKing(ctx, KING, 0, 0); ctx.restore();
+            drawGuidePlayer(ctx, 62, 60);
+            if (firing) drawCoolingRipple(ctx, 62, 60, SUN.waveVisualTicks * (1 - since / 36), true, 110);
+            for (let n = 0; n < 5; n++) { ctx.fillStyle = age >= n * 24 ? '#d8fbff' : '#27404a'; ctx.fillRect(72 + n * 12, 106, 8, 8); } // one pip per pulse
+          }
         }
         else if (i === 7) { // a short burning trail, put out by a water ripple
           const k = tick % 200, out = k >= 140;

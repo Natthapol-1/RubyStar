@@ -88,7 +88,7 @@ An attached Sapper blocks manual and Hydro Pulse station charging while draining
 
 ## Rule sheet
 
-The Sun sheet opens with bold warm-gold guidance to control temperature, fill cooling stations and keep the King's rage down. Cards are grouped under General Rules & Skills (temperature, stations, Hydro Pulse, extinguishing and Solar Flare), Enemies (King, rage, wisps and Emberlings), Phase 2 (burning trail and Flare Spitter) and Phase 3 (Sunburst and Scorch Sapper). Descriptions emphasize actions, consequences and counters, including slowing enemies at zero heat and stopping Sunbursts with Solar Flare from anywhere. Station instructions show the active heal binding.
+The Sun sheet opens with bold warm-gold guidance to control temperature, fill cooling stations and keep the King's rage down. Cards are grouped under General Rules & Skills (temperature, stations, Hydro Pulse and Solar Flare), Enemies (King, rage, extinguishing, wisps and Emberlings), Phase 2+ (burning trail and Flare Spitter) and Phase 3 (Sunburst and Scorch Sapper). Descriptions emphasize actions, consequences and counters, including slowing enemies at zero heat and stopping Sunbursts with Solar Flare from anywhere. Station instructions show the active heal binding.
 
 Each challenge has an animated CELESTIAL SKILL (PRESS F) card alongside its SPECIAL SKILL (PRESS C) card. Sun describes Solar Flare, Neptune describes Neptune’s Tide, Gaia describes Gaia’s Roots (including clearing vines and preventing regrowth), and Moon describes Lunar Echo and the real Queen’s immunity to its bait. These cards reuse the actual celestial cast renderer.
 

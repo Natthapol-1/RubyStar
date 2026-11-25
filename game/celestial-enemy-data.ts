@@ -79,7 +79,7 @@ export const celestialEnemies:readonly CelestialEnemyEntry[] = [
     "map": "gaia",
     "type": "blossom",
     "name": "Blossom",
-    "description": "Heals the boss and bursts to push you away."
+    "description": "Heals the boss from anywhere and bursts to push you away."
   },
   {
     "id": "moon-mirror_mite",

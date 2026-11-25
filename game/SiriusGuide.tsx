@@ -133,8 +133,8 @@ export default function SiriusGuide({ drawBoss, drawCelestial }: { drawBoss: (ct
   return <div className="rs-guide"><div className="rs-guide-nav"><h3>SIRIUS CHALLENGE</h3></div>
     <p className="rs-guide-intro" style={{ color: '#ffe6a6', fontWeight: 700 }}>Trace the boss’s runes to burn him while his aliens try to knock you off course.</p>
     {[
-      { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 2, 3, 4, 5, 6, 7], skill: true },
-      { title: 'ENEMIES', indices: [8, 9, 10], skill: false },
+      { title: 'GENERAL RULES & SKILLS', indices: [0, 6, 7], skill: true },
+      { title: 'ENEMIES', indices: [8, 1, 2, 3, 4, 5, 9, 10], skill: false },
       { title: 'PHASE 2+', indices: [11, 13], skill: false },
       { title: 'PHASE 3', indices: [12, 14], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>

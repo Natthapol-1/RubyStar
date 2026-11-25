@@ -143,8 +143,8 @@ export default function VenusGuide({ drawCelestial }: { drawCelestial: Celestial
   return <div className="rs-guide"><div className="rs-guide-nav"><h3>VENUS</h3></div>
     <p className="rs-guide-intro" style={{ color: '#ffe6a6', fontWeight: 700 }}>Remember where each totem sank and its order, then break them in that order.</p>
     {[
-      { title: 'GENERAL RULES & SKILLS', indices: [0, 1, 2, 3, 4, 5, 6, 12], skill: true },
-      { title: 'ENEMIES', indices: [7, 10], skill: false },
+      { title: 'GENERAL RULES & SKILLS', indices: [1, 2, 3, 5, 6, 12], skill: true },
+      { title: 'ENEMIES', indices: [7, 0, 4, 10], skill: false },
       { title: 'PHASE 2+', indices: [8, 11], skill: false },
       { title: 'PHASE 3', indices: [9, 13], skill: false },
     ].map(section => <section key={section.title} className="rs-guide-section" aria-label={section.title}>

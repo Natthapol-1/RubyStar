@@ -33,7 +33,7 @@ export const VENUS = {
   overloadTicks: 90,                 // a totem about to blow shows itself, glowing amber, for 1.5s; then, as in endless, it hits
                                      // everyone in its chamber for blastDamage and moves
   sweepRadius: 3, sweepExpose: 300, sweepCooldown: 75, // C: clear sand in a 7×7 blocky octagon (3-tile edges), exposing totems for 5s; 1.25s cooldown
-  exposeTicks: 720, shieldHeal: 30, breakShare: .18, finalBreakShare: .08, shatterTicks: 100, // breaking the shield also deals him 18% of a phase (180), 8% in the final phase (88); never past his phase
+  exposeTicks: 720, shieldHeal: 30, breakShare: .19, finalBreakShare: .09, shatterTicks: 100, // breaking the shield also deals him 19% of a phase (190), 9% in the final phase (99); never past his phase
     // shield down for 12s once the whole sequence is destroyed; breaking it heals you and Ruby 30
   // leapSlow/leapSlowSpeed: after landing he moves at most leapSlowSpeed for leapSlow ticks
   leapSlow: 90, leapSlowSpeed: 1.8, leapParryReach: 1, // leapParryReach: tiles beyond the landing reach where you can still parry it
@@ -270,8 +270,9 @@ function reflectBlast(s: GameState, room: number) {
     t.reflects.push({ fromX: s.playerX, fromY: s.playerY, toX: e.x, toY: e.y, ticks: 18 });
   }
 }
-/** As in endless: it blows, hitting everyone in its chamber, and reappears elsewhere keeping its number. */
-function explode(s: GameState, p: VenusTotem) {
+/** Wrong-order blasts keep the original overload schedule; timed blasts begin the next cycle. */
+function explode(s: GameState, p: VenusTotem, preserveSchedule = false) {
+  const life = p.life, warning = p.overload;
   const t = s.venus!, x = p.enemy.x, y = p.enemy.y, room = chamberOfTile(p.enemy.tileX, p.enemy.tileY);
   p.overload = 0; p.enemy.totem = undefined; p.intro = false;
   t.blasts.push({ x, y, ticks: 30, kind: 'overload' });
@@ -297,6 +298,10 @@ function explode(s: GameState, p: VenusTotem) {
     p.life = VENUS.lifeTicks[idx(t)];
     show(s, p, VENUS.revealTicks);
   }
+  if (preserveSchedule) {
+    p.life = life; p.overload = warning;
+    if (warning > 0) p.enemy.totem = { ageTicks: 0, overloadTicks: warning };
+  }
 }
 /** Called from killEnemy when a totem breaks. The right one advances the sequence (the last breaks the shield); a wrong
  * one blows up its whole chamber at once and reappears elsewhere at full HP, keeping its place in the sequence. */
@@ -304,7 +309,7 @@ export function venusTotemDestroyed(s: GameState, e: Enemy) {
   const t = s.venus!, p = t.totems.find(q => q.enemy === e);
   s.enemies = s.enemies.filter(q => q !== e);
   if (!p) return;
-  if (p.order !== t.next) { p.buried = true; explode(s, p); return; } // wrong one: it blows and moves
+  if (p.order !== t.next) { p.buried = true; explode(s, p, true); return; } // wrong one: move without delaying its scheduled blast
   t.totems = t.totems.filter(q => q !== p); t.next++;
   healPlayer(s, VENUS.totemHeal); healCore(s, VENUS.totemHeal); // breaking one in order heals you and Ruby a little
   t.nests = t.nests.filter(n => n.totemId !== e.id);

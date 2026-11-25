@@ -2,12 +2,12 @@ import { gameAudio, channelVolume } from './audio-settings';
 import { playMoonDarknessEntry } from './event-audio';
 import {
   CHAMBER_BOUNDS, CHAMBER_SPAWN_TILES, MAP_COLS, TELEPORT_PADS, TILE_SIZE, T_FLOOR, T_WALL, chamberOfTile, type EnemyType,
-  MOON_PHASE_HP, MOON_FIRST_CLONES, MOON_CLONES_PER_JUMP, MOON_CLONE_CAPS, MOON_MIRROR_STRIPS, MOON_MIRROR_LENGTH, MOON_MIRROR_SHIFT, MOON_MIRROR_FADE, MOON_REVEAL_TICKS, MOON_REVEAL_DAMAGE_MULT,
+  MOON_PHASE_HP, MOON_FIRST_CLONES, MOON_CLONES_PER_JUMP, MOON_CLONE_CAPS, MOON_MIRROR_STRIPS, MOON_MIRROR_LENGTH, MOON_MIRROR_REFLECT, MOON_MIRROR_SHIFT, MOON_MIRROR_FADE, MOON_REVEAL_TICKS, MOON_REVEAL_DAMAGE_MULT,
   MOON_MARK_TICKS, MOON_MARK_COOLDOWN, MOON_MITE_HINT_TICKS, MOON_MIMIC_TRUE_TICKS, MOON_MIMIC_GAP, MOON_MIMIC_CAP, MOON_DARK_SHIFT, MOON_DOUBLE_DARK_CHANCE, MOON_DARK_OVERLAY_TICKS, MOON_DARK_FADE, MOON_SEEN_TICKS, MOON_SHARD_COUNT, MOON_SHARD_SPEED, MOON_SHARD_TICKS, MOON_SHARD_DAMAGE, MOON_SHARD_RUBY_DAMAGE, MOON_SHARD_HIT_RADIUS, ENEMY_CONFIGS,
-  MOVE_SPEED_MULT, MOON_SHADE_RUBY_PUSH, MOON_RUBY_PUSH_STEP,
+  MOVE_SPEED_MULT, MOON_SHADE_RUBY_PUSH, MOON_SHADE_PUSH_COST, MOON_RUBY_PUSH_STEP,
 } from './constants';
 import { godPhaseClock, isFloorTile, playSFX_enemyAttack, tileDist,
-  stormSlowMultiplier, ATTACK_SFX_VOLUME, bfs, createEncounterEnemy, damagePlayer, playAudioOneShot, godSpawnBoss, healCore, healPlayer, playCelestialSound, playSFX_queenTeleport, damageRuby, playSFX_objectBreak, spawnDeathParticles, tileEuclidDist, type Enemy, type GameState,
+  stormSlowMultiplier, ATTACK_SFX_VOLUME, bfs, createEncounterEnemy, damagePlayer, playAudioOneShot, godSpawnBoss, healCore, healPlayer, killEnemy, playCelestialSound, playSFX_queenTeleport, damageRuby, playSFX_objectBreak, spawnDeathParticles, tileEuclidDist, type Enemy, type GameState,
 } from './engine';
 import { playUiSfx } from './ui-sfx';
 import { stepEnemy } from './aliens';
@@ -276,7 +276,7 @@ export function isMoonMirror(state: Readonly<GameState>, tx: number, ty: number)
 // Your shot hit a mirror: its damage comes back to you, with a pale streak from the mirror.
 export function moonReflect(state: GameState, tx: number, ty: number, damage: number) {
   const moon = state.moon!;
-  damagePlayer(state, damage);
+  damagePlayer(state, damage * MOON_MIRROR_REFLECT);
   moon.reflects.push({ x: (tx + .5) * TILE_SIZE, y: (ty + .5) * TILE_SIZE, toX: state.playerX, toY: state.playerY, ticks: 16 });
   if (moon.reflects.length > 16) moon.reflects.shift();
 }
@@ -339,8 +339,7 @@ export function useMoonMark(state: GameState): boolean {
 // Shade: it belongs to the chamber it spawned in and never leaves it. It hunts a placed Ruby only while Ruby is in
 // that chamber (you, only while you carry Ruby there); otherwise it wanders its chamber. Paths are searched on a copy
 // of the map where everything outside its chamber is wall, so it never cuts through a hallway; if a push throws it
-// out, it walks straight back. When it goes for Ruby it strikes from the side facing its chamber's teleport pad, so
-// its shove pushes Ruby away from the pad. Always returns true, so the normal chase-and-attack AI never runs for it.
+// out, it walks straight back. It walks directly to Ruby and strikes from whichever side it reaches. Always returns true, so the normal chase-and-attack AI never runs for it.
 const shadeMaps = new WeakMap<number[][], Map<number, number[][]>>();
 function chamberOnlyMap(map: number[][], room: number) {
   let byRoom = shadeMaps.get(map); if (!byRoom) shadeMaps.set(map, byRoom = new Map());
@@ -361,29 +360,20 @@ export function updateMoonShade(state: GameState, e: Enemy, playerCarrying: bool
   const carriedHome = playerCarrying && chamberOfTile(state.playerTileX, state.playerTileY) === home;
   e.targeting = carriedHome ? 'player' : 'ruby';
   const goal: [number, number] | null = here !== home ? null : rubyHome ? [state.rubyTileX, state.rubyTileY] : carriedHome ? [state.playerTileX, state.playerTileY] : null;
-  // Against Ruby: stand on the tile beside it toward the pad, so the shove sends it away from the pad.
-  let strikeFrom: [number, number] | null = null;
-  if (goal && rubyHome) {
-    const pad = TELEPORT_PADS.find(([px, py]) => chamberOfTile(px, py) === home);
-    const dx = pad ? pad[0] - goal[0] : 0, dy = pad ? pad[1] - goal[1] : 0;
-    if (dx || dy) {
-      const [kx, ky] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
-      const sx = goal[0] + kx, sy = goal[1] + ky;
-      if (isFloorTile(state.map, sx, sy) && chamberOfTile(sx, sy) === home) strikeFrom = [sx, sy];
-    }
-  }
+  const inReach = !!goal && tileDist(e.tileX, e.tileY, goal[0], goal[1]) <= cfg.attackRange;
   if (settled) {
     if (e.attackTimer > 0) e.attackTimer--;
-    else if (goal && (strikeFrom ? e.tileX === strikeFrom[0] && e.tileY === strikeFrom[1] : tileDist(e.tileX, e.tileY, goal[0], goal[1]) <= cfg.attackRange)) {
+    else if (inReach) {
       playSFX_enemyAttack(e);
       if (rubyHome) { damageRuby(state, cfg.damageToRuby, e); moonShadePushRuby(state, e); }
       else damagePlayer(state, cfg.damageToPlayer, e);
       e.attackTimer = cfg.attackCooldown; e.shootTicks = 14;
       return true;
     }
+    if (inReach) { e.path = []; return true; } // beside its prey: wait there for the next strike
   }
-  // Where to walk: its striking spot or prey, back home if it was pushed out, or a wander spot in its chamber.
-  let to = strikeFrom ?? goal;
+  // Where to walk: its prey, back home if it was pushed out, or a wander spot in its chamber.
+  let to = goal;
   if (!to) {
     if (!s.wander || (settled && e.tileX === s.wander[0] && e.tileY === s.wander[1]) || chamberOfTile(s.wander[0], s.wander[1]) !== home) {
       const [r1, c1, r2, c2] = CHAMBER_BOUNDS[home];
@@ -407,12 +397,34 @@ export function updateMoonShade(state: GameState, e: Enemy, playerCarrying: bool
   return true;
 }
 
-// A shade's hit shoves a placed Ruby straight away from the shade, one tile at a time; walls and cover stop it.
+/** Which way a shade's shove sends Ruby: straight away from the shade when possible, else the next best open direction.
+ * Never onto its chamber's teleport pad or a tile beside it (unless Ruby is already there and moving away). Null when no direction is open. */
+function rubyShoveDir(state: GameState, shade: Enemy): [number, number] | null {
+  const rx = state.rubyTileX, ry = state.rubyTileY, room = chamberOfTile(rx, ry);
+  const pad = TELEPORT_PADS.find(([px, py]) => chamberOfTile(px, py) === room);
+  const ax = rx - shade.tileX, ay = ry - shade.tileY;
+  const dirs: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  dirs.sort((a, b) => (b[0] * ax + b[1] * ay) - (a[0] * ax + a[1] * ay));
+  return dirs.find(([kx, ky]) => {
+    let moved = 0;
+    while (moved < MOON_SHADE_RUBY_PUSH && isFloorTile(state.map, rx + kx * (moved + 1), ry + ky * (moved + 1))) {
+      moved++;
+      const toPad = pad ? Math.max(Math.abs(rx + kx * moved - pad[0]), Math.abs(ry + ky * moved - pad[1])) : 9;
+      if (toPad <= 1 && toPad <= Math.max(Math.abs(rx - pad![0]), Math.abs(ry - pad![1]))) return false;
+    }
+    return moved > 0;
+  }) ?? null;
+}
+// A shade's hit shoves a placed Ruby away (rubyShoveDir), one tile at a time; walls and cover stop it.
+// Every shove costs the shade MOON_SHADE_PUSH_COST of its max HP; one that dies of it gives no star energy.
 export function moonShadePushRuby(state: GameState, shade: Enemy) {
   const moon = state.moon; if (!moon || state.rubyTileX === -1 || state.rubyStolenBy !== undefined) return;
-  const dx = state.rubyTileX - shade.tileX, dy = state.rubyTileY - shade.tileY;
-  const [kx, ky] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
-  moon.rubyPush = { dx: kx, dy: ky, tilesLeft: MOON_SHADE_RUBY_PUSH, timer: 0 };
+  const dir = rubyShoveDir(state, shade);
+  moon.rubyPush = dir && { dx: dir[0], dy: dir[1], tilesLeft: MOON_SHADE_RUBY_PUSH, timer: 0 };
+  playAudioOneShot('/sounds/saturn-warning.mp3', .6); // over its strike sound
+  shade.hp -= shade.maxHp * MOON_SHADE_PUSH_COST; shade.flashTicks = Math.max(shade.flashTicks, 6);
+  const index = state.enemies.indexOf(shade);
+  if (shade.hp <= 0 && index >= 0) killEnemy(state, index, false, true);
 }
 function stepMoonRubyPush(state: GameState) {
   const moon = state.moon!, push = moon.rubyPush; if (!push) return;
